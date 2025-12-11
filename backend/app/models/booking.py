@@ -1,0 +1,101 @@
+"""
+Booking models for lesson scheduling
+"""
+from sqlalchemy import Column, Integer, String, Float, ForeignKey, DateTime, Enum as SQLEnum, Text, Boolean
+from sqlalchemy.orm import relationship
+from sqlalchemy.sql import func
+import enum
+from ..database import Base
+
+
+class BookingStatus(str, enum.Enum):
+    """Booking status enumeration"""
+    PENDING = "pending"
+    CONFIRMED = "confirmed"
+    IN_PROGRESS = "in_progress"
+    COMPLETED = "completed"
+    CANCELLED = "cancelled"
+    NO_SHOW = "no_show"
+
+
+class PaymentStatus(str, enum.Enum):
+    """Payment status enumeration"""
+    PENDING = "pending"
+    PAID = "paid"
+    REFUNDED = "refunded"
+    FAILED = "failed"
+
+
+class Booking(Base):
+    """Booking model for driving lessons"""
+    __tablename__ = "bookings"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    booking_reference = Column(String, unique=True, index=True, nullable=False)
+    
+    # Relations
+    student_id = Column(Integer, ForeignKey("students.id"), nullable=False)
+    instructor_id = Column(Integer, ForeignKey("instructors.id"), nullable=False)
+    
+    # Lesson details
+    lesson_date = Column(DateTime(timezone=True), nullable=False)
+    duration_minutes = Column(Integer, nullable=False, default=60)
+    lesson_type = Column(String, nullable=False)  # "beginner", "intermediate", "advanced", "test_preparation"
+    
+    # Location
+    pickup_latitude = Column(Float, nullable=False)
+    pickup_longitude = Column(Float, nullable=False)
+    pickup_address = Column(String, nullable=False)
+    
+    dropoff_latitude = Column(Float, nullable=True)
+    dropoff_longitude = Column(Float, nullable=True)
+    dropoff_address = Column(String, nullable=True)
+    
+    # Status
+    status = Column(SQLEnum(BookingStatus), default=BookingStatus.PENDING)
+    
+    # Payment
+    amount = Column(Float, nullable=False)  # In ZAR
+    payment_status = Column(SQLEnum(PaymentStatus), default=PaymentStatus.PENDING)
+    payment_method = Column(String, nullable=True)  # "stripe", "payfast"
+    payment_id = Column(String, nullable=True)
+    
+    # Notes
+    student_notes = Column(Text, nullable=True)
+    instructor_notes = Column(Text, nullable=True)
+    
+    # Cancellation
+    cancelled_at = Column(DateTime(timezone=True), nullable=True)
+    cancelled_by = Column(String, nullable=True)  # "student" or "instructor"
+    cancellation_reason = Column(Text, nullable=True)
+    refund_amount = Column(Float, nullable=True)
+    
+    # Timestamps
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    completed_at = Column(DateTime(timezone=True), nullable=True)
+    
+    # Relationships
+    student = relationship("Student", back_populates="bookings")
+    instructor = relationship("Instructor", back_populates="bookings")
+    review = relationship("Review", back_populates="booking", uselist=False)
+
+
+class Review(Base):
+    """Review model for completed lessons"""
+    __tablename__ = "reviews"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    booking_id = Column(Integer, ForeignKey("bookings.id"), unique=True, nullable=False)
+    
+    # Rating (1-5 stars)
+    rating = Column(Integer, nullable=False)
+    
+    # Review text
+    comment = Column(Text, nullable=True)
+    
+    # Timestamps
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    
+    # Relationships
+    booking = relationship("Booking", back_populates="review")

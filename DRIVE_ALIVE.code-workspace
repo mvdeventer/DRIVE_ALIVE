@@ -1,0 +1,123 @@
+{
+  "folders": [
+    {
+      "name": "🚗 Drive Alive (Root)",
+      "path": "."
+    },
+    {
+      "name": "📱 Frontend (React Native)",
+      "path": "./frontend"
+    },
+    {
+      "name": "⚙️ Backend (FastAPI)",
+      "path": "./backend"
+    },
+    {
+      "name": "📚 Documentation",
+      "path": "./docs"
+    },
+    {
+      "name": "🔧 Config",
+      "path": "./config"
+    },
+    {
+      "name": "🧪 Tests",
+      "path": "./tests"
+    }
+  ],
+  "settings": {
+    "editor.formatOnSave": true,
+    "editor.codeActionsOnSave": {
+      "source.fixAll.eslint": "explicit",
+      "source.organizeImports": "explicit"
+    },
+    "files.exclude": {
+      "**/__pycache__": true,
+      "**/*.pyc": true,
+      "**/node_modules": true,
+      "**/.expo": true,
+      "**/venv": true
+    },
+    "python.defaultInterpreterPath": "${workspaceFolder:⚙️ Backend (FastAPI)}/venv/Scripts/python.exe",
+    "python.terminal.activateEnvironment": true,
+    "python.linting.enabled": true,
+    "python.linting.flake8Enabled": true,
+    "python.formatting.provider": "black",
+    "python.testing.pytestEnabled": true,
+    "[python]": {
+      "editor.defaultFormatter": "ms-python.black-formatter",
+      "editor.tabSize": 4
+    },
+    "[javascript]": {
+      "editor.defaultFormatter": "esbenp.prettier-vscode",
+      "editor.tabSize": 2
+    },
+    "[javascriptreact]": {
+      "editor.defaultFormatter": "esbenp.prettier-vscode",
+      "editor.tabSize": 2
+    },
+    "[typescript]": {
+      "editor.defaultFormatter": "esbenp.prettier-vscode",
+      "editor.tabSize": 2
+    },
+    "[json]": {
+      "editor.defaultFormatter": "esbenp.prettier-vscode"
+    },
+    "eslint.workingDirectories": [
+      "./frontend"
+    ],
+    "typescript.updateImportsOnFileMove.enabled": "always",
+    "javascript.updateImportsOnFileMove.enabled": "always"
+  },
+  "extensions": {
+    "recommendations": [
+      "ms-python.python",
+      "ms-python.vscode-pylance",
+      "ms-python.black-formatter",
+      "dbaeumer.vscode-eslint",
+      "esbenp.prettier-vscode",
+      "expo.vscode-expo-tools",
+      "msjsdiag.vscode-react-native",
+      "dsznajder.es7-react-js-snippets",
+      "github.copilot",
+      "github.copilot-chat"
+    ]
+  },
+  "launch": {
+    "version": "0.2.0",
+    "configurations": [
+      {
+        "name": "Python: FastAPI",
+        "type": "python",
+        "request": "launch",
+        "module": "uvicorn",
+        "args": [
+          "app.main:app",
+          "--reload"
+        ],
+        "cwd": "${workspaceFolder:⚙️ Backend (FastAPI)}",
+        "python": "${workspaceFolder:⚙️ Backend (FastAPI)}/venv/Scripts/python.exe"
+      },
+      {
+        "name": "Expo: Start",
+        "type": "node",
+        "request": "launch",
+        "runtimeExecutable": "npx",
+        "runtimeArgs": [
+          "expo",
+          "start"
+        ],
+        "cwd": "${workspaceFolder:📱 Frontend (React Native)}"
+      }
+    ],
+    "compounds": [
+      {
+        "name": "Full Stack",
+        "configurations": [
+          "Python: FastAPI",
+          "Expo: Start"
+        ]
+      }
+    ]
+  }
+}
