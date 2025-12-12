@@ -26,11 +26,15 @@ if not exist ".venv\Scripts\python.exe" (
 )
 
 echo [1/2] Starting Backend Server...
-start "Backend - FastAPI" cmd /k "cd /d "%PROJECT_ROOT%\backend\app" && "%PROJECT_ROOT%\.venv\Scripts\python.exe" -m uvicorn main:app --reload"
+start "Backend - FastAPI" cmd /k "cd /d "%PROJECT_ROOT%\backend" && "%PROJECT_ROOT%\.venv\Scripts\python.exe" -m uvicorn app.main:app --reload --port 8000"
 
 timeout /t 2 /nobreak >nul
 
 echo [2/2] Starting Frontend Server...
+echo.
+echo NOTE: Frontend requires npm packages to be installed first.
+echo If this fails, you need to reinstall Node.js (npm is broken on your system).
+echo.
 start "Frontend - Expo" cmd /k "cd /d "%PROJECT_ROOT%\frontend" && npm start"
 
 echo.

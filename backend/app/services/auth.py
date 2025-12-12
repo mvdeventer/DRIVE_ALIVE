@@ -1,6 +1,7 @@
 """
 Authentication service
 """
+
 from sqlalchemy.orm import Session
 from fastapi import HTTPException, status
 from typing import Optional
@@ -13,23 +14,25 @@ import uuid
 
 class AuthService:
     """Authentication service"""
-    
+
     @staticmethod
     def create_user(db: Session, user_data: UserCreate) -> User:
         """
         Create a new user
         """
         # Check if user exists
-        existing_user = db.query(User).filter(
-            (User.email == user_data.email) | (User.phone == user_data.phone)
-        ).first()
-        
+        existing_user = (
+            db.query(User)
+            .filter((User.email == user_data.email) | (User.phone == user_data.phone))
+            .first()
+        )
+
         if existing_user:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="User with this email or phone already exists"
+                detail="User with this email or phone already exists",
             )
-        
+
         # Create user
         user = User(
             email=user_data.email,
@@ -37,23 +40,27 @@ class AuthService:
             first_name=user_data.first_name,
             last_name=user_data.last_name,
             password_hash=get_password_hash(user_data.password),
-            role=user_data.role
+            role=user_data.role,
         )
-        
+
         db.add(user)
         db.commit()
         db.refresh(user)
-        
+
         return user
-    
+
     @staticmethod
-    def create_instructor(db: Session, instructor_data: InstructorCreate) -> tuple[User, Instructor]:
+    def create_instructor(
+        db: Session, instructor_data: InstructorCreate
+    ) -> tuple[User, Instructor]:
         """
         Create a new instructor with profile
         """
+        # Set role to instructor
+        instructor_data.role = UserRole.INSTRUCTOR
         # Create user
         user = AuthService.create_user(db, instructor_data)
-        
+
         # Create instructor profile
         instructor = Instructor(
             user_id=user.id,
@@ -65,23 +72,27 @@ class AuthService:
             vehicle_year=instructor_data.vehicle_year,
             hourly_rate=instructor_data.hourly_rate,
             service_radius_km=instructor_data.service_radius_km,
-            bio=instructor_data.bio
+            bio=instructor_data.bio,
         )
-        
+
         db.add(instructor)
         db.commit()
         db.refresh(instructor)
-        
+
         return user, instructor
-    
+
     @staticmethod
-    def create_student(db: Session, student_data: StudentCreate) -> tuple[User, Student]:
+    def create_student(
+        db: Session, student_data: StudentCreate
+    ) -> tuple[User, Student]:
         """
         Create a new student with profile
         """
+        # Set role to student
+        student_data.role = UserRole.STUDENT
         # Create user
         user = AuthService.create_user(db, student_data)
-        
+
         # Create student profile
         student = Student(
             user_id=user.id,
@@ -93,43 +104,39 @@ class AuthService:
             address_line2=student_data.address_line2,
             city=student_data.city,
             province=student_data.province,
-            postal_code=student_data.postal_code
+            postal_code=student_data.postal_code,
         )
-        
+
         db.add(student)
         db.commit()
         db.refresh(student)
-        
+
         return user, student
-    
+
     @staticmethod
     def authenticate_user(db: Session, email: str, password: str) -> Optional[User]:
         """
         Authenticate a user
         """
         user = db.query(User).filter(User.email == email).first()
-        
+
         if not user:
             return None
-        
+
         if not verify_password(password, user.password_hash):
             return None
-        
+
         # Update last login
         user.last_login = datetime.utcnow()
         db.commit()
-        
+
         return user
-    
+
     @staticmethod
     def create_user_token(user: User) -> str:
         """
         Create access token for user
         """
-        token_data = {
-            "sub": str(user.id),
-            "email": user.email,
-            "role": user.role.value
-        }
-        
+        token_data = {"sub": str(user.id), "email": user.email, "role": user.role.value}
+
         return create_access_token(token_data)

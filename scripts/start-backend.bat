@@ -34,7 +34,7 @@ if not exist "backend\.env" (
 
 echo Starting FastAPI Server...
 echo.
-cd "%PROJECT_ROOT%\backend\app"
-"%PROJECT_ROOT%\.venv\Scripts\python.exe" -m uvicorn main:app --reload
+cd "%PROJECT_ROOT%\backend"
+"%PROJECT_ROOT%\.venv\Scripts\python.exe" -m uvicorn app.main:app --reload --port 8000
 
 pause
