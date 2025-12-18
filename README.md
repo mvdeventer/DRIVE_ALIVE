@@ -1,113 +1,281 @@
 # Drive Alive - Driving School Booking App
 
-## Overview
-Cross-platform mobile and web application for South African driving schools. Students can book lessons with instructors, handle payments in-app, and receive GPS-based pickup/drop-off with WhatsApp reminders.
+Professional driving school booking application for South Africa, built with React Native (Expo) and FastAPI.
 
-## Tech Stack
-
-### Frontend
-- **React Native + Expo** - Cross-platform mobile (iOS/Android) and web
-- **React Navigation** - Navigation and routing
-- **Expo Location** - GPS tracking and location services
-- **React Native Maps** - Map integration
-- **Stripe React Native** - Payment processing
-- **Axios** - API communication
-- **Firebase** - Authentication and real-time features
-
-### Backend
-- **FastAPI** - Modern Python web framework
-- **SQLAlchemy** - ORM for database operations
-- **PostgreSQL** - Primary database
-- **Celery + Redis** - Background task processing
-- **Stripe/PayFast** - Payment gateway integration
-- **WhatsApp Business API** - Automated reminders
-
-## Project Structure
+## 🏗️ Project Structure
 
 ```
-driving-school-app/
-├── frontend/              # React Native + Expo mobile/web app
-├── backend/               # FastAPI Python backend with venv
-├── docs/                  # Documentation
-├── config/                # Configuration files
-├── tests/                 # Testing suites
-└── .vscode/              # VS Code workspace settings
+DRIVE_ALIVE/
+├── backend/               # FastAPI Python backend
+│   ├── app/
+│   │   ├── main.py       # Application entry point
+│   │   ├── config.py     # Configuration
+│   │   ├── database.py   # Database setup
+│   │   ├── models/       # SQLAlchemy models
+│   │   ├── routes/       # API endpoints
+│   │   ├── schemas/      # Pydantic schemas
+│   │   └── services/     # Business logic
+│   ├── tests/            # Backend tests
+│   └── requirements.txt  # Python dependencies
+│
+├── frontend/             # React Native (Expo) mobile app
+│   ├── screens/          # App screens
+│   ├── components/       # Reusable components
+│   ├── services/         # API & location services
+│   ├── navigation/       # Navigation setup
+│   └── package.json      # Node dependencies
+│
+├── .vscode/              # VS Code workspace configuration
+│   ├── settings.json     # Workspace settings
+│   ├── tasks.json        # Build & run tasks
+│   ├── launch.json       # Debug configurations
+│   └── extensions.json   # Recommended extensions
+│
+├── .github/              # GitHub workflows & instructions
+├── AGENTS.md             # Team roles & todo list
+├── CONTRIBUTING.md       # Contribution guidelines
+├── LICENSE               # Project license
+└── README.md             # This file
 ```
 
-## Getting Started
+## 🚀 Quick Start
 
 ### Prerequisites
-- Node.js 18+ and npm/yarn
-- Python 3.11+
-- PostgreSQL 14+
-- Redis (for background tasks)
-- Expo CLI (`npm install -g expo-cli`)
 
-### Backend Setup
+- **Python 3.9+** (for backend)
+- **Node.js 18+** & **npm** (for frontend)
+- **Git** (for version control)
+- **VS Code** (recommended IDE)
+
+### 1. Clone & Open Project
+
+```bash
+git clone <your-repo-url>
+cd DRIVE_ALIVE
+code DRIVE_ALIVE.code-workspace
+```
+
+### 2. Automatic Setup (Recommended)
+
+When you open the workspace in VS Code:
+
+1. Install recommended extensions when prompted
+2. Open the Command Palette (`Ctrl+Shift+P`)
+3. Run: `Tasks: Run Task` → `Full Project Setup`
+
+This will:
+
+- Create Python virtual environment
+- Install backend dependencies
+- Install frontend dependencies
+
+### 3. Manual Setup (Alternative)
+
+#### Backend Setup
+
 ```bash
 cd backend
 python -m venv venv
-venv\Scripts\activate  # Windows
+venv\Scripts\activate  # On Windows
 pip install -r requirements.txt
-uvicorn app.main:app --reload
 ```
 
-### Frontend Setup
+#### Frontend Setup
+
 ```bash
 cd frontend
 npm install
+```
+
+## 🎯 Development
+
+### Running the Project
+
+#### Using VS Code Tasks (Recommended)
+
+- Press `Ctrl+Shift+P` → `Tasks: Run Task`
+- Choose:
+  - `Start Backend Server` - FastAPI server on http://localhost:8000
+  - `Start Expo Dev Server` - Expo dev server
+
+#### Using VS Code Debugger
+
+- Press `F5` or click "Run and Debug"
+- Select: `Full Stack: Frontend + Backend`
+
+#### Manual Commands
+
+**Backend:**
+
+```bash
+cd backend
+venv\Scripts\activate
+uvicorn app.main:app --reload
+```
+
+**Frontend:**
+
+```bash
+cd frontend
 npx expo start
 ```
 
-## Features
+## 🧪 Testing
 
-### Phase 1: MVP
-- User registration & authentication
-- Instructor GPS location & availability
-- Student booking system
-- Payment integration (Stripe/PayFast)
-- Cancellation policy enforcement
+### Backend Tests
 
-### Phase 2: Core Features
-- WhatsApp reminders
-- Push notifications
-- Instructor/student dashboards
-- Web support (React Native Web)
+```bash
+cd backend
+venv\Scripts\activate
+pytest -v
+```
 
-### Phase 3: Advanced Features
-- Live lesson tracking
-- Lesson packages
-- Certification tracking
-- Multi-language support (English, Afrikaans, Zulu)
-- Analytics dashboard
+### Using VS Code
 
-### Phase 4: Admin & Compliance
-- Admin dashboard
-- POPIA compliance (South African data protection)
-- PCI DSS compliance (payment security)
+- Open Command Palette (`Ctrl+Shift+P`)
+- Run: `Tasks: Run Task` → `Run Backend Tests`
 
-## Compliance
+## 📦 Project Features
 
-### POPIA (Protection of Personal Information Act)
-- User data encryption at rest and in transit
-- Consent management for data collection
-- Data retention policies
-- User rights implementation (access, deletion, portability)
+### Phase 1: MVP ✅
 
-### PCI DSS (Payment Card Industry Data Security Standard)
-- No storage of sensitive card data
-- Secure payment tokenization via Stripe/PayFast
-- Regular security audits
-- Network security and monitoring
+- ✅ User registration & authentication
+- ✅ Instructor GPS location & availability
+- ✅ Student booking system
+- ✅ Payment integration (Stripe/PayFast)
+- ✅ Cancellation policy enforcement
 
-## Development
+### Phase 2: Core Features (In Progress)
 
-See [AGENTS.md](docs/AGENTS.md) for team roles and responsibilities.
-See [API.md](docs/API.md) for API documentation.
-See [ARCHITECTURE.md](docs/ARCHITECTURE.md) for system design.
+- ⏳ WhatsApp reminders
+- ⏳ Push notifications
+- ⏳ Instructor/student dashboards
+- ⏳ Web support
 
-## License
-MIT License - See LICENSE file for details
+### Phase 3: Advanced Features (Planned)
 
-## Contact
-For questions or support, please open an issue on GitHub.
+- 📋 Live lesson tracking
+- 📋 Lesson packages
+- 📋 Certification tracking
+- 📋 Multi-language support
+- 📋 Analytics
+
+## 🛠️ Tech Stack
+
+### Backend
+
+- **FastAPI** - Modern Python web framework
+- **SQLAlchemy** - ORM
+- **PostgreSQL** - Database
+- **Uvicorn** - ASGI server
+- **pytest** - Testing
+
+### Frontend
+
+- **React Native** - Mobile framework
+- **Expo** - React Native toolchain
+- **React Navigation** - Navigation
+- **Axios** - HTTP client
+- **Expo Location** - GPS services
+
+## 📝 VS Code Features
+
+This workspace is configured with:
+
+### Automatic Python Virtual Environment
+
+- Activates automatically when you open a terminal
+- Pre-configured Python interpreter path
+- Integrated terminal environment variables
+
+### Code Formatting
+
+- Python: Black formatter (on save)
+- JavaScript/TypeScript: Prettier (on save)
+- Auto-organize imports
+
+### Debugging
+
+- Pre-configured launch configurations
+- FastAPI debugging
+- Expo app debugging
+- Compound debugging (run both together)
+
+### Tasks
+
+- One-click backend/frontend startup
+- Automated testing
+- Project setup automation
+
+### Recommended Extensions
+
+- Python language support
+- ESLint & Prettier
+- Expo Tools
+- React Native Tools
+- GitLens
+
+## 🔧 Configuration Files
+
+| File                      | Purpose                       |
+| ------------------------- | ----------------------------- |
+| `.vscode/settings.json`   | Workspace-specific settings   |
+| `.vscode/tasks.json`      | Build and run tasks           |
+| `.vscode/launch.json`     | Debug configurations          |
+| `.vscode/extensions.json` | Recommended extensions        |
+| `backend/.env`            | Backend environment variables |
+| `frontend/config.ts`      | Frontend configuration        |
+
+## 🤝 Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+
+## 📄 License
+
+See [LICENSE](LICENSE) file.
+
+## 🆘 Troubleshooting
+
+### Python Virtual Environment Not Activating
+
+1. Open Command Palette (`Ctrl+Shift+P`)
+2. Run: `Python: Select Interpreter`
+3. Choose: `backend/venv/Scripts/python.exe`
+
+### Expo Not Starting
+
+```bash
+cd frontend
+npx expo start --clear
+```
+
+### Port Already in Use
+
+- Backend (8000): Check if another FastAPI instance is running
+- Frontend: Expo will automatically assign a different port
+
+### Dependencies Issues
+
+```bash
+# Backend
+cd backend
+pip install --upgrade pip
+pip install -r requirements.txt
+
+# Frontend
+cd frontend
+rm -rf node_modules package-lock.json
+npm install
+```
+
+## 📞 Support
+
+For issues and questions:
+
+- Check [AGENTS.md](AGENTS.md) for team roles
+- Open an issue on GitHub
+- Contact the development team
+
+---
+
+**Happy Coding! 🚗💨**

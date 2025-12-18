@@ -3,7 +3,32 @@
  */
 import axios, { AxiosInstance } from 'axios';
 import * as SecureStore from 'expo-secure-store';
+import { Platform } from 'react-native';
 import { API_CONFIG } from '../../config';
+
+// Storage wrapper to handle web vs native
+const storage = {
+  async getItem(key: string): Promise<string | null> {
+    if (Platform.OS === 'web') {
+      return localStorage.getItem(key);
+    }
+    return await SecureStore.getItemAsync(key);
+  },
+  async setItem(key: string, value: string): Promise<void> {
+    if (Platform.OS === 'web') {
+      localStorage.setItem(key, value);
+    } else {
+      await SecureStore.setItemAsync(key, value);
+    }
+  },
+  async removeItem(key: string): Promise<void> {
+    if (Platform.OS === 'web') {
+      localStorage.removeItem(key);
+    } else {
+      await SecureStore.deleteItemAsync(key);
+    }
+  },
+};
 
 class ApiService {
   private api: AxiosInstance;
@@ -19,25 +44,25 @@ class ApiService {
 
     // Request interceptor to add auth token
     this.api.interceptors.request.use(
-      async (config) => {
-        const token = await SecureStore.getItemAsync('access_token');
+      async config => {
+        const token = await storage.getItem('access_token');
         if (token) {
           config.headers.Authorization = `Bearer ${token}`;
         }
         return config;
       },
-      (error) => {
+      error => {
         return Promise.reject(error);
       }
     );
 
     // Response interceptor for error handling
     this.api.interceptors.response.use(
-      (response) => response,
-      async (error) => {
+      response => response,
+      async error => {
         if (error.response?.status === 401) {
           // Token expired, logout user
-          await SecureStore.deleteItemAsync('access_token');
+          await storage.removeItem('access_token');
           // You might want to navigate to login screen here
         }
         return Promise.reject(error);
@@ -45,42 +70,67 @@ class ApiService {
     );
   }
 
+  // Generic API methods
+  async get(url: string, config?: any) {
+    const response = await this.api.get(url, config);
+    return response.data;
+  }
+
+  async post(url: string, data?: any, config?: any) {
+    const response = await this.api.post(url, data, config);
+    return response.data;
+  }
+
+  async put(url: string, data?: any, config?: any) {
+    const response = await this.api.put(url, data, config);
+    return response.data;
+  }
+
+  async delete(url: string, config?: any) {
+    const response = await this.api.delete(url, config);
+    return response.data;
+  }
+
+  async setAuthToken(token: string) {
+    await storage.setItem('access_token', token);
+  }
+
   // Auth methods
   async login(email: string, password: string) {
     const formData = new FormData();
     formData.append('username', email);
     formData.append('password', password);
-    
+
     const response = await this.api.post(API_CONFIG.ENDPOINTS.LOGIN, formData, {
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded',
       },
     });
-    
+
     if (response.data.access_token) {
-      await SecureStore.setItemAsync('access_token', response.data.access_token);
+      await storage.setItem('access_token', response.data.access_token);
     }
-    
+
     return response.data;
   }
 
   async registerStudent(data: any) {
     const response = await this.api.post(API_CONFIG.ENDPOINTS.REGISTER_STUDENT, data);
-    
+
     if (response.data.access_token) {
-      await SecureStore.setItemAsync('access_token', response.data.access_token);
+      await storage.setItem('access_token', response.data.access_token);
     }
-    
+
     return response.data;
   }
 
   async registerInstructor(data: any) {
     const response = await this.api.post(API_CONFIG.ENDPOINTS.REGISTER_INSTRUCTOR, data);
-    
+
     if (response.data.access_token) {
-      await SecureStore.setItemAsync('access_token', response.data.access_token);
+      await storage.setItem('access_token', response.data.access_token);
     }
-    
+
     return response.data;
   }
 
@@ -90,7 +140,7 @@ class ApiService {
   }
 
   async logout() {
-    await SecureStore.deleteItemAsync('access_token');
+    await storage.removeItem('access_token');
   }
 
   // Instructor methods
@@ -126,10 +176,9 @@ class ApiService {
   }
 
   async cancelBooking(bookingId: number, reason: string) {
-    const response = await this.api.post(
-      API_CONFIG.ENDPOINTS.BOOKING_CANCEL(bookingId),
-      { cancellation_reason: reason }
-    );
+    const response = await this.api.post(API_CONFIG.ENDPOINTS.BOOKING_CANCEL(bookingId), {
+      cancellation_reason: reason,
+    });
     return response.data;
   }
 
@@ -140,18 +189,16 @@ class ApiService {
 
   // Payment methods
   async createStripePaymentIntent(bookingId: number) {
-    const response = await this.api.post(
-      API_CONFIG.ENDPOINTS.STRIPE_PAYMENT_INTENT,
-      { booking_id: bookingId }
-    );
+    const response = await this.api.post(API_CONFIG.ENDPOINTS.STRIPE_PAYMENT_INTENT, {
+      booking_id: bookingId,
+    });
     return response.data;
   }
 
   async createPayFastPayment(bookingId: number) {
-    const response = await this.api.post(
-      API_CONFIG.ENDPOINTS.PAYFAST_PAYMENT,
-      { booking_id: bookingId }
-    );
+    const response = await this.api.post(API_CONFIG.ENDPOINTS.PAYFAST_PAYMENT, {
+      booking_id: bookingId,
+    });
     return response.data;
   }
 }

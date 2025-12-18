@@ -1,22 +1,23 @@
 /**
  * Main App Component
  */
-import React, { useState, useEffect } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import * as SecureStore from 'expo-secure-store';
 import { StatusBar } from 'expo-status-bar';
+import React, { useEffect, useState } from 'react';
+import { Platform } from 'react-native';
 
 // Auth Screens
 import LoginScreen from './screens/auth/LoginScreen';
-import RegisterStudentScreen from './screens/auth/RegisterStudentScreen';
-import RegisterInstructorScreen from './screens/auth/RegisterInstructorScreen';
 import RegisterChoiceScreen from './screens/auth/RegisterChoiceScreen';
+import RegisterInstructorScreen from './screens/auth/RegisterInstructorScreen';
+import RegisterStudentScreen from './screens/auth/RegisterStudentScreen';
 
 // Student Screens
-import StudentHomeScreen from './screens/student/StudentHomeScreen';
-import InstructorListScreen from './screens/student/InstructorListScreen';
 import BookingScreen from './screens/booking/BookingScreen';
+import InstructorListScreen from './screens/student/InstructorListScreen';
+import StudentHomeScreen from './screens/student/StudentHomeScreen';
 
 // Instructor Screens
 import InstructorHomeScreen from './screens/instructor/InstructorHomeScreen';
@@ -25,6 +26,23 @@ import InstructorHomeScreen from './screens/instructor/InstructorHomeScreen';
 import PaymentScreen from './screens/payment/PaymentScreen';
 
 const Stack = createNativeStackNavigator();
+
+// Storage wrapper for web compatibility
+const storage = {
+  async getItem(key: string): Promise<string | null> {
+    if (Platform.OS === 'web') {
+      return localStorage.getItem(key);
+    }
+    return await SecureStore.getItemAsync(key);
+  },
+  async removeItem(key: string): Promise<void> {
+    if (Platform.OS === 'web') {
+      localStorage.removeItem(key);
+    } else {
+      await SecureStore.deleteItemAsync(key);
+    }
+  },
+};
 
 export default function App() {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
@@ -37,7 +55,7 @@ export default function App() {
 
   const checkAuth = async () => {
     try {
-      const token = await SecureStore.getItemAsync('access_token');
+      const token = await storage.getItem('access_token');
       setIsAuthenticated(!!token);
     } catch (error) {
       console.error('Error checking auth:', error);
@@ -68,23 +86,19 @@ export default function App() {
           {!isAuthenticated ? (
             // Auth Stack
             <>
-              <Stack.Screen 
-                name="Login" 
-                component={LoginScreen}
-                options={{ title: 'Login' }}
-              />
-              <Stack.Screen 
-                name="RegisterChoice" 
+              <Stack.Screen name="Login" component={LoginScreen} options={{ title: 'Login' }} />
+              <Stack.Screen
+                name="RegisterChoice"
                 component={RegisterChoiceScreen}
                 options={{ title: 'Choose Account Type' }}
               />
-              <Stack.Screen 
-                name="RegisterStudent" 
+              <Stack.Screen
+                name="RegisterStudent"
                 component={RegisterStudentScreen}
                 options={{ title: 'Register as Student' }}
               />
-              <Stack.Screen 
-                name="RegisterInstructor" 
+              <Stack.Screen
+                name="RegisterInstructor"
                 component={RegisterInstructorScreen}
                 options={{ title: 'Register as Instructor' }}
               />
@@ -92,28 +106,28 @@ export default function App() {
           ) : (
             // Main App Stack
             <>
-              <Stack.Screen 
-                name="StudentHome" 
+              <Stack.Screen
+                name="StudentHome"
                 component={StudentHomeScreen}
                 options={{ title: 'Home' }}
               />
-              <Stack.Screen 
-                name="InstructorList" 
+              <Stack.Screen
+                name="InstructorList"
                 component={InstructorListScreen}
                 options={{ title: 'Find Instructors' }}
               />
-              <Stack.Screen 
-                name="Booking" 
+              <Stack.Screen
+                name="Booking"
                 component={BookingScreen}
                 options={{ title: 'Book Lesson' }}
               />
-              <Stack.Screen 
-                name="InstructorHome" 
+              <Stack.Screen
+                name="InstructorHome"
                 component={InstructorHomeScreen}
                 options={{ title: 'Instructor Dashboard' }}
               />
-              <Stack.Screen 
-                name="Payment" 
+              <Stack.Screen
+                name="Payment"
                 component={PaymentScreen}
                 options={{ title: 'Payment' }}
               />

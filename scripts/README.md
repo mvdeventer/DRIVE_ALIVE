@@ -1,138 +1,181 @@
-# Launch Scripts for Driving School App
+# Drive Alive - Development Scripts
 
-This directory contains convenient batch scripts to launch and manage the application.
+This directory contains batch scripts to manage the Drive Alive application.
 
-## 🚀 Quick Start Scripts
+## 📁 Available Scripts
 
-### `start-all.bat` ⭐ (Recommended)
-**Starts both backend and frontend in separate windows**
-- Opens two terminal windows automatically
-- Backend runs on port 8000
-- Frontend runs on port 19006
-- Best for development
+### `drive-alive.bat` ⭐ **PRIMARY SCRIPT**
 
-**Usage:**
+**Comprehensive all-in-one development and deployment toolkit**
+
+This is the **ONLY** script you need for development! It replaces all legacy scripts with a unified, powerful interface.
+
+#### Quick Examples:
+
+```bash
+# Start everything (servers + open browsers)
+scripts\drive-alive.bat start
+
+# Check if everything is set up correctly
+scripts\drive-alive.bat check
+
+# Install all dependencies
+scripts\drive-alive.bat install
+
+# Run all tests
+scripts\drive-alive.bat test
+
+# Commit changes with GitHub CLI
+scripts\drive-alive.bat commit -m "feat: new feature"
+
+# Create a release
+scripts\drive-alive.bat release -v v1.0.0
+
+# Build for production (dry-run)
+scripts\drive-alive.bat build
+
+# Stop all servers
+scripts\drive-alive.bat stop
 ```
-Double-click start-all.bat
-```
-Or from command line:
-```
-scripts\start-all.bat
-```
 
-### `start-backend.bat`
-**Starts only the backend FastAPI server**
-- Runs on http://localhost:8000
-- API docs at http://localhost:8000/docs
-- Checks for .env file
-- Uses virtual environment automatically
+#### Available Commands:
 
-### `start-frontend.bat`
-**Starts only the frontend Expo dev server**
-- Runs on http://localhost:19006
-- Opens Expo DevTools
-- Auto-installs dependencies if needed
-- Press 'w' to open in web browser
+| Command   | Description             | Options                                             |
+| --------- | ----------------------- | --------------------------------------------------- |
+| `start`   | Start servers (default) | `--backend-only`, `--frontend-only`, `--no-browser` |
+| `stop`    | Stop all servers        | -                                                   |
+| `restart` | Restart all servers     | -                                                   |
+| `check`   | Check dependencies      | -                                                   |
+| `install` | Install dependencies    | `--backend-only`, `--frontend-only`                 |
+| `test`    | Run tests               | `--backend-only`, `--frontend-only`                 |
+| `build`   | Build (dry-run)         | `--backend-only`, `--frontend-only`                 |
+| `commit`  | Git commit with GH CLI  | `--message "msg"`, `-m "msg"`                       |
+| `release` | Create release          | `--version v1.0.0`, `-v v1.0.0`                     |
+| `status`  | Show system status      | -                                                   |
+| `help`    | Show help               | -                                                   |
 
-## 🔧 Utility Scripts
+#### Options:
 
-### `install-dependencies.bat`
-**Installs all required dependencies**
-- Checks Python and Node.js installation
-- Creates virtual environment
-- Installs Python packages
-- Installs npm packages
-- Run this first if setting up project
+- `--backend-only`, `-b` - Only affect backend
+- `--frontend-only`, `-f` - Only affect frontend
+- `--no-browser`, `-n` - Don't open browsers
+- `--debug`, `-d` - Show debug info
+- `--port [PORT]` - Custom backend port
+- `--message [MSG]`, `-m` - Commit message
+- `--version [VER]`, `-v` - Release version
+
+#### Features:
+
+✅ **Dependency Checking** - Verifies Python, Node.js, Git, GitHub CLI
+✅ **Auto Environment** - Activates venv automatically
+✅ **Browser Auto-Open** - Opens API docs & frontend
+✅ **GitHub CLI Integration** - Commit and release commands
+✅ **Build Verification** - Dry-run production builds
+✅ **Server Management** - Start, stop, restart servers
+✅ **Status Monitoring** - Check what's running
+✅ **Colored Output** - Easy-to-read colored terminal
+
+---
+
+## � Utility Scripts
 
 ### `setup-database.bat`
+
 **Creates PostgreSQL database**
+
 - Creates 'driving_school_db' database
 - Checks if PostgreSQL is installed
 - Provides connection string
 - Run after installing PostgreSQL
 
-### `open-api-docs.bat`
-**Opens API documentation in browser**
-- Opens http://localhost:8000/docs
-- Backend must be running first
-
-### `open-frontend.bat`
-**Opens frontend in browser**
-- Opens http://localhost:19006
-- Frontend must be running first
+> **Note:** This is a specialized database setup utility. For all other operations, use `drive-alive.bat`
 
 ## 📋 Setup Workflow
 
-For first-time setup, run scripts in this order:
+For first-time setup:
 
-```
-1. install-dependencies.bat    # Install Python & npm packages
-2. setup-database.bat          # Create PostgreSQL database
-3. Edit backend\.env           # Configure environment
-4. start-all.bat               # Launch application
+```bash
+# 1. Install dependencies and check system
+scripts\drive-alive.bat install
+
+# 2. Create database (if using PostgreSQL)
+scripts\setup-database.bat
+
+# 3. Configure environment
+# Edit backend\.env with your settings
+
+# 4. Start application
+scripts\drive-alive.bat start
 ```
 
 ## 🛠️ Development Workflow
 
 For daily development:
 
-```
-1. start-all.bat               # Start both servers
-2. Code your changes
-3. Servers auto-reload on save
-4. Close terminal windows when done
+```bash
+# Start development servers
+scripts\drive-alive.bat start
+
+# Run tests
+scripts\drive-alive.bat test
+
+# Check project status
+scripts\drive-alive.bat status
+
+# Stop servers
+scripts\drive-alive.bat stop
 ```
 
-## 📝 Notes
+## 📝 Important Notes
 
-- **Virtual Environment**: All scripts use `.venv` automatically
+- **Primary Tool**: Use `drive-alive.bat` for all standard operations
+- **Database Setup**: Use `setup-database.bat` only for PostgreSQL database creation
+- **Virtual Environment**: Automatically activated by all scripts
 - **Auto-reload**: Backend and frontend reload on file changes
 - **Port Numbers**:
   - Backend: 8000
-  - Frontend: 19006 (Expo), 19000 (Metro)
-- **Stopping Servers**: Close terminal windows or press Ctrl+C
+  - Frontend: 19000 (default Expo port)
+- **Stopping Servers**: Use `drive-alive.bat stop` or close terminal windows
 
 ## 🔍 Troubleshooting
 
-### Backend won't start?
-1. Check `.venv` exists: `dir .venv`
-2. Check .env file exists: `dir backend\.env`
-3. Run `install-dependencies.bat` again
+### Dependencies not found?
 
-### Frontend won't start?
-1. Delete `frontend\node_modules`
-2. Run `start-frontend.bat` (auto-installs)
-3. Or manually: `cd frontend && npm install`
+```bash
+scripts\drive-alive.bat check    # Check what's missing
+scripts\drive-alive.bat install  # Install everything
+```
+
+### Backend/Frontend won't start?
+
+```bash
+scripts\drive-alive.bat status   # Check current state
+scripts\drive-alive.bat restart  # Restart servers
+```
 
 ### Database errors?
-1. Check PostgreSQL is installed: `psql --version`
-2. Run `setup-database.bat`
-3. Update `backend\.env` with correct DATABASE_URL
 
-### Port already in use?
-- Backend: Edit `start-backend.bat`, add `--port 8001`
-- Frontend: Edit `start-frontend.bat`, add `-- --port 19001`
+1. Run `scripts\setup-database.bat` to create database
+2. Update `backend\.env` with correct DATABASE_URL
+3. Restart backend: `scripts\drive-alive.bat restart`
 
-## 💡 Tips
+### Port conflicts?
 
-- **Multiple Instances**: You can run multiple backends on different ports
-- **Background Running**: Minimize terminal windows, don't close them
-- **Logs**: Check terminal windows for errors and logs
-- **API Testing**: Use http://localhost:8000/docs for testing endpoints
+The scripts check for available ports automatically. If issues persist, manually stop conflicting processes.
+
+## 💡 Pro Tips
+
+- Run `drive-alive.bat help` to see all available commands
+- Use `drive-alive.bat check` before starting work to verify dependencies
+- Use `drive-alive.bat status` to see running servers
+- Use `drive-alive.bat test` to run automated tests
+- Use `drive-alive.bat commit` for quick Git commits
 
 ## 🔗 Quick Links
 
 When servers are running:
 
-- Backend API: http://localhost:8000
-- API Documentation: http://localhost:8000/docs
-- Frontend Web: http://localhost:19006
-- Alternative API Docs: http://localhost:8000/redoc
-
-## 📞 Support
-
-If scripts don't work:
-1. Check you're in project root directory
-2. Ensure Python 3.10+ and Node.js 18+ installed
-3. Run as Administrator if permission errors
-4. Check firewall allows localhost connections
+- **Backend API**: http://localhost:8000
+- **API Documentation**: http://localhost:8000/docs
+- **Alternative Docs**: http://localhost:8000/redoc
+- **Frontend**: Opens automatically in browser

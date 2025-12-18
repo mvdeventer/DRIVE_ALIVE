@@ -1,53 +1,90 @@
 {
   "folders": [
     {
-      "name": "🚗 Drive Alive (Root)",
+      "name": "🚗 Drive Alive",
       "path": "."
     },
     {
-      "name": "📱 Frontend (React Native)",
-      "path": "./frontend"
+      "name": "📱 Frontend",
+      "path": "frontend"
     },
     {
-      "name": "⚙️ Backend (FastAPI)",
-      "path": "./backend"
-    },
-    {
-      "name": "📚 Documentation",
-      "path": "./docs"
-    },
-    {
-      "name": "🔧 Config",
-      "path": "./config"
-    },
-    {
-      "name": "🧪 Tests",
-      "path": "./tests"
+      "name": "⚙️ Backend",
+      "path": "backend"
     }
   ],
   "settings": {
+    // === Editor Settings ===
     "editor.formatOnSave": true,
+    "editor.defaultFormatter": "esbenp.prettier-vscode",
     "editor.codeActionsOnSave": {
       "source.fixAll.eslint": "explicit",
       "source.organizeImports": "explicit"
     },
+    "editor.tabSize": 2,
+    "editor.insertSpaces": true,
+    "editor.rulers": [80, 120],
+    "editor.wordWrap": "on",
+    "editor.minimap.enabled": true,
+    "files.trimTrailingWhitespace": true,
+    "files.insertFinalNewline": true,
+    "files.encoding": "utf8",
+    // === File Exclusions ===
     "files.exclude": {
       "**/__pycache__": true,
       "**/*.pyc": true,
+      "**/.pytest_cache": true,
       "**/node_modules": true,
       "**/.expo": true,
-      "**/venv": true
+      "**/.expo-shared": true,
+      "**/venv": true,
+      "**/.venv": true,
+      "**/.next": true,
+      "**/.DS_Store": true,
+      "**/Thumbs.db": true,
+      "**/*.egg-info": true,
+      "**/.mypy_cache": true,
+      "**/.coverage": true,
+      "**/dist": true,
+      "**/build": true
     },
-    "python.defaultInterpreterPath": "${workspaceFolder:⚙️ Backend (FastAPI)}/venv/Scripts/python.exe",
+    "search.exclude": {
+      "**/node_modules": true,
+      "**/venv": true,
+      "**/.venv": true,
+      "**/dist": true,
+      "**/build": true,
+      "**/.expo": true,
+      "**/__pycache__": true
+    },
+    // === Python Settings ===
+    "python.defaultInterpreterPath": "${workspaceFolder}/backend/venv/Scripts/python.exe",
     "python.terminal.activateEnvironment": true,
+    "python.terminal.activateEnvInCurrentTerminal": true,
+    "python.analysis.autoImportCompletions": true,
+    "python.analysis.typeCheckingMode": "basic",
+    "python.analysis.extraPaths": ["${workspaceFolder}/backend"],
     "python.linting.enabled": true,
+    "python.linting.pylintEnabled": false,
     "python.linting.flake8Enabled": true,
-    "python.formatting.provider": "black",
+    "python.linting.flake8Args": [
+      "--max-line-length=120",
+      "--extend-ignore=E203,W503"
+    ],
+    "python.formatting.provider": "none",
     "python.testing.pytestEnabled": true,
+    "python.testing.unittestEnabled": false,
+    "python.testing.pytestArgs": ["tests"],
     "[python]": {
       "editor.defaultFormatter": "ms-python.black-formatter",
-      "editor.tabSize": 4
+      "editor.tabSize": 4,
+      "editor.formatOnSave": true,
+      "editor.codeActionsOnSave": {
+        "source.organizeImports": "explicit"
+      }
     },
+
+    // === JavaScript/TypeScript Settings ===
     "[javascript]": {
       "editor.defaultFormatter": "esbenp.prettier-vscode",
       "editor.tabSize": 2
@@ -60,41 +97,109 @@
       "editor.defaultFormatter": "esbenp.prettier-vscode",
       "editor.tabSize": 2
     },
+    "[typescriptreact]": {
+      "editor.defaultFormatter": "esbenp.prettier-vscode",
+      "editor.tabSize": 2
+    },
     "[json]": {
       "editor.defaultFormatter": "esbenp.prettier-vscode"
     },
-    "eslint.workingDirectories": [
-      "./frontend"
+    "[jsonc]": {
+      "editor.defaultFormatter": "esbenp.prettier-vscode"
+    },
+    "eslint.enable": true,
+    "eslint.validate": [
+      "javascript",
+      "javascriptreact",
+      "typescript",
+      "typescriptreact"
     ],
+    "eslint.workingDirectories": ["${workspaceFolder}/frontend"],
     "typescript.updateImportsOnFileMove.enabled": "always",
-    "javascript.updateImportsOnFileMove.enabled": "always"
+    "typescript.preferences.importModuleSpecifier": "relative",
+    "javascript.updateImportsOnFileMove.enabled": "always",
+    "javascript.preferences.importModuleSpecifier": "relative",
+
+    // === Terminal Settings ===
+    "terminal.integrated.defaultProfile.windows": "PowerShell",
+    "terminal.integrated.cwd": "${workspaceFolder}",
+    "terminal.integrated.env.windows": {
+      "PYTHONPATH": "${workspaceFolder}\\backend"
+    },
+
+    // === Git Settings ===
+    "git.enabled": true,
+    "git.autofetch": true,
+    "git.confirmSync": false,
+    "git.enableSmartCommit": true,
+
+    // === Expo Settings ===
+    "expo.enable": true
   },
   "extensions": {
     "recommendations": [
       "ms-python.python",
       "ms-python.vscode-pylance",
       "ms-python.black-formatter",
+      "ms-python.isort",
       "dbaeumer.vscode-eslint",
       "esbenp.prettier-vscode",
       "expo.vscode-expo-tools",
       "msjsdiag.vscode-react-native",
       "dsznajder.es7-react-js-snippets",
-      "github.copilot",
-      "github.copilot-chat"
+      "firsttris.vscode-jest-runner",
+      "eamodio.gitlens",
+      "streetsidesoftware.code-spell-checker",
+      "gruntfuggly.todo-tree",
+      "usernamehw.errorlens"
     ]
   },
   "launch": {
     "version": "0.2.0",
     "configurations": [
       {
-        "name": "Python: FastAPI",
+        "name": "Python: FastAPI Backend",
         "type": "python",
         "request": "launch",
         "module": "uvicorn",
         "args": [
           "app.main:app",
-          "--reload"
+          "--reload",
+          "--host",
+          "0.0.0.0",
+          "--port",
+          "8000"
         ],
+        "cwd": "${workspaceFolder}/backend",
+        "console": "integratedTerminal",
+        "justMyCode": true,
+        "env": {
+          "PYTHONPATH": "${workspaceFolder}/backend"
+        }
+      },
+      {
+        "name": "Python: Current File",
+        "type": "python",
+        "request": "launch",
+        "program": "${file}",
+        "console": "integratedTerminal",
+        "justMyCode": true
+      },
+      {
+        "name": "Python: pytest",
+        "type": "python",
+        "request": "launch",
+        "module": "pytest",
+        "args": ["-v", "${file}"],
+        "cwd": "${workspaceFolder}/backend",
+        "console": "integratedTerminal"
+      },
+      {
+        "name": "Python: FastAPI",
+        "type": "python",
+        "request": "launch",
+        "module": "uvicorn",
+        "args": ["app.main:app", "--reload"],
         "cwd": "${workspaceFolder:⚙️ Backend (FastAPI)}",
         "python": "${workspaceFolder:⚙️ Backend (FastAPI)}/venv/Scripts/python.exe"
       },
@@ -103,20 +208,14 @@
         "type": "node",
         "request": "launch",
         "runtimeExecutable": "npx",
-        "runtimeArgs": [
-          "expo",
-          "start"
-        ],
+        "runtimeArgs": ["expo", "start"],
         "cwd": "${workspaceFolder:📱 Frontend (React Native)}"
       }
     ],
     "compounds": [
       {
         "name": "Full Stack",
-        "configurations": [
-          "Python: FastAPI",
-          "Expo: Start"
-        ]
+        "configurations": ["Python: FastAPI", "Expo: Start"]
       }
     ]
   }

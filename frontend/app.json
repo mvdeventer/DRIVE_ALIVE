@@ -6,14 +6,13 @@
     "orientation": "portrait",
     "icon": "./assets/icons/icon.png",
     "userInterfaceStyle": "light",
+    "newArchEnabled": true,
     "splash": {
       "image": "./assets/images/splash.png",
       "resizeMode": "contain",
       "backgroundColor": "#ffffff"
     },
-    "assetBundlePatterns": [
-      "**/*"
-    ],
+    "assetBundlePatterns": ["**/*"],
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.drivingschool.app",
@@ -28,10 +27,7 @@
         "backgroundColor": "#ffffff"
       },
       "package": "com.drivingschool.app",
-      "permissions": [
-        "ACCESS_FINE_LOCATION",
-        "ACCESS_COARSE_LOCATION"
-      ],
+      "permissions": ["ACCESS_FINE_LOCATION", "ACCESS_COARSE_LOCATION"],
       "config": {
         "googleMaps": {
           "apiKey": "YOUR_GOOGLE_MAPS_API_KEY"
@@ -42,9 +38,6 @@
       "favicon": "./assets/icons/favicon.png",
       "bundler": "metro"
     },
-    "plugins": [
-      "expo-location",
-      "expo-notifications"
-    ]
+    "plugins": ["expo-location", "expo-notifications"]
   }
 }
