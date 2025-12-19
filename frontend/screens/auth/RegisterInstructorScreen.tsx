@@ -8,29 +8,34 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
+import FormFieldWithTip from '../../components/FormFieldWithTip';
+import LicenseTypeSelector from '../../components/LicenseTypeSelector';
 import ApiService from '../../services/api';
 
 export default function RegisterInstructorScreen({ navigation }: any) {
+  // Pre-fill with test data in development mode for faster debugging
   const [formData, setFormData] = useState({
-    email: '',
-    phone: '',
+    email: __DEV__ ? 'martin@example.com' : '',
+    phone: __DEV__ ? '+27821234567' : '',
     password: '',
     confirmPassword: '',
-    first_name: '',
-    last_name: '',
-    id_number: '',
-    license_number: '',
-    vehicle_registration: '',
-    vehicle_make: '',
-    vehicle_model: '',
-    vehicle_year: '',
-    hourly_rate: '',
+    first_name: __DEV__ ? 'Martin' : '',
+    last_name: __DEV__ ? 'van Deventer' : '',
+    id_number: __DEV__ ? '7901175104084' : '',
+    license_number: __DEV__ ? 'ML123456789' : '',
+    license_types: __DEV__ ? ['B', 'EB', 'C1'] : ([] as string[]),
+    vehicle_registration: __DEV__ ? 'ABC123GP' : '',
+    vehicle_make: __DEV__ ? 'Toyota' : '',
+    vehicle_model: __DEV__ ? 'Corolla' : '',
+    vehicle_year: __DEV__ ? '2020' : '',
+    hourly_rate: __DEV__ ? '350' : '',
     service_radius_km: '20',
-    bio: '',
+    max_travel_distance_km: '50',
+    rate_per_km_beyond_radius: '5',
+    bio: __DEV__ ? 'Experienced driving instructor with 15 years teaching Code B, EB, and C1.' : '',
   });
   const [loading, setLoading] = useState(false);
 
@@ -44,7 +49,8 @@ export default function RegisterInstructorScreen({ navigation }: any) {
       !formData.phone ||
       !formData.license_number ||
       !formData.id_number ||
-      !formData.vehicle_registration
+      !formData.vehicle_registration ||
+      formData.license_types.length === 0
     ) {
       Alert.alert('Error', 'Please fill in all required fields');
       return;
@@ -71,12 +77,15 @@ export default function RegisterInstructorScreen({ navigation }: any) {
         last_name: formData.last_name,
         id_number: formData.id_number,
         license_number: formData.license_number,
+        license_types: formData.license_types.join(','),
         vehicle_registration: formData.vehicle_registration,
         vehicle_make: formData.vehicle_make,
         vehicle_model: formData.vehicle_model,
         vehicle_year: parseInt(formData.vehicle_year),
         hourly_rate: parseFloat(formData.hourly_rate),
         service_radius_km: parseFloat(formData.service_radius_km),
+        max_travel_distance_km: parseFloat(formData.max_travel_distance_km),
+        rate_per_km_beyond_radius: parseFloat(formData.rate_per_km_beyond_radius),
         bio: formData.bio || null,
       };
 
@@ -115,85 +124,113 @@ export default function RegisterInstructorScreen({ navigation }: any) {
         {/* Personal Information */}
         <Text style={styles.sectionTitle}>Personal Information</Text>
 
-        <TextInput
-          style={styles.input}
-          placeholder="First Name *"
+        <FormFieldWithTip
+          label="First Name"
+          tooltip="Enter your legal first name as it appears on your ID document. This will be displayed to students."
+          required
+          placeholder="e.g., John"
           value={formData.first_name}
           onChangeText={text => updateFormData('first_name', text)}
           autoCapitalize="words"
         />
 
-        <TextInput
-          style={styles.input}
-          placeholder="Last Name *"
+        <FormFieldWithTip
+          label="Last Name"
+          tooltip="Enter your legal surname as it appears on your ID document. This helps students identify you professionally."
+          required
+          placeholder="e.g., Smith"
           value={formData.last_name}
           onChangeText={text => updateFormData('last_name', text)}
           autoCapitalize="words"
         />
 
-        <TextInput
-          style={styles.input}
-          placeholder="Email *"
+        <FormFieldWithTip
+          label="Email Address"
+          tooltip="Use a valid email address. You'll receive booking confirmations, payment notifications, and important updates here."
+          required
+          placeholder="e.g., john.smith@example.com"
           value={formData.email}
           onChangeText={text => updateFormData('email', text)}
           keyboardType="email-address"
           autoCapitalize="none"
         />
 
-        <TextInput
-          style={styles.input}
-          placeholder="Phone Number *"
+        <FormFieldWithTip
+          label="Phone Number"
+          tooltip="Enter your mobile number in South African format. Students may contact you for urgent matters or directions."
+          required
+          placeholder="e.g., 0821234567"
           value={formData.phone}
           onChangeText={text => updateFormData('phone', text)}
           keyboardType="phone-pad"
         />
 
-        <TextInput
-          style={styles.input}
-          placeholder="ID Number *"
+        <FormFieldWithTip
+          label="ID Number"
+          tooltip="Your South African ID number is required for verification and POPIA compliance. This information is kept secure and private."
+          required
+          placeholder="e.g., 8001015009087"
           value={formData.id_number}
           onChangeText={text => updateFormData('id_number', text)}
+          keyboardType="numeric"
         />
 
         {/* Professional Information */}
         <Text style={styles.sectionTitle}>Professional Details</Text>
 
-        <TextInput
-          style={styles.input}
-          placeholder="Driving License Number *"
+        <FormFieldWithTip
+          label="Driving License Number"
+          tooltip="Enter your valid South African driving license number. This must be a professional driving permit (PrDP) to legally offer driving instruction services."
+          required
+          placeholder="e.g., A12345678"
           value={formData.license_number}
           onChangeText={text => updateFormData('license_number', text)}
           autoCapitalize="characters"
         />
 
+        <LicenseTypeSelector
+          label="License Types You Can Teach"
+          tooltip="Select all the license types/codes you are qualified to teach. This includes CODE8 (light vehicles/cars), CODE10 (heavy vehicles), CODE14 (extra heavy vehicles), etc. Students will filter instructors based on the license type they need."
+          required
+          selectedTypes={formData.license_types}
+          onSelectionChange={types => setFormData(prev => ({ ...prev, license_types: types }))}
+        />
+
         {/* Vehicle Information */}
         <Text style={styles.sectionTitle}>Vehicle Information</Text>
 
-        <TextInput
-          style={styles.input}
-          placeholder="Vehicle Registration *"
+        <FormFieldWithTip
+          label="Vehicle Registration"
+          tooltip="Enter your vehicle's registration number (license plate). Students will use this to identify your car during pickup."
+          required
+          placeholder="e.g., CA 123-456 or ABC 123 GP"
           value={formData.vehicle_registration}
           onChangeText={text => updateFormData('vehicle_registration', text)}
           autoCapitalize="characters"
         />
 
-        <TextInput
-          style={styles.input}
-          placeholder="Vehicle Make (e.g., Toyota)"
+        <FormFieldWithTip
+          label="Vehicle Make"
+          tooltip="The manufacturer of your vehicle. This helps students recognize your car."
+          placeholder="e.g., Toyota, Volkswagen, Ford"
           value={formData.vehicle_make}
           onChangeText={text => updateFormData('vehicle_make', text)}
+          autoCapitalize="words"
         />
 
-        <TextInput
-          style={styles.input}
-          placeholder="Vehicle Model (e.g., Corolla)"
+        <FormFieldWithTip
+          label="Vehicle Model"
+          tooltip="Your vehicle's model name. Combined with make, this helps students easily spot your car."
+          placeholder="e.g., Corolla, Polo, Ranger"
           value={formData.vehicle_model}
           onChangeText={text => updateFormData('vehicle_model', text)}
+          autoCapitalize="words"
         />
 
-        <TextInput
-          style={styles.input}
-          placeholder="Vehicle Year (e.g., 2020)"
+        <FormFieldWithTip
+          label="Vehicle Year"
+          tooltip="The year your vehicle was manufactured. This is optional but provides additional identification details."
+          placeholder="e.g., 2020"
           value={formData.vehicle_year}
           onChangeText={text => updateFormData('vehicle_year', text)}
           keyboardType="numeric"
@@ -202,45 +239,72 @@ export default function RegisterInstructorScreen({ navigation }: any) {
         {/* Service Information */}
         <Text style={styles.sectionTitle}>Service Details</Text>
 
-        <TextInput
-          style={styles.input}
-          placeholder="Hourly Rate (ZAR) *"
+        <FormFieldWithTip
+          label="Hourly Rate (ZAR)"
+          tooltip="Set your hourly rate in South African Rands. The typical range is R250-R500 per hour. Students will see this rate when booking lessons with you."
+          required
+          placeholder="e.g., 350"
           value={formData.hourly_rate}
           onChangeText={text => updateFormData('hourly_rate', text)}
           keyboardType="decimal-pad"
         />
 
-        <TextInput
-          style={styles.input}
-          placeholder="Service Radius (km)"
+        <FormFieldWithTip
+          label="Service Radius (km)"
+          tooltip="The maximum distance you're willing to travel to pick up students from their location. Default is 20km. A larger radius means more potential students, but consider fuel costs and travel time."
+          placeholder="e.g., 20 (recommended: 10-30km)"
           value={formData.service_radius_km}
           onChangeText={text => updateFormData('service_radius_km', text)}
           keyboardType="decimal-pad"
         />
 
-        <TextInput
-          style={[styles.input, styles.textArea]}
-          placeholder="Bio (Optional - Tell students about yourself)"
+        <FormFieldWithTip
+          label="Maximum Travel Distance (km)"
+          tooltip="The absolute maximum distance you'll travel for a student, even with extra charges. Example: If service radius is 20km and max travel is 50km, you'll accept students up to 50km away but charge extra for the 30km beyond your service radius."
+          placeholder="e.g., 50 (must be ≥ service radius)"
+          value={formData.max_travel_distance_km}
+          onChangeText={text => updateFormData('max_travel_distance_km', text)}
+          keyboardType="decimal-pad"
+        />
+
+        <FormFieldWithTip
+          label="Rate per Extra Kilometer (ZAR)"
+          tooltip="How much you charge per kilometer when students are outside your service radius. Example: If a student is 25km away and your service radius is 20km, you'll charge this rate × 5km extra. Typical range: R3-R10 per km."
+          placeholder="e.g., 5 (recommended: R3-R10)"
+          value={formData.rate_per_km_beyond_radius}
+          onChangeText={text => updateFormData('rate_per_km_beyond_radius', text)}
+          keyboardType="decimal-pad"
+        />
+
+        <FormFieldWithTip
+          label="Bio (Optional)"
+          tooltip="Tell students about yourself! Mention your teaching experience, specialties (e.g., nervous learners, test preparation), languages spoken, and what makes you a great instructor. A compelling bio helps attract more students."
+          placeholder="e.g., 'Professional driving instructor with 10 years experience. Patient and friendly approach, specializing in helping nervous learners gain confidence...'"
           value={formData.bio}
           onChangeText={text => updateFormData('bio', text)}
           multiline
           numberOfLines={4}
+          style={styles.textArea}
         />
 
         {/* Password */}
         <Text style={styles.sectionTitle}>Security</Text>
 
-        <TextInput
-          style={styles.input}
-          placeholder="Password *"
+        <FormFieldWithTip
+          label="Password"
+          tooltip="Create a strong password with at least 6 characters. Use a mix of letters, numbers, and symbols for better security. This protects your account and student data."
+          required
+          placeholder="Minimum 6 characters"
           value={formData.password}
           onChangeText={text => updateFormData('password', text)}
           secureTextEntry
         />
 
-        <TextInput
-          style={styles.input}
-          placeholder="Confirm Password *"
+        <FormFieldWithTip
+          label="Confirm Password"
+          tooltip="Re-enter your password to ensure it was typed correctly. Both passwords must match exactly."
+          required
+          placeholder="Re-enter your password"
           value={formData.confirmPassword}
           onChangeText={text => updateFormData('confirmPassword', text)}
           secureTextEntry

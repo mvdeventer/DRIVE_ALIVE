@@ -57,11 +57,8 @@ set "PROJECT_ROOT=%~dp0.."
 set "BACKEND_DIR=%PROJECT_ROOT%\backend"
 set "FRONTEND_DIR=%PROJECT_ROOT%\frontend"
 set "VENV_DIR=%BACKEND_DIR%\venv"
-set "BACKEND_PORT=8000"
-set "FRONTEND_PORT=19000"
-set "BACKEND_URL=http://localhost:%BACKEND_PORT%"
-set "FRONTEND_URL=http://localhost:%FRONTEND_PORT%"
-set "API_DOCS_URL=%BACKEND_URL%/docs"
+set "BACKEND_PORT="
+set "FRONTEND_PORT="
 
 :: Colors for output (Windows 10+)
 set "COLOR_RESET=[0m"
@@ -148,23 +145,96 @@ echo Run 'drive-alive.bat help' for usage information.
 exit /b 1
 
 :: ==============================================================================
+:: HELPER: Find Available Port
+:: ==============================================================================
+:find_available_port
+:: Usage: call :find_available_port <start_port> <return_var_name>
+:: Returns the first available port starting from <start_port>
+set "test_port=%~1"
+
+:port_loop_%~1
+netstat -ano 2>nul | findstr ":%test_port% " | findstr "LISTENING" >nul 2>&1
+if errorlevel 1 (
+    set "%~2=%test_port%"
+    goto :eof
+)
+set /a test_port+=1
+if %test_port% gtr 65535 (
+    echo %COLOR_RED%Error: No available ports found%COLOR_RESET%
+    exit /b 1
+)
+goto :port_loop_%~1
+
+:: ==============================================================================
 :: COMMAND: START
 :: ==============================================================================
 :cmd_start
 echo %COLOR_BLUE%Starting Drive Alive servers...%COLOR_RESET%
 echo.
 
-:: Always stop any existing servers first
+:: Set default ports
+if "%BACKEND_PORT%"=="" set "BACKEND_PORT=8000"
+if "%FRONTEND_PORT%"=="" set "FRONTEND_PORT=8081"
+
+echo %COLOR_GREEN%Backend will use port: %BACKEND_PORT%%COLOR_RESET%
+echo %COLOR_GREEN%Frontend will use port: %FRONTEND_PORT%%COLOR_RESET%
+
+:: Set URLs based on ports
+set "BACKEND_URL=http://localhost:%BACKEND_PORT%"
+set "API_DOCS_URL=http://localhost:%BACKEND_PORT%/docs"
+set "FRONTEND_URL=http://localhost:%FRONTEND_PORT%"
+echo.
+
+:: Always stop any existing servers first with graceful shutdown
 echo %COLOR_YELLOW%Stopping any existing servers...%COLOR_RESET%
-taskkill /FI "WINDOWTITLE eq Drive Alive - Backend*" /T /F >nul 2>&1
-taskkill /FI "WINDOWTITLE eq Drive Alive - Frontend*" /T /F >nul 2>&1
-taskkill /FI "ImageName eq uvicorn.exe" /F >nul 2>&1
-taskkill /FI "ImageName eq python.exe" /FI "CommandLine eq *uvicorn*" /F >nul 2>&1
-taskkill /FI "ImageName eq node.exe" /FI "CommandLine eq *expo*" /F >nul 2>&1
-for /f "tokens=5" %%a in ('netstat -ano ^| findstr ":8000" ^| findstr "LISTENING"') do taskkill /F /PID %%a >nul 2>&1
-for /f "tokens=5" %%a in ('netstat -ano ^| findstr ":8081" ^| findstr "LISTENING"') do taskkill /F /PID %%a >nul 2>&1
-for /f "tokens=5" %%a in ('netstat -ano ^| findstr ":19000" ^| findstr "LISTENING"') do taskkill /F /PID %%a >nul 2>&1
+
+:: Kill CMD windows by process ID using WMIC
+for /f "tokens=2 delims=," %%a in ('wmic process where "name='cmd.exe' and CommandLine like '%%Drive Alive - Backend%%'" get ProcessId /format:csv 2^>nul ^| findstr /r "[0-9]"') do (
+    taskkill /F /PID %%a >nul 2>&1
+)
+for /f "tokens=2 delims=," %%a in ('wmic process where "name='cmd.exe' and CommandLine like '%%Drive Alive - Frontend%%'" get ProcessId /format:csv 2^>nul ^| findstr /r "[0-9]"') do (
+    taskkill /F /PID %%a >nul 2>&1
+)
+
+:: Alternative: Kill by window title using tasklist
+for /f "skip=3 tokens=2" %%a in ('tasklist /V /FI "WINDOWTITLE eq Drive Alive - Backend*" /FO CSV ^| findstr /v "INFO:"') do (
+    set "PID=%%a"
+    set PID=!PID:"=!
+    if defined PID taskkill /F /PID !PID! >nul 2>&1
+)
+for /f "skip=3 tokens=2" %%a in ('tasklist /V /FI "WINDOWTITLE eq Drive Alive - Frontend*" /FO CSV ^| findstr /v "INFO:"') do (
+    set "PID=%%a"
+    set PID=!PID:"=!
+    if defined PID taskkill /F /PID !PID! >nul 2>&1
+)
+
+:: Small delay to ensure processes are terminated
+timeout /t 2 /nobreak >nul
+
+:: Kill processes on common ports
+for /f "tokens=5" %%a in ('netstat -ano 2^>nul ^| findstr ":8000" ^| findstr "LISTENING"') do (
+    taskkill /PID %%a >nul 2>&1
+    timeout /t 1 /nobreak >nul
+    taskkill /F /PID %%a >nul 2>&1
+)
+
+for /f "tokens=5" %%a in ('netstat -ano 2^>nul ^| findstr ":8081" ^| findstr "LISTENING"') do (
+    taskkill /PID %%a >nul 2>&1
+    timeout /t 1 /nobreak >nul
+    taskkill /F /PID %%a >nul 2>&1
+)
+
+for /f "tokens=5" %%a in ('netstat -ano 2^>nul ^| findstr ":19000" ^| findstr "LISTENING"') do (
+    taskkill /PID %%a >nul 2>&1
+    timeout /t 1 /nobreak >nul
+    taskkill /F /PID %%a >nul 2>&1
+)
+
+:: Final cleanup
+taskkill /FI "ImageName eq uvicorn.exe" >nul 2>&1
 timeout /t 1 /nobreak >nul
+taskkill /FI "ImageName eq uvicorn.exe" /F >nul 2>&1
+
 echo.
 
 call :check_dependencies
@@ -212,12 +282,29 @@ echo.
 goto :eof
 
 :start_backend_only
+:: Find available port if not set
+if "%BACKEND_PORT%"==" " (
+    echo %COLOR_YELLOW%Finding available backend port...%COLOR_RESET%
+    call :find_available_port 8000 BACKEND_PORT
+    echo %COLOR_GREEN%Backend will use port: %BACKEND_PORT%%COLOR_RESET%
+)
+set "BACKEND_URL=http://localhost:%BACKEND_PORT%"
+set "API_DOCS_URL=%BACKEND_URL%/docs"
+
 echo %COLOR_YELLOW%Stopping any existing backend servers...%COLOR_RESET%
-taskkill /FI "WINDOWTITLE eq Drive Alive - Backend*" /T /F >nul 2>&1
-taskkill /FI "ImageName eq uvicorn.exe" /F >nul 2>&1
-taskkill /FI "ImageName eq python.exe" /FI "CommandLine eq *uvicorn*" /F >nul 2>&1
-for /f "tokens=5" %%a in ('netstat -ano ^| findstr ":8000" ^| findstr "LISTENING"') do taskkill /F /PID %%a >nul 2>&1
+:: Try graceful shutdown first
+for /f "tokens=5" %%a in ('netstat -ano ^| findstr ":%BACKEND_PORT%" ^| findstr "LISTENING" 2^>nul') do (
+    echo %COLOR_CYAN%Gracefully stopping backend on port %BACKEND_PORT%...%COLOR_RESET%
+    taskkill /PID %%a >nul 2>&1
+    timeout /t 2 /nobreak >nul
+    taskkill /F /PID %%a >nul 2>&1
+)
+taskkill /FI "WINDOWTITLE eq Drive Alive - Backend*" /T >nul 2>&1
 timeout /t 1 /nobreak >nul
+taskkill /FI "WINDOWTITLE eq Drive Alive - Backend*" /T /F >nul 2>&1
+taskkill /FI "ImageName eq uvicorn.exe" >nul 2>&1
+timeout /t 1 /nobreak >nul
+taskkill /FI "ImageName eq uvicorn.exe" /F >nul 2>&1
 echo %COLOR_YELLOW%Starting Backend Server only...%COLOR_RESET%
 start "Drive Alive - Backend" cmd /k "cd /d "%BACKEND_DIR%" && "%VENV_DIR%\Scripts\python.exe" -m uvicorn app.main:app --reload --host 0.0.0.0 --port %BACKEND_PORT%"
 echo.
@@ -229,14 +316,33 @@ if "%NO_BROWSER%"=="0" (
 goto :eof
 
 :start_frontend_only
+:: Find available port if not set
+if "%FRONTEND_PORT%"=="" (
+    echo %COLOR_YELLOW%Finding available frontend port...%COLOR_RESET%
+    call :find_available_port 8081 FRONTEND_PORT
+    echo %COLOR_GREEN%Frontend will use port: %FRONTEND_PORT%%COLOR_RESET%
+)
+set "FRONTEND_URL=http://localhost:%FRONTEND_PORT%"
+
 echo %COLOR_YELLOW%Stopping any existing frontend servers...%COLOR_RESET%
-taskkill /FI "WINDOWTITLE eq Drive Alive - Frontend*" /T /F >nul 2>&1
-taskkill /FI "ImageName eq node.exe" /FI "CommandLine eq *expo*" /F >nul 2>&1
-for /f "tokens=5" %%a in ('netstat -ano ^| findstr ":8081" ^| findstr "LISTENING"') do taskkill /F /PID %%a >nul 2>&1
-for /f "tokens=5" %%a in ('netstat -ano ^| findstr ":19000" ^| findstr "LISTENING"') do taskkill /F /PID %%a >nul 2>&1
+:: Try graceful shutdown first
+for /f "tokens=5" %%a in ('netstat -ano ^| findstr ":8081" ^| findstr "LISTENING" 2^>nul') do (
+    echo %COLOR_CYAN%Gracefully stopping frontend on port 8081...%COLOR_RESET%
+    taskkill /PID %%a >nul 2>&1
+    timeout /t 2 /nobreak >nul
+    taskkill /F /PID %%a >nul 2>&1
+)
+for /f "tokens=5" %%a in ('netstat -ano ^| findstr ":19000" ^| findstr "LISTENING" 2^>nul') do (
+    echo %COLOR_CYAN%Gracefully stopping Expo on port 19000...%COLOR_RESET%
+    taskkill /PID %%a >nul 2>&1
+    timeout /t 2 /nobreak >nul
+    taskkill /F /PID %%a >nul 2>&1
+)
+taskkill /FI "WINDOWTITLE eq Drive Alive - Frontend*" /T >nul 2>&1
 timeout /t 1 /nobreak >nul
+taskkill /FI "WINDOWTITLE eq Drive Alive - Frontend*" /T /F >nul 2>&1
 echo %COLOR_YELLOW%Starting Frontend Server only...%COLOR_RESET%
-start "Drive Alive - Frontend" cmd /k "cd /d "%FRONTEND_DIR%" && npm start"
+start "Drive Alive - Frontend" cmd /k "cd /d "%FRONTEND_DIR%" && set PORT=%FRONTEND_PORT% && npm start"
 echo.
 echo %COLOR_GREEN%Frontend server started: %FRONTEND_URL%%COLOR_RESET%
 goto :eof

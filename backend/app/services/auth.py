@@ -2,14 +2,16 @@
 Authentication service
 """
 
-from sqlalchemy.orm import Session
-from fastapi import HTTPException, status
-from typing import Optional
-from datetime import datetime
-from ..models.user import User, Instructor, Student, UserRole
-from ..utils.auth import get_password_hash, verify_password, create_access_token
-from ..schemas.user import UserCreate, InstructorCreate, StudentCreate
 import uuid
+from datetime import datetime
+from typing import Optional
+
+from fastapi import HTTPException, status
+from sqlalchemy.orm import Session
+
+from ..models.user import Instructor, Student, User, UserRole
+from ..schemas.user import InstructorCreate, StudentCreate, UserCreate
+from ..utils.auth import create_access_token, get_password_hash, verify_password
 
 
 class AuthService:
@@ -21,11 +23,7 @@ class AuthService:
         Create a new user
         """
         # Check if user exists
-        existing_user = (
-            db.query(User)
-            .filter((User.email == user_data.email) | (User.phone == user_data.phone))
-            .first()
-        )
+        existing_user = db.query(User).filter((User.email == user_data.email) | (User.phone == user_data.phone)).first()
 
         if existing_user:
             raise HTTPException(
@@ -50,9 +48,7 @@ class AuthService:
         return user
 
     @staticmethod
-    def create_instructor(
-        db: Session, instructor_data: InstructorCreate
-    ) -> tuple[User, Instructor]:
+    def create_instructor(db: Session, instructor_data: InstructorCreate) -> tuple[User, Instructor]:
         """
         Create a new instructor with profile
         """
@@ -65,6 +61,7 @@ class AuthService:
         instructor = Instructor(
             user_id=user.id,
             license_number=instructor_data.license_number,
+            license_types=instructor_data.license_types,
             id_number=instructor_data.id_number,
             vehicle_registration=instructor_data.vehicle_registration,
             vehicle_make=instructor_data.vehicle_make,
@@ -72,6 +69,8 @@ class AuthService:
             vehicle_year=instructor_data.vehicle_year,
             hourly_rate=instructor_data.hourly_rate,
             service_radius_km=instructor_data.service_radius_km,
+            max_travel_distance_km=instructor_data.max_travel_distance_km,
+            rate_per_km_beyond_radius=instructor_data.rate_per_km_beyond_radius,
             bio=instructor_data.bio,
         )
 
@@ -82,9 +81,7 @@ class AuthService:
         return user, instructor
 
     @staticmethod
-    def create_student(
-        db: Session, student_data: StudentCreate
-    ) -> tuple[User, Student]:
+    def create_student(db: Session, student_data: StudentCreate) -> tuple[User, Student]:
         """
         Create a new student with profile
         """
