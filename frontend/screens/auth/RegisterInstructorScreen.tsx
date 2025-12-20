@@ -5,6 +5,7 @@ import React, { useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -15,11 +16,30 @@ import FormFieldWithTip from '../../components/FormFieldWithTip';
 import LicenseTypeSelector from '../../components/LicenseTypeSelector';
 import ApiService from '../../services/api';
 
+// Web-compatible alert function
+const showAlert = (title: string, message: string, buttons?: any[]) => {
+  console.log('[showAlert] Called with:', { title, message, platform: Platform.OS });
+  if (Platform.OS === 'web') {
+    // Use browser's native alert for web
+    const fullMessage = `${title}\n\n${message}`;
+    alert(fullMessage);
+    // Execute callback if provided
+    if (buttons && buttons[0] && buttons[0].onPress) {
+      buttons[0].onPress();
+    }
+  } else {
+    // Use React Native Alert for mobile
+    Alert.alert(title, message, buttons);
+  }
+};
+
 export default function RegisterInstructorScreen({ navigation }: any) {
   // Pre-fill with test data in development mode for faster debugging
+  // Use timestamp to create unique email/phone for testing
+  const timestamp = __DEV__ ? Date.now().toString().slice(-6) : '';
   const [formData, setFormData] = useState({
-    email: __DEV__ ? 'martin@example.com' : '',
-    phone: __DEV__ ? '+27821234567' : '',
+    email: __DEV__ ? `martin${timestamp}@example.com` : '',
+    phone: __DEV__ ? `+2761115${timestamp.slice(0, 4)}` : '',
     password: '',
     confirmPassword: '',
     first_name: __DEV__ ? 'Martin' : '',
@@ -40,29 +60,53 @@ export default function RegisterInstructorScreen({ navigation }: any) {
   const [loading, setLoading] = useState(false);
 
   const handleRegister = async () => {
-    // Validation
-    if (
-      !formData.email ||
-      !formData.password ||
-      !formData.first_name ||
-      !formData.last_name ||
-      !formData.phone ||
-      !formData.license_number ||
-      !formData.id_number ||
-      !formData.vehicle_registration ||
-      formData.license_types.length === 0
-    ) {
-      Alert.alert('Error', 'Please fill in all required fields');
+    console.log('Register button clicked!');
+    console.log('Form data:', formData);
+    console.log('Email being sent:', formData.email);
+    console.log('Phone being sent:', formData.phone);
+
+    // Detailed validation with specific error messages
+    const missingFields = [];
+
+    if (!formData.email) missingFields.push('Email');
+    if (!formData.first_name) missingFields.push('First Name');
+    if (!formData.last_name) missingFields.push('Last Name');
+    if (!formData.id_number) missingFields.push('ID Number');
+    if (!formData.phone) missingFields.push('Phone Number');
+    if (!formData.license_number) missingFields.push('License Number');
+    if (formData.license_types.length === 0) missingFields.push('License Types');
+    if (!formData.vehicle_registration) missingFields.push('Vehicle Registration');
+    if (!formData.vehicle_make) missingFields.push('Vehicle Make');
+    if (!formData.vehicle_model) missingFields.push('Vehicle Model');
+    if (!formData.vehicle_year) missingFields.push('Vehicle Year');
+    if (!formData.hourly_rate) missingFields.push('Hourly Rate');
+    if (!formData.password) missingFields.push('Password');
+    if (!formData.confirmPassword) missingFields.push('Confirm Password');
+
+    if (missingFields.length > 0) {
+      console.log('Validation failed - missing fields:', missingFields);
+      showAlert(
+        '📝 Missing Required Fields',
+        `Please fill in the following fields:\n\n${missingFields
+          .map(field => `• ${field}`)
+          .join('\n')}`
+      );
       return;
     }
 
     if (formData.password !== formData.confirmPassword) {
-      Alert.alert('Error', 'Passwords do not match');
+      showAlert(
+        '🔒 Password Mismatch',
+        'Passwords do not match. Please make sure both passwords are identical.'
+      );
       return;
     }
 
     if (formData.password.length < 6) {
-      Alert.alert('Error', 'Password must be at least 6 characters');
+      showAlert(
+        '🔒 Password Too Short',
+        'Password must be at least 6 characters long for security.'
+      );
       return;
     }
 
@@ -91,21 +135,42 @@ export default function RegisterInstructorScreen({ navigation }: any) {
 
       const response = await ApiService.post('/auth/register/instructor', registrationData);
 
-      // Store token
-      await ApiService.setAuthToken(response.access_token);
+      // Don't store token - require login after registration
+      // This ensures proper authentication flow and navigation
 
-      Alert.alert('Success', 'Registration successful!', [
+      showAlert('✅ Success!', 'Registration successful! Please login to continue.', [
         {
-          text: 'OK',
-          onPress: () => navigation.navigate('InstructorHome'),
+          text: 'Login Now',
+          onPress: () => {
+            // Navigate to Login screen
+            navigation.reset({
+              index: 0,
+              routes: [{ name: 'Login' }],
+            });
+          },
         },
       ]);
     } catch (error: any) {
       console.error('Registration error:', error);
-      Alert.alert(
-        'Registration Failed',
-        error.response?.data?.detail || 'An error occurred during registration'
-      );
+      console.error('Error response:', error.response);
+      console.error('Error details:', error.response?.data);
+
+      // Extract error message
+      let errorMessage = 'An error occurred during registration';
+
+      if (error.response?.data?.detail) {
+        errorMessage = error.response.data.detail;
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+
+      // Make error message more user-friendly
+      if (errorMessage.includes('email or phone already exists')) {
+        errorMessage =
+          '⚠️ This email or phone number is already registered.\n\nPlease use a different email or phone number, or try logging in instead.';
+      }
+
+      showAlert('❌ Registration Failed', errorMessage);
     } finally {
       setLoading(false);
     }
@@ -312,8 +377,13 @@ export default function RegisterInstructorScreen({ navigation }: any) {
 
         <TouchableOpacity
           style={[styles.button, loading && styles.buttonDisabled]}
-          onPress={handleRegister}
+          onPress={() => {
+            console.log('!!!!! BUTTON PRESSED !!!!!');
+            Alert.alert('Debug', 'Button was clicked!');
+            handleRegister();
+          }}
           disabled={loading}
+          activeOpacity={0.7}
         >
           {loading ? (
             <ActivityIndicator color="#fff" />

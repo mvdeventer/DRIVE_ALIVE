@@ -56,7 +56,9 @@ export default function App() {
   const checkAuth = async () => {
     try {
       const token = await storage.getItem('access_token');
+      const role = await storage.getItem('user_role');
       setIsAuthenticated(!!token);
+      setUserRole(role);
     } catch (error) {
       console.error('Error checking auth:', error);
     } finally {
@@ -73,6 +75,13 @@ export default function App() {
       <StatusBar style="auto" />
       <NavigationContainer>
         <Stack.Navigator
+          initialRouteName={
+            !isAuthenticated
+              ? 'Login'
+              : userRole === 'instructor'
+              ? 'InstructorHome'
+              : 'StudentHome'
+          }
           screenOptions={{
             headerStyle: {
               backgroundColor: '#007AFF',

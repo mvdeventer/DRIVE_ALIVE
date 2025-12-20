@@ -109,6 +109,12 @@ class ApiService {
 
     if (response.data.access_token) {
       await storage.setItem('access_token', response.data.access_token);
+
+      // Get user info to store role
+      const user = await this.getCurrentUser();
+      if (user.role) {
+        await storage.setItem('user_role', user.role);
+      }
     }
 
     return response.data;
@@ -141,6 +147,7 @@ class ApiService {
 
   async logout() {
     await storage.removeItem('access_token');
+    await storage.removeItem('user_role');
   }
 
   // Instructor methods

@@ -237,9 +237,9 @@ taskkill /FI "ImageName eq uvicorn.exe" /F >nul 2>&1
 
 echo.
 
-call :check_dependencies
+call :check_and_setup_dependencies
 if errorlevel 1 (
-    echo %COLOR_RED%Dependency check failed. Run 'drive-alive.bat check' for details.%COLOR_RESET%
+    echo %COLOR_RED%Failed to setup dependencies.%COLOR_RESET%
     exit /b 1
 )
 
@@ -248,7 +248,7 @@ if "%BACKEND_ONLY%"=="1" goto :start_backend_only
 
 :: Start both servers
 echo %COLOR_YELLOW%Starting Backend Server on port %BACKEND_PORT%...%COLOR_RESET%
-start "Drive Alive - Backend" cmd /k "cd /d "%BACKEND_DIR%" && "%VENV_DIR%\Scripts\python.exe" -m uvicorn app.main:app --reload --host 0.0.0.0 --port %BACKEND_PORT%"
+start "Drive Alive - Backend" cmd /k "cd /d "%BACKEND_DIR%" && call venv\Scripts\activate.bat && python -m uvicorn app.main:app --reload --host 0.0.0.0 --port %BACKEND_PORT%"
 
 echo %COLOR_YELLOW%Waiting for backend to initialize...%COLOR_RESET%
 timeout /t 5 /nobreak >nul
@@ -306,7 +306,7 @@ taskkill /FI "ImageName eq uvicorn.exe" >nul 2>&1
 timeout /t 1 /nobreak >nul
 taskkill /FI "ImageName eq uvicorn.exe" /F >nul 2>&1
 echo %COLOR_YELLOW%Starting Backend Server only...%COLOR_RESET%
-start "Drive Alive - Backend" cmd /k "cd /d "%BACKEND_DIR%" && "%VENV_DIR%\Scripts\python.exe" -m uvicorn app.main:app --reload --host 0.0.0.0 --port %BACKEND_PORT%"
+start "Drive Alive - Backend" cmd /k "cd /d "%BACKEND_DIR%" && call venv\Scripts\activate.bat && python -m uvicorn app.main:app --reload --host 0.0.0.0 --port %BACKEND_PORT%"
 echo.
 echo %COLOR_GREEN%Backend server started: %BACKEND_URL%%COLOR_RESET%
 if "%NO_BROWSER%"=="0" (
@@ -1031,6 +1031,71 @@ python --version >nul 2>&1 || exit /b 1
 node --version >nul 2>&1 || exit /b 1
 if not exist "%VENV_DIR%\Scripts\python.exe" exit /b 1
 if not exist "%FRONTEND_DIR%\node_modules" exit /b 1
+exit /b 0
+
+:check_and_setup_dependencies
+:: Check and auto-setup dependencies with virtual environment activation
+echo %COLOR_CYAN%Checking environment setup...%COLOR_RESET%
+
+:: Check Python
+python --version >nul 2>&1
+if errorlevel 1 (
+    echo %COLOR_RED%Error: Python not found. Please install Python 3.9+%COLOR_RESET%
+    exit /b 1
+)
+
+:: Check Node.js
+node --version >nul 2>&1
+if errorlevel 1 (
+    echo %COLOR_RED%Error: Node.js not found. Please install Node.js 18+%COLOR_RESET%
+    exit /b 1
+)
+
+:: Setup Python Virtual Environment
+if not exist "%VENV_DIR%\Scripts\python.exe" (
+    echo %COLOR_YELLOW%Virtual environment not found. Creating...%COLOR_RESET%
+    cd /d "%BACKEND_DIR%"
+    python -m venv venv
+    if errorlevel 1 (
+        echo %COLOR_RED%Failed to create virtual environment%COLOR_RESET%
+        exit /b 1
+    )
+    echo %COLOR_GREEN%✓ Virtual environment created%COLOR_RESET%
+)
+
+:: Check if backend dependencies are installed
+"%VENV_DIR%\Scripts\python.exe" -c "import fastapi" >nul 2>&1
+if errorlevel 1 (
+    echo %COLOR_YELLOW%Backend dependencies not installed. Installing...%COLOR_RESET%
+    cd /d "%BACKEND_DIR%"
+    call "%VENV_DIR%\Scripts\activate.bat"
+    python -m pip install --upgrade pip --quiet
+    pip install -r requirements.txt
+    if errorlevel 1 (
+        echo %COLOR_RED%Failed to install backend dependencies%COLOR_RESET%
+        exit /b 1
+    )
+    echo %COLOR_GREEN%✓ Backend dependencies installed%COLOR_RESET%
+) else (
+    echo %COLOR_GREEN%✓ Backend dependencies OK%COLOR_RESET%
+)
+
+:: Check frontend dependencies
+if not exist "%FRONTEND_DIR%\node_modules" (
+    echo %COLOR_YELLOW%Frontend dependencies not installed. Installing...%COLOR_RESET%
+    cd /d "%FRONTEND_DIR%"
+    call npm install
+    if errorlevel 1 (
+        echo %COLOR_RED%Failed to install frontend dependencies%COLOR_RESET%
+        exit /b 1
+    )
+    echo %COLOR_GREEN%✓ Frontend dependencies installed%COLOR_RESET%
+) else (
+    echo %COLOR_GREEN%✓ Frontend dependencies OK%COLOR_RESET%
+)
+
+echo %COLOR_GREEN%Environment ready!%COLOR_RESET%
+echo.
 exit /b 0
 
 :debug_output

@@ -2,32 +2,23 @@
 Authentication routes
 """
 
+from typing import Annotated
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
-from typing import Annotated
 
 from ..database import get_db
-from ..schemas.user import (
-    Token,
-    UserLogin,
-    UserResponse,
-    InstructorCreate,
-    InstructorResponse,
-    StudentCreate,
-    StudentResponse,
-)
+from ..models.user import User
+from ..schemas.user import InstructorCreate, InstructorResponse, StudentCreate, StudentResponse, Token, UserLogin, UserResponse
 from ..services.auth import AuthService
 from ..utils.auth import decode_access_token
-from ..models.user import User
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/login")
 
 
-async def get_current_user(
-    token: Annotated[str, Depends(oauth2_scheme)], db: Session = Depends(get_db)
-) -> User:
+async def get_current_user(token: Annotated[str, Depends(oauth2_scheme)], db: Session = Depends(get_db)) -> User:
     """
     Get current authenticated user
     """
@@ -52,9 +43,7 @@ async def get_current_user(
     return user
 
 
-@router.post(
-    "/register/student", response_model=dict, status_code=status.HTTP_201_CREATED
-)
+@router.post("/register/student", response_model=dict, status_code=status.HTTP_201_CREATED)
 async def register_student(student_data: StudentCreate, db: Session = Depends(get_db)):
     """
     Register a new student
@@ -70,24 +59,28 @@ async def register_student(student_data: StudentCreate, db: Session = Depends(ge
     }
 
 
-@router.post(
-    "/register/instructor", response_model=dict, status_code=status.HTTP_201_CREATED
-)
-async def register_instructor(
-    instructor_data: InstructorCreate, db: Session = Depends(get_db)
-):
+@router.post("/register/instructor", response_model=dict, status_code=status.HTTP_201_CREATED)
+async def register_instructor(instructor_data: InstructorCreate, db: Session = Depends(get_db)):
     """
     Register a new instructor
     """
-    user, instructor = AuthService.create_instructor(db, instructor_data)
-    token = AuthService.create_user_token(user)
+    try:
+        print(f"[DEBUG] Received instructor registration data: {instructor_data}")
+        user, instructor = AuthService.create_instructor(db, instructor_data)
+        token = AuthService.create_user_token(user)
 
-    return {
-        "user": UserResponse.model_validate(user),
-        "instructor_id": instructor.id,
-        "access_token": token,
-        "token_type": "bearer",
-    }
+        return {
+            "user": UserResponse.model_validate(user),
+            "instructor_id": instructor.id,
+            "access_token": token,
+            "token_type": "bearer",
+        }
+    except Exception as e:
+        print(f"[ERROR] Registration failed: {type(e).__name__}: {str(e)}")
+        import traceback
+
+        traceback.print_exc()
+        raise
 
 
 @router.post("/login", response_model=Token)
