@@ -7,6 +7,7 @@ from datetime import datetime
 from typing import Optional
 
 from fastapi import HTTPException, status
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from ..models.user import Instructor, Student, User, UserRole
@@ -75,8 +76,23 @@ class AuthService:
         )
 
         db.add(instructor)
-        db.commit()
-        db.refresh(instructor)
+
+        try:
+            db.commit()
+            db.refresh(instructor)
+        except IntegrityError as e:
+            db.rollback()
+            # Check if it's a duplicate ID number error
+            if "id_number" in str(e.orig):
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="ID number already in use. Please check your ID number.",
+                )
+            # Re-raise other integrity errors
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Registration failed due to duplicate data.",
+            )
 
         return user, instructor
 
@@ -105,17 +121,33 @@ class AuthService:
         )
 
         db.add(student)
-        db.commit()
-        db.refresh(student)
+
+        try:
+            db.commit()
+            db.refresh(student)
+        except IntegrityError as e:
+            db.rollback()
+            # Check if it's a duplicate ID number error
+            if "id_number" in str(e.orig):
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="ID number already in use. Please check your ID number.",
+                )
+            # Re-raise other integrity errors
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Registration failed due to duplicate data.",
+            )
 
         return user, student
 
     @staticmethod
-    def authenticate_user(db: Session, email: str, password: str) -> Optional[User]:
+    def authenticate_user(db: Session, email_or_phone: str, password: str) -> Optional[User]:
         """
-        Authenticate a user
+        Authenticate a user by email or phone number
         """
-        user = db.query(User).filter(User.email == email).first()
+        # Try to find user by email or phone
+        user = db.query(User).filter((User.email == email_or_phone) | (User.phone == email_or_phone)).first()
 
         if not user:
             return None

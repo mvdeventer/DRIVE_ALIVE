@@ -12,6 +12,17 @@ const API_BASE_URL = isWeb
   ? 'http://localhost:8000'
   : 'https://your-production-api.com';
 
+// Debug configuration
+export const DEBUG_CONFIG = {
+  ENABLED: __DEV__ || process.env.NODE_ENV === 'development',
+  DEFAULT_EMAIL: 'mvdeventer123@gmail.com',
+  DEFAULT_PHONE: '+27611154598',
+  DEFAULT_PASSWORD: 'Test1234',
+  // Student-specific debug values
+  STUDENT_EMAIL: 'mvdeventer@lhar.co.za',
+  STUDENT_PHONE: '+27611154599',
+};
+
 export const API_CONFIG = {
   BASE_URL: API_BASE_URL,
   TIMEOUT: 30000,

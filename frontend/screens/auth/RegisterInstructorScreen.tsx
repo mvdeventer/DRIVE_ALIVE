@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 import FormFieldWithTip from '../../components/FormFieldWithTip';
 import LicenseTypeSelector from '../../components/LicenseTypeSelector';
+import { DEBUG_CONFIG } from '../../config';
 import ApiService from '../../services/api';
 
 // Web-compatible alert function
@@ -35,11 +36,11 @@ const showAlert = (title: string, message: string, buttons?: any[]) => {
 
 export default function RegisterInstructorScreen({ navigation }: any) {
   // Pre-fill with test data in development mode for faster debugging
-  // Use timestamp to create unique email/phone for testing
+  // Use debug email and phone when in debug mode
   const timestamp = __DEV__ ? Date.now().toString().slice(-6) : '';
   const [formData, setFormData] = useState({
-    email: __DEV__ ? `martin${timestamp}@example.com` : '',
-    phone: __DEV__ ? `+2761115${timestamp.slice(0, 4)}` : '',
+    email: DEBUG_CONFIG.ENABLED ? DEBUG_CONFIG.DEFAULT_EMAIL : '',
+    phone: DEBUG_CONFIG.ENABLED ? DEBUG_CONFIG.DEFAULT_PHONE : '',
     password: '',
     confirmPassword: '',
     first_name: __DEV__ ? 'Martin' : '',

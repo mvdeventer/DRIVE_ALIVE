@@ -3,23 +3,24 @@
  */
 import React, { useState } from 'react';
 import {
-  View,
+  ActivityIndicator,
+  Alert,
+  Platform,
+  StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
-  StyleSheet,
-  Alert,
-  ActivityIndicator,
+  View,
 } from 'react-native';
 import ApiService from '../../services/api';
 
 export default function LoginScreen({ navigation }: any) {
-  const [email, setEmail] = useState('');
+  const [emailOrPhone, setEmailOrPhone] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
 
   const handleLogin = async () => {
-    if (!email || !password) {
+    if (!emailOrPhone || !password) {
       Alert.alert('Error', 'Please fill in all fields');
       return;
     }
@@ -27,21 +28,22 @@ export default function LoginScreen({ navigation }: any) {
     setLoading(true);
 
     try {
-      await ApiService.login(email, password);
-      const user = await ApiService.getCurrentUser();
-      
-      // Navigate based on user role
-      if (user.role === 'student') {
-        navigation.replace('StudentHome');
-      } else if (user.role === 'instructor') {
-        navigation.replace('InstructorHome');
+      await ApiService.login(emailOrPhone, password);
+
+      // On web, reload the page to trigger App.tsx to re-check auth
+      if (Platform.OS === 'web') {
+        window.location.reload();
+      } else {
+        // On native, navigate based on user role
+        const user = await ApiService.getCurrentUser();
+        if (user.role === 'student') {
+          navigation.replace('StudentHome');
+        } else if (user.role === 'instructor') {
+          navigation.replace('InstructorHome');
+        }
       }
     } catch (error: any) {
-      Alert.alert(
-        'Login Failed',
-        error.response?.data?.detail || 'An error occurred during login'
-      );
-    } finally {
+      Alert.alert('Login Failed', error.response?.data?.detail || 'An error occurred during login');
       setLoading(false);
     }
   };
@@ -53,10 +55,9 @@ export default function LoginScreen({ navigation }: any) {
 
       <TextInput
         style={styles.input}
-        placeholder="Email"
-        value={email}
-        onChangeText={setEmail}
-        keyboardType="email-address"
+        placeholder="Email or Phone Number"
+        value={emailOrPhone}
+        onChangeText={setEmailOrPhone}
         autoCapitalize="none"
         autoCorrect={false}
       />
@@ -69,11 +70,7 @@ export default function LoginScreen({ navigation }: any) {
         secureTextEntry
       />
 
-      <TouchableOpacity
-        style={styles.button}
-        onPress={handleLogin}
-        disabled={loading}
-      >
+      <TouchableOpacity style={styles.button} onPress={handleLogin} disabled={loading}>
         {loading ? (
           <ActivityIndicator color="#fff" />
         ) : (
@@ -85,9 +82,7 @@ export default function LoginScreen({ navigation }: any) {
         onPress={() => navigation.navigate('RegisterChoice')}
         style={styles.linkButton}
       >
-        <Text style={styles.linkText}>
-          Don't have an account? Register
-        </Text>
+        <Text style={styles.linkText}>Don't have an account? Register</Text>
       </TouchableOpacity>
     </View>
   );

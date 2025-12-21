@@ -9,7 +9,7 @@ from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 
 from ..database import get_db
-from ..models.user import User
+from ..models.user import Instructor, Student, User, UserRole
 from ..schemas.user import InstructorCreate, InstructorResponse, StudentCreate, StudentResponse, Token, UserLogin, UserResponse
 from ..services.auth import AuthService
 from ..utils.auth import decode_access_token
@@ -89,14 +89,14 @@ async def login(
     db: Session = Depends(get_db),
 ):
     """
-    Login with email and password
+    Login with email/phone and password
     """
     user = AuthService.authenticate_user(db, form_data.username, form_data.password)
 
     if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect email or password",
+            detail="Incorrect email/phone or password",
             headers={"WWW-Authenticate": "Bearer"},
         )
 
@@ -105,11 +105,48 @@ async def login(
     return {"access_token": access_token, "token_type": "bearer"}
 
 
-@router.get("/me", response_model=UserResponse)
+@router.get("/me")
 async def get_current_user_info(
     current_user: Annotated[User, Depends(get_current_user)],
+    db: Session = Depends(get_db),
 ):
     """
-    Get current user information
+    Get current user information with profile details
     """
-    return UserResponse.model_validate(current_user)
+    user_data = {
+        "id": current_user.id,
+        "email": current_user.email,
+        "phone": current_user.phone,
+        "first_name": current_user.first_name,
+        "last_name": current_user.last_name,
+        "role": current_user.role.value,
+        "status": current_user.status.value,
+    }
+
+    # Add role-specific details
+    if current_user.role == UserRole.INSTRUCTOR:
+        instructor = db.query(Instructor).filter(Instructor.user_id == current_user.id).first()
+        if instructor:
+            user_data.update(
+                {
+                    "license_type": instructor.license_type,
+                    "hourly_rate": float(instructor.hourly_rate),
+                    "is_available": instructor.is_available,
+                    "total_earnings": 0.0,  # TODO: Calculate from completed bookings
+                    "rating": float(instructor.rating) if instructor.rating else 0.0,
+                }
+            )
+
+    elif current_user.role == UserRole.STUDENT:
+        student = db.query(Student).filter(Student.user_id == current_user.id).first()
+        if student:
+            user_data.update(
+                {
+                    "id_number": student.id_number,
+                    "learners_permit_number": student.learners_permit_number,
+                    "emergency_contact_name": student.emergency_contact_name,
+                    "emergency_contact_phone": student.emergency_contact_phone,
+                }
+            )
+
+    return user_data

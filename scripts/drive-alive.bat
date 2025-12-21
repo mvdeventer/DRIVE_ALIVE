@@ -29,6 +29,7 @@
 ::   --frontend-only, -f     Only affect frontend
 ::   --no-browser, -n        Don't open browser windows
 ::   --debug, -d             Show detailed debug information
+::   --clear-db, -c          Clear database before starting (in debug mode only)
 ::   --port [PORT]           Custom backend port (default: 8000)
 ::   --message [MSG], -m     Commit message (for commit command)
 ::   --version [VER], -v     Version tag (for release command)
@@ -74,6 +75,7 @@ set "BACKEND_ONLY=0"
 set "FRONTEND_ONLY=0"
 set "NO_BROWSER=0"
 set "DEBUG=0"
+set "CLEAR_DB=0"
 set "COMMIT_MESSAGE="
 set "RELEASE_VERSION="
 
@@ -90,6 +92,8 @@ if /i "%~1"=="--no-browser" set "NO_BROWSER=1"
 if /i "%~1"=="-n" set "NO_BROWSER=1"
 if /i "%~1"=="--debug" set "DEBUG=1"
 if /i "%~1"=="-d" set "DEBUG=1"
+if /i "%~1"=="--clear-db" set "CLEAR_DB=1"
+if /i "%~1"=="-c" set "CLEAR_DB=1"
 if /i "%~1"=="--port" (
     shift
     set "BACKEND_PORT=%~1"
@@ -245,6 +249,22 @@ if errorlevel 1 (
 
 if "%FRONTEND_ONLY%"=="1" goto :start_frontend_only
 if "%BACKEND_ONLY%"=="1" goto :start_backend_only
+
+:: Clear database if requested in debug mode
+if "%CLEAR_DB%"=="1" (
+    if "%DEBUG%"=="1" (
+        echo %COLOR_YELLOW%Clearing database...%COLOR_RESET%
+        if exist "%BACKEND_DIR%\drive_alive.db" (
+            del /F /Q "%BACKEND_DIR%\drive_alive.db" >nul 2>&1
+            echo %COLOR_GREEN%Database cleared successfully!%COLOR_RESET%
+        ) else (
+            echo %COLOR_YELLOW%No database file found to clear.%COLOR_RESET%
+        )
+    ) else (
+        echo %COLOR_RED%Error: --clear-db can only be used with --debug flag%COLOR_RESET%
+        exit /b 1
+    )
+)
 
 :: Start both servers
 echo %COLOR_YELLOW%Starting Backend Server on port %BACKEND_PORT%...%COLOR_RESET%
