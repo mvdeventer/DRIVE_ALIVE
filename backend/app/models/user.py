@@ -79,6 +79,9 @@ class Instructor(Base):
     # Location
     current_latitude = Column(Float, nullable=True)
     current_longitude = Column(Float, nullable=True)
+    province = Column(String, nullable=True)  # Operating province
+    city = Column(String, nullable=False)  # Operating city
+    suburb = Column(String, nullable=True)  # Operating suburb
     service_radius_km = Column(Float, default=20.0)
     max_travel_distance_km = Column(Float, default=50.0)  # Maximum distance willing to travel
     rate_per_km_beyond_radius = Column(Float, default=5.0)  # Extra charge per km outside service radius
@@ -126,8 +129,9 @@ class Student(Base):
     # Address
     address_line1 = Column(String, nullable=False)
     address_line2 = Column(String, nullable=True)
-    city = Column(String, nullable=False)
     province = Column(String, nullable=False)
+    city = Column(String, nullable=False)
+    suburb = Column(String, nullable=True)
     postal_code = Column(String, nullable=False)
 
     # Default pickup location

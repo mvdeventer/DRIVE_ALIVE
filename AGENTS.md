@@ -50,24 +50,35 @@ payments handled in-app, GPS pickup/drop-off, WhatsApp reminders, and compliance
   - [x] Payment routes (Stripe, PayFast integration)
   - [x] Instructor routes (profile, availability)
 
-### Phase 2: Core Features (IN PROGRESS)
+### Phase 2: Core Features
 
 - [x] Login/Logout functionality
 - [x] React Native Web support (working)
 - [x] Form field tooltips and UX enhancements
 - [x] Tab navigation in forms
-- [ ] **Student Dashboard** ← CURRENT FOCUS
-  - [ ] View upcoming bookings
-  - [ ] Browse available instructors
-  - [ ] Book new lessons
-  - [ ] View booking history
-  - [ ] Profile management
-- [ ] **Instructor Dashboard** ← CURRENT FOCUS
-  - [ ] View upcoming lessons
-  - [ ] Manage availability
-  - [ ] View student bookings
-  - [ ] Earnings overview
-  - [ ] Profile management
+- [x] **Student Dashboard** ✅
+  - [x] View upcoming bookings
+  - [x] Browse available instructors
+  - [x] Book new lessons
+  - [x] View booking history
+  - [x] Profile management (full editing)
+- [x] **Instructor Dashboard** ✅
+  - [x] View upcoming lessons
+  - [x] Manage availability
+  - [x] View student bookings
+  - [x] Earnings overview
+  - [x] Profile management (full editing)
+- [x] **Profile Editing** ✅
+  - [x] Edit all registration fields (instructors)
+  - [x] Edit all registration fields (students)
+  - [x] Password change functionality
+  - [x] Location selector integration
+- [x] **Instructor Discovery** ✅
+  - [x] List all registered & verified instructors
+  - [x] Search by name, vehicle, city, suburb, province
+  - [x] Filter by availability and city
+  - [x] Sort alphabetically by suburb
+  - [x] Auto-verify instructors on registration (dev mode)
 - [ ] WhatsApp reminders
 - [ ] Push notifications
 
@@ -83,6 +94,10 @@ payments handled in-app, GPS pickup/drop-off, WhatsApp reminders, and compliance
 ### Phase 4: Admin & Compliance
 
 - [ ] Admin dashboard
+  - [ ] Manual instructor verification system
+  - [ ] User management (activate/deactivate accounts)
+  - [ ] Booking oversight and conflict resolution
+  - [ ] Revenue and analytics reporting
 - [ ] POPIA compliance audit
 - [ ] PCI DSS compliance certification
 
@@ -93,3 +108,5 @@ payments handled in-app, GPS pickup/drop-off, WhatsApp reminders, and compliance
 - Use **React Native + Expo** for cross-platform frontend.
 - Use **FastAPI/Django** in Python venv for backend.
 - Ensure secure handling of payments and user data.
+- **Development Mode**: Instructors are auto-verified on registration for testing.
+- **Production Mode**: Will require admin dashboard for manual verification.

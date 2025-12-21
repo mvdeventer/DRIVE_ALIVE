@@ -2,8 +2,9 @@
 Application configuration module
 """
 
-from pydantic_settings import BaseSettings
 from typing import List
+
+from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
@@ -40,6 +41,7 @@ class Settings(BaseSettings):
     ENVIRONMENT: str = "development"
     DEBUG: bool = True
     ALLOWED_ORIGINS: str = "http://localhost:3000"
+    AUTO_VERIFY_INSTRUCTORS: bool = True  # Set to False in production
 
     # South Africa
     DEFAULT_TIMEZONE: str = "Africa/Johannesburg"

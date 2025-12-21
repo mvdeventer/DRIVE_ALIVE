@@ -10,6 +10,7 @@ from fastapi import HTTPException, status
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from ..config import settings
 from ..models.user import Instructor, Student, User, UserRole
 from ..schemas.user import InstructorCreate, StudentCreate, UserCreate
 from ..utils.auth import create_access_token, get_password_hash, verify_password
@@ -68,12 +69,20 @@ class AuthService:
             vehicle_make=instructor_data.vehicle_make,
             vehicle_model=instructor_data.vehicle_model,
             vehicle_year=instructor_data.vehicle_year,
+            province=instructor_data.province,
+            city=instructor_data.city,
+            suburb=instructor_data.suburb,
             hourly_rate=instructor_data.hourly_rate,
             service_radius_km=instructor_data.service_radius_km,
             max_travel_distance_km=instructor_data.max_travel_distance_km,
             rate_per_km_beyond_radius=instructor_data.rate_per_km_beyond_radius,
             bio=instructor_data.bio,
         )
+
+        # Auto-verify in development mode
+        if settings.AUTO_VERIFY_INSTRUCTORS:
+            instructor.is_verified = True
+            instructor.verified_at = datetime.utcnow()
 
         db.add(instructor)
 
@@ -115,8 +124,9 @@ class AuthService:
             emergency_contact_phone=student_data.emergency_contact_phone,
             address_line1=student_data.address_line1,
             address_line2=student_data.address_line2,
-            city=student_data.city,
             province=student_data.province,
+            city=student_data.city,
+            suburb=student_data.suburb,
             postal_code=student_data.postal_code,
         )
 
@@ -145,15 +155,22 @@ class AuthService:
     def authenticate_user(db: Session, email_or_phone: str, password: str) -> Optional[User]:
         """
         Authenticate a user by email or phone number
+        Raises HTTPException with specific error messages
         """
         # Try to find user by email or phone
         user = db.query(User).filter((User.email == email_or_phone) | (User.phone == email_or_phone)).first()
 
         if not user:
-            return None
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="User does not exist. Please register first.",
+            )
 
         if not verify_password(password, user.password_hash):
-            return None
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Incorrect password",
+            )
 
         # Update last login
         user.last_login = datetime.utcnow()

@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 import FormFieldWithTip from '../../components/FormFieldWithTip';
 import LicenseTypeSelector from '../../components/LicenseTypeSelector';
+import LocationSelector from '../../components/LocationSelector';
 import { DEBUG_CONFIG } from '../../config';
 import ApiService from '../../services/api';
 
@@ -52,6 +53,9 @@ export default function RegisterInstructorScreen({ navigation }: any) {
     vehicle_make: __DEV__ ? 'Toyota' : '',
     vehicle_model: __DEV__ ? 'Corolla' : '',
     vehicle_year: __DEV__ ? '2020' : '',
+    province: __DEV__ ? 'Gauteng' : '',
+    city: __DEV__ ? 'Johannesburg' : '',
+    suburb: __DEV__ ? 'Sandton' : '',
     hourly_rate: __DEV__ ? '350' : '',
     service_radius_km: '20',
     max_travel_distance_km: '50',
@@ -80,6 +84,7 @@ export default function RegisterInstructorScreen({ navigation }: any) {
     if (!formData.vehicle_make) missingFields.push('Vehicle Make');
     if (!formData.vehicle_model) missingFields.push('Vehicle Model');
     if (!formData.vehicle_year) missingFields.push('Vehicle Year');
+    if (!formData.city) missingFields.push('City');
     if (!formData.hourly_rate) missingFields.push('Hourly Rate');
     if (!formData.password) missingFields.push('Password');
     if (!formData.confirmPassword) missingFields.push('Confirm Password');
@@ -127,6 +132,9 @@ export default function RegisterInstructorScreen({ navigation }: any) {
         vehicle_make: formData.vehicle_make,
         vehicle_model: formData.vehicle_model,
         vehicle_year: parseInt(formData.vehicle_year),
+        province: formData.province || null,
+        city: formData.city,
+        suburb: formData.suburb || null,
         hourly_rate: parseFloat(formData.hourly_rate),
         service_radius_km: parseFloat(formData.service_radius_km),
         max_travel_distance_km: parseFloat(formData.max_travel_distance_km),
@@ -302,6 +310,24 @@ export default function RegisterInstructorScreen({ navigation }: any) {
           keyboardType="numeric"
         />
 
+        <LocationSelector
+          label="Operating Location"
+          tooltip="Select your province, city, and suburb where you primarily operate. Students will search for instructors in their area."
+          required
+          selectedProvince={formData.province}
+          selectedCity={formData.city}
+          selectedSuburb={formData.suburb}
+          onProvinceChange={province =>
+            setFormData(prev => ({ ...prev, province, city: '', suburb: '' }))
+          }
+          onCityChange={city => setFormData(prev => ({ ...prev, city, suburb: '' }))}
+          onSuburbChange={suburb => setFormData(prev => ({ ...prev, suburb }))}
+          onPostalCodeChange={postalCode =>
+            setFormData(prev => ({ ...prev, postal_code: postalCode || prev.postal_code }))
+          }
+          showSuburbs={true}
+        />
+
         {/* Service Information */}
         <Text style={styles.sectionTitle}>Service Details</Text>
 
@@ -461,5 +487,54 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: 10,
     fontSize: 16,
+  },
+  pickerOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 1000,
+  },
+  pickerContainer: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 20,
+    width: '90%',
+    maxWidth: 400,
+    maxHeight: '80%',
+  },
+  pickerTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  cityList: {
+    maxHeight: 400,
+  },
+  cityItem: {
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e0e0e0',
+  },
+  cityText: {
+    fontSize: 16,
+    color: '#333',
+  },
+  pickerCloseButton: {
+    marginTop: 16,
+    padding: 12,
+    backgroundColor: '#6c757d',
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  pickerCloseButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
   },
 });

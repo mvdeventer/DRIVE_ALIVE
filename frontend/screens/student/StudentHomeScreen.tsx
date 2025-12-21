@@ -104,6 +104,23 @@ export default function StudentHomeScreen() {
     }
   };
 
+  const handleViewProfile = () => {
+    navigation.navigate('EditStudentProfile' as never);
+  };
+
+  const handleViewBooking = (booking: Booking) => {
+    const details = `Instructor: ${booking.instructor_name}\nDate: ${formatDate(
+      booking.scheduled_time
+    )}\nDuration: ${booking.duration_minutes} minutes\nPrice: R${booking.total_price.toFixed(
+      2
+    )}\nStatus: ${booking.status}\nPayment: ${booking.payment_status}`;
+    if (Platform.OS === 'web') {
+      alert(`📖 Booking Details\n\n${details}`);
+    } else {
+      Alert.alert('📖 Booking Details', details);
+    }
+  };
+
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
     return date.toLocaleDateString('en-ZA', {
@@ -183,7 +200,10 @@ export default function StudentHomeScreen() {
         >
           <Text style={styles.actionButtonText}>📚 Book a Lesson</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={[styles.actionButton, styles.secondaryButton]} onPress={() => {}}>
+        <TouchableOpacity
+          style={[styles.actionButton, styles.secondaryButton]}
+          onPress={handleViewProfile}
+        >
           <Text style={styles.actionButtonText}>👤 View My Profile</Text>
         </TouchableOpacity>
       </View>
@@ -212,7 +232,10 @@ export default function StudentHomeScreen() {
               <View style={styles.bookingFooter}>
                 <Text style={styles.bookingPrice}>R{booking.total_price.toFixed(2)}</Text>
                 <View style={styles.bookingActions}>
-                  <TouchableOpacity style={styles.viewButton}>
+                  <TouchableOpacity
+                    style={styles.viewButton}
+                    onPress={() => handleViewBooking(booking)}
+                  >
                     <Text style={styles.viewButtonText}>View</Text>
                   </TouchableOpacity>
                 </View>

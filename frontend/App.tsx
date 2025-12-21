@@ -16,10 +16,12 @@ import RegisterStudentScreen from './screens/auth/RegisterStudentScreen';
 
 // Student Screens
 import BookingScreen from './screens/booking/BookingScreen';
+import EditStudentProfileScreen from './screens/student/EditStudentProfileScreen';
 import InstructorListScreen from './screens/student/InstructorListScreen';
 import StudentHomeScreen from './screens/student/StudentHomeScreen';
 
 // Instructor Screens
+import EditInstructorProfileScreen from './screens/instructor/EditInstructorProfileScreen';
 import InstructorHomeScreen from './screens/instructor/InstructorHomeScreen';
 
 // Payment Screens
@@ -131,9 +133,19 @@ export default function App() {
                 options={{ title: 'Book Lesson' }}
               />
               <Stack.Screen
+                name="EditStudentProfile"
+                component={EditStudentProfileScreen}
+                options={{ title: 'Edit Profile' }}
+              />
+              <Stack.Screen
                 name="InstructorHome"
                 component={InstructorHomeScreen}
                 options={{ title: 'Instructor Dashboard' }}
+              />
+              <Stack.Screen
+                name="EditInstructorProfile"
+                component={EditInstructorProfileScreen}
+                options={{ title: 'Edit Profile' }}
               />
               <Stack.Screen
                 name="Payment"

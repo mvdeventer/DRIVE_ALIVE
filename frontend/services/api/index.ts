@@ -73,23 +73,19 @@ class ApiService {
 
   // Generic API methods
   async get(url: string, config?: any) {
-    const response = await this.api.get(url, config);
-    return response.data;
+    return await this.api.get(url, config);
   }
 
   async post(url: string, data?: any, config?: any) {
-    const response = await this.api.post(url, data, config);
-    return response.data;
+    return await this.api.post(url, data, config);
   }
 
   async put(url: string, data?: any, config?: any) {
-    const response = await this.api.put(url, data, config);
-    return response.data;
+    return await this.api.put(url, data, config);
   }
 
   async delete(url: string, config?: any) {
-    const response = await this.api.delete(url, config);
-    return response.data;
+    return await this.api.delete(url, config);
   }
 
   async setAuthToken(token: string) {
@@ -98,11 +94,12 @@ class ApiService {
 
   // Auth methods
   async login(email: string, password: string) {
-    const formData = new FormData();
-    formData.append('username', email);
-    formData.append('password', password);
+    // Use URLSearchParams for proper x-www-form-urlencoded format
+    const params = new URLSearchParams();
+    params.append('username', email);
+    params.append('password', password);
 
-    const response = await this.api.post(API_CONFIG.ENDPOINTS.LOGIN, formData, {
+    const response = await this.api.post(API_CONFIG.ENDPOINTS.LOGIN, params.toString(), {
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded',
       },

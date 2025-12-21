@@ -7,12 +7,14 @@ import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Modal,
   Platform,
   RefreshControl,
   ScrollView,
   StyleSheet,
   Switch,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
@@ -47,6 +49,12 @@ export default function InstructorHomeScreen() {
   const [profile, setProfile] = useState<InstructorProfile | null>(null);
   const [upcomingLessons, setUpcomingLessons] = useState<Booking[]>([]);
   const [todayLessons, setTodayLessons] = useState<Booking[]>([]);
+  const [showEditProfileModal, setShowEditProfileModal] = useState(false);
+  const [showAvailabilityModal, setShowAvailabilityModal] = useState(false);
+  const [editFormData, setEditFormData] = useState({
+    hourly_rate: '',
+    is_available: true,
+  });
 
   useEffect(() => {
     loadDashboardData();
@@ -57,7 +65,7 @@ export default function InstructorHomeScreen() {
       // Load instructor profile and bookings
       const [profileRes, bookingsRes] = await Promise.all([
         ApiService.get('/auth/me'),
-        ApiService.get('/instructors/my-bookings'),
+        ApiService.get('/bookings/my-bookings'),
       ]);
 
       setProfile(profileRes.data);
@@ -135,6 +143,83 @@ export default function InstructorHomeScreen() {
       }
     } catch (error) {
       console.error('Logout error:', error);
+    }
+  };
+
+  const handleManageAvailability = () => {
+    setEditFormData({
+      hourly_rate: profile?.hourly_rate?.toString() || '',
+      is_available: profile?.is_available || false,
+    });
+    setShowAvailabilityModal(true);
+  };
+
+  const handleEditProfile = () => {
+    navigation.navigate('EditInstructorProfile' as never);
+  };
+
+  const handleSaveProfile = async () => {
+    try {
+      const hourlyRate = parseFloat(editFormData.hourly_rate);
+      if (isNaN(hourlyRate) || hourlyRate <= 0) {
+        if (Platform.OS === 'web') {
+          alert('Please enter a valid hourly rate');
+        } else {
+          Alert.alert('Validation Error', 'Please enter a valid hourly rate');
+        }
+        return;
+      }
+
+      await ApiService.put('/instructors/me', {
+        hourly_rate: hourlyRate,
+        is_available: editFormData.is_available,
+      });
+
+      setProfile(prev =>
+        prev ? { ...prev, hourly_rate: hourlyRate, is_available: editFormData.is_available } : null
+      );
+      setShowEditProfileModal(false);
+
+      if (Platform.OS === 'web') {
+        alert('✅ Profile updated successfully!');
+      } else {
+        Alert.alert('Success', 'Profile updated successfully!');
+      }
+    } catch (error) {
+      console.error('Error updating profile:', error);
+      if (Platform.OS === 'web') {
+        alert('Failed to update profile');
+      } else {
+        Alert.alert('Error', 'Failed to update profile');
+      }
+    }
+  };
+
+  const handleViewEarnings = () => {
+    const details = `Total Earnings: R${
+      profile?.total_earnings?.toFixed(2) || '0.00'
+    }\nHourly Rate: R${profile?.hourly_rate || 0}\nToday's Lessons: ${
+      todayLessons.length
+    }\nUpcoming Lessons: ${upcomingLessons.length}\n\n(Detailed earnings report coming soon!)`;
+    if (Platform.OS === 'web') {
+      alert(`💰 Earnings Report\n\n${details}`);
+    } else {
+      Alert.alert('💰 Earnings Report', details);
+    }
+  };
+
+  const handleViewLessonDetails = (lesson: Booking) => {
+    const details = `Student: ${lesson.student_name}\nTime: ${formatDate(
+      lesson.scheduled_time
+    )} at ${formatTime(lesson.scheduled_time)}\nDuration: ${
+      lesson.duration_minutes
+    } minutes\nPrice: R${lesson.total_price.toFixed(2)}\nStatus: ${lesson.status}${
+      lesson.pickup_location ? `\nPickup: ${lesson.pickup_location}` : ''
+    }`;
+    if (Platform.OS === 'web') {
+      alert(`📖 Lesson Details\n\n${details}`);
+    } else {
+      Alert.alert('📖 Lesson Details', details);
     }
   };
 
@@ -269,7 +354,10 @@ export default function InstructorHomeScreen() {
               )}
               <View style={styles.lessonFooter}>
                 <Text style={styles.lessonPrice}>R{lesson.total_price.toFixed(2)}</Text>
-                <TouchableOpacity style={styles.viewButton}>
+                <TouchableOpacity
+                  style={styles.viewButton}
+                  onPress={() => handleViewLessonDetails(lesson)}
+                >
                   <Text style={styles.viewButtonText}>View Details</Text>
                 </TouchableOpacity>
               </View>
@@ -309,18 +397,182 @@ export default function InstructorHomeScreen() {
       {/* Quick Actions */}
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Quick Actions</Text>
-        <TouchableOpacity style={styles.actionButton} onPress={() => {}}>
+        <TouchableOpacity style={styles.actionButton} onPress={handleManageAvailability}>
           <Text style={styles.actionButtonText}>📅 Manage Availability</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={[styles.actionButton, styles.secondaryButton]} onPress={() => {}}>
+        <TouchableOpacity
+          style={[styles.actionButton, styles.secondaryButton]}
+          onPress={handleEditProfile}
+        >
           <Text style={styles.actionButtonText}>👤 Edit Profile</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={[styles.actionButton, styles.secondaryButton]} onPress={() => {}}>
+        <TouchableOpacity
+          style={[styles.actionButton, styles.secondaryButton]}
+          onPress={handleViewEarnings}
+        >
           <Text style={styles.actionButtonText}>💰 View Earnings Report</Text>
         </TouchableOpacity>
       </View>
 
       <View style={{ height: 40 }} />
+
+      {/* Edit Profile Modal */}
+      <Modal
+        visible={showEditProfileModal}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setShowEditProfileModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>👤 Edit Profile</Text>
+              <TouchableOpacity onPress={() => setShowEditProfileModal(false)}>
+                <Text style={styles.modalClose}>✕</Text>
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.profileInfoCard}>
+              <Text style={styles.profileInfoLabel}>Name:</Text>
+              <Text style={styles.profileInfoValue}>
+                {profile?.first_name} {profile?.last_name}
+              </Text>
+            </View>
+
+            <View style={styles.profileInfoCard}>
+              <Text style={styles.profileInfoLabel}>Email:</Text>
+              <Text style={styles.profileInfoValue}>{profile?.email}</Text>
+            </View>
+
+            <View style={styles.profileInfoCard}>
+              <Text style={styles.profileInfoLabel}>Phone:</Text>
+              <Text style={styles.profileInfoValue}>{profile?.phone}</Text>
+            </View>
+
+            <View style={styles.profileInfoCard}>
+              <Text style={styles.profileInfoLabel}>License:</Text>
+              <Text style={styles.profileInfoValue}>{profile?.license_type}</Text>
+            </View>
+
+            <View style={styles.modalFormGroup}>
+              <Text style={styles.modalLabel}>
+                Hourly Rate (ZAR) <Text style={styles.requiredStar}>*</Text>
+              </Text>
+              <TextInput
+                style={styles.modalInput}
+                value={editFormData.hourly_rate}
+                onChangeText={value => setEditFormData(prev => ({ ...prev, hourly_rate: value }))}
+                keyboardType="decimal-pad"
+                placeholder="e.g., 350"
+              />
+            </View>
+
+            <View style={styles.modalFormGroup}>
+              <View style={styles.switchRow}>
+                <Text style={styles.modalLabel}>Available for Bookings</Text>
+                <Switch
+                  value={editFormData.is_available}
+                  onValueChange={value =>
+                    setEditFormData(prev => ({ ...prev, is_available: value }))
+                  }
+                  trackColor={{ false: '#ccc', true: '#28a745' }}
+                  thumbColor={Platform.OS === 'android' ? '#fff' : undefined}
+                />
+              </View>
+            </View>
+
+            <View style={styles.modalButtons}>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.modalCancelButton]}
+                onPress={() => setShowEditProfileModal(false)}
+              >
+                <Text style={styles.modalCancelButtonText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.modalSaveButton]}
+                onPress={handleSaveProfile}
+              >
+                <Text style={styles.modalSaveButtonText}>Save Changes</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Manage Availability Modal */}
+      <Modal
+        visible={showAvailabilityModal}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setShowAvailabilityModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>📅 Manage Availability</Text>
+              <TouchableOpacity onPress={() => setShowAvailabilityModal(false)}>
+                <Text style={styles.modalClose}>✕</Text>
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.availabilityStatusCard}>
+              <Text style={styles.availabilityCurrentLabel}>Current Status</Text>
+              <Text
+                style={[
+                  styles.availabilityCurrentStatus,
+                  { color: profile?.is_available ? '#28a745' : '#dc3545' },
+                ]}
+              >
+                {profile?.is_available ? '🟢 Available' : '🔴 Unavailable'}
+              </Text>
+            </View>
+
+            <View style={styles.modalFormGroup}>
+              <View style={styles.switchRow}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.modalLabel}>Available for New Bookings</Text>
+                  <Text style={styles.modalHint}>
+                    Toggle this to control whether students can book lessons with you
+                  </Text>
+                </View>
+                <Switch
+                  value={editFormData.is_available}
+                  onValueChange={value =>
+                    setEditFormData(prev => ({ ...prev, is_available: value }))
+                  }
+                  trackColor={{ false: '#ccc', true: '#28a745' }}
+                  thumbColor={Platform.OS === 'android' ? '#fff' : undefined}
+                />
+              </View>
+            </View>
+
+            <View style={styles.modalInfoBox}>
+              <Text style={styles.modalInfoText}>
+                💡 Tip: You can quickly toggle your availability using the switch on the main
+                dashboard
+              </Text>
+            </View>
+
+            <View style={styles.modalButtons}>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.modalCancelButton]}
+                onPress={() => setShowAvailabilityModal(false)}
+              >
+                <Text style={styles.modalCancelButtonText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.modalSaveButton]}
+                onPress={async () => {
+                  await toggleAvailability(editFormData.is_available);
+                  setShowAvailabilityModal(false);
+                }}
+              >
+                <Text style={styles.modalSaveButtonText}>Update Status</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </ScrollView>
   );
 }
@@ -401,7 +653,6 @@ const styles = StyleSheet.create({
   statsContainer: {
     flexDirection: 'row',
     padding: 20,
-    gap: 12,
   },
   statCard: {
     flex: 1,
@@ -409,6 +660,7 @@ const styles = StyleSheet.create({
     padding: 16,
     borderRadius: 12,
     alignItems: 'center',
+    marginHorizontal: 6,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
@@ -569,5 +821,144 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 16,
     fontWeight: '600',
+  },
+  // Modal Styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  modalContent: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    width: '100%',
+    maxWidth: 500,
+    maxHeight: '90%',
+    padding: 20,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 20,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e0e0e0',
+  },
+  modalTitle: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: '#333',
+  },
+  modalClose: {
+    fontSize: 28,
+    color: '#666',
+    fontWeight: 'bold',
+    padding: 4,
+  },
+  profileInfoCard: {
+    backgroundColor: '#f8f9fa',
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 12,
+  },
+  profileInfoLabel: {
+    fontSize: 12,
+    color: '#666',
+    marginBottom: 4,
+  },
+  profileInfoValue: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+  },
+  modalFormGroup: {
+    marginBottom: 20,
+  },
+  modalLabel: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 8,
+  },
+  requiredStar: {
+    color: '#dc3545',
+  },
+  modalInput: {
+    backgroundColor: '#f8f9fa',
+    padding: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#dee2e6',
+    fontSize: 16,
+  },
+  switchRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  modalHint: {
+    fontSize: 13,
+    color: '#666',
+    marginTop: 4,
+  },
+  modalButtons: {
+    flexDirection: 'row',
+    marginTop: 20,
+  },
+  modalButton: {
+    flex: 1,
+    padding: 14,
+    borderRadius: 8,
+    alignItems: 'center',
+    marginHorizontal: 6,
+  },
+  modalCancelButton: {
+    backgroundColor: '#f8f9fa',
+    borderWidth: 1,
+    borderColor: '#dee2e6',
+  },
+  modalCancelButtonText: {
+    color: '#495057',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  modalSaveButton: {
+    backgroundColor: '#007bff',
+  },
+  modalSaveButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  availabilityStatusCard: {
+    backgroundColor: '#f8f9fa',
+    padding: 20,
+    borderRadius: 12,
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  availabilityCurrentLabel: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 8,
+  },
+  availabilityCurrentStatus: {
+    fontSize: 24,
+    fontWeight: 'bold',
+  },
+  modalInfoBox: {
+    backgroundColor: '#e7f3ff',
+    padding: 12,
+    borderRadius: 8,
+    borderLeftWidth: 4,
+    borderLeftColor: '#007bff',
+  },
+  modalInfoText: {
+    fontSize: 14,
+    color: '#495057',
+    lineHeight: 20,
   },
 });

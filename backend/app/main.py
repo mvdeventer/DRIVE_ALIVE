@@ -9,7 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from .config import settings
 from .database import Base, engine
-from .routes import auth, bookings, instructors, payments
+from .routes import auth, bookings, instructors, payments, students
 
 # Create database tables
 Base.metadata.create_all(bind=engine)
@@ -17,12 +17,15 @@ Base.metadata.create_all(bind=engine)
 # Create FastAPI app
 app = FastAPI(title="Driving School Booking API", description="API for South African driving school booking system", version="1.0.0")
 
-# Configure CORS - Allow all origins for development
+# Configure CORS - Specify origins for credentials
 origins = [
     "http://localhost:8081",
     "http://localhost:3000",
     "http://127.0.0.1:8081",
     "http://127.0.0.1:3000",
+    "http://localhost:19000",  # Expo dev server
+    "http://localhost:19001",  # Expo dev server alternate
+    "http://localhost:19006",  # Expo web
 ]
 
 app.add_middleware(
@@ -31,6 +34,7 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["*"],
 )
 
 # Include routers
@@ -38,6 +42,7 @@ app.include_router(auth.router)
 app.include_router(bookings.router)
 app.include_router(instructors.router)
 app.include_router(payments.router)
+app.include_router(students.router)
 
 
 @app.on_event("startup")

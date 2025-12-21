@@ -43,7 +43,26 @@ export default function LoginScreen({ navigation }: any) {
         }
       }
     } catch (error: any) {
-      Alert.alert('Login Failed', error.response?.data?.detail || 'An error occurred during login');
+      console.error('Login error:', error);
+      console.error('Error response:', error.response);
+      console.error('Error data:', error.response?.data);
+      console.error('Error detail:', error.response?.data?.detail);
+      console.error('Error status:', error.response?.status);
+
+      // Debug: Show full error structure
+      const errorMessage =
+        error.response?.data?.detail || error.message || 'An error occurred during login';
+      const statusCode = error.response?.status || 'unknown';
+
+      console.error(`Showing alert: ${errorMessage} (${statusCode})`);
+
+      if (Platform.OS === 'web') {
+        alert(
+          `Login Failed (${statusCode})\n\n${errorMessage}\n\nCheck browser console for details`
+        );
+      } else {
+        Alert.alert('Login Failed', `${errorMessage}\n\nStatus: ${statusCode}`);
+      }
       setLoading(false);
     }
   };
@@ -60,6 +79,8 @@ export default function LoginScreen({ navigation }: any) {
         onChangeText={setEmailOrPhone}
         autoCapitalize="none"
         autoCorrect={false}
+        onSubmitEditing={handleLogin}
+        returnKeyType="next"
       />
 
       <TextInput
@@ -68,6 +89,8 @@ export default function LoginScreen({ navigation }: any) {
         value={password}
         onChangeText={setPassword}
         secureTextEntry
+        onSubmitEditing={handleLogin}
+        returnKeyType="go"
       />
 
       <TouchableOpacity style={styles.button} onPress={handleLogin} disabled={loading}>

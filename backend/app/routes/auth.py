@@ -10,9 +10,9 @@ from sqlalchemy.orm import Session
 
 from ..database import get_db
 from ..models.user import Instructor, Student, User, UserRole
-from ..schemas.user import InstructorCreate, InstructorResponse, StudentCreate, StudentResponse, Token, UserLogin, UserResponse
+from ..schemas.user import ChangePasswordRequest, InstructorCreate, StudentCreate, Token, UserResponse, UserUpdate
 from ..services.auth import AuthService
-from ..utils.auth import decode_access_token
+from ..utils.auth import decode_access_token, get_password_hash, verify_password
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/login")
@@ -91,14 +91,8 @@ async def login(
     """
     Login with email/phone and password
     """
+    # authenticate_user now raises HTTPException with specific error messages
     user = AuthService.authenticate_user(db, form_data.username, form_data.password)
-
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect email/phone or password",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
 
     access_token = AuthService.create_user_token(user)
 
@@ -129,7 +123,7 @@ async def get_current_user_info(
         if instructor:
             user_data.update(
                 {
-                    "license_type": instructor.license_type,
+                    "license_types": instructor.license_types,
                     "hourly_rate": float(instructor.hourly_rate),
                     "is_available": instructor.is_available,
                     "total_earnings": 0.0,  # TODO: Calculate from completed bookings
@@ -150,3 +144,49 @@ async def get_current_user_info(
             )
 
     return user_data
+
+
+@router.put("/me", response_model=UserResponse)
+async def update_user_profile(
+    user_update: UserUpdate,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Session = Depends(get_db),
+):
+    """
+    Update current user's basic profile information
+    """
+    # Update only provided fields
+    if user_update.first_name is not None:
+        current_user.first_name = user_update.first_name
+    if user_update.last_name is not None:
+        current_user.last_name = user_update.last_name
+    if user_update.phone is not None:
+        current_user.phone = user_update.phone
+
+    db.commit()
+    db.refresh(current_user)
+
+    return current_user
+
+
+@router.post("/change-password")
+async def change_password(
+    password_data: ChangePasswordRequest,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Session = Depends(get_db),
+):
+    """
+    Change user's password
+    """
+    # Verify current password
+    if not verify_password(password_data.current_password, current_user.password_hash):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Current password is incorrect",
+        )
+
+    # Update password
+    current_user.password_hash = get_password_hash(password_data.new_password)
+    db.commit()
+
+    return {"message": "Password changed successfully"}

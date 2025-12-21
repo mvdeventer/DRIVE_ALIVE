@@ -1,11 +1,791 @@
-// Placeholder - To be implemented in Phase 2
-import React from 'react';
-import { View, Text } from 'react-native';
+/**
+ * Instructor List Screen - Browse and select instructors for booking
+ */
+import { CommonActions, useNavigation } from '@react-navigation/native';
+import * as SecureStore from 'expo-secure-store';
+import React, { useEffect, useState } from 'react';
+import {
+  ActivityIndicator,
+  Alert,
+  FlatList,
+  Platform,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from 'react-native';
+import ApiService from '../../services/api';
+import { SOUTH_AFRICAN_CITIES } from '../../utils/cities';
+
+interface Instructor {
+  id: number;
+  first_name: string;
+  last_name: string;
+  email: string;
+  phone: string;
+  instructor_id: number;
+  license_number: string;
+  license_types: string;
+  vehicle_make: string;
+  vehicle_model: string;
+  vehicle_year: number;
+  province?: string;
+  city: string;
+  suburb?: string;
+  is_available: boolean;
+  hourly_rate: number;
+  rating: number;
+  total_reviews: number;
+  is_verified: boolean;
+  current_latitude?: number;
+  current_longitude?: number;
+}
 
 export default function InstructorListScreen() {
+  const navigation = useNavigation();
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [instructors, setInstructors] = useState<Instructor[]>([]);
+  const [filteredInstructors, setFilteredInstructors] = useState<Instructor[]>([]);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedCity, setSelectedCity] = useState('');
+  const [availableOnly, setAvailableOnly] = useState(true);
+  const [showCityPicker, setShowCityPicker] = useState(false);
+  const [sortBySuburb, setSortBySuburb] = useState(false);
+
+  useEffect(() => {
+    loadInstructors();
+  }, []);
+
+  useEffect(() => {
+    filterInstructors();
+  }, [searchQuery, availableOnly, selectedCity, instructors, sortBySuburb]);
+
+  const loadInstructors = async () => {
+    try {
+      // Load ALL instructors (not just available)
+      const response = await ApiService.get('/instructors/', {
+        params: {
+          available_only: false,
+        },
+      });
+      setInstructors(response.data);
+      setFilteredInstructors(response.data);
+    } catch (error: any) {
+      console.error('Error loading instructors:', error);
+      if (Platform.OS === 'web') {
+        alert('Failed to load instructors');
+      } else {
+        Alert.alert('Error', 'Failed to load instructors');
+      }
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  };
+
+  const filterInstructors = () => {
+    let filtered = instructors;
+
+    // Filter by availability
+    if (availableOnly) {
+      filtered = filtered.filter(i => i.is_available);
+    }
+
+    // Filter by city
+    if (selectedCity) {
+      filtered = filtered.filter(i => i.city === selectedCity);
+    }
+
+    // Filter by search query (name, vehicle, city, suburb, province)
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase();
+      filtered = filtered.filter(
+        i =>
+          i.first_name.toLowerCase().includes(query) ||
+          i.last_name.toLowerCase().includes(query) ||
+          i.vehicle_make.toLowerCase().includes(query) ||
+          i.vehicle_model.toLowerCase().includes(query) ||
+          i.city.toLowerCase().includes(query) ||
+          (i.suburb && i.suburb.toLowerCase().includes(query)) ||
+          (i.province && i.province.toLowerCase().includes(query))
+      );
+    }
+
+    // Sort alphabetically by suburb if enabled
+    if (sortBySuburb) {
+      filtered = filtered.sort((a, b) => {
+        const suburbA = a.suburb || '';
+        const suburbB = b.suburb || '';
+        return suburbA.localeCompare(suburbB);
+      });
+    }
+
+    setFilteredInstructors(filtered);
+  };
+
+  const onRefresh = () => {
+    setRefreshing(true);
+    loadInstructors();
+  };
+
+  const handleLogout = async () => {
+    try {
+      if (Platform.OS === 'web') {
+        localStorage.clear();
+        window.location.reload();
+      } else {
+        await SecureStore.deleteItemAsync('access_token');
+        await SecureStore.deleteItemAsync('user_role');
+        navigation.dispatch(
+          CommonActions.reset({
+            index: 0,
+            routes: [{ name: 'Login' }],
+          })
+        );
+      }
+    } catch (error) {
+      console.error('Logout error:', error);
+    }
+  };
+
+  const handleSelectInstructor = (instructor: Instructor) => {
+    // Show full profile when card is tapped
+    handleViewFullProfile(instructor);
+  };
+
+  const handleBookLesson = (instructor: Instructor) => {
+    if (!instructor.is_available) {
+      if (Platform.OS === 'web') {
+        alert('This instructor is currently unavailable');
+      } else {
+        Alert.alert('Unavailable', 'This instructor is currently unavailable');
+      }
+      return;
+    }
+
+    // Navigate to booking screen with instructor data
+    navigation.navigate('Booking' as never, { instructor } as never);
+  };
+
+  const handleCallInstructor = (instructor: Instructor) => {
+    if (Platform.OS === 'web') {
+      window.open(`tel:${instructor.phone}`, '_self');
+    } else {
+      Alert.alert('Call Instructor', `Call ${instructor.first_name} ${instructor.last_name}?`, [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Call',
+          onPress: () => {
+            const { Linking } = require('react-native');
+            Linking.openURL(`tel:${instructor.phone}`);
+          },
+        },
+      ]);
+    }
+  };
+
+  const handleEmailInstructor = (instructor: Instructor) => {
+    const subject = `Driving Lesson Inquiry - ${instructor.first_name} ${instructor.last_name}`;
+    const body = `Hi ${instructor.first_name},\n\nI found your profile on Drive Alive and I'm interested in booking driving lessons.\n\nLooking forward to hearing from you!\n\nBest regards`;
+    const mailtoUrl = `mailto:${instructor.email}?subject=${encodeURIComponent(
+      subject
+    )}&body=${encodeURIComponent(body)}`;
+
+    if (Platform.OS === 'web') {
+      window.open(mailtoUrl, '_self');
+    } else {
+      const { Linking } = require('react-native');
+      Linking.openURL(mailtoUrl);
+    }
+  };
+
+  const handleViewFullProfile = (instructor: Instructor) => {
+    const licenseTypes = instructor.license_types
+      .split(',')
+      .map(t => `Code ${t}`)
+      .join(', ');
+
+    const location = [instructor.province, instructor.city, instructor.suburb]
+      .filter(Boolean)
+      .join(', ');
+
+    const details = `👤 ${instructor.first_name} ${instructor.last_name}\n${
+      instructor.is_verified ? '✅ Verified Instructor' : '⚠️ Not Verified'
+    }\n\n📍 Location\n${location}\n\n🪪 License Types\n${licenseTypes}\n\n🚗 Vehicle\n${
+      instructor.vehicle_make
+    } ${instructor.vehicle_model} (${instructor.vehicle_year})\n\n💰 Pricing\nR${
+      instructor.hourly_rate
+    }/hr\n\n⭐ Rating\n${instructor.rating.toFixed(1)} stars (${
+      instructor.total_reviews
+    } reviews)\n\n📱 Contact\nPhone: ${instructor.phone}\nEmail: ${instructor.email}\n\n${
+      instructor.is_available ? '✅ Currently Available' : '❌ Currently Unavailable'
+    }`;
+
+    if (Platform.OS === 'web') {
+      alert(`Instructor Profile\n\n${details}`);
+    } else {
+      Alert.alert('Instructor Profile', details, [
+        { text: 'Close', style: 'cancel' },
+        { text: 'Book Now', onPress: () => handleBookLesson(instructor) },
+      ]);
+    }
+  };
+
+  const renderInstructor = ({ item }: { item: Instructor }) => (
+    <TouchableOpacity style={styles.instructorCard} onPress={() => handleSelectInstructor(item)}>
+      <View style={styles.instructorHeader}>
+        <View style={styles.instructorInfo}>
+          <Text style={styles.instructorName}>
+            {item.first_name} {item.last_name}
+            {item.is_verified && ' ✅'}
+          </Text>
+          <Text style={styles.vehicleInfo}>
+            🚗 {item.vehicle_make} {item.vehicle_model} ({item.vehicle_year})
+          </Text>
+        </View>
+        <View
+          style={[
+            styles.availabilityBadge,
+            { backgroundColor: item.is_available ? '#28a745' : '#dc3545' },
+          ]}
+        >
+          <Text style={styles.availabilityText}>
+            {item.is_available ? 'Available' : 'Unavailable'}
+          </Text>
+        </View>
+      </View>
+
+      <View style={styles.instructorDetails}>
+        {item.province && (
+          <View style={styles.detailRow}>
+            <Text style={styles.detailLabel}>📍 Province:</Text>
+            <Text style={styles.detailValue}>{item.province}</Text>
+          </View>
+        )}
+        <View style={styles.detailRow}>
+          <Text style={styles.detailLabel}>🏙️ City:</Text>
+          <Text style={styles.detailValue}>{item.city}</Text>
+        </View>
+        {item.suburb && (
+          <View style={styles.detailRow}>
+            <Text style={styles.detailLabel}>🏘️ Suburb:</Text>
+            <Text style={styles.detailValue}>{item.suburb}</Text>
+          </View>
+        )}
+        <View style={styles.detailRow}>
+          <Text style={styles.detailLabel}>🪪 License Types:</Text>
+          <Text style={styles.detailValue}>
+            {item.license_types
+              .split(',')
+              .map(t => `Code ${t}`)
+              .join(', ')}
+          </Text>
+        </View>
+        <View style={styles.detailRow}>
+          <Text style={styles.detailLabel}>💰 Hourly Rate:</Text>
+          <Text style={styles.detailValue}>R{item.hourly_rate}/hr</Text>
+        </View>
+        <View style={styles.detailRow}>
+          <Text style={styles.detailLabel}>⭐ Rating:</Text>
+          <Text style={styles.detailValue}>
+            {item.rating.toFixed(1)} ({item.total_reviews} reviews)
+          </Text>
+        </View>
+        <View style={styles.detailRow}>
+          <Text style={styles.detailLabel}>📱 Contact:</Text>
+          <Text style={styles.detailValue}>{item.phone}</Text>
+        </View>
+      </View>
+
+      {/* Action Buttons */}
+      <View style={styles.actionButtonsContainer}>
+        <TouchableOpacity
+          style={[styles.primaryButton, !item.is_available && styles.primaryButtonDisabled]}
+          onPress={() => handleBookLesson(item)}
+          disabled={!item.is_available}
+        >
+          <Text style={styles.primaryButtonText}>
+            {item.is_available ? '📅 Book Lesson' : '❌ Unavailable'}
+          </Text>
+        </TouchableOpacity>
+
+        <View style={styles.secondaryButtonsRow}>
+          <TouchableOpacity
+            style={styles.secondaryButton}
+            onPress={() => handleViewFullProfile(item)}
+          >
+            <Text style={styles.secondaryButtonText}>👤 Profile</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.secondaryButton}
+            onPress={() => handleCallInstructor(item)}
+          >
+            <Text style={styles.secondaryButtonText}>📞 Call</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.secondaryButton}
+            onPress={() => handleEmailInstructor(item)}
+          >
+            <Text style={styles.secondaryButtonText}>✉️ Email</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </TouchableOpacity>
+  );
+
+  if (loading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#007bff" />
+        <Text style={styles.loadingText}>Loading instructors...</Text>
+      </View>
+    );
+  }
+
   return (
-    <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-      <Text>Instructor List - Coming Soon</Text>
+    <View style={styles.container}>
+      {/* Header */}
+      <View style={styles.header}>
+        <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
+          <Text style={styles.backButtonText}>← Back</Text>
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>Find an Instructor</Text>
+        <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
+          <Text style={styles.logoutButtonText}>Logout</Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* Search Bar */}
+      <View style={styles.searchContainer}>
+        <TextInput
+          style={styles.searchInput}
+          placeholder="Search by name, vehicle, city, suburb, or province..."
+          value={searchQuery}
+          onChangeText={setSearchQuery}
+        />
+      </View>
+
+      {/* Filter Toggles */}
+      <View style={styles.filterContainer}>
+        <TouchableOpacity
+          style={[styles.filterButton, availableOnly && styles.filterButtonActive]}
+          onPress={() => setAvailableOnly(!availableOnly)}
+        >
+          <Text style={[styles.filterButtonText, availableOnly && styles.filterButtonTextActive]}>
+            {availableOnly ? '✓ Available Only' : 'Show All'}
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.filterButton, selectedCity && styles.filterButtonActive]}
+          onPress={() => setShowCityPicker(true)}
+        >
+          <Text style={[styles.filterButtonText, selectedCity && styles.filterButtonTextActive]}>
+            {selectedCity ? `📍 ${selectedCity}` : '📍 All Cities'}
+          </Text>
+        </TouchableOpacity>
+        {selectedCity && (
+          <TouchableOpacity style={styles.clearCityButton} onPress={() => setSelectedCity(null)}>
+            <Text style={styles.clearCityText}>✕</Text>
+          </TouchableOpacity>
+        )}
+      </View>
+
+      {/* Sort Toggle */}
+      <View style={styles.sortContainer}>
+        <TouchableOpacity
+          style={[styles.sortButton, sortBySuburb && styles.sortButtonActive]}
+          onPress={() => setSortBySuburb(!sortBySuburb)}
+        >
+          <Text style={[styles.sortButtonText, sortBySuburb && styles.sortButtonTextActive]}>
+            {sortBySuburb ? '✓ Sorted by Suburb (A-Z)' : '⬇️ Sort by Suburb'}
+          </Text>
+        </TouchableOpacity>
+      </View>
+
+      <View style={styles.resultCountContainer}>
+        <Text style={styles.resultCount}>{filteredInstructors.length} instructor(s) found</Text>
+      </View>
+
+      {/* City Picker Modal */}
+      {Platform.OS === 'web' && showCityPicker && (
+        <View style={styles.pickerOverlay}>
+          <View style={styles.pickerContainer}>
+            <View style={styles.pickerHeader}>
+              <Text style={styles.pickerTitle}>Select City</Text>
+              <TouchableOpacity onPress={() => setShowCityPicker(false)}>
+                <Text style={styles.pickerClose}>✕</Text>
+              </TouchableOpacity>
+            </View>
+            <ScrollView style={styles.cityList}>
+              {SOUTH_AFRICAN_CITIES.map(city => (
+                <TouchableOpacity
+                  key={city}
+                  style={[styles.cityItem, selectedCity === city && styles.cityItemSelected]}
+                  onPress={() => {
+                    setSelectedCity(city);
+                    setShowCityPicker(false);
+                  }}
+                >
+                  <Text
+                    style={[
+                      styles.cityItemText,
+                      selectedCity === city && styles.cityItemTextSelected,
+                    ]}
+                  >
+                    {city}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+        </View>
+      )}
+
+      {/* Instructor List */}
+      <FlatList
+        data={filteredInstructors}
+        renderItem={renderInstructor}
+        keyExtractor={item => item.id.toString()}
+        contentContainerStyle={styles.listContainer}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+        ListEmptyComponent={
+          <View style={styles.emptyState}>
+            <Text style={styles.emptyStateText}>No instructors found</Text>
+            <Text style={styles.emptyStateSubtext}>Try adjusting your filters or search query</Text>
+          </View>
+        }
+      />
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#f5f5f5',
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#f5f5f5',
+  },
+  loadingText: {
+    marginTop: 16,
+    fontSize: 16,
+    color: '#666',
+  },
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 20,
+    backgroundColor: '#fff',
+    borderBottomWidth: 1,
+    borderBottomColor: '#e0e0e0',
+  },
+  backButton: {
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+  },
+  backButtonText: {
+    fontSize: 16,
+    color: '#007bff',
+    fontWeight: '600',
+  },
+  headerTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#333',
+  },
+  logoutButton: {
+    backgroundColor: '#dc3545',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 6,
+  },
+  logoutButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  searchContainer: {
+    padding: 16,
+    backgroundColor: '#fff',
+    borderBottomWidth: 1,
+    borderBottomColor: '#e0e0e0',
+  },
+  searchInput: {
+    backgroundColor: '#f5f5f5',
+    padding: 12,
+    borderRadius: 8,
+    fontSize: 16,
+  },
+  filterContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+    paddingBottom: 8,
+    backgroundColor: '#fff',
+  },
+  filterButton: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#007bff',
+    marginRight: 8,
+  },
+  filterButtonActive: {
+    backgroundColor: '#007bff',
+  },
+  filterButtonText: {
+    color: '#007bff',
+    fontWeight: '600',
+    fontSize: 14,
+  },
+  filterButtonTextActive: {
+    color: '#fff',
+  },
+  clearCityButton: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#dc3545',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  clearCityText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  sortContainer: {
+    padding: 16,
+    paddingTop: 8,
+    paddingBottom: 12,
+    backgroundColor: '#fff',
+    borderBottomWidth: 1,
+    borderBottomColor: '#e0e0e0',
+  },
+  sortButton: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#6c757d',
+    backgroundColor: '#fff',
+  },
+  sortButtonActive: {
+    backgroundColor: '#6c757d',
+    borderColor: '#6c757d',
+  },
+  sortButtonText: {
+    color: '#6c757d',
+    fontWeight: '600',
+    fontSize: 14,
+    textAlign: 'center',
+  },
+  sortButtonTextActive: {
+    color: '#fff',
+  },
+  resultCountContainer: {
+    paddingHorizontal: 16,
+    paddingBottom: 8,
+    backgroundColor: '#fff',
+    borderBottomWidth: 1,
+    borderBottomColor: '#e0e0e0',
+  },
+  resultCount: {
+    fontSize: 14,
+    color: '#666',
+  },
+  pickerOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 1000,
+  },
+  pickerContainer: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    width: '90%',
+    maxWidth: 500,
+    maxHeight: '80%',
+    overflow: 'hidden',
+  },
+  pickerHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e0e0e0',
+  },
+  pickerTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#333',
+  },
+  pickerClose: {
+    fontSize: 24,
+    color: '#666',
+    fontWeight: 'bold',
+  },
+  cityList: {
+    maxHeight: 400,
+  },
+  cityItem: {
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
+  },
+  cityItemSelected: {
+    backgroundColor: '#e7f3ff',
+  },
+  cityItemText: {
+    fontSize: 16,
+    color: '#333',
+  },
+  cityItemTextSelected: {
+    color: '#007bff',
+    fontWeight: '600',
+  },
+  listContainer: {
+    padding: 16,
+  },
+  instructorCard: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  instructorHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 12,
+  },
+  instructorInfo: {
+    flex: 1,
+  },
+  instructorName: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#333',
+    marginBottom: 4,
+  },
+  vehicleInfo: {
+    fontSize: 14,
+    color: '#666',
+  },
+  availabilityBadge: {
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  availabilityText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  instructorDetails: {
+    marginBottom: 12,
+  },
+  detailRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 6,
+  },
+  detailLabel: {
+    fontSize: 14,
+    color: '#666',
+  },
+  detailValue: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#333',
+  },
+  actionButtonsContainer: {
+    marginTop: 4,
+  },
+  primaryButton: {
+    backgroundColor: '#007bff',
+    padding: 14,
+    borderRadius: 8,
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  primaryButtonDisabled: {
+    backgroundColor: '#6c757d',
+  },
+  primaryButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  secondaryButtonsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  secondaryButton: {
+    flex: 1,
+    backgroundColor: '#f8f9fa',
+    padding: 10,
+    borderRadius: 8,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#dee2e6',
+    marginHorizontal: 4,
+  },
+  secondaryButtonText: {
+    color: '#495057',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  bookButton: {
+    backgroundColor: '#007bff',
+    padding: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  bookButtonDisabled: {
+    backgroundColor: '#6c757d',
+  },
+  bookButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  emptyState: {
+    padding: 40,
+    alignItems: 'center',
+  },
+  emptyStateText: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 8,
+  },
+  emptyStateSubtext: {
+    fontSize: 14,
+    color: '#666',
+    textAlign: 'center',
+  },
+});

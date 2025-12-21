@@ -234,12 +234,77 @@ for /f "tokens=5" %%a in ('netstat -ano 2^>nul ^| findstr ":19000" ^| findstr "L
     taskkill /F /PID %%a >nul 2>&1
 )
 
-:: Final cleanup
+:: Final cleanup - Kill Python processes holding database connections
+taskkill /FI "ImageName eq python.exe" /FI "CommandLine eq *uvicorn*" >nul 2>&1
+timeout /t 1 /nobreak >nul
+taskkill /FI "ImageName eq python.exe" /FI "CommandLine eq *uvicorn*" /F >nul 2>&1
+
 taskkill /FI "ImageName eq uvicorn.exe" >nul 2>&1
 timeout /t 1 /nobreak >nul
 taskkill /FI "ImageName eq uvicorn.exe" /F >nul 2>&1
 
+:: Extra delay for database connections to close
+if "%CLEAR_DB%"=="1" (
+    echo %COLOR_CYAN%Waiting for database connections to close...%COLOR_RESET%
+
+    :: Kill ALL Python processes (including VSCode Pylance) to release database locks
+    echo %COLOR_YELLOW%Stopping Python language servers and other processes...%COLOR_RESET%
+    taskkill /FI "ImageName eq python.exe" /F >nul 2>&1
+
+    timeout /t 3 /nobreak >nul
+)
+
 echo.
+
+:: Clear database FIRST if requested in debug mode (before any server starts)
+if "%CLEAR_DB%"=="1" (
+    if "%DEBUG%"=="1" (
+        echo.
+        echo %COLOR_CYAN%==============================================================================
+        echo   DATABASE RESET OPERATION
+        echo ==============================================================================%COLOR_RESET%
+        echo.
+
+        if exist "%BACKEND_DIR%\drive_alive.db" (
+            echo %COLOR_YELLOW%^[BEFORE^] Database file found%COLOR_RESET%
+
+            :: Get file size
+            for %%A in ("%BACKEND_DIR%\drive_alive.db") do set "DB_SIZE=%%~zA"
+            echo   - Database file: drive_alive.db
+            echo   - File size: !DB_SIZE! bytes
+
+            echo.
+            echo %COLOR_RED%^[ACTION^] Deleting database file...%COLOR_RESET%
+
+            :: Use PowerShell to force kill Python and delete database
+            powershell -Command "taskkill /F /IM python.exe 2>$null; Start-Sleep -Seconds 2; Remove-Item '%BACKEND_DIR%\drive_alive.db' -Force -ErrorAction SilentlyContinue"
+
+            if exist "%BACKEND_DIR%\drive_alive.db" (
+                echo %COLOR_RED%  X Failed to delete database file ^(file may be locked^)%COLOR_RESET%
+                echo %COLOR_YELLOW%  → Try closing VSCode and running again%COLOR_RESET%
+            ) else (
+                echo %COLOR_GREEN%  √ Database file deleted successfully%COLOR_RESET%
+            )
+
+            echo.
+            echo %COLOR_GREEN%^[AFTER^] Database will be recreated when backend starts%COLOR_RESET%
+            echo   - New empty database will be created
+            echo   - All tables will be initialized
+            echo   - No users will exist ^(registration required^)
+            echo.
+            echo %COLOR_CYAN%==============================================================================%COLOR_RESET%
+            echo.
+        ) else (
+            echo %COLOR_YELLOW%^[INFO^] No existing database file found%COLOR_RESET%
+            echo   - Fresh database will be created on backend startup
+            echo.
+        )
+    ) else (
+        echo %COLOR_RED%Error: --clear-db can only be used with --debug flag%COLOR_RESET%
+        echo %COLOR_YELLOW%Usage: drive-alive.bat start -d -c%COLOR_RESET%
+        exit /b 1
+    )
+)
 
 call :check_and_setup_dependencies
 if errorlevel 1 (
@@ -250,28 +315,36 @@ if errorlevel 1 (
 if "%FRONTEND_ONLY%"=="1" goto :start_frontend_only
 if "%BACKEND_ONLY%"=="1" goto :start_backend_only
 
-:: Clear database if requested in debug mode
-if "%CLEAR_DB%"=="1" (
-    if "%DEBUG%"=="1" (
-        echo %COLOR_YELLOW%Clearing database...%COLOR_RESET%
-        if exist "%BACKEND_DIR%\drive_alive.db" (
-            del /F /Q "%BACKEND_DIR%\drive_alive.db" >nul 2>&1
-            echo %COLOR_GREEN%Database cleared successfully!%COLOR_RESET%
-        ) else (
-            echo %COLOR_YELLOW%No database file found to clear.%COLOR_RESET%
-        )
-    ) else (
-        echo %COLOR_RED%Error: --clear-db can only be used with --debug flag%COLOR_RESET%
-        exit /b 1
-    )
-)
-
 :: Start both servers
 echo %COLOR_YELLOW%Starting Backend Server on port %BACKEND_PORT%...%COLOR_RESET%
 start "Drive Alive - Backend" cmd /k "cd /d "%BACKEND_DIR%" && call venv\Scripts\activate.bat && python -m uvicorn app.main:app --reload --host 0.0.0.0 --port %BACKEND_PORT%"
 
 echo %COLOR_YELLOW%Waiting for backend to initialize...%COLOR_RESET%
 timeout /t 5 /nobreak >nul
+
+:: Verify database was created after backend startup
+if "%CLEAR_DB%"=="1" (
+    if "%DEBUG%"=="1" (
+        echo.
+        echo %COLOR_CYAN%^[VERIFY^] Checking new database state...%COLOR_RESET%
+        if exist "%BACKEND_DIR%\drive_alive.db" (
+            for %%A in ("%BACKEND_DIR%\drive_alive.db") do set "NEW_DB_SIZE=%%~zA"
+            echo %COLOR_GREEN%  √ New database created successfully%COLOR_RESET%
+            echo   - File size: !NEW_DB_SIZE! bytes
+
+            :: Verify empty database
+            cd /d "%BACKEND_DIR%"
+            call venv\Scripts\activate.bat >nul 2>&1
+            python check_db_users.py 2>nul
+            cd /d "%PROJECT_ROOT%"
+            echo   - Database is ready for new registrations
+            echo.
+        ) else (
+            echo %COLOR_RED%  X Warning: Database file not created%COLOR_RESET%
+            echo.
+        )
+    )
+)
 
 echo %COLOR_YELLOW%Starting Frontend Server...%COLOR_RESET%
 start "Drive Alive - Frontend" cmd /k "cd /d "%FRONTEND_DIR%" && npm start"

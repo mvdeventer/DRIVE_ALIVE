@@ -14,6 +14,7 @@ import {
   View,
 } from 'react-native';
 import FormFieldWithTip from '../../components/FormFieldWithTip';
+import LocationSelector from '../../components/LocationSelector';
 import { DEBUG_CONFIG } from '../../config';
 import ApiService from '../../services/api';
 
@@ -42,8 +43,6 @@ export default function RegisterStudentScreen({ navigation }: any) {
   const emergencyPhoneRef = useRef<TextInput>(null);
   const addressLine1Ref = useRef<TextInput>(null);
   const addressLine2Ref = useRef<TextInput>(null);
-  const cityRef = useRef<TextInput>(null);
-  const provinceRef = useRef<TextInput>(null);
   const postalCodeRef = useRef<TextInput>(null);
   const passwordRef = useRef<TextInput>(null);
   const confirmPasswordRef = useRef<TextInput>(null);
@@ -61,8 +60,9 @@ export default function RegisterStudentScreen({ navigation }: any) {
     emergency_contact_phone: DEBUG_CONFIG.ENABLED ? '+27821234567' : '',
     address_line1: DEBUG_CONFIG.ENABLED ? '123 Main Street' : '',
     address_line2: DEBUG_CONFIG.ENABLED ? 'Apartment 4B' : '',
-    city: DEBUG_CONFIG.ENABLED ? 'Johannesburg' : '',
     province: DEBUG_CONFIG.ENABLED ? 'Gauteng' : '',
+    city: DEBUG_CONFIG.ENABLED ? 'Johannesburg' : '',
+    suburb: DEBUG_CONFIG.ENABLED ? 'Sandton' : '',
     postal_code: DEBUG_CONFIG.ENABLED ? '2000' : '',
   });
   const [loading, setLoading] = useState(false);
@@ -241,31 +241,28 @@ export default function RegisterStudentScreen({ navigation }: any) {
         onChangeText={value => updateField('address_line2', value)}
         tip="Optional additional address information"
         returnKeyType="next"
-        onSubmitEditing={() => cityRef.current?.focus()}
-        blurOnSubmit={false}
-      />
-      <FormFieldWithTip
-        ref={cityRef}
-        label="City"
-        placeholder="City name"
-        value={formData.city}
-        onChangeText={value => updateField('city', value)}
-        tip="Your city or town"
-        returnKeyType="next"
-        onSubmitEditing={() => provinceRef.current?.focus()}
-        blurOnSubmit={false}
-      />
-      <FormFieldWithTip
-        ref={provinceRef}
-        label="Province"
-        placeholder="Province"
-        value={formData.province}
-        onChangeText={value => updateField('province', value)}
-        tip="Your province (e.g., Gauteng, Western Cape)"
-        returnKeyType="next"
         onSubmitEditing={() => postalCodeRef.current?.focus()}
         blurOnSubmit={false}
       />
+
+      <LocationSelector
+        label="Residential Location"
+        tooltip="Select your province, city, and suburb where you live. This helps match you with nearby instructors."
+        required
+        selectedProvince={formData.province}
+        selectedCity={formData.city}
+        selectedSuburb={formData.suburb}
+        onProvinceChange={province =>
+          setFormData(prev => ({ ...prev, province, city: '', suburb: '' }))
+        }
+        onCityChange={city => setFormData(prev => ({ ...prev, city, suburb: '' }))}
+        onSuburbChange={suburb => setFormData(prev => ({ ...prev, suburb }))}
+        onPostalCodeChange={postalCode =>
+          setFormData(prev => ({ ...prev, postal_code: postalCode || prev.postal_code }))
+        }
+        showSuburbs={true}
+      />
+
       <FormFieldWithTip
         ref={postalCodeRef}
         label="Postal Code"
