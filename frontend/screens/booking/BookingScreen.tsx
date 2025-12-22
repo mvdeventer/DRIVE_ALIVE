@@ -1,10 +1,12 @@
 /**
  * Booking Screen - Book a driving lesson with selected instructor
+ * Redesigned with step-by-step date and time selection
  */
 import { CommonActions, useNavigation, useRoute } from '@react-navigation/native';
 import * as SecureStore from 'expo-secure-store';
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
+  ActivityIndicator,
   Alert,
   Platform,
   ScrollView,
@@ -15,6 +17,12 @@ import {
   View,
 } from 'react-native';
 import ApiService from '../../services/api';
+
+// Conditional import for DateTimePicker
+let DateTimePicker: any;
+if (Platform.OS !== 'web') {
+  DateTimePicker = require('@react-native-community/datetimepicker').default;
+}
 
 interface Instructor {
   id: number;
@@ -38,18 +46,265 @@ interface Instructor {
   is_verified: boolean;
 }
 
+interface TimeSlot {
+  start_time: string;
+  end_time: string;
+  duration_minutes: number;
+}
+
+interface SelectedBooking {
+  date: string;
+  slot: TimeSlot;
+  time: string;
+  pickup_address?: string;
+}
+
+interface ExistingBooking {
+  id: number;
+  lesson_date: string;
+  duration_minutes: number;
+  status: string;
+  created_at: string;
+}
+
 export default function BookingScreen() {
   const navigation = useNavigation();
   const route = useRoute();
   const instructor = (route.params as any)?.instructor as Instructor;
 
   const [formData, setFormData] = useState({
-    lesson_date: '',
-    lesson_time: '',
     duration_minutes: '60',
     pickup_address: '',
     notes: '',
   });
+  const [useSamePickupAddress, setUseSamePickupAddress] = useState(true);
+
+  // Step-by-step booking flow
+  const [selectedDate, setSelectedDate] = useState<Date | null>(null);
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [availableSlotsForDate, setAvailableSlotsForDate] = useState<TimeSlot[]>([]);
+  const [loadingSlots, setLoadingSlots] = useState(false);
+  const [selectedBookings, setSelectedBookings] = useState<SelectedBooking[]>([]);
+  const [existingBookings, setExistingBookings] = useState<ExistingBooking[]>([]);
+  const [loadingExisting, setLoadingExisting] = useState(false);
+  const [showSlotSelection, setShowSlotSelection] = useState(false);
+  const [loading, setLoading] = useState(false);
+
+  // Load existing bookings on mount
+  useEffect(() => {
+    loadExistingBookings();
+  }, [instructor.instructor_id]);
+
+  const loadExistingBookings = async () => {
+    try {
+      setLoadingExisting(true);
+      const response = await ApiService.get('/bookings/');
+
+      // Filter bookings for this instructor that are pending or confirmed
+      const instructorBookings = response.data.filter(
+        (booking: ExistingBooking) =>
+          booking.status !== 'cancelled' && new Date(booking.lesson_date) > new Date()
+      );
+
+      setExistingBookings(instructorBookings);
+    } catch (error: any) {
+      console.error('Error loading existing bookings:', error);
+    } finally {
+      setLoadingExisting(false);
+    }
+  };
+
+  const loadSlotsForDate = async (date: Date) => {
+    try {
+      setLoadingSlots(true);
+      // Format date as YYYY-MM-DD using local timezone (not UTC)
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const day = String(date.getDate()).padStart(2, '0');
+      const dateStr = `${year}-${month}-${day}`;
+
+      console.log('Loading slots for date:', dateStr);
+      console.log('Duration:', formData.duration_minutes, 'minutes');
+
+      const response = await ApiService.get(
+        `/availability/instructor/${instructor.instructor_id}/slots`,
+        {
+          params: {
+            start_date: dateStr,
+            end_date: dateStr, // Only get slots for this specific date
+            duration_minutes: parseInt(formData.duration_minutes) || 60,
+          },
+        }
+      );
+
+      console.log('Available slots response:', response.data);
+
+      if (response.data.availability && response.data.availability.length > 0) {
+        setAvailableSlotsForDate(response.data.availability[0].slots || []);
+        setShowSlotSelection(true);
+      } else {
+        setAvailableSlotsForDate([]);
+        setShowSlotSelection(true); // Still show the section to display "no slots" message
+      }
+    } catch (error: any) {
+      console.error('Error loading available slots:', error);
+
+      if (Platform.OS === 'web') {
+        alert('Failed to load available slots. Please try again.');
+      } else {
+        Alert.alert('Error', 'Failed to load available slots. Please try again.');
+      }
+      setAvailableSlotsForDate([]);
+      setShowSlotSelection(false);
+    } finally {
+      setLoadingSlots(false);
+    }
+  };
+
+  const handleDateSelect = (date: Date) => {
+    setSelectedDate(date);
+    setShowDatePicker(false);
+    loadSlotsForDate(date);
+  };
+
+  const handleAddSlot = (slot: TimeSlot) => {
+    if (!selectedDate) return;
+
+    // Check if slot is in the past
+    const slotDateTime = new Date(slot.start_time);
+    const now = new Date();
+    if (slotDateTime <= now) {
+      if (Platform.OS === 'web') {
+        alert('Cannot book lessons in the past. Please select a future time slot.');
+      } else {
+        Alert.alert(
+          'Invalid Time',
+          'Cannot book lessons in the past. Please select a future time slot.'
+        );
+      }
+      return;
+    }
+
+    // Format date without timezone issues
+    const year = selectedDate.getFullYear();
+    const month = String(selectedDate.getMonth() + 1).padStart(2, '0');
+    const day = String(selectedDate.getDate()).padStart(2, '0');
+    const dateStr = `${year}-${month}-${day}`;
+
+    const startTime = new Date(slot.start_time);
+    const timeStr = startTime.toTimeString().split(' ')[0].substring(0, 5);
+
+    // Check if this exact slot is already selected
+    const exists = selectedBookings.some(
+      booking => booking.date === dateStr && booking.slot.start_time === slot.start_time
+    );
+
+    if (exists) {
+      if (Platform.OS === 'web') {
+        alert('This time slot is already added to your bookings.');
+      } else {
+        Alert.alert('Already Added', 'This time slot is already added to your bookings.');
+      }
+      return;
+    }
+
+    // Add to bookings with pickup address if available
+    const pickupAddr = useSamePickupAddress ? formData.pickup_address : '';
+    setSelectedBookings(prev => [
+      ...prev,
+      { date: dateStr, slot, time: timeStr, pickup_address: pickupAddr },
+    ]);
+
+    // Keep the date and slots visible so user can select more slots on the same date
+    // Don't reset - just show a brief confirmation
+    if (Platform.OS === 'web') {
+      // No alert for web to avoid interrupting flow
+    } else {
+      // Optional: Brief toast-like notification (currently skipped for better UX)
+    }
+  };
+
+  const handleAddAnotherDateTime = () => {
+    setShowSlotSelection(false);
+    setSelectedDate(null);
+    setAvailableSlotsForDate([]);
+    setShowDatePicker(true);
+  };
+
+  const handleRemoveBooking = (index: number) => {
+    setSelectedBookings(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const handleCancelExistingBooking = async (booking: ExistingBooking) => {
+    const lessonDateTime = new Date(booking.lesson_date);
+    const now = new Date();
+    const hoursUntilLesson = (lessonDateTime.getTime() - now.getTime()) / (1000 * 60 * 60);
+
+    let confirmMessage = '';
+    let cancelFee = 0;
+
+    if (hoursUntilLesson < 6) {
+      // Calculate 50% cancellation fee
+      const hours = booking.duration_minutes / 60;
+      cancelFee = instructor.hourly_rate * hours * 0.5;
+      confirmMessage = `⚠️ Cancellation within 6 hours requires a 50% cancellation fee of R${cancelFee.toFixed(
+        2
+      )}.\n\nDo you want to proceed with cancellation?`;
+    } else {
+      confirmMessage = 'Are you sure you want to cancel this lesson?';
+    }
+
+    const proceed =
+      Platform.OS === 'web'
+        ? confirm(confirmMessage)
+        : await new Promise<boolean>(resolve => {
+            Alert.alert('Cancel Lesson', confirmMessage, [
+              { text: 'No', onPress: () => resolve(false), style: 'cancel' },
+              { text: 'Yes, Cancel', onPress: () => resolve(true), style: 'destructive' },
+            ]);
+          });
+
+    if (!proceed) return;
+
+    try {
+      setLoading(true);
+
+      // Cancel the booking
+      await ApiService.patch(`/bookings/${booking.id}`, {
+        status: 'cancelled',
+        cancellation_fee: cancelFee,
+      });
+
+      if (Platform.OS === 'web') {
+        alert(
+          `✅ Lesson cancelled successfully.${
+            cancelFee > 0 ? ` A cancellation fee of R${cancelFee.toFixed(2)} will be charged.` : ''
+          }`
+        );
+      } else {
+        Alert.alert(
+          'Cancelled',
+          `Lesson cancelled successfully.${
+            cancelFee > 0 ? ` A cancellation fee of R${cancelFee.toFixed(2)} will be charged.` : ''
+          }`
+        );
+      }
+
+      // Reload bookings
+      await loadExistingBookings();
+    } catch (error: any) {
+      console.error('Cancellation error:', error);
+      const errorMsg = error.response?.data?.detail || 'Failed to cancel booking';
+
+      if (Platform.OS === 'web') {
+        alert(`❌ Cancellation Failed\n\n${errorMsg}`);
+      } else {
+        Alert.alert('Cancellation Failed', errorMsg);
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleLogout = async () => {
     try {
@@ -71,59 +326,136 @@ export default function BookingScreen() {
     }
   };
 
-  const [loading, setLoading] = useState(false);
-
   const updateField = (field: string, value: string) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
+    const newFormData = { ...formData, [field]: value };
+    setFormData(newFormData);
+
+    // Reload slots if duration changes and a date is already selected
+    if (field === 'duration_minutes' && selectedDate) {
+      // Use the new value directly instead of waiting for state update
+      loadSlotsWithDuration(selectedDate, parseInt(value));
+    }
+  };
+
+  const loadSlotsWithDuration = async (date: Date, durationMinutes: number) => {
+    try {
+      setLoadingSlots(true);
+      const dateStr = date.toISOString().split('T')[0];
+
+      console.log('Loading slots for date:', dateStr);
+      console.log('Duration:', durationMinutes, 'minutes');
+
+      const response = await ApiService.get(
+        `/availability/instructor/${instructor.instructor_id}/slots`,
+        {
+          params: {
+            start_date: dateStr,
+            end_date: dateStr,
+            duration_minutes: durationMinutes,
+          },
+        }
+      );
+
+      console.log('Available slots response:', response.data);
+
+      if (response.data.availability && response.data.availability.length > 0) {
+        setAvailableSlotsForDate(response.data.availability[0].slots || []);
+        setShowSlotSelection(true);
+      } else {
+        setAvailableSlotsForDate([]);
+        setShowSlotSelection(true);
+      }
+    } catch (error: any) {
+      console.error('Error loading available slots:', error);
+
+      if (Platform.OS === 'web') {
+        alert('Failed to load available slots. Please try again.');
+      } else {
+        Alert.alert('Error', 'Failed to load available slots. Please try again.');
+      }
+      setAvailableSlotsForDate([]);
+      setShowSlotSelection(false);
+    } finally {
+      setLoadingSlots(false);
+    }
   };
 
   const calculatePrice = () => {
     const hours = parseInt(formData.duration_minutes) / 60;
-    return (instructor?.hourly_rate || 0) * hours;
+    const pricePerBooking = (instructor?.hourly_rate || 0) * hours;
+    return pricePerBooking * selectedBookings.length;
   };
 
   const handleSubmitBooking = async () => {
     // Validate form
-    if (!formData.lesson_date || !formData.lesson_time || !formData.pickup_address) {
+    if (selectedBookings.length === 0) {
       if (Platform.OS === 'web') {
-        alert('Please fill in all required fields');
+        alert('Please select at least one time slot');
       } else {
-        Alert.alert('Validation Error', 'Please fill in all required fields');
+        Alert.alert('Validation Error', 'Please select at least one time slot');
+      }
+      return;
+    }
+
+    if (!formData.pickup_address) {
+      if (Platform.OS === 'web') {
+        alert('Please enter your pickup address');
+      } else {
+        Alert.alert('Validation Error', 'Please enter your pickup address');
       }
       return;
     }
 
     setLoading(true);
     try {
-      const lessonDateTime = `${formData.lesson_date}T${formData.lesson_time}:00`;
+      // Prepare all bookings data
+      const bookingsData = selectedBookings.map(booking => {
+        const lessonDateTime = `${booking.date}T${booking.time}:00`;
 
-      const response = await ApiService.post('/bookings/', {
-        instructor_id: instructor.instructor_id,
-        lesson_date: lessonDateTime,
-        duration_minutes: parseInt(formData.duration_minutes),
-        pickup_address: formData.pickup_address,
-        notes: formData.notes,
+        return {
+          instructor_id: instructor.instructor_id,
+          lesson_date: lessonDateTime,
+          duration_minutes: parseInt(formData.duration_minutes),
+          lesson_type: 'standard',
+          pickup_latitude: 0, // TODO: Get from geocoding
+          pickup_longitude: 0, // TODO: Get from geocoding
+          pickup_address: formData.pickup_address,
+          dropoff_latitude: null,
+          dropoff_longitude: null,
+          dropoff_address: null,
+          student_notes: formData.notes || null,
+        };
       });
+
+      // Use bulk booking endpoint for atomic creation
+      const response = await ApiService.post('/bookings/bulk', bookingsData);
 
       if (Platform.OS === 'web') {
         alert(
-          `✅ Booking confirmed!\n\nBooking ID: ${response.data.id}\n\nYou will receive a confirmation shortly.`
+          `✅ ${response.data.length} Booking${
+            response.data.length > 1 ? 's' : ''
+          } confirmed!\n\nYou will receive confirmation shortly.`
         );
       } else {
         Alert.alert(
-          '✅ Booking Confirmed',
-          `Booking ID: ${response.data.id}\n\nYou will receive a confirmation shortly.`,
-          [{ text: 'OK', onPress: () => navigation.goBack() }]
+          '✅ Bookings Confirmed',
+          `${response.data.length} lesson${
+            response.data.length > 1 ? 's' : ''
+          } booked successfully!\n\nYou will receive confirmation shortly.`,
+          [{ text: 'OK' }]
         );
       }
 
-      navigation.goBack();
+      // Clear new bookings and reload existing
+      setSelectedBookings([]);
+      setFormData({ duration_minutes: '60', pickup_address: '', notes: '' });
+      await loadExistingBookings();
     } catch (error: any) {
       console.error('Booking error:', error);
-      const errorMsg = error.response?.data?.detail || 'Failed to create booking';
+      const errorMsg = error.response?.data?.detail || 'Failed to create bookings';
 
       if (Platform.OS === 'web') {
-        alert(`Error: ${errorMsg}`);
+        alert(`❌ Booking Failed\n\n${errorMsg}`);
       } else {
         Alert.alert('Booking Failed', errorMsg);
       }
@@ -185,34 +517,11 @@ export default function BookingScreen() {
         <View style={styles.formCard}>
           <Text style={styles.sectionTitle}>Lesson Details</Text>
 
-          <View style={styles.formGroup}>
-            <Text style={styles.label}>
-              Lesson Date <Text style={styles.required}>*</Text>
-            </Text>
-            <TextInput
-              style={styles.input}
-              placeholder="YYYY-MM-DD (e.g., 2025-12-25)"
-              value={formData.lesson_date}
-              onChangeText={value => updateField('lesson_date', value)}
-            />
-          </View>
-
-          <View style={styles.formGroup}>
-            <Text style={styles.label}>
-              Lesson Time <Text style={styles.required}>*</Text>
-            </Text>
-            <TextInput
-              style={styles.input}
-              placeholder="HH:MM (e.g., 14:30)"
-              value={formData.lesson_time}
-              onChangeText={value => updateField('lesson_time', value)}
-            />
-          </View>
-
+          {/* Duration Selection */}
           <View style={styles.formGroup}>
             <Text style={styles.label}>Duration (minutes)</Text>
             <View style={styles.durationButtons}>
-              {['30', '60', '90', '120'].map(duration => (
+              {['60', '90', '120'].map(duration => (
                 <TouchableOpacity
                   key={duration}
                   style={[
@@ -227,17 +536,292 @@ export default function BookingScreen() {
                       formData.duration_minutes === duration && styles.durationButtonTextActive,
                     ]}
                   >
-                    {duration}min
+                    {duration} min
                   </Text>
                 </TouchableOpacity>
               ))}
             </View>
           </View>
 
+          {/* Step-by-Step Date and Time Selection */}
+          <View style={styles.formGroup}>
+            <Text style={styles.label}>
+              Add Lesson Date & Time <Text style={styles.required}>*</Text>
+            </Text>
+
+            {!showSlotSelection && !selectedDate && (
+              <View>
+                <Text style={styles.instructionText}>Step 1: Select a date from the calendar</Text>
+                <TouchableOpacity
+                  style={styles.selectDateButton}
+                  onPress={() => setShowDatePicker(true)}
+                >
+                  <Text style={styles.selectDateButtonText}>📅 Select Date</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+
+            {/* Web Calendar Picker */}
+            {showDatePicker && Platform.OS === 'web' && (
+              <View style={styles.calendarContainer}>
+                <Text style={styles.calendarTitle}>Select a Date</Text>
+                <input
+                  type="date"
+                  min={new Date().toISOString().split('T')[0]}
+                  max={new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]}
+                  style={{
+                    padding: '12px',
+                    fontSize: '16px',
+                    borderRadius: '8px',
+                    border: '2px solid #007bff',
+                    width: '100%',
+                    marginBottom: '12px',
+                  }}
+                  onChange={(e: any) => {
+                    const date = new Date(e.target.value + 'T00:00:00');
+                    handleDateSelect(date);
+                  }}
+                />
+                <TouchableOpacity
+                  style={styles.cancelButton}
+                  onPress={() => setShowDatePicker(false)}
+                >
+                  <Text style={styles.cancelButtonText}>Cancel</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+
+            {/* Native Date Picker */}
+            {showDatePicker && Platform.OS !== 'web' && DateTimePicker && (
+              <DateTimePicker
+                value={selectedDate || new Date()}
+                mode="date"
+                display="default"
+                minimumDate={new Date()}
+                maximumDate={new Date(Date.now() + 90 * 24 * 60 * 60 * 1000)}
+                onChange={(event: any, date?: Date) => {
+                  if (date) {
+                    handleDateSelect(date);
+                  } else {
+                    setShowDatePicker(false);
+                  }
+                }}
+              />
+            )}
+
+            {/* Loading Slots */}
+            {loadingSlots && (
+              <View style={styles.loadingSlotsContainer}>
+                <ActivityIndicator size="small" color="#007bff" />
+                <Text style={styles.loadingSlotsText}>Loading available times...</Text>
+              </View>
+            )}
+
+            {/* Time Slot Selection */}
+            {showSlotSelection && !loadingSlots && (
+              <View style={styles.slotSelectionContainer}>
+                <View style={styles.selectedDateHeader}>
+                  <Text style={styles.selectedDateTitle}>
+                    📅{' '}
+                    {selectedDate?.toLocaleDateString('en-ZA', {
+                      weekday: 'long',
+                      year: 'numeric',
+                      month: 'long',
+                      day: 'numeric',
+                    })}
+                  </Text>
+                  <TouchableOpacity
+                    style={styles.changeDateButton}
+                    onPress={() => {
+                      setShowSlotSelection(false);
+                      setSelectedDate(null);
+                      setShowDatePicker(true);
+                    }}
+                  >
+                    <Text style={styles.changeDateButtonText}>Change Date</Text>
+                  </TouchableOpacity>
+                </View>
+
+                {availableSlotsForDate.length === 0 ? (
+                  <View style={styles.noSlotsContainer}>
+                    <Text style={styles.noSlotsTitle}>😔 No Available Time Slots</Text>
+                    <Text style={styles.noSlotsText}>No available time slots for this date.</Text>
+                    <TouchableOpacity
+                      style={styles.selectDateButton}
+                      onPress={() => {
+                        setShowSlotSelection(false);
+                        setSelectedDate(null);
+                        setShowDatePicker(true);
+                      }}
+                    >
+                      <Text style={styles.selectDateButtonText}>Try Another Date</Text>
+                    </TouchableOpacity>
+                  </View>
+                ) : (
+                  <View>
+                    <Text style={styles.instructionText}>Step 2: Select a time slot</Text>
+                    <Text style={styles.slotCountText}>
+                      {availableSlotsForDate.length} slots available (scroll to see all)
+                    </Text>
+                    <ScrollView
+                      style={styles.slotsScrollView}
+                      contentContainerStyle={styles.slotsScrollViewContent}
+                      nestedScrollEnabled
+                      showsVerticalScrollIndicator={true}
+                    >
+                      <View style={styles.slotsList}>
+                        {availableSlotsForDate.map((slot, index) => {
+                          const startTime = new Date(slot.start_time);
+                          const endTime = new Date(slot.end_time);
+                          const dateStr = selectedDate?.toISOString().split('T')[0] || '';
+                          const isSelected = selectedBookings.some(
+                            booking =>
+                              booking.date === dateStr &&
+                              booking.slot.start_time === slot.start_time
+                          );
+
+                          return (
+                            <TouchableOpacity
+                              key={index}
+                              style={[styles.slotButton, isSelected && styles.slotButtonSelected]}
+                              onPress={() => handleAddSlot(slot)}
+                            >
+                              <Text
+                                style={[
+                                  styles.slotButtonText,
+                                  isSelected && styles.slotButtonTextSelected,
+                                ]}
+                              >
+                                {startTime.toLocaleTimeString('en-ZA', {
+                                  hour: '2-digit',
+                                  minute: '2-digit',
+                                })}{' '}
+                                -{' '}
+                                {endTime.toLocaleTimeString('en-ZA', {
+                                  hour: '2-digit',
+                                  minute: '2-digit',
+                                })}
+                              </Text>
+                            </TouchableOpacity>
+                          );
+                        })}
+                      </View>
+                    </ScrollView>
+                  </View>
+                )}
+              </View>
+            )}
+          </View>
+
+          {/* Existing Bookings Display */}
+          {existingBookings.length > 0 && (
+            <View style={styles.existingBookingsContainer}>
+              <View style={styles.selectedBookingsHeader}>
+                <Text style={styles.selectedBookingsTitle}>
+                  📚 Your Upcoming Lessons ({existingBookings.length})
+                </Text>
+              </View>
+              {existingBookings.map((booking, index) => {
+                const lessonDate = new Date(booking.lesson_date);
+                const now = new Date();
+                const hoursUntilLesson = (lessonDate.getTime() - now.getTime()) / (1000 * 60 * 60);
+                const canCancelFree = hoursUntilLesson >= 6;
+
+                return (
+                  <View key={booking.id} style={styles.existingBookingCard}>
+                    <View style={styles.selectedBookingInfo}>
+                      <Text style={styles.selectedBookingDate}>
+                        {lessonDate.toLocaleDateString('en-ZA', {
+                          weekday: 'short',
+                          year: 'numeric',
+                          month: 'short',
+                          day: 'numeric',
+                        })}
+                      </Text>
+                      <Text style={styles.selectedBookingTime}>
+                        🕐{' '}
+                        {lessonDate.toLocaleTimeString('en-ZA', {
+                          hour: '2-digit',
+                          minute: '2-digit',
+                        })}{' '}
+                        ({booking.duration_minutes} min)
+                      </Text>
+                      {!canCancelFree && (
+                        <Text style={styles.cancellationWarning}>⚠️ 50% fee if cancelled</Text>
+                      )}
+                    </View>
+                    <TouchableOpacity
+                      style={styles.cancelBookingButton}
+                      onPress={() => handleCancelExistingBooking(booking)}
+                    >
+                      <Text style={styles.cancelBookingButtonText}>Cancel</Text>
+                    </TouchableOpacity>
+                  </View>
+                );
+              })}
+            </View>
+          )}
+
+          {/* Selected Bookings Display */}
+          {selectedBookings.length > 0 && (
+            <View style={styles.selectedBookingsContainer}>
+              <View style={styles.selectedBookingsHeader}>
+                <Text style={styles.selectedBookingsTitle}>
+                  📅 Selected Lessons ({selectedBookings.length})
+                </Text>
+              </View>
+              {selectedBookings.map((booking, index) => (
+                <View key={index} style={styles.selectedBookingCard}>
+                  <View style={styles.selectedBookingInfo}>
+                    <Text style={styles.selectedBookingDate}>
+                      {new Date(booking.date + 'T00:00:00').toLocaleDateString('en-ZA', {
+                        weekday: 'short',
+                        year: 'numeric',
+                        month: 'short',
+                        day: 'numeric',
+                      })}
+                    </Text>
+                    <Text style={styles.selectedBookingTime}>
+                      🕐 {booking.time} ({booking.slot.duration_minutes} min)
+                    </Text>
+                    <Text style={styles.selectedBookingDetails}>
+                      💰 R
+                      {((instructor.hourly_rate * booking.slot.duration_minutes) / 60).toFixed(2)}
+                    </Text>
+                    {booking.pickup_address && (
+                      <Text style={styles.selectedBookingAddress}>📍 {booking.pickup_address}</Text>
+                    )}
+                  </View>
+                  <TouchableOpacity
+                    style={styles.removeBookingButton}
+                    onPress={() => handleRemoveBooking(index)}
+                  >
+                    <Text style={styles.removeBookingButtonText}>✕</Text>
+                  </TouchableOpacity>
+                </View>
+              ))}
+
+              <TouchableOpacity style={styles.addAnotherButton} onPress={handleAddAnotherDateTime}>
+                <Text style={styles.addAnotherButtonText}>➕ Add Another Date/Time</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+
           <View style={styles.formGroup}>
             <Text style={styles.label}>
               Pickup Address <Text style={styles.required}>*</Text>
             </Text>
+            {selectedBookings.length > 0 && (
+              <TouchableOpacity
+                style={styles.checkboxContainer}
+                onPress={() => setUseSamePickupAddress(!useSamePickupAddress)}
+              >
+                <View style={[styles.checkbox, useSamePickupAddress && styles.checkboxChecked]}>
+                  {useSamePickupAddress && <Text style={styles.checkboxCheckmark}>✓</Text>}
+                </View>
+                <Text style={styles.checkboxLabel}>Use same pickup address for all lessons</Text>
+              </TouchableOpacity>
+            )}
             <TextInput
               style={[styles.input, styles.textArea]}
               placeholder="Enter your pickup location"
@@ -264,13 +848,25 @@ export default function BookingScreen() {
         {/* Price Summary */}
         <View style={styles.priceCard}>
           <View style={styles.priceRow}>
-            <Text style={styles.priceLabel}>Duration:</Text>
+            <Text style={styles.priceLabel}>Number of Lessons:</Text>
+            <Text style={styles.priceValue}>{selectedBookings.length}</Text>
+          </View>
+          <View style={styles.priceRow}>
+            <Text style={styles.priceLabel}>Duration per Lesson:</Text>
             <Text style={styles.priceValue}>{formData.duration_minutes} minutes</Text>
           </View>
           <View style={styles.priceRow}>
             <Text style={styles.priceLabel}>Hourly Rate:</Text>
             <Text style={styles.priceValue}>R{instructor.hourly_rate}/hr</Text>
           </View>
+          {selectedBookings.length > 0 && (
+            <View style={styles.priceRow}>
+              <Text style={styles.priceLabel}>Price per Lesson:</Text>
+              <Text style={styles.priceValue}>
+                R{((instructor.hourly_rate * parseInt(formData.duration_minutes)) / 60).toFixed(2)}
+              </Text>
+            </View>
+          )}
           <View style={[styles.priceRow, styles.totalRow]}>
             <Text style={styles.totalLabel}>Total Price:</Text>
             <Text style={styles.totalValue}>R{calculatePrice().toFixed(2)}</Text>
@@ -403,6 +999,36 @@ const styles = StyleSheet.create({
     minHeight: 80,
     textAlignVertical: 'top',
   },
+  checkboxContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+    paddingVertical: 8,
+  },
+  checkbox: {
+    width: 24,
+    height: 24,
+    borderWidth: 2,
+    borderColor: '#007bff',
+    borderRadius: 4,
+    marginRight: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+  },
+  checkboxChecked: {
+    backgroundColor: '#007bff',
+  },
+  checkboxCheckmark: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  checkboxLabel: {
+    fontSize: 14,
+    color: '#333',
+    flex: 1,
+  },
   durationButtons: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -411,20 +1037,291 @@ const styles = StyleSheet.create({
     flex: 1,
     padding: 12,
     borderRadius: 8,
+    backgroundColor: '#f8f9fa',
     borderWidth: 1,
-    borderColor: '#007bff',
-    alignItems: 'center',
+    borderColor: '#dee2e6',
     marginHorizontal: 4,
+    alignItems: 'center',
   },
   durationButtonActive: {
     backgroundColor: '#007bff',
+    borderColor: '#007bff',
   },
   durationButtonText: {
-    color: '#007bff',
+    fontSize: 14,
+    color: '#495057',
     fontWeight: '600',
   },
   durationButtonTextActive: {
     color: '#fff',
+  },
+  instructionText: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 12,
+    fontStyle: 'italic',
+  },
+  selectDateButton: {
+    backgroundColor: '#007bff',
+    padding: 16,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  selectDateButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  calendarContainer: {
+    backgroundColor: '#f8f9fa',
+    padding: 16,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#dee2e6',
+  },
+  calendarTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 12,
+  },
+  cancelButton: {
+    backgroundColor: '#6c757d',
+    padding: 12,
+    borderRadius: 6,
+    alignItems: 'center',
+  },
+  cancelButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  loadingSlotsContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 20,
+    justifyContent: 'center',
+  },
+  loadingSlotsText: {
+    marginLeft: 10,
+    fontSize: 14,
+    color: '#666',
+  },
+  slotSelectionContainer: {
+    backgroundColor: '#f8f9fa',
+    padding: 16,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#dee2e6',
+  },
+  selectedDateHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  selectedDateTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#333',
+    flex: 1,
+  },
+  changeDateButton: {
+    backgroundColor: '#6c757d',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 4,
+  },
+  changeDateButtonText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  noSlotsContainer: {
+    padding: 20,
+    backgroundColor: '#fff3cd',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#ffc107',
+    alignItems: 'center',
+  },
+  noSlotsTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#856404',
+    textAlign: 'center',
+    marginBottom: 12,
+  },
+  noSlotsText: {
+    fontSize: 14,
+    color: '#856404',
+    textAlign: 'center',
+    marginBottom: 12,
+    lineHeight: 20,
+  },
+  slotsScrollView: {
+    maxHeight: 600,
+    minHeight: 200,
+    borderWidth: 1,
+    borderColor: '#dee2e6',
+    borderRadius: 8,
+  },
+  slotsScrollViewContent: {
+    paddingVertical: 8,
+    paddingHorizontal: 4,
+  },
+  slotCountText: {
+    fontSize: 13,
+    color: '#666',
+    marginBottom: 8,
+    fontStyle: 'italic',
+  },
+  slotsList: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    paddingBottom: 20,
+    alignItems: 'flex-start',
+  },
+  slotButton: {
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    backgroundColor: '#fff',
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#dee2e6',
+    marginRight: 8,
+    marginBottom: 8,
+    minWidth: 120,
+  },
+  slotButtonSelected: {
+    backgroundColor: '#28a745',
+    borderColor: '#28a745',
+  },
+  slotButtonText: {
+    fontSize: 13,
+    color: '#495057',
+    fontWeight: '500',
+  },
+  slotButtonTextSelected: {
+    color: '#fff',
+    fontWeight: '600',
+  },
+  selectedBookingsContainer: {
+    backgroundColor: '#e7f5ff',
+    borderRadius: 12,
+    padding: 16,
+    marginTop: 16,
+    borderWidth: 2,
+    borderColor: '#007bff',
+  },
+  selectedBookingsHeader: {
+    marginBottom: 12,
+  },
+  selectedBookingsTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#007bff',
+    marginBottom: 4,
+  },
+  selectedBookingCard: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: '#007bff',
+  },
+  selectedBookingInfo: {
+    flex: 1,
+  },
+  selectedBookingDate: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 2,
+  },
+  selectedBookingTime: {
+    fontSize: 13,
+    color: '#666',
+  },
+  selectedBookingDetails: {
+    fontSize: 12,
+    color: '#28a745',
+    marginTop: 2,
+    fontWeight: '600',
+  },
+  selectedBookingAddress: {
+    fontSize: 11,
+    color: '#666',
+    marginTop: 4,
+    fontStyle: 'italic',
+  },
+  removeBookingButton: {
+    backgroundColor: '#dc3545',
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginLeft: 8,
+  },
+  removeBookingButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  addAnotherButton: {
+    backgroundColor: '#28a745',
+    padding: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  addAnotherButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  existingBookingsContainer: {
+    backgroundColor: '#fff3cd',
+    borderRadius: 12,
+    padding: 16,
+    marginTop: 16,
+    borderWidth: 2,
+    borderColor: '#ffc107',
+  },
+  existingBookingCard: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: '#ffc107',
+  },
+  cancelBookingButton: {
+    backgroundColor: '#dc3545',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 6,
+    marginLeft: 8,
+  },
+  cancelBookingButtonText: {
+    color: '#fff',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  cancellationWarning: {
+    fontSize: 11,
+    color: '#dc3545',
+    marginTop: 4,
+    fontStyle: 'italic',
   },
   priceCard: {
     backgroundColor: '#fff',

@@ -6,10 +6,11 @@
 const isWeb = typeof window !== 'undefined' && window.document;
 
 // Change this to your backend URL
+// For Android emulator, use 10.0.2.2 to connect to host machine's localhost
 const API_BASE_URL = isWeb
   ? 'http://localhost:8000'
   : __DEV__
-  ? 'http://localhost:8000'
+  ? 'http://10.0.2.2:8000'
   : 'https://your-production-api.com';
 
 // Debug configuration

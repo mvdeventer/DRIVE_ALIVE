@@ -7,6 +7,7 @@ import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Dimensions,
   FlatList,
   Platform,
   RefreshControl,
@@ -48,6 +49,7 @@ export default function InstructorListScreen() {
   const navigation = useNavigation();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [numColumns, setNumColumns] = useState(getNumColumns());
   const [instructors, setInstructors] = useState<Instructor[]>([]);
   const [filteredInstructors, setFilteredInstructors] = useState<Instructor[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
@@ -58,6 +60,15 @@ export default function InstructorListScreen() {
 
   useEffect(() => {
     loadInstructors();
+
+    // Handle window resize for responsive grid
+    if (Platform.OS === 'web') {
+      const handleResize = () => {
+        setNumColumns(getNumColumns());
+      };
+      window.addEventListener('resize', handleResize);
+      return () => window.removeEventListener('resize', handleResize);
+    }
   }, []);
 
   useEffect(() => {
@@ -188,18 +199,28 @@ export default function InstructorListScreen() {
     }
   };
 
-  const handleEmailInstructor = (instructor: Instructor) => {
-    const subject = `Driving Lesson Inquiry - ${instructor.first_name} ${instructor.last_name}`;
-    const body = `Hi ${instructor.first_name},\n\nI found your profile on Drive Alive and I'm interested in booking driving lessons.\n\nLooking forward to hearing from you!\n\nBest regards`;
-    const mailtoUrl = `mailto:${instructor.email}?subject=${encodeURIComponent(
-      subject
-    )}&body=${encodeURIComponent(body)}`;
+  const handleWhatsAppInstructor = (instructor: Instructor) => {
+    const message = `Hi ${instructor.first_name}, I found your profile on Drive Alive and I'm interested in booking driving lessons. Looking forward to hearing from you!`;
+
+    // Remove any non-numeric characters and ensure number starts with country code
+    let phoneNumber = instructor.phone.replace(/\D/g, '');
+
+    // If number starts with 0, replace with South African country code (27)
+    if (phoneNumber.startsWith('0')) {
+      phoneNumber = '27' + phoneNumber.substring(1);
+    } else if (!phoneNumber.startsWith('27')) {
+      phoneNumber = '27' + phoneNumber;
+    }
+
+    const whatsappUrl = `https://wa.me/${phoneNumber}?text=${encodeURIComponent(message)}`;
 
     if (Platform.OS === 'web') {
-      window.open(mailtoUrl, '_self');
+      window.open(whatsappUrl, '_blank');
     } else {
       const { Linking } = require('react-native');
-      Linking.openURL(mailtoUrl);
+      Linking.openURL(whatsappUrl).catch(() => {
+        Alert.alert('WhatsApp Not Found', 'Please make sure WhatsApp is installed on your device.');
+      });
     }
   };
 
@@ -235,109 +256,86 @@ export default function InstructorListScreen() {
     }
   };
 
-  const renderInstructor = ({ item }: { item: Instructor }) => (
-    <TouchableOpacity style={styles.instructorCard} onPress={() => handleSelectInstructor(item)}>
-      <View style={styles.instructorHeader}>
-        <View style={styles.instructorInfo}>
-          <Text style={styles.instructorName}>
-            {item.first_name} {item.last_name}
-            {item.is_verified && ' ✅'}
-          </Text>
-          <Text style={styles.vehicleInfo}>
-            🚗 {item.vehicle_make} {item.vehicle_model} ({item.vehicle_year})
-          </Text>
-        </View>
-        <View
-          style={[
-            styles.availabilityBadge,
-            { backgroundColor: item.is_available ? '#28a745' : '#dc3545' },
-          ]}
-        >
-          <Text style={styles.availabilityText}>
-            {item.is_available ? 'Available' : 'Unavailable'}
-          </Text>
-        </View>
-      </View>
+  const renderInstructor = ({ item }: { item: Instructor }) => {
+    // Compact location display
+    const location = [item.suburb, item.city, item.province].filter(Boolean).join(', ');
 
-      <View style={styles.instructorDetails}>
-        {item.province && (
-          <View style={styles.detailRow}>
-            <Text style={styles.detailLabel}>📍 Province:</Text>
-            <Text style={styles.detailValue}>{item.province}</Text>
+    return (
+      <TouchableOpacity style={styles.instructorCard} onPress={() => handleSelectInstructor(item)}>
+        <View style={styles.instructorHeader}>
+          <View style={styles.instructorInfo}>
+            <View style={styles.nameRow}>
+              <Text style={styles.instructorName}>
+                {item.first_name} {item.last_name} {item.is_verified && '✅'}
+              </Text>
+              <View
+                style={[
+                  styles.availabilityBadge,
+                  { backgroundColor: item.is_available ? '#28a745' : '#dc3545' },
+                ]}
+              >
+                <Text style={styles.availabilityText}>
+                  {item.is_available ? 'Available' : 'Unavailable'}
+                </Text>
+              </View>
+            </View>
+            <Text style={styles.vehicleInfo}>
+              🚗 {item.vehicle_make} {item.vehicle_model} ({item.vehicle_year})
+            </Text>
           </View>
-        )}
-        <View style={styles.detailRow}>
-          <Text style={styles.detailLabel}>🏙️ City:</Text>
-          <Text style={styles.detailValue}>{item.city}</Text>
         </View>
-        {item.suburb && (
+
+        <View style={styles.instructorDetails}>
           <View style={styles.detailRow}>
-            <Text style={styles.detailLabel}>🏘️ Suburb:</Text>
-            <Text style={styles.detailValue}>{item.suburb}</Text>
+            <Text style={styles.detailLabel}>📍 {location}</Text>
           </View>
-        )}
-        <View style={styles.detailRow}>
-          <Text style={styles.detailLabel}>🪪 License Types:</Text>
-          <Text style={styles.detailValue}>
-            {item.license_types
-              .split(',')
-              .map(t => `Code ${t}`)
-              .join(', ')}
-          </Text>
+          <View style={styles.detailRow}>
+            <Text style={styles.detailLabel}>
+              🪪{' '}
+              {item.license_types
+                .split(',')
+                .map(t => `Code ${t}`)
+                .join(', ')}
+            </Text>
+          </View>
+          <View style={styles.infoRow}>
+            <Text style={styles.detailLabel}>💰 R{item.hourly_rate}/hr</Text>
+            <Text style={styles.detailLabel}>
+              ⭐ {item.rating.toFixed(1)} ({item.total_reviews})
+            </Text>
+            <Text style={styles.detailLabel}>📱 {item.phone}</Text>
+          </View>
         </View>
-        <View style={styles.detailRow}>
-          <Text style={styles.detailLabel}>💰 Hourly Rate:</Text>
-          <Text style={styles.detailValue}>R{item.hourly_rate}/hr</Text>
-        </View>
-        <View style={styles.detailRow}>
-          <Text style={styles.detailLabel}>⭐ Rating:</Text>
-          <Text style={styles.detailValue}>
-            {item.rating.toFixed(1)} ({item.total_reviews} reviews)
-          </Text>
-        </View>
-        <View style={styles.detailRow}>
-          <Text style={styles.detailLabel}>📱 Contact:</Text>
-          <Text style={styles.detailValue}>{item.phone}</Text>
-        </View>
-      </View>
 
-      {/* Action Buttons */}
-      <View style={styles.actionButtonsContainer}>
-        <TouchableOpacity
-          style={[styles.primaryButton, !item.is_available && styles.primaryButtonDisabled]}
-          onPress={() => handleBookLesson(item)}
-          disabled={!item.is_available}
-        >
-          <Text style={styles.primaryButtonText}>
-            {item.is_available ? '📅 Book Lesson' : '❌ Unavailable'}
-          </Text>
-        </TouchableOpacity>
-
-        <View style={styles.secondaryButtonsRow}>
+        {/* Action Buttons */}
+        <View style={styles.actionButtonsContainer}>
           <TouchableOpacity
-            style={styles.secondaryButton}
-            onPress={() => handleViewFullProfile(item)}
+            style={[styles.primaryButton, !item.is_available && styles.primaryButtonDisabled]}
+            onPress={() => handleBookLesson(item)}
+            disabled={!item.is_available}
           >
-            <Text style={styles.secondaryButtonText}>👤 Profile</Text>
+            <Text style={styles.primaryButtonText}>📅 Book Lesson</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity
-            style={styles.secondaryButton}
-            onPress={() => handleCallInstructor(item)}
-          >
-            <Text style={styles.secondaryButtonText}>📞 Call</Text>
-          </TouchableOpacity>
+          <View style={styles.secondaryButtonsRow}>
+            <TouchableOpacity
+              style={styles.secondaryButton}
+              onPress={() => handleCallInstructor(item)}
+            >
+              <Text style={styles.secondaryButtonText}>📞 Call</Text>
+            </TouchableOpacity>
 
-          <TouchableOpacity
-            style={styles.secondaryButton}
-            onPress={() => handleEmailInstructor(item)}
-          >
-            <Text style={styles.secondaryButtonText}>✉️ Email</Text>
-          </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.secondaryButton}
+              onPress={() => handleWhatsAppInstructor(item)}
+            >
+              <Text style={styles.secondaryButtonText}>💬 WhatsApp</Text>
+            </TouchableOpacity>
+          </View>
         </View>
-      </View>
-    </TouchableOpacity>
-  );
+      </TouchableOpacity>
+    );
+  };
 
   if (loading) {
     return (
@@ -452,6 +450,9 @@ export default function InstructorListScreen() {
         data={filteredInstructors}
         renderItem={renderInstructor}
         keyExtractor={item => item.id.toString()}
+        numColumns={numColumns}
+        key={numColumns}
+        columnWrapperStyle={numColumns > 1 ? styles.row : undefined}
         contentContainerStyle={styles.listContainer}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
         ListEmptyComponent={
@@ -463,6 +464,20 @@ export default function InstructorListScreen() {
       />
     </View>
   );
+}
+
+// Calculate number of columns based on screen width
+function getNumColumns(): number {
+  if (Platform.OS === 'web') {
+    const width = typeof window !== 'undefined' ? window.innerWidth : 1024;
+    if (width >= 1200) return 3; // Large screens
+    if (width >= 768) return 2; // Tablets
+    return 1; // Mobile
+  }
+  // For native mobile apps, use screen dimensions
+  const width = Dimensions.get('window').width;
+  if (width >= 768) return 2; // Tablets in landscape
+  return 1; // Mobile phones
 }
 
 const styles = StyleSheet.create({
@@ -663,81 +678,93 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   listContainer: {
-    padding: 16,
+    padding: 12,
+  },
+  row: {
+    justifyContent: 'flex-start',
+    gap: 10,
   },
   instructorCard: {
     backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 16,
+    borderRadius: 10,
+    padding: 12,
+    marginBottom: 10,
+    flex: 1,
+    maxWidth: Platform.OS === 'web' ? '100%' : undefined,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08,
+    shadowRadius: 3,
+    elevation: 2,
   },
   instructorHeader: {
+    marginBottom: 8,
+  },
+  nameRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 12,
+    alignItems: 'center',
+    marginBottom: 4,
   },
   instructorInfo: {
     flex: 1,
   },
   instructorName: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: 'bold',
     color: '#333',
-    marginBottom: 4,
+    flex: 1,
   },
   vehicleInfo: {
-    fontSize: 14,
+    fontSize: 13,
     color: '#666',
   },
   availabilityBadge: {
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    borderRadius: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 3,
+    borderRadius: 10,
   },
   availabilityText: {
     color: '#fff',
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '600',
   },
   instructorDetails: {
-    marginBottom: 12,
+    marginBottom: 8,
   },
   detailRow: {
+    marginBottom: 3,
+  },
+  infoRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 6,
+    marginTop: 2,
   },
   detailLabel: {
-    fontSize: 14,
+    fontSize: 12,
     color: '#666',
   },
   detailValue: {
-    fontSize: 14,
+    fontSize: 12,
     fontWeight: '600',
     color: '#333',
   },
   actionButtonsContainer: {
-    marginTop: 4,
+    marginTop: 6,
   },
   primaryButton: {
     backgroundColor: '#007bff',
-    padding: 14,
-    borderRadius: 8,
+    padding: 10,
+    borderRadius: 6,
     alignItems: 'center',
-    marginBottom: 8,
+    marginBottom: 6,
   },
   primaryButtonDisabled: {
     backgroundColor: '#6c757d',
   },
   primaryButtonText: {
     color: '#fff',
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '600',
   },
   secondaryButtonsRow: {
@@ -747,16 +774,16 @@ const styles = StyleSheet.create({
   secondaryButton: {
     flex: 1,
     backgroundColor: '#f8f9fa',
-    padding: 10,
-    borderRadius: 8,
+    padding: 8,
+    borderRadius: 6,
     alignItems: 'center',
     borderWidth: 1,
     borderColor: '#dee2e6',
-    marginHorizontal: 4,
+    marginHorizontal: 2,
   },
   secondaryButtonText: {
     color: '#495057',
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '600',
   },
   bookButton: {

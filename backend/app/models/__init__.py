@@ -1,9 +1,11 @@
 """
 Models package initialization
 """
-from .user import User, Instructor, Student, UserRole, UserStatus
-from .booking import Booking, Review, BookingStatus, PaymentStatus
-from .payment import Transaction, TransactionType, TransactionStatus
+
+from .availability import CustomAvailability, DayOfWeek, InstructorSchedule, TimeOffException
+from .booking import Booking, BookingStatus, PaymentStatus, Review
+from .payment import Transaction, TransactionStatus, TransactionType
+from .user import Instructor, Student, User, UserRole, UserStatus
 
 __all__ = [
     "User",
@@ -18,4 +20,8 @@ __all__ = [
     "Transaction",
     "TransactionType",
     "TransactionStatus",
+    "InstructorSchedule",
+    "TimeOffException",
+    "CustomAvailability",
+    "DayOfWeek",
 ]

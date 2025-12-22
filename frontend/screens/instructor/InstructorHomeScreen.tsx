@@ -22,7 +22,13 @@ import ApiService from '../../services/api';
 
 interface Booking {
   id: number;
+  student_id?: number;
   student_name: string;
+  student_phone?: string;
+  student_email?: string;
+  student_city?: string;
+  student_suburb?: string;
+  student_notes?: string;
   scheduled_time: string;
   duration_minutes: number;
   status: string;
@@ -49,8 +55,16 @@ export default function InstructorHomeScreen() {
   const [profile, setProfile] = useState<InstructorProfile | null>(null);
   const [upcomingLessons, setUpcomingLessons] = useState<Booking[]>([]);
   const [todayLessons, setTodayLessons] = useState<Booking[]>([]);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [showSearchDropdown, setShowSearchDropdown] = useState(false);
+  const [uniqueStudents, setUniqueStudents] = useState<Booking[]>([]);
   const [showEditProfileModal, setShowEditProfileModal] = useState(false);
   const [showAvailabilityModal, setShowAvailabilityModal] = useState(false);
+  const [showRescheduleModal, setShowRescheduleModal] = useState(false);
+  const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
+  const [rescheduleDate, setRescheduleDate] = useState('');
+  const [rescheduleTime, setRescheduleTime] = useState('');
+  const [availableSlots, setAvailableSlots] = useState<string[]>([]);
   const [editFormData, setEditFormData] = useState({
     hourly_rate: '',
     is_available: true,
@@ -68,26 +82,58 @@ export default function InstructorHomeScreen() {
         ApiService.get('/bookings/my-bookings'),
       ]);
 
+      console.log('Raw bookings response:', bookingsRes.data);
+      console.log('First booking detail:', JSON.stringify(bookingsRes.data[0], null, 2));
       setProfile(profileRes.data);
 
-      // Filter bookings for today and upcoming
+      // Filter bookings for today and upcoming, sorted in ascending order
       const now = new Date();
       const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+      // Sort all bookings by scheduled_time in ascending order
+      const sortedBookings = (bookingsRes.data || []).sort(
+        (a: Booking, b: Booking) =>
+          new Date(a.scheduled_time).getTime() - new Date(b.scheduled_time).getTime()
+      );
       const tomorrow = new Date(today);
       tomorrow.setDate(tomorrow.getDate() + 1);
 
-      const todayBookings = bookingsRes.data.filter((b: Booking) => {
+      const todayBookings = sortedBookings.filter((b: Booking) => {
         const lessonDate = new Date(b.scheduled_time);
         return lessonDate >= today && lessonDate < tomorrow;
       });
 
-      const upcomingBookings = bookingsRes.data.filter((b: Booking) => {
+      const upcomingBookings = sortedBookings.filter((b: Booking) => {
         const lessonDate = new Date(b.scheduled_time);
         return lessonDate >= tomorrow;
       });
 
+      console.log('Sample booking data:', todayBookings[0] || upcomingBookings[0]);
+      console.log(
+        'Sample booking JSON:',
+        JSON.stringify(todayBookings[0] || upcomingBookings[0], null, 2)
+      );
       setTodayLessons(todayBookings);
       setUpcomingLessons(upcomingBookings);
+
+      // Extract unique students by student_id (to handle students with same name)
+      const allBookings = [...todayBookings, ...upcomingBookings];
+      const studentMap = new Map<string, Booking>();
+      allBookings.forEach(booking => {
+        // Use student_id if available, otherwise use student_name as fallback
+        const key = booking.student_id
+          ? `id_${booking.student_id}`
+          : `name_${booking.student_name}`;
+        if (!studentMap.has(key)) {
+          studentMap.set(key, booking);
+        }
+      });
+      const students = Array.from(studentMap.values()).sort((a, b) =>
+        a.student_name.localeCompare(b.student_name)
+      );
+      setUniqueStudents(students);
+      console.log('Unique students:', students.length, students);
+      console.log('First student detail:', JSON.stringify(students[0], null, 2));
     } catch (error: any) {
       console.error('Error loading dashboard:', error);
       if (Platform.OS === 'web') {
@@ -231,6 +277,79 @@ export default function InstructorHomeScreen() {
     });
   };
 
+  const filterBookings = (bookings: Booking[]) => {
+    if (!searchQuery.trim()) return bookings;
+    return bookings.filter(booking =>
+      booking.student_name.toLowerCase().includes(searchQuery.toLowerCase())
+    );
+  };
+
+  const openRescheduleModal = async (booking: Booking) => {
+    setSelectedBooking(booking);
+    setShowRescheduleModal(true);
+    // Load available time slots for the current date
+    const currentDate = new Date(booking.scheduled_time);
+    const dateStr = currentDate.toISOString().split('T')[0];
+    setRescheduleDate(dateStr);
+    await loadAvailableSlots(dateStr);
+  };
+
+  const loadAvailableSlots = async (date: string) => {
+    if (!selectedBooking || !profile) return;
+    try {
+      const response = await ApiService.get(`/availability/instructor/${profile.id}/slots`, {
+        params: {
+          date,
+          duration: selectedBooking.duration_minutes,
+        },
+      });
+      // Extract available slots from the response
+      const slots = response.data.available_slots || [];
+      setAvailableSlots(slots.map((slot: any) => slot.start_time));
+    } catch (error) {
+      console.error('Error loading time slots:', error);
+      setAvailableSlots([]);
+    }
+  };
+
+  const handleReschedule = async () => {
+    if (!selectedBooking || !rescheduleDate || !rescheduleTime) {
+      if (Platform.OS === 'web') {
+        alert('Please select a date and time');
+      } else {
+        Alert.alert('Error', 'Please select a date and time');
+      }
+      return;
+    }
+
+    try {
+      const newDateTime = `${rescheduleDate}T${rescheduleTime}`;
+      await ApiService.patch(`/bookings/${selectedBooking.id}/reschedule`, {
+        new_datetime: newDateTime,
+      });
+
+      if (Platform.OS === 'web') {
+        alert('✅ Booking rescheduled successfully!');
+      } else {
+        Alert.alert('Success', 'Booking rescheduled successfully!');
+      }
+
+      setShowRescheduleModal(false);
+      setSelectedBooking(null);
+      setRescheduleDate('');
+      setRescheduleTime('');
+      loadDashboardData();
+    } catch (error: any) {
+      console.error('Error rescheduling booking:', error);
+      const message = error.response?.data?.detail || 'Failed to reschedule booking';
+      if (Platform.OS === 'web') {
+        alert(message);
+      } else {
+        Alert.alert('Error', message);
+      }
+    }
+  };
+
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
     return date.toLocaleDateString('en-ZA', {
@@ -303,6 +422,96 @@ export default function InstructorHomeScreen() {
         />
       </View>
 
+      {/* Manage Schedule Button */}
+      <TouchableOpacity
+        style={styles.manageScheduleButton}
+        onPress={() => (navigation as any).navigate('ManageAvailability')}
+      >
+        <Text style={styles.manageScheduleButtonText}>📅 Manage My Schedule & Hours</Text>
+        <Text style={styles.manageScheduleButtonSubtext}>
+          Set your weekly availability and time off
+        </Text>
+      </TouchableOpacity>
+
+      {/* Search Bar */}
+      <View style={styles.searchContainer}>
+        <TextInput
+          style={styles.searchInput}
+          placeholder="🔍 Search by student name..."
+          value={searchQuery}
+          onChangeText={setSearchQuery}
+          onFocus={() => setShowSearchDropdown(true)}
+        />
+        {searchQuery.length > 0 && (
+          <TouchableOpacity
+            onPress={() => {
+              setSearchQuery('');
+              setShowSearchDropdown(false);
+            }}
+            style={styles.clearButton}
+          >
+            <Text style={styles.clearButtonText}>✕</Text>
+          </TouchableOpacity>
+        )}
+
+        {/* Student Dropdown */}
+        {showSearchDropdown && uniqueStudents.length > 0 && (
+          <View style={styles.searchDropdown}>
+            <View style={styles.dropdownHeader}>
+              <Text style={styles.dropdownTitle}>Students ({uniqueStudents.length})</Text>
+              <TouchableOpacity onPress={() => setShowSearchDropdown(false)}>
+                <Text style={styles.dropdownClose}>✕</Text>
+              </TouchableOpacity>
+            </View>
+            <ScrollView style={styles.dropdownList} nestedScrollEnabled={true}>
+              {uniqueStudents
+                .filter(
+                  student =>
+                    !searchQuery ||
+                    student.student_name.toLowerCase().includes(searchQuery.toLowerCase())
+                )
+                .map((student, index) => {
+                  const bookingCount = [...todayLessons, ...upcomingLessons].filter(
+                    b => b.student_id === student.student_id
+                  ).length;
+                  return (
+                    <TouchableOpacity
+                      key={student.student_id || index}
+                      style={styles.dropdownItem}
+                      onPress={() => {
+                        setSearchQuery(student.student_name);
+                        setShowSearchDropdown(false);
+                      }}
+                    >
+                      <View style={styles.dropdownItemLeft}>
+                        <Text style={styles.dropdownItemText}>👤 {student.student_name}</Text>
+                        <View style={styles.dropdownItemDetails}>
+                          {student.student_id && (
+                            <Text style={styles.dropdownItemSubtext}>ID: {student.student_id}</Text>
+                          )}
+                          {student.student_phone && (
+                            <Text style={styles.dropdownItemSubtext}>
+                              📞 {student.student_phone}
+                            </Text>
+                          )}
+                        </View>
+                      </View>
+                      <Text style={styles.dropdownItemCount}>
+                        {bookingCount} booking{bookingCount !== 1 ? 's' : ''}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              {uniqueStudents.filter(
+                student =>
+                  !searchQuery ||
+                  student.student_name.toLowerCase().includes(searchQuery.toLowerCase())
+              ).length === 0 && <Text style={styles.noResultsText}>No students found</Text>}
+            </ScrollView>
+          </View>
+        )}
+      </View>
+
       {/* Earnings & Stats */}
       <View style={styles.statsContainer}>
         <View style={styles.statCard}>
@@ -328,19 +537,29 @@ export default function InstructorHomeScreen() {
 
       {/* Today's Lessons */}
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Today's Lessons</Text>
-        {todayLessons.length === 0 ? (
+        <Text style={styles.sectionTitle}>
+          Today's Lessons {searchQuery && `(${filterBookings(todayLessons).length} results)`}
+        </Text>
+        {filterBookings(todayLessons).length === 0 ? (
           <View style={styles.emptyState}>
-            <Text style={styles.emptyStateText}>No lessons scheduled for today</Text>
-            <Text style={styles.emptyStateSubtext}>Enjoy your free time! 🎉</Text>
+            <Text style={styles.emptyStateText}>
+              {searchQuery ? 'No lessons found' : 'No lessons scheduled for today'}
+            </Text>
+            <Text style={styles.emptyStateSubtext}>
+              {searchQuery ? 'Try a different search' : 'Enjoy your free time! 🎉'}
+            </Text>
           </View>
         ) : (
-          todayLessons.map(lesson => (
+          filterBookings(todayLessons).map(lesson => (
             <View key={lesson.id} style={styles.lessonCard}>
               <View style={styles.lessonHeader}>
-                <View>
+                <View style={{ flex: 1 }}>
                   <Text style={styles.studentName}>👤 {lesson.student_name}</Text>
+                  {lesson.student_id && (
+                    <Text style={styles.studentId}>🆔 Student ID: {lesson.student_id}</Text>
+                  )}
                   <Text style={styles.lessonTime}>🕒 {formatTime(lesson.scheduled_time)}</Text>
+                  <Text style={styles.lessonDuration}>⏱️ {lesson.duration_minutes} minutes</Text>
                 </View>
                 <View
                   style={[styles.statusBadge, { backgroundColor: getStatusColor(lesson.status) }]}
@@ -348,18 +567,46 @@ export default function InstructorHomeScreen() {
                   <Text style={styles.statusText}>{lesson.status}</Text>
                 </View>
               </View>
-              <Text style={styles.lessonDuration}>⏱️ {lesson.duration_minutes} minutes</Text>
-              {lesson.pickup_location && (
-                <Text style={styles.pickupLocation}>📍 {lesson.pickup_location}</Text>
+
+              {/* Student Contact Info */}
+              {lesson.student_phone && (
+                <Text style={styles.lessonDetail}>📞 {lesson.student_phone}</Text>
               )}
+              {lesson.student_email && (
+                <Text style={styles.lessonDetail}>✉️ {lesson.student_email}</Text>
+              )}
+
+              {/* Student Location */}
+              {(lesson.student_city || lesson.student_suburb) && (
+                <Text style={styles.lessonDetail}>
+                  🗺️ {lesson.student_suburb ? `${lesson.student_suburb}, ` : ''}
+                  {lesson.student_city || ''}
+                </Text>
+              )}
+
+              {/* Pickup Location */}
+              {lesson.pickup_location && (
+                <Text style={styles.lessonDetail}>📌 Pickup: {lesson.pickup_location}</Text>
+              )}
+
+              {/* Student Comments */}
+              <View style={styles.notesContainer}>
+                <Text style={styles.notesLabel}>💬 Student Comments:</Text>
+                <Text style={styles.notesText}>
+                  {lesson.student_notes || 'No special requests'}
+                </Text>
+              </View>
+
               <View style={styles.lessonFooter}>
                 <Text style={styles.lessonPrice}>R{lesson.total_price.toFixed(2)}</Text>
-                <TouchableOpacity
-                  style={styles.viewButton}
-                  onPress={() => handleViewLessonDetails(lesson)}
-                >
-                  <Text style={styles.viewButtonText}>View Details</Text>
-                </TouchableOpacity>
+                {lesson.status.toLowerCase() === 'pending' && (
+                  <TouchableOpacity
+                    style={styles.rescheduleButton}
+                    onPress={() => openRescheduleModal(lesson)}
+                  >
+                    <Text style={styles.rescheduleButtonText}>🔄 Reschedule</Text>
+                  </TouchableOpacity>
+                )}
               </View>
             </View>
           ))
@@ -367,30 +614,72 @@ export default function InstructorHomeScreen() {
       </View>
 
       {/* Upcoming Lessons */}
-      {upcomingLessons.length > 0 && (
+      {filterBookings(upcomingLessons).length > 0 && (
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Upcoming Lessons</Text>
-          {upcomingLessons.slice(0, 5).map(lesson => (
-            <View key={lesson.id} style={styles.lessonCard}>
-              <View style={styles.lessonHeader}>
-                <View>
-                  <Text style={styles.studentName}>👤 {lesson.student_name}</Text>
-                  <Text style={styles.lessonDate}>
-                    📅 {formatDate(lesson.scheduled_time)} at {formatTime(lesson.scheduled_time)}
+          <Text style={styles.sectionTitle}>
+            Upcoming Lessons {searchQuery && `(${filterBookings(upcomingLessons).length} results)`}
+          </Text>
+          {filterBookings(upcomingLessons)
+            .slice(0, 5)
+            .map(lesson => (
+              <View key={lesson.id} style={styles.lessonCard}>
+                <View style={styles.lessonHeader}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.studentName}>👤 {lesson.student_name}</Text>
+                    {lesson.student_id && (
+                      <Text style={styles.studentId}>🆔 Student ID: {lesson.student_id}</Text>
+                    )}
+                    <Text style={styles.lessonDate}>
+                      📅 {formatDate(lesson.scheduled_time)} at {formatTime(lesson.scheduled_time)}
+                    </Text>
+                    <Text style={styles.lessonDuration}>⏱️ {lesson.duration_minutes} minutes</Text>
+                  </View>
+                  <View
+                    style={[styles.statusBadge, { backgroundColor: getStatusColor(lesson.status) }]}
+                  >
+                    <Text style={styles.statusText}>{lesson.status}</Text>
+                  </View>
+                </View>
+
+                {/* Student Contact Info */}
+                {lesson.student_phone && (
+                  <Text style={styles.lessonDetail}>📞 {lesson.student_phone}</Text>
+                )}
+
+                {/* Student Location */}
+                {(lesson.student_city || lesson.student_suburb) && (
+                  <Text style={styles.lessonDetail}>
+                    🗺️ {lesson.student_suburb ? `${lesson.student_suburb}, ` : ''}
+                    {lesson.student_city || ''}
+                  </Text>
+                )}
+
+                {/* Pickup Location */}
+                {lesson.pickup_location && (
+                  <Text style={styles.lessonDetail}>📌 Pickup: {lesson.pickup_location}</Text>
+                )}
+
+                {/* Student Comments */}
+                <View style={styles.notesContainer}>
+                  <Text style={styles.notesLabel}>💬 Student Comments:</Text>
+                  <Text style={styles.notesText}>
+                    {lesson.student_notes || 'No special requests'}
                   </Text>
                 </View>
-                <View
-                  style={[styles.statusBadge, { backgroundColor: getStatusColor(lesson.status) }]}
-                >
-                  <Text style={styles.statusText}>{lesson.status}</Text>
+
+                <View style={styles.lessonFooter}>
+                  <Text style={styles.lessonPrice}>R{lesson.total_price.toFixed(2)}</Text>
+                  {lesson.status.toLowerCase() === 'pending' && (
+                    <TouchableOpacity
+                      style={styles.rescheduleButton}
+                      onPress={() => openRescheduleModal(lesson)}
+                    >
+                      <Text style={styles.rescheduleButtonText}>🔄 Reschedule</Text>
+                    </TouchableOpacity>
+                  )}
                 </View>
               </View>
-              <Text style={styles.lessonDuration}>⏱️ {lesson.duration_minutes} minutes</Text>
-              <View style={styles.lessonFooter}>
-                <Text style={styles.lessonPrice}>R{lesson.total_price.toFixed(2)}</Text>
-              </View>
-            </View>
-          ))}
+            ))}
         </View>
       )}
 
@@ -568,6 +857,108 @@ export default function InstructorHomeScreen() {
                 }}
               >
                 <Text style={styles.modalSaveButtonText}>Update Status</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Reschedule Modal */}
+      <Modal
+        visible={showRescheduleModal}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setShowRescheduleModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Reschedule Lesson</Text>
+              <TouchableOpacity onPress={() => setShowRescheduleModal(false)}>
+                <Text style={styles.modalClose}>✕</Text>
+              </TouchableOpacity>
+            </View>
+
+            {selectedBooking && (
+              <View style={styles.bookingInfoCard}>
+                <Text style={styles.bookingInfoText}>
+                  👤 Student: {selectedBooking.student_name}
+                </Text>
+                <Text style={styles.bookingInfoText}>
+                  📅 Current Time: {formatDate(selectedBooking.scheduled_time)} at{' '}
+                  {formatTime(selectedBooking.scheduled_time)}
+                </Text>
+                <Text style={styles.bookingInfoText}>
+                  ⏱️ Duration: {selectedBooking.duration_minutes} minutes
+                </Text>
+              </View>
+            )}
+
+            <View style={styles.modalFormGroup}>
+              <Text style={styles.modalLabel}>Select New Date</Text>
+              <TextInput
+                style={styles.modalInput}
+                value={rescheduleDate}
+                onChangeText={async value => {
+                  setRescheduleDate(value);
+                  if (value.length === 10) {
+                    await loadAvailableSlots(value);
+                  }
+                }}
+                placeholder="YYYY-MM-DD"
+              />
+            </View>
+
+            <View style={styles.modalFormGroup}>
+              <Text style={styles.modalLabel}>Available Time Slots</Text>
+              <ScrollView style={styles.timeSlotsContainer}>
+                {availableSlots.length === 0 ? (
+                  <Text style={styles.noSlotsText}>
+                    {rescheduleDate
+                      ? 'No available slots for this date'
+                      : 'Select a date to see available slots'}
+                  </Text>
+                ) : (
+                  availableSlots.map((slot, index) => (
+                    <TouchableOpacity
+                      key={index}
+                      style={[
+                        styles.timeSlotButton,
+                        rescheduleTime === slot && styles.timeSlotButtonSelected,
+                      ]}
+                      onPress={() => setRescheduleTime(slot)}
+                    >
+                      <Text
+                        style={[
+                          styles.timeSlotText,
+                          rescheduleTime === slot && styles.timeSlotTextSelected,
+                        ]}
+                      >
+                        {slot}
+                      </Text>
+                    </TouchableOpacity>
+                  ))
+                )}
+              </ScrollView>
+            </View>
+
+            <View style={styles.modalButtons}>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.modalCancelButton]}
+                onPress={() => {
+                  setShowRescheduleModal(false);
+                  setSelectedBooking(null);
+                  setRescheduleDate('');
+                  setRescheduleTime('');
+                }}
+              >
+                <Text style={styles.modalCancelButtonText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.modalSaveButton]}
+                onPress={handleReschedule}
+              >
+                <Text style={styles.modalSaveButtonText}>Confirm Reschedule</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -753,6 +1144,12 @@ const styles = StyleSheet.create({
     color: '#333',
     marginBottom: 4,
   },
+  studentId: {
+    fontSize: 12,
+    color: '#007bff',
+    fontWeight: '500',
+    marginBottom: 4,
+  },
   lessonTime: {
     fontSize: 14,
     color: '#666',
@@ -821,6 +1218,30 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 16,
     fontWeight: '600',
+  },
+  lessonDetail: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 4,
+  },
+  notesContainer: {
+    marginTop: 8,
+    padding: 10,
+    backgroundColor: '#f8f9fa',
+    borderRadius: 8,
+    borderLeftWidth: 3,
+    borderLeftColor: '#007bff',
+  },
+  notesLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 4,
+  },
+  notesText: {
+    fontSize: 14,
+    color: '#555',
+    lineHeight: 20,
   },
   // Modal Styles
   modalOverlay: {
@@ -953,12 +1374,196 @@ const styles = StyleSheet.create({
     backgroundColor: '#e7f3ff',
     padding: 12,
     borderRadius: 8,
-    borderLeftWidth: 4,
-    borderLeftColor: '#007bff',
+    marginTop: 16,
   },
   modalInfoText: {
+    fontSize: 13,
+    color: '#0056b3',
+    lineHeight: 18,
+  },
+  manageScheduleButton: {
+    backgroundColor: '#007bff',
+    marginHorizontal: 16,
+    marginTop: 12,
+    marginBottom: 8,
+    padding: 16,
+    borderRadius: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  manageScheduleButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
+    textAlign: 'center',
+  },
+  manageScheduleButtonSubtext: {
+    color: '#e3f2fd',
+    fontSize: 12,
+    textAlign: 'center',
+    marginTop: 4,
+  },
+  searchContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+    marginHorizontal: 16,
+    marginTop: 12,
+    marginBottom: 8,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
+    position: 'relative',
+    zIndex: 1000,
+  },
+  searchInput: {
+    flex: 1,
+    paddingVertical: 12,
+    fontSize: 16,
+    color: '#333',
+  },
+  clearButton: {
+    padding: 8,
+  },
+  clearButtonText: {
+    fontSize: 18,
+    color: '#999',
+  },
+  searchDropdown: {
+    position: 'absolute',
+    top: '100%',
+    left: 0,
+    right: 0,
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    marginTop: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 5,
+    maxHeight: 300,
+    zIndex: 1001,
+  },
+  dropdownHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e0e0e0',
+  },
+  dropdownTitle: {
     fontSize: 14,
-    color: '#495057',
-    lineHeight: 20,
+    fontWeight: '600',
+    color: '#333',
+  },
+  dropdownClose: {
+    fontSize: 18,
+    color: '#999',
+    padding: 4,
+  },
+  dropdownList: {
+    maxHeight: 250,
+  },
+  dropdownItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
+  },
+  dropdownItemLeft: {
+    flex: 1,
+    marginRight: 12,
+  },
+  dropdownItemText: {
+    fontSize: 16,
+    color: '#333',
+    fontWeight: '500',
+    marginBottom: 4,
+  },
+  dropdownItemDetails: {
+    flexDirection: 'row',
+    gap: 12,
+    flexWrap: 'wrap',
+  },
+  dropdownItemSubtext: {
+    fontSize: 12,
+    color: '#666',
+  },
+  dropdownItemCount: {
+    fontSize: 12,
+    color: '#666',
+    backgroundColor: '#f0f0f0',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  noResultsText: {
+    fontSize: 14,
+    color: '#999',
+    textAlign: 'center',
+    padding: 20,
+  },
+  rescheduleButton: {
+    backgroundColor: '#ffc107',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 6,
+  },
+  rescheduleButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  bookingInfoCard: {
+    backgroundColor: '#f8f9fa',
+    padding: 16,
+    borderRadius: 8,
+    marginBottom: 16,
+  },
+  bookingInfoText: {
+    fontSize: 14,
+    color: '#333',
+    marginBottom: 8,
+  },
+  timeSlotsContainer: {
+    maxHeight: 200,
+  },
+  timeSlotButton: {
+    backgroundColor: '#f8f9fa',
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 8,
+    borderWidth: 2,
+    borderColor: 'transparent',
+  },
+  timeSlotButtonSelected: {
+    backgroundColor: '#007bff',
+    borderColor: '#0056b3',
+  },
+  timeSlotText: {
+    fontSize: 16,
+    color: '#333',
+    textAlign: 'center',
+  },
+  timeSlotTextSelected: {
+    color: '#fff',
+    fontWeight: 'bold',
+  },
+  noSlotsText: {
+    fontSize: 14,
+    color: '#999',
+    textAlign: 'center',
+    padding: 20,
   },
 });

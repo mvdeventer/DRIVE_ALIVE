@@ -14,7 +14,7 @@ import {
 } from 'react-native';
 import ApiService from '../../services/api';
 
-export default function LoginScreen({ navigation }: any) {
+export default function LoginScreen({ navigation, onAuthChange }: any) {
   const [emailOrPhone, setEmailOrPhone] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -34,7 +34,12 @@ export default function LoginScreen({ navigation }: any) {
       if (Platform.OS === 'web') {
         window.location.reload();
       } else {
-        // On native, navigate based on user role
+        // Trigger auth state update in App.tsx
+        if (onAuthChange) {
+          onAuthChange();
+        }
+
+        // Navigate based on user role
         const user = await ApiService.getCurrentUser();
         if (user.role === 'student') {
           navigation.replace('StudentHome');

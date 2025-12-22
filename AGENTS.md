@@ -79,6 +79,16 @@ payments handled in-app, GPS pickup/drop-off, WhatsApp reminders, and compliance
   - [x] Filter by availability and city
   - [x] Sort alphabetically by suburb
   - [x] Auto-verify instructors on registration (dev mode)
+- [x] **Calendar & Scheduling System** ✅
+  - [x] Instructor weekly schedule management
+  - [x] Time off/unavailability blocking
+  - [x] Custom availability for specific dates
+  - [x] Student time slot selection (shows only available slots)
+  - [x] Booking conflict prevention
+  - [x] 15-minute interval slot generation
+  - [x] Real-time availability checking
+  - [x] Scrollable time picker UI (15-min intervals)
+  - [x] Calendar date picker for time-off
 - [ ] WhatsApp reminders
 - [ ] Push notifications
 

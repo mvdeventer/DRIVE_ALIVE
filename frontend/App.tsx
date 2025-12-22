@@ -23,6 +23,7 @@ import StudentHomeScreen from './screens/student/StudentHomeScreen';
 // Instructor Screens
 import EditInstructorProfileScreen from './screens/instructor/EditInstructorProfileScreen';
 import InstructorHomeScreen from './screens/instructor/InstructorHomeScreen';
+import ManageAvailabilityScreen from './screens/instructor/ManageAvailabilityScreen';
 
 // Payment Screens
 import PaymentScreen from './screens/payment/PaymentScreen';
@@ -72,6 +73,10 @@ export default function App() {
     return null; // Or a loading screen
   }
 
+  const handleAuthChange = () => {
+    checkAuth();
+  };
+
   return (
     <>
       <StatusBar style="auto" />
@@ -94,66 +99,67 @@ export default function App() {
             },
           }}
         >
-          {!isAuthenticated ? (
-            // Auth Stack
-            <>
-              <Stack.Screen name="Login" component={LoginScreen} options={{ title: 'Login' }} />
-              <Stack.Screen
-                name="RegisterChoice"
-                component={RegisterChoiceScreen}
-                options={{ title: 'Choose Account Type' }}
-              />
-              <Stack.Screen
-                name="RegisterStudent"
-                component={RegisterStudentScreen}
-                options={{ title: 'Register as Student' }}
-              />
-              <Stack.Screen
-                name="RegisterInstructor"
-                component={RegisterInstructorScreen}
-                options={{ title: 'Register as Instructor' }}
-              />
-            </>
-          ) : (
-            // Main App Stack
-            <>
-              <Stack.Screen
-                name="StudentHome"
-                component={StudentHomeScreen}
-                options={{ title: 'Home' }}
-              />
-              <Stack.Screen
-                name="InstructorList"
-                component={InstructorListScreen}
-                options={{ title: 'Find Instructors' }}
-              />
-              <Stack.Screen
-                name="Booking"
-                component={BookingScreen}
-                options={{ title: 'Book Lesson' }}
-              />
-              <Stack.Screen
-                name="EditStudentProfile"
-                component={EditStudentProfileScreen}
-                options={{ title: 'Edit Profile' }}
-              />
-              <Stack.Screen
-                name="InstructorHome"
-                component={InstructorHomeScreen}
-                options={{ title: 'Instructor Dashboard' }}
-              />
-              <Stack.Screen
-                name="EditInstructorProfile"
-                component={EditInstructorProfileScreen}
-                options={{ title: 'Edit Profile' }}
-              />
-              <Stack.Screen
-                name="Payment"
-                component={PaymentScreen}
-                options={{ title: 'Payment' }}
-              />
-            </>
-          )}
+          {/* Auth Stack - Always available */}
+          <Stack.Screen name="Login" options={{ title: 'Login', headerShown: !isAuthenticated }}>
+            {props => <LoginScreen {...props} onAuthChange={handleAuthChange} />}
+          </Stack.Screen>
+          <Stack.Screen
+            name="RegisterChoice"
+            component={RegisterChoiceScreen}
+            options={{ title: 'Choose Account Type', headerShown: !isAuthenticated }}
+          />
+          <Stack.Screen
+            name="RegisterStudent"
+            component={RegisterStudentScreen}
+            options={{ title: 'Register as Student', headerShown: !isAuthenticated }}
+          />
+          <Stack.Screen
+            name="RegisterInstructor"
+            component={RegisterInstructorScreen}
+            options={{ title: 'Register as Instructor', headerShown: !isAuthenticated }}
+          />
+
+          {/* Student Stack */}
+          <Stack.Screen
+            name="StudentHome"
+            component={StudentHomeScreen}
+            options={{ title: 'Home' }}
+          />
+          <Stack.Screen
+            name="InstructorList"
+            component={InstructorListScreen}
+            options={{ title: 'Find Instructors' }}
+          />
+          <Stack.Screen
+            name="Booking"
+            component={BookingScreen}
+            options={{ title: 'Book Lesson' }}
+          />
+          <Stack.Screen
+            name="EditStudentProfile"
+            component={EditStudentProfileScreen}
+            options={{ title: 'Edit Profile' }}
+          />
+
+          {/* Instructor Stack */}
+          <Stack.Screen
+            name="InstructorHome"
+            component={InstructorHomeScreen}
+            options={{ title: 'Instructor Dashboard' }}
+          />
+          <Stack.Screen
+            name="EditInstructorProfile"
+            component={EditInstructorProfileScreen}
+            options={{ title: 'Edit Profile' }}
+          />
+          <Stack.Screen
+            name="ManageAvailability"
+            component={ManageAvailabilityScreen}
+            options={{ title: 'Manage Availability' }}
+          />
+
+          {/* Payment */}
+          <Stack.Screen name="Payment" component={PaymentScreen} options={{ title: 'Payment' }} />
         </Stack.Navigator>
       </NavigationContainer>
     </>

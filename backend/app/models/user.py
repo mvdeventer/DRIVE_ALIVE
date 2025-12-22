@@ -108,6 +108,9 @@ class Instructor(Base):
     # Relationships
     user = relationship("User", back_populates="instructor_profile")
     bookings = relationship("Booking", back_populates="instructor")
+    schedules = relationship("InstructorSchedule", back_populates="instructor", cascade="all, delete-orphan")
+    time_off_exceptions = relationship("TimeOffException", back_populates="instructor", cascade="all, delete-orphan")
+    custom_availability = relationship("CustomAvailability", back_populates="instructor", cascade="all, delete-orphan")
 
 
 class Student(Base):

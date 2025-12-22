@@ -1,14 +1,18 @@
 """
 Pydantic schemas for booking requests and responses
 """
-from pydantic import BaseModel, Field
-from typing import Optional
+
 from datetime import datetime
+from typing import Optional
+
+from pydantic import BaseModel, Field
+
 from ..models.booking import BookingStatus, PaymentStatus
 
 
 class BookingBase(BaseModel):
     """Base booking schema"""
+
     lesson_date: datetime
     duration_minutes: int = Field(60, ge=30, le=180)
     lesson_type: str
@@ -23,11 +27,13 @@ class BookingBase(BaseModel):
 
 class BookingCreate(BookingBase):
     """Booking creation schema"""
+
     instructor_id: int
 
 
 class BookingUpdate(BaseModel):
     """Booking update schema"""
+
     lesson_date: Optional[datetime] = None
     duration_minutes: Optional[int] = Field(None, ge=30, le=180)
     pickup_latitude: Optional[float] = Field(None, ge=-90, le=90)
@@ -38,11 +44,13 @@ class BookingUpdate(BaseModel):
 
 class BookingCancel(BaseModel):
     """Booking cancellation schema"""
+
     cancellation_reason: str
 
 
 class BookingResponse(BookingBase):
     """Booking response schema"""
+
     id: int
     booking_reference: str
     student_id: int
@@ -51,13 +59,14 @@ class BookingResponse(BookingBase):
     amount: float
     payment_status: PaymentStatus
     created_at: datetime
-    
+
     class Config:
         from_attributes = True
 
 
 class ReviewCreate(BaseModel):
     """Review creation schema"""
+
     booking_id: int
     rating: int = Field(..., ge=1, le=5)
     comment: Optional[str] = None
@@ -65,11 +74,18 @@ class ReviewCreate(BaseModel):
 
 class ReviewResponse(BaseModel):
     """Review response schema"""
+
     id: int
     booking_id: int
     rating: int
     comment: Optional[str] = None
     created_at: datetime
-    
+
     class Config:
         from_attributes = True
+
+
+class BookingReschedule(BaseModel):
+    """Reschedule booking schema"""
+
+    new_datetime: str = Field(..., description="New date and time in ISO format (YYYY-MM-DDTHH:MM:SS)")

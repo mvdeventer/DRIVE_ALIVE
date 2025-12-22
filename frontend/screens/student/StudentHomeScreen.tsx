@@ -20,11 +20,19 @@ import ApiService from '../../services/api';
 interface Booking {
   id: number;
   instructor_name: string;
+  instructor_phone?: string;
+  vehicle_make?: string;
+  vehicle_model?: string;
+  vehicle_registration?: string;
+  instructor_city?: string;
+  instructor_suburb?: string;
   scheduled_time: string;
   duration_minutes: number;
   status: string;
   payment_status: string;
   total_price: number;
+  pickup_location?: string;
+  review_rating?: number;
 }
 
 interface StudentProfile {
@@ -41,6 +49,8 @@ export default function StudentHomeScreen() {
   const [profile, setProfile] = useState<StudentProfile | null>(null);
   const [upcomingBookings, setUpcomingBookings] = useState<Booking[]>([]);
   const [pastBookings, setPastBookings] = useState<Booking[]>([]);
+  const [selectedRatings, setSelectedRatings] = useState<{ [key: number]: number }>({});
+  const [showThankYou, setShowThankYou] = useState<{ [key: number]: boolean }>({});
 
   useEffect(() => {
     loadDashboardData();
@@ -56,13 +66,30 @@ export default function StudentHomeScreen() {
 
       setProfile(profileRes.data);
 
+      // Debug: Log the bookings data
+      console.log('📊 Raw bookings data:', JSON.stringify(bookingsRes.data, null, 2));
+      if (bookingsRes.data.length > 0) {
+        console.log('🔍 First booking sample:', bookingsRes.data[0]);
+      }
+
       // Split bookings into upcoming and past
       const now = new Date();
       const upcoming = bookingsRes.data.filter((b: Booking) => new Date(b.scheduled_time) >= now);
       const past = bookingsRes.data.filter((b: Booking) => new Date(b.scheduled_time) < now);
 
+      console.log(`✅ Loaded ${upcoming.length} upcoming and ${past.length} past bookings`);
+
       setUpcomingBookings(upcoming);
       setPastBookings(past);
+
+      // Load existing ratings into selectedRatings state
+      const existingRatings: { [key: number]: number } = {};
+      past.forEach((booking: Booking) => {
+        if (booking.review_rating) {
+          existingRatings[booking.id] = booking.review_rating;
+        }
+      });
+      setSelectedRatings(prev => ({ ...prev, ...existingRatings }));
     } catch (error: any) {
       console.error('Error loading dashboard:', error);
       console.error('Error response:', error.response?.data);
@@ -108,17 +135,122 @@ export default function StudentHomeScreen() {
     navigation.navigate('EditStudentProfile' as never);
   };
 
-  const handleViewBooking = (booking: Booking) => {
-    const details = `Instructor: ${booking.instructor_name}\nDate: ${formatDate(
-      booking.scheduled_time
-    )}\nDuration: ${booking.duration_minutes} minutes\nPrice: R${booking.total_price.toFixed(
-      2
-    )}\nStatus: ${booking.status}\nPayment: ${booking.payment_status}`;
-    if (Platform.OS === 'web') {
-      alert(`📖 Booking Details\n\n${details}`);
-    } else {
-      Alert.alert('📖 Booking Details', details);
+  const handleCancelBooking = async (booking: Booking) => {
+    const lessonTime = new Date(booking.scheduled_time);
+    const now = new Date();
+    const hoursUntilLesson = (lessonTime.getTime() - now.getTime()) / (1000 * 60 * 60);
+
+    // Check if lesson is in the past
+    if (hoursUntilLesson < 0) {
+      const msg = 'Cannot cancel a lesson that has already passed';
+      if (Platform.OS === 'web') {
+        alert(msg);
+      } else {
+        Alert.alert('Error', msg);
+      }
+      return;
     }
+
+    // Calculate cancellation fee
+    const cancellationFee = hoursUntilLesson < 6 ? booking.total_price * 0.5 : 0;
+    const feeMessage =
+      cancellationFee > 0
+        ? `\n\n⚠️ Cancellation within 6 hours: 50% fee (R${cancellationFee.toFixed(2)}) will apply.`
+        : '';
+
+    const confirmMsg = `Cancel this lesson?\n\nInstructor: ${
+      booking.instructor_name
+    }\nDate: ${formatDate(booking.scheduled_time)}${feeMessage}`;
+
+    const confirmed = Platform.OS === 'web' ? window.confirm(confirmMsg) : false;
+
+    if (Platform.OS !== 'web') {
+      Alert.alert(
+        'Cancel Booking',
+        confirmMsg,
+        [
+          { text: 'No', style: 'cancel' },
+          {
+            text: 'Yes, Cancel',
+            style: 'destructive',
+            onPress: async () => {
+              await performCancellation(booking.id);
+            },
+          },
+        ],
+        { cancelable: true }
+      );
+    } else if (confirmed) {
+      await performCancellation(booking.id);
+    }
+  };
+
+  const performCancellation = async (bookingId: number) => {
+    try {
+      await ApiService.patch(`/bookings/${bookingId}`, {
+        status: 'cancelled',
+      });
+
+      if (Platform.OS === 'web') {
+        alert('✅ Booking cancelled successfully');
+      } else {
+        Alert.alert('Success', 'Booking cancelled successfully');
+      }
+
+      // Reload bookings
+      loadDashboardData();
+    } catch (error: any) {
+      console.error('Error cancelling booking:', error);
+      const errorMsg = error.response?.data?.detail || 'Failed to cancel booking';
+      if (Platform.OS === 'web') {
+        alert(`❌ Error\n\n${errorMsg}`);
+      } else {
+        Alert.alert('Error', errorMsg);
+      }
+    }
+  };
+
+  const handleSelectRating = async (bookingId: number, rating: number) => {
+    // Update selected rating
+    setSelectedRatings(prev => ({ ...prev, [bookingId]: rating }));
+
+    // Automatically submit the rating
+    try {
+      await ApiService.post('/bookings/reviews', {
+        booking_id: bookingId,
+        rating: rating,
+      });
+
+      // Show thank you message
+      setShowThankYou(prev => ({ ...prev, [bookingId]: true }));
+
+      // Hide thank you message after 3 seconds
+      setTimeout(() => {
+        setShowThankYou(prev => {
+          const newState = { ...prev };
+          delete newState[bookingId];
+          return newState;
+        });
+      }, 3000);
+
+      // Reload bookings silently to update any other data
+      loadDashboardData();
+    } catch (error: any) {
+      console.error('Error submitting rating:', error);
+      const errorMsg = error.response?.data?.detail || 'Failed to submit rating';
+      if (Platform.OS === 'web') {
+        alert(`❌ Error\n\n${errorMsg}`);
+      } else {
+        Alert.alert('Error', errorMsg);
+      }
+    }
+  };
+
+  const getRatingEmoji = (rating?: number) => {
+    if (!rating) return '';
+    if (rating <= 2) return '😞'; // Sad for 1-2 stars
+    if (rating === 3) return '😐'; // Neutral for 3 stars
+    return '😊'; // Happy for 4-5 stars
   };
 
   const formatDate = (dateString: string) => {
@@ -227,16 +359,29 @@ export default function StudentHomeScreen() {
                   <Text style={styles.statusText}>{booking.status}</Text>
                 </View>
               </View>
+              <Text style={styles.bookingDetail}>👤 Instructor: {booking.instructor_name}</Text>
               <Text style={styles.bookingTime}>🕒 {formatDate(booking.scheduled_time)}</Text>
               <Text style={styles.bookingDuration}>⏱️ {booking.duration_minutes} minutes</Text>
+              <Text style={styles.bookingDetail}>
+                🚗 {booking.vehicle_make || 'N/A'} {booking.vehicle_model || ''} (
+                {booking.vehicle_registration || 'N/A'})
+              </Text>
+              <Text style={styles.bookingDetail}>
+                📍 {booking.instructor_suburb ? `${booking.instructor_suburb}, ` : ''}
+                {booking.instructor_city || 'N/A'}
+              </Text>
+              <Text style={styles.bookingDetail}>
+                📌 Pickup: {booking.pickup_location || 'Not specified'}
+              </Text>
+              <Text style={styles.bookingDetail}>📞 {booking.instructor_phone || 'N/A'}</Text>
               <View style={styles.bookingFooter}>
                 <Text style={styles.bookingPrice}>R{booking.total_price.toFixed(2)}</Text>
                 <View style={styles.bookingActions}>
                   <TouchableOpacity
-                    style={styles.viewButton}
-                    onPress={() => handleViewBooking(booking)}
+                    style={styles.cancelButton}
+                    onPress={() => handleCancelBooking(booking)}
                   >
-                    <Text style={styles.viewButtonText}>View</Text>
+                    <Text style={styles.cancelButtonText}>Cancel</Text>
                   </TouchableOpacity>
                 </View>
               </View>
@@ -253,14 +398,65 @@ export default function StudentHomeScreen() {
             <View key={booking.id} style={styles.bookingCard}>
               <View style={styles.bookingHeader}>
                 <Text style={styles.instructorName}>{booking.instructor_name}</Text>
-                <View
-                  style={[styles.statusBadge, { backgroundColor: getStatusColor(booking.status) }]}
-                >
-                  <Text style={styles.statusText}>{booking.status}</Text>
+                <View style={[styles.statusBadge, { backgroundColor: '#28a745' }]}>
+                  <Text style={styles.statusText}>Completed</Text>
                 </View>
               </View>
+              <Text style={styles.bookingDetail}>👤 Instructor: {booking.instructor_name}</Text>
               <Text style={styles.bookingTime}>🕒 {formatDate(booking.scheduled_time)}</Text>
               <Text style={styles.bookingDuration}>⏱️ {booking.duration_minutes} minutes</Text>
+              {booking.vehicle_make && (
+                <Text style={styles.bookingDetail}>
+                  🚗 {booking.vehicle_make} {booking.vehicle_model} ({booking.vehicle_registration})
+                </Text>
+              )}
+              {booking.instructor_city && (
+                <Text style={styles.bookingDetail}>
+                  📍 {booking.instructor_suburb ? `${booking.instructor_suburb}, ` : ''}
+                  {booking.instructor_city}
+                </Text>
+              )}
+              {booking.pickup_location && (
+                <Text style={styles.bookingDetail}>📌 Pickup: {booking.pickup_location}</Text>
+              )}
+              <View style={styles.bookingFooter}>
+                <Text style={styles.bookingPrice}>R{booking.total_price.toFixed(2)}</Text>
+              </View>
+              <View style={styles.ratingSection}>
+                <View style={styles.ratingRow}>
+                  <View style={styles.starRating}>
+                    {[1, 2, 3, 4, 5].map(star => (
+                      <TouchableOpacity
+                        key={star}
+                        onPress={() => handleSelectRating(booking.id, star)}
+                        style={styles.starButton}
+                      >
+                        <Text
+                          style={[
+                            styles.starText,
+                            {
+                              opacity:
+                                selectedRatings[booking.id] && selectedRatings[booking.id] >= star
+                                  ? 1
+                                  : 0.3,
+                            },
+                          ]}
+                        >
+                          ⭐
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                  {selectedRatings[booking.id] && (
+                    <Text style={styles.ratingEmoji}>
+                      {getRatingEmoji(selectedRatings[booking.id])}
+                    </Text>
+                  )}
+                </View>
+                {showThankYou[booking.id] && (
+                  <Text style={styles.thankYouText}>✓ Thanks for rating!</Text>
+                )}
+              </View>
             </View>
           ))}
         </View>
@@ -427,7 +623,12 @@ const styles = StyleSheet.create({
   bookingDuration: {
     fontSize: 14,
     color: '#666',
-    marginBottom: 12,
+    marginBottom: 4,
+  },
+  bookingDetail: {
+    fontSize: 13,
+    color: '#555',
+    marginBottom: 4,
   },
   bookingFooter: {
     flexDirection: 'row',
@@ -447,14 +648,57 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 8,
   },
-  viewButton: {
-    backgroundColor: '#007bff',
+  cancelButton: {
+    backgroundColor: '#dc3545',
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 6,
   },
-  viewButtonText: {
+  cancelButtonText: {
     color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  starRating: {
+    flexDirection: 'row',
+    gap: 4,
+  },
+  starButton: {
+    padding: 4,
+  },
+  starText: {
+    fontSize: 24,
+  },
+  ratingSection: {
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#e0e0e0',
+    alignItems: 'center',
+    gap: 12,
+  },
+  ratingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  ratingEmoji: {
+    fontSize: 32,
+  },
+  thankYouText: {
+    fontSize: 14,
+    color: '#28a745',
+    fontWeight: '600',
+    marginTop: 8,
+  },
+  rateButton: {
+    backgroundColor: '#ffc107',
+    paddingHorizontal: 24,
+    paddingVertical: 10,
+    borderRadius: 6,
+  },
+  rateButtonText: {
+    color: '#000',
     fontSize: 14,
     fontWeight: '600',
   },
