@@ -469,6 +469,7 @@ async def get_my_bookings(current_user: Annotated[User, Depends(get_current_user
             booking_dict = {
                 "id": booking.id,
                 "student_id": student.id if student else None,
+                "student_id_number": student.id_number if student else None,
                 "student_name": f"{student_user.first_name} {student_user.last_name}" if student_user else "Unknown",
                 "student_phone": student_user.phone if student_user else None,
                 "student_email": student_user.email if student_user else None,

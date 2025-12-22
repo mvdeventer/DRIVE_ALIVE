@@ -23,6 +23,7 @@ import ApiService from '../../services/api';
 interface Booking {
   id: number;
   student_id?: number;
+  student_id_number?: string;
   student_name: string;
   student_phone?: string;
   student_email?: string;
@@ -82,8 +83,6 @@ export default function InstructorHomeScreen() {
         ApiService.get('/bookings/my-bookings'),
       ]);
 
-      console.log('Raw bookings response:', bookingsRes.data);
-      console.log('First booking detail:', JSON.stringify(bookingsRes.data[0], null, 2));
       setProfile(profileRes.data);
 
       // Filter bookings for today and upcoming, sorted in ascending order
@@ -108,11 +107,6 @@ export default function InstructorHomeScreen() {
         return lessonDate >= tomorrow;
       });
 
-      console.log('Sample booking data:', todayBookings[0] || upcomingBookings[0]);
-      console.log(
-        'Sample booking JSON:',
-        JSON.stringify(todayBookings[0] || upcomingBookings[0], null, 2)
-      );
       setTodayLessons(todayBookings);
       setUpcomingLessons(upcomingBookings);
 
@@ -132,8 +126,6 @@ export default function InstructorHomeScreen() {
         a.student_name.localeCompare(b.student_name)
       );
       setUniqueStudents(students);
-      console.log('Unique students:', students.length, students);
-      console.log('First student detail:', JSON.stringify(students[0], null, 2));
     } catch (error: any) {
       console.error('Error loading dashboard:', error);
       if (Platform.OS === 'web') {
@@ -486,8 +478,10 @@ export default function InstructorHomeScreen() {
                       <View style={styles.dropdownItemLeft}>
                         <Text style={styles.dropdownItemText}>👤 {student.student_name}</Text>
                         <View style={styles.dropdownItemDetails}>
-                          {student.student_id && (
-                            <Text style={styles.dropdownItemSubtext}>ID: {student.student_id}</Text>
+                          {student.student_id_number && (
+                            <Text style={styles.dropdownItemSubtext}>
+                              🆔 ID: {student.student_id_number}
+                            </Text>
                           )}
                           {student.student_phone && (
                             <Text style={styles.dropdownItemSubtext}>
@@ -555,8 +549,8 @@ export default function InstructorHomeScreen() {
               <View style={styles.lessonHeader}>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.studentName}>👤 {lesson.student_name}</Text>
-                  {lesson.student_id && (
-                    <Text style={styles.studentId}>🆔 Student ID: {lesson.student_id}</Text>
+                  {lesson.student_id_number && (
+                    <Text style={styles.studentId}>🆔 ID Number: {lesson.student_id_number}</Text>
                   )}
                   <Text style={styles.lessonTime}>🕒 {formatTime(lesson.scheduled_time)}</Text>
                   <Text style={styles.lessonDuration}>⏱️ {lesson.duration_minutes} minutes</Text>
@@ -626,8 +620,8 @@ export default function InstructorHomeScreen() {
                 <View style={styles.lessonHeader}>
                   <View style={{ flex: 1 }}>
                     <Text style={styles.studentName}>👤 {lesson.student_name}</Text>
-                    {lesson.student_id && (
-                      <Text style={styles.studentId}>🆔 Student ID: {lesson.student_id}</Text>
+                    {lesson.student_id_number && (
+                      <Text style={styles.studentId}>🆔 ID Number: {lesson.student_id_number}</Text>
                     )}
                     <Text style={styles.lessonDate}>
                       📅 {formatDate(lesson.scheduled_time)} at {formatTime(lesson.scheduled_time)}
