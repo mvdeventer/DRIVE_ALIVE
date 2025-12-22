@@ -306,6 +306,7 @@ async def get_my_bookings(current_user: Annotated[User, Depends(get_current_user
 
         booking_dict = {
             "id": booking.id,
+            "booking_reference": booking.booking_reference,
             "student_name": f"{student_user.first_name} {student_user.last_name}" if student_user else "Unknown",
             "scheduled_time": booking.lesson_date.isoformat(),
             "duration_minutes": booking.duration_minutes,
@@ -313,6 +314,9 @@ async def get_my_bookings(current_user: Annotated[User, Depends(get_current_user
             "payment_status": booking.payment_status.value,
             "total_price": float(booking.amount),
             "pickup_location": booking.pickup_address,
+            "rebooking_count": booking.rebooking_count if booking.rebooking_count else 0,
+            "cancellation_fee": float(booking.cancellation_fee) if booking.cancellation_fee else 0.0,
+            "original_lesson_date": booking.original_lesson_date.isoformat() if booking.original_lesson_date else None,
         }
         bookings_list.append(booking_dict)
 

@@ -15,6 +15,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import InlineMessage from '../../components/InlineMessage';
 import ApiService from '../../services/api';
 
 interface Booking {
@@ -51,6 +52,10 @@ export default function StudentHomeScreen() {
   const [pastBookings, setPastBookings] = useState<Booking[]>([]);
   const [selectedRatings, setSelectedRatings] = useState<{ [key: number]: number }>({});
   const [showThankYou, setShowThankYou] = useState<{ [key: number]: boolean }>({});
+  const [message, setMessage] = useState<{
+    type: 'success' | 'error' | 'warning' | 'info';
+    text: string;
+  } | null>(null);
 
   useEffect(() => {
     loadDashboardData();
@@ -94,12 +99,9 @@ export default function StudentHomeScreen() {
       console.error('Error loading dashboard:', error);
       console.error('Error response:', error.response?.data);
       console.error('Error status:', error.response?.status);
-      if (Platform.OS === 'web') {
-        const errorMsg = error.response?.data?.detail || 'Failed to load dashboard data';
-        alert(`Failed to load dashboard data\n\n${errorMsg}`);
-      } else {
-        Alert.alert('Error', 'Failed to load dashboard data');
-      }
+      const errorMsg = error.response?.data?.detail || 'Failed to load dashboard data';
+      setMessage({ type: 'error', text: errorMsg });
+      setTimeout(() => setMessage(null), 5000);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -135,19 +137,49 @@ export default function StudentHomeScreen() {
     navigation.navigate('EditStudentProfile' as never);
   };
 
-  const handleCancelBooking = async (booking: Booking) => {
+  const handleDeleteBooking = async (booking: Booking) => {
+    // If booking is already cancelled, just remove it from the list
+    if (booking.status.toLowerCase() === 'cancelled') {
+      const confirmMsg = `Remove this cancelled lesson from your list?\n\nInstructor: ${
+        booking.instructor_name
+      }\nDate: ${formatDate(booking.scheduled_time)}`;
+
+      const confirmed = Platform.OS === 'web' ? window.confirm(confirmMsg) : false;
+
+      if (Platform.OS !== 'web') {
+        Alert.alert(
+          'Remove Lesson',
+          confirmMsg,
+          [
+            { text: 'No', style: 'cancel' },
+            {
+              text: 'Yes, Remove',
+              style: 'destructive',
+              onPress: () => {
+                setUpcomingBookings(prev => prev.filter(b => b.id !== booking.id));
+                setMessage({ type: 'success', text: '✅ Lesson removed from list' });
+                setTimeout(() => setMessage(null), 3000);
+              },
+            },
+          ],
+          { cancelable: true }
+        );
+      } else if (confirmed) {
+        setUpcomingBookings(prev => prev.filter(b => b.id !== booking.id));
+        setMessage({ type: 'success', text: '✅ Lesson removed from list' });
+        setTimeout(() => setMessage(null), 3000);
+      }
+      return;
+    }
+
     const lessonTime = new Date(booking.scheduled_time);
     const now = new Date();
     const hoursUntilLesson = (lessonTime.getTime() - now.getTime()) / (1000 * 60 * 60);
 
     // Check if lesson is in the past
     if (hoursUntilLesson < 0) {
-      const msg = 'Cannot cancel a lesson that has already passed';
-      if (Platform.OS === 'web') {
-        alert(msg);
-      } else {
-        Alert.alert('Error', msg);
-      }
+      setMessage({ type: 'error', text: 'Cannot delete a lesson that has already passed' });
+      setTimeout(() => setMessage(null), 3000);
       return;
     }
 
@@ -158,55 +190,52 @@ export default function StudentHomeScreen() {
         ? `\n\n⚠️ Cancellation within 6 hours: 50% fee (R${cancellationFee.toFixed(2)}) will apply.`
         : '';
 
-    const confirmMsg = `Cancel this lesson?\n\nInstructor: ${
+    const confirmMsg = `Delete this lesson?\n\nInstructor: ${
       booking.instructor_name
-    }\nDate: ${formatDate(booking.scheduled_time)}${feeMessage}`;
+    }\nDate: ${formatDate(
+      booking.scheduled_time
+    )}${feeMessage}\n\nThis will cancel the booking and remove it from your list.`;
 
     const confirmed = Platform.OS === 'web' ? window.confirm(confirmMsg) : false;
 
     if (Platform.OS !== 'web') {
       Alert.alert(
-        'Cancel Booking',
+        'Delete Booking',
         confirmMsg,
         [
           { text: 'No', style: 'cancel' },
           {
-            text: 'Yes, Cancel',
+            text: 'Yes, Delete',
             style: 'destructive',
             onPress: async () => {
-              await performCancellation(booking.id);
+              await performDeletion(booking.id);
             },
           },
         ],
         { cancelable: true }
       );
     } else if (confirmed) {
-      await performCancellation(booking.id);
+      await performDeletion(booking.id);
     }
   };
 
-  const performCancellation = async (bookingId: number) => {
+  const performDeletion = async (bookingId: number) => {
     try {
-      await ApiService.patch(`/bookings/${bookingId}`, {
-        status: 'cancelled',
+      // Cancel the booking via API
+      await ApiService.post(`/bookings/${bookingId}/cancel`, {
+        cancellation_reason: 'Student requested cancellation',
       });
 
-      if (Platform.OS === 'web') {
-        alert('✅ Booking cancelled successfully');
-      } else {
-        Alert.alert('Success', 'Booking cancelled successfully');
-      }
+      // Remove from local state immediately (optimistic update)
+      setUpcomingBookings(prev => prev.filter(b => b.id !== bookingId));
 
-      // Reload bookings
-      loadDashboardData();
+      setMessage({ type: 'success', text: '✅ Booking deleted successfully' });
+      setTimeout(() => setMessage(null), 3000);
     } catch (error: any) {
-      console.error('Error cancelling booking:', error);
-      const errorMsg = error.response?.data?.detail || 'Failed to cancel booking';
-      if (Platform.OS === 'web') {
-        alert(`❌ Error\n\n${errorMsg}`);
-      } else {
-        Alert.alert('Error', errorMsg);
-      }
+      console.error('Error deleting booking:', error);
+      const errorMsg = error.response?.data?.detail || 'Failed to delete booking';
+      setMessage({ type: 'error', text: errorMsg });
+      setTimeout(() => setMessage(null), 3000);
     }
   };
 
@@ -238,11 +267,8 @@ export default function StudentHomeScreen() {
     } catch (error: any) {
       console.error('Error submitting rating:', error);
       const errorMsg = error.response?.data?.detail || 'Failed to submit rating';
-      if (Platform.OS === 'web') {
-        alert(`❌ Error\n\n${errorMsg}`);
-      } else {
-        Alert.alert('Error', errorMsg);
-      }
+      setMessage({ type: 'error', text: errorMsg });
+      setTimeout(() => setMessage(null), 3000);
     }
   };
 
@@ -323,6 +349,18 @@ export default function StudentHomeScreen() {
         </View>
       </View>
 
+      {/* Inline Message Display */}
+      {message && (
+        <View style={{ marginHorizontal: 16 }}>
+          <InlineMessage
+            type={message.type}
+            message={message.text}
+            onDismiss={() => setMessage(null)}
+            autoDismissMs={0}
+          />
+        </View>
+      )}
+
       {/* Quick Actions */}
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Quick Actions</Text>
@@ -349,44 +387,49 @@ export default function StudentHomeScreen() {
             <Text style={styles.emptyStateSubtext}>Book your first lesson to get started!</Text>
           </View>
         ) : (
-          upcomingBookings.map(booking => (
-            <View key={booking.id} style={styles.bookingCard}>
-              <View style={styles.bookingHeader}>
-                <Text style={styles.instructorName}>{booking.instructor_name}</Text>
-                <View
-                  style={[styles.statusBadge, { backgroundColor: getStatusColor(booking.status) }]}
-                >
-                  <Text style={styles.statusText}>{booking.status}</Text>
-                </View>
-              </View>
-              <Text style={styles.bookingDetail}>👤 Instructor: {booking.instructor_name}</Text>
-              <Text style={styles.bookingTime}>🕒 {formatDate(booking.scheduled_time)}</Text>
-              <Text style={styles.bookingDuration}>⏱️ {booking.duration_minutes} minutes</Text>
-              <Text style={styles.bookingDetail}>
-                🚗 {booking.vehicle_make || 'N/A'} {booking.vehicle_model || ''} (
-                {booking.vehicle_registration || 'N/A'})
-              </Text>
-              <Text style={styles.bookingDetail}>
-                📍 {booking.instructor_suburb ? `${booking.instructor_suburb}, ` : ''}
-                {booking.instructor_city || 'N/A'}
-              </Text>
-              <Text style={styles.bookingDetail}>
-                📌 Pickup: {booking.pickup_location || 'Not specified'}
-              </Text>
-              <Text style={styles.bookingDetail}>📞 {booking.instructor_phone || 'N/A'}</Text>
-              <View style={styles.bookingFooter}>
-                <Text style={styles.bookingPrice}>R{booking.total_price.toFixed(2)}</Text>
-                <View style={styles.bookingActions}>
-                  <TouchableOpacity
-                    style={styles.cancelButton}
-                    onPress={() => handleCancelBooking(booking)}
+          <View style={styles.bookingsGrid}>
+            {upcomingBookings.map(booking => (
+              <View key={booking.id} style={styles.bookingCard}>
+                <View style={styles.bookingHeader}>
+                  <Text style={styles.instructorName}>{booking.instructor_name}</Text>
+                  <View
+                    style={[
+                      styles.statusBadge,
+                      { backgroundColor: getStatusColor(booking.status) },
+                    ]}
                   >
-                    <Text style={styles.cancelButtonText}>Cancel</Text>
-                  </TouchableOpacity>
+                    <Text style={styles.statusText}>{booking.status}</Text>
+                  </View>
+                </View>
+                <Text style={styles.bookingDetail}>👤 Instructor: {booking.instructor_name}</Text>
+                <Text style={styles.bookingTime}>🕒 {formatDate(booking.scheduled_time)}</Text>
+                <Text style={styles.bookingDuration}>⏱️ {booking.duration_minutes} minutes</Text>
+                <Text style={styles.bookingDetail}>
+                  🚗 {booking.vehicle_make || 'N/A'} {booking.vehicle_model || ''} (
+                  {booking.vehicle_registration || 'N/A'})
+                </Text>
+                <Text style={styles.bookingDetail}>
+                  📍 {booking.instructor_suburb ? `${booking.instructor_suburb}, ` : ''}
+                  {booking.instructor_city || 'N/A'}
+                </Text>
+                <Text style={styles.bookingDetail}>
+                  📌 Pickup: {booking.pickup_location || 'Not specified'}
+                </Text>
+                <Text style={styles.bookingDetail}>📞 {booking.instructor_phone || 'N/A'}</Text>
+                <View style={styles.bookingFooter}>
+                  <Text style={styles.bookingPrice}>R{booking.total_price.toFixed(2)}</Text>
+                  <View style={styles.bookingActions}>
+                    <TouchableOpacity
+                      style={styles.deleteButton}
+                      onPress={() => handleDeleteBooking(booking)}
+                    >
+                      <Text style={styles.deleteButtonText}>🗑️ Delete</Text>
+                    </TouchableOpacity>
+                  </View>
                 </View>
               </View>
-            </View>
-          ))
+            ))}
+          </View>
         )}
       </View>
 
@@ -394,71 +437,74 @@ export default function StudentHomeScreen() {
       {pastBookings.length > 0 && (
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Recent Lessons</Text>
-          {pastBookings.slice(0, 3).map(booking => (
-            <View key={booking.id} style={styles.bookingCard}>
-              <View style={styles.bookingHeader}>
-                <Text style={styles.instructorName}>{booking.instructor_name}</Text>
-                <View style={[styles.statusBadge, { backgroundColor: '#28a745' }]}>
-                  <Text style={styles.statusText}>Completed</Text>
-                </View>
-              </View>
-              <Text style={styles.bookingDetail}>👤 Instructor: {booking.instructor_name}</Text>
-              <Text style={styles.bookingTime}>🕒 {formatDate(booking.scheduled_time)}</Text>
-              <Text style={styles.bookingDuration}>⏱️ {booking.duration_minutes} minutes</Text>
-              {booking.vehicle_make && (
-                <Text style={styles.bookingDetail}>
-                  🚗 {booking.vehicle_make} {booking.vehicle_model} ({booking.vehicle_registration})
-                </Text>
-              )}
-              {booking.instructor_city && (
-                <Text style={styles.bookingDetail}>
-                  📍 {booking.instructor_suburb ? `${booking.instructor_suburb}, ` : ''}
-                  {booking.instructor_city}
-                </Text>
-              )}
-              {booking.pickup_location && (
-                <Text style={styles.bookingDetail}>📌 Pickup: {booking.pickup_location}</Text>
-              )}
-              <View style={styles.bookingFooter}>
-                <Text style={styles.bookingPrice}>R{booking.total_price.toFixed(2)}</Text>
-              </View>
-              <View style={styles.ratingSection}>
-                <View style={styles.ratingRow}>
-                  <View style={styles.starRating}>
-                    {[1, 2, 3, 4, 5].map(star => (
-                      <TouchableOpacity
-                        key={star}
-                        onPress={() => handleSelectRating(booking.id, star)}
-                        style={styles.starButton}
-                      >
-                        <Text
-                          style={[
-                            styles.starText,
-                            {
-                              opacity:
-                                selectedRatings[booking.id] && selectedRatings[booking.id] >= star
-                                  ? 1
-                                  : 0.3,
-                            },
-                          ]}
-                        >
-                          ⭐
-                        </Text>
-                      </TouchableOpacity>
-                    ))}
+          <View style={styles.bookingsGrid}>
+            {pastBookings.map(booking => (
+              <View key={booking.id} style={styles.bookingCard}>
+                <View style={styles.bookingHeader}>
+                  <Text style={styles.instructorName}>{booking.instructor_name}</Text>
+                  <View style={[styles.statusBadge, { backgroundColor: '#28a745' }]}>
+                    <Text style={styles.statusText}>Completed</Text>
                   </View>
-                  {selectedRatings[booking.id] && (
-                    <Text style={styles.ratingEmoji}>
-                      {getRatingEmoji(selectedRatings[booking.id])}
-                    </Text>
+                </View>
+                <Text style={styles.bookingDetail}>👤 Instructor: {booking.instructor_name}</Text>
+                <Text style={styles.bookingTime}>🕒 {formatDate(booking.scheduled_time)}</Text>
+                <Text style={styles.bookingDuration}>⏱️ {booking.duration_minutes} minutes</Text>
+                {booking.vehicle_make && (
+                  <Text style={styles.bookingDetail}>
+                    🚗 {booking.vehicle_make} {booking.vehicle_model} (
+                    {booking.vehicle_registration})
+                  </Text>
+                )}
+                {booking.instructor_city && (
+                  <Text style={styles.bookingDetail}>
+                    📍 {booking.instructor_suburb ? `${booking.instructor_suburb}, ` : ''}
+                    {booking.instructor_city}
+                  </Text>
+                )}
+                {booking.pickup_location && (
+                  <Text style={styles.bookingDetail}>📌 Pickup: {booking.pickup_location}</Text>
+                )}
+                <View style={styles.bookingFooter}>
+                  <Text style={styles.bookingPrice}>R{booking.total_price.toFixed(2)}</Text>
+                </View>
+                <View style={styles.ratingSection}>
+                  <View style={styles.ratingRow}>
+                    <View style={styles.starRating}>
+                      {[1, 2, 3, 4, 5].map(star => (
+                        <TouchableOpacity
+                          key={star}
+                          onPress={() => handleSelectRating(booking.id, star)}
+                          style={styles.starButton}
+                        >
+                          <Text
+                            style={[
+                              styles.starText,
+                              {
+                                opacity:
+                                  selectedRatings[booking.id] && selectedRatings[booking.id] >= star
+                                    ? 1
+                                    : 0.3,
+                              },
+                            ]}
+                          >
+                            ⭐
+                          </Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                    {selectedRatings[booking.id] && (
+                      <Text style={styles.ratingEmoji}>
+                        {getRatingEmoji(selectedRatings[booking.id])}
+                      </Text>
+                    )}
+                  </View>
+                  {showThankYou[booking.id] && (
+                    <Text style={styles.thankYouText}>✓ Thanks for rating!</Text>
                   )}
                 </View>
-                {showThankYou[booking.id] && (
-                  <Text style={styles.thankYouText}>✓ Thanks for rating!</Text>
-                )}
               </View>
-            </View>
-          ))}
+            ))}
+          </View>
         </View>
       )}
 
@@ -582,25 +628,34 @@ const styles = StyleSheet.create({
     color: '#666',
     textAlign: 'center',
   },
+  bookingsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginHorizontal: -6,
+  },
   bookingCard: {
     backgroundColor: '#fff',
-    padding: 16,
-    borderRadius: 12,
+    padding: 12,
+    borderRadius: 10,
     marginBottom: 12,
+    marginHorizontal: 6,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08,
+    shadowRadius: 3,
+    elevation: 2,
+    minWidth: Platform.OS === 'web' ? 'calc(33.33% - 12px)' : '100%',
+    maxWidth: Platform.OS === 'web' ? 'calc(33.33% - 12px)' : '100%',
+    flex: Platform.OS === 'web' ? undefined : 1,
   },
   bookingHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: 8,
   },
   instructorName: {
-    fontSize: 18,
+    fontSize: 14,
     fontWeight: '600',
     color: '#333',
   },
@@ -616,31 +671,31 @@ const styles = StyleSheet.create({
     textTransform: 'capitalize',
   },
   bookingTime: {
-    fontSize: 14,
+    fontSize: 12,
     color: '#666',
-    marginBottom: 4,
+    marginBottom: 2,
   },
   bookingDuration: {
-    fontSize: 14,
+    fontSize: 12,
     color: '#666',
-    marginBottom: 4,
+    marginBottom: 2,
   },
   bookingDetail: {
-    fontSize: 13,
+    fontSize: 11,
     color: '#555',
-    marginBottom: 4,
+    marginBottom: 2,
   },
   bookingFooter: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginTop: 8,
-    paddingTop: 12,
+    marginTop: 6,
+    paddingTop: 8,
     borderTopWidth: 1,
     borderTopColor: '#e0e0e0',
   },
   bookingPrice: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: 'bold',
     color: '#28a745',
   },
@@ -648,13 +703,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 8,
   },
-  cancelButton: {
+  deleteButton: {
     backgroundColor: '#dc3545',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
     borderRadius: 6,
   },
-  cancelButtonText: {
+  deleteButtonText: {
     color: '#fff',
     fontSize: 14,
     fontWeight: '600',

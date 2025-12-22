@@ -84,6 +84,10 @@ class ApiService {
     return await this.api.put(url, data, config);
   }
 
+  async patch(url: string, data?: any, config?: any) {
+    return await this.api.patch(url, data, config);
+  }
+
   async delete(url: string, config?: any) {
     return await this.api.delete(url, config);
   }

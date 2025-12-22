@@ -68,6 +68,9 @@ def is_time_slot_available(
         .all()
     )
 
+    print(f"DEBUG: Checking slot {slot_start} - {slot_end} for instructor {instructor_id}")
+    print(f"DEBUG: Found {len(bookings)} active bookings")
+
     # SAST timezone for comparison
     sast_tz = pytz.timezone("Africa/Johannesburg")
 
@@ -79,10 +82,14 @@ def is_time_slot_available(
             booking_start = sast_tz.localize(booking_start)
         booking_end = booking_start + timedelta(minutes=booking.duration_minutes)
 
+        print(f"DEBUG: Checking against booking {booking.id}: {booking_start} - {booking_end}")
+
         # Check if there's any overlap
         if not (booking_end <= slot_start or booking_start >= slot_end):
+            print(f"DEBUG: CONFLICT FOUND! Slot overlaps with booking {booking.id}")
             return False  # Conflict found
 
+    print(f"DEBUG: Slot is AVAILABLE")
     return True  # No conflicts
 
 
@@ -182,8 +189,117 @@ def get_available_slots_for_date(
                     )
                 )
 
-            # Move to next slot (15-minute intervals)
-            current_time += timedelta(minutes=15)
+            # Move to next slot with 15min buffer (60min lesson + 15min spacing)
+            current_time += timedelta(minutes=duration_minutes + 15)
+
+    return slots
+
+
+def get_all_slots_with_booking_status(
+    instructor_id: int,
+    target_date: date,
+    duration_minutes: int,
+    db: Session,
+) -> List[TimeSlot]:
+    """Get ALL time slots for a specific date, including both available and booked slots"""
+    instructor = db.query(Instructor).filter(Instructor.id == instructor_id).first()
+    if not instructor:
+        return []
+
+    slots = []
+    day_of_week = get_day_of_week_enum(target_date)
+
+    # Check if there's time off on this date
+    time_off = (
+        db.query(TimeOffException)
+        .filter(
+            TimeOffException.instructor_id == instructor_id,
+            TimeOffException.start_date <= target_date,
+            TimeOffException.end_date >= target_date,
+        )
+        .all()
+    )
+
+    # Get regular schedule for this day
+    schedules = (
+        db.query(InstructorSchedule)
+        .filter(
+            InstructorSchedule.instructor_id == instructor_id,
+            InstructorSchedule.day_of_week == day_of_week,
+            InstructorSchedule.is_active == True,
+        )
+        .all()
+    )
+
+    # Get custom availability for this specific date
+    custom_avail = (
+        db.query(CustomAvailability)
+        .filter(
+            CustomAvailability.instructor_id == instructor_id,
+            CustomAvailability.date == target_date,
+            CustomAvailability.is_active == True,
+        )
+        .all()
+    )
+
+    # Combine regular schedules and custom availability
+    all_availability = []
+
+    # Add regular schedules
+    for schedule in schedules:
+        all_availability.append((schedule.start_time, schedule.end_time))
+
+    # Add custom availability
+    for custom in custom_avail:
+        all_availability.append((custom.start_time, custom.end_time))
+
+    # Generate slots with South Africa timezone
+    sast_tz = pytz.timezone("Africa/Johannesburg")
+
+    for start_time, end_time in all_availability:
+        # Create naive datetime first, then localize to SAST
+        current_time = sast_tz.localize(datetime.combine(target_date, start_time))
+        end_datetime = sast_tz.localize(datetime.combine(target_date, end_time))
+
+        while current_time + timedelta(minutes=duration_minutes) <= end_datetime:
+            slot_end = current_time + timedelta(minutes=duration_minutes)
+
+            # Check if this slot conflicts with time off
+            is_blocked = False
+            for time_off_entry in time_off:
+                # If time off has specific times, check them
+                if time_off_entry.start_time and time_off_entry.end_time:
+                    time_off_start = sast_tz.localize(datetime.combine(target_date, time_off_entry.start_time))
+                    time_off_end = sast_tz.localize(datetime.combine(target_date, time_off_entry.end_time))
+
+                    if not (slot_end <= time_off_start or current_time >= time_off_end):
+                        is_blocked = True
+                        break
+                else:
+                    # Entire day is blocked
+                    is_blocked = True
+                    break
+
+            # Only include slots that are not blocked by time off
+            if not is_blocked:
+                # Check if slot is booked
+                is_booked = not is_time_slot_available(instructor_id, current_time, slot_end, db)
+
+                # Debug logging
+                if is_booked:
+                    print(f"DEBUG: Slot {current_time.isoformat()} is BOOKED")
+
+                slots.append(
+                    TimeSlot(
+                        start_time=current_time.isoformat(),
+                        end_time=slot_end.isoformat(),
+                        duration_minutes=duration_minutes,
+                        is_booked=is_booked,
+                    )
+                )
+
+            # Move to next slot with 15min buffer (60min lesson + 15min spacing)
+            current_time += timedelta(minutes=duration_minutes + 15)
 
     return slots
 
@@ -484,6 +600,7 @@ async def get_instructor_available_slots(
     start_date: date = Query(..., description="Start date for availability search"),
     end_date: date = Query(..., description="End date for availability search"),
     duration_minutes: int = Query(60, description="Lesson duration in minutes", ge=30, le=180),
+    show_booked: bool = Query(False, description="Include booked slots in response (marked with is_booked=True)"),
     db: Session = Depends(get_db),
 ):
     """Get available time slots for a specific instructor (public - for students to book)"""
@@ -502,9 +619,13 @@ async def get_instructor_available_slots(
     current_date = start_date
 
     while current_date <= end_date:
-        slots = get_available_slots_for_date(instructor_id, current_date, duration_minutes, db)
+        # Use different function based on whether we want to show booked slots
+        if show_booked:
+            slots = get_all_slots_with_booking_status(instructor_id, current_date, duration_minutes, db)
+        else:
+            slots = get_available_slots_for_date(instructor_id, current_date, duration_minutes, db)
 
-        if slots:  # Only include dates with available slots
+        if slots:  # Only include dates with slots
             availability_by_date.append(AvailableSlotsResponse(instructor_id=instructor_id, date=current_date, slots=slots))
 
         current_date += timedelta(days=1)

@@ -4,7 +4,6 @@
 import React, { useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Platform,
   StyleSheet,
   Text,
@@ -12,16 +11,22 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import InlineMessage from '../../components/InlineMessage';
 import ApiService from '../../services/api';
 
 export default function LoginScreen({ navigation, onAuthChange }: any) {
   const [emailOrPhone, setEmailOrPhone] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [message, setMessage] = useState<{
+    type: 'success' | 'error' | 'warning' | 'info';
+    text: string;
+  } | null>(null);
 
   const handleLogin = async () => {
     if (!emailOrPhone || !password) {
-      Alert.alert('Error', 'Please fill in all fields');
+      setMessage({ type: 'error', text: 'Please fill in all fields' });
+      setTimeout(() => setMessage(null), 3000);
       return;
     }
 
@@ -59,15 +64,13 @@ export default function LoginScreen({ navigation, onAuthChange }: any) {
         error.response?.data?.detail || error.message || 'An error occurred during login';
       const statusCode = error.response?.status || 'unknown';
 
-      console.error(`Showing alert: ${errorMessage} (${statusCode})`);
+      console.error(`Showing error message: ${errorMessage} (${statusCode})`);
 
-      if (Platform.OS === 'web') {
-        alert(
-          `Login Failed (${statusCode})\n\n${errorMessage}\n\nCheck browser console for details`
-        );
-      } else {
-        Alert.alert('Login Failed', `${errorMessage}\n\nStatus: ${statusCode}`);
-      }
+      setMessage({
+        type: 'error',
+        text: `Login Failed (${statusCode}): ${errorMessage}`,
+      });
+      setTimeout(() => setMessage(null), 5000);
       setLoading(false);
     }
   };
@@ -76,6 +79,17 @@ export default function LoginScreen({ navigation, onAuthChange }: any) {
     <View style={styles.container}>
       <Text style={styles.title}>Driving School</Text>
       <Text style={styles.subtitle}>Login to your account</Text>
+
+      {message && (
+        <View style={{ marginBottom: 16 }}>
+          <InlineMessage
+            type={message.type}
+            message={message.text}
+            onDismiss={() => setMessage(null)}
+            autoDismissMs={0}
+          />
+        </View>
+      )}
 
       <TextInput
         style={styles.input}

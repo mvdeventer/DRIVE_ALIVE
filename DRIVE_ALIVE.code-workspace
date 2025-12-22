@@ -134,7 +134,8 @@
     "git.enableSmartCommit": true,
 
     // === Expo Settings ===
-    "expo.enable": true
+    "expo.enable": true,
+    "powershell.cwd": "🚗 Drive Alive"
   },
   "extensions": {
     "recommendations": [

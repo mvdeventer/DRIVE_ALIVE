@@ -150,6 +150,7 @@ class TimeSlot(BaseModel):
     start_time: str  # ISO format datetime string
     end_time: str  # ISO format datetime string
     duration_minutes: int
+    is_booked: bool = False  # Whether this slot is already booked by another student
 
 
 class AvailableSlotsRequest(BaseModel):

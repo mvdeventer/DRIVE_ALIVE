@@ -17,6 +17,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import InlineMessage from '../../components/InlineMessage';
 import ApiService from '../../services/api';
 
 // Conditional imports for web and native
@@ -63,6 +64,10 @@ export default function ManageAvailabilityScreen() {
   const navigation = useNavigation();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState<{
+    type: 'success' | 'error' | 'warning' | 'info';
+    text: string;
+  } | null>(null);
   const [schedules, setSchedules] = useState<Schedule[]>([]);
   const [timeOff, setTimeOff] = useState<TimeOff[]>([]);
   const [newTimeOff, setNewTimeOff] = useState<TimeOff>({
@@ -116,11 +121,8 @@ export default function ManageAvailabilityScreen() {
       });
     } catch (error) {
       console.error('Error loading availability:', error);
-      if (Platform.OS === 'web') {
-        alert('Failed to load availability');
-      } else {
-        Alert.alert('Error', 'Failed to load availability');
-      }
+      setMessage({ type: 'error', text: 'Failed to load availability' });
+      setTimeout(() => setMessage(null), 3000);
     } finally {
       setLoading(false);
     }
@@ -189,22 +191,19 @@ export default function ManageAvailabilityScreen() {
       const activeSchedules = schedules.filter(s => s.is_active);
 
       if (activeSchedules.length === 0) {
-        if (Platform.OS === 'web') {
-          alert('Please enable at least one day');
-        } else {
-          Alert.alert('Error', 'Please enable at least one day');
-        }
+        setMessage({ type: 'warning', text: 'Please enable at least one day' });
+        setTimeout(() => setMessage(null), 3000);
         return;
       }
 
       // Validate times
       for (const schedule of activeSchedules) {
         if (schedule.start_time >= schedule.end_time) {
-          if (Platform.OS === 'web') {
-            alert(`Invalid time range for ${DAY_LABELS[schedule.day_of_week]}`);
-          } else {
-            Alert.alert('Error', `Invalid time range for ${DAY_LABELS[schedule.day_of_week]}`);
-          }
+          setMessage({
+            type: 'warning',
+            text: `Invalid time range for ${DAY_LABELS[schedule.day_of_week]}`,
+          });
+          setTimeout(() => setMessage(null), 3000);
           return;
         }
       }
@@ -228,21 +227,15 @@ export default function ManageAvailabilityScreen() {
         })),
       });
 
-      if (Platform.OS === 'web') {
-        alert('Schedule saved successfully!');
-      } else {
-        Alert.alert('Success', 'Schedule saved successfully!');
-      }
+      setMessage({ type: 'success', text: 'Schedule saved successfully!' });
+      setTimeout(() => setMessage(null), 4000);
 
       loadAvailability();
     } catch (error: any) {
       console.error('Error saving schedule:', error);
-      const message = error.response?.data?.detail || 'Failed to save schedule';
-      if (Platform.OS === 'web') {
-        alert(message);
-      } else {
-        Alert.alert('Error', message);
-      }
+      const errMsg = error.response?.data?.detail || 'Failed to save schedule';
+      setMessage({ type: 'error', text: errMsg });
+      setTimeout(() => setMessage(null), 3000);
     } finally {
       setSaving(false);
     }
@@ -251,11 +244,8 @@ export default function ManageAvailabilityScreen() {
   const addTimeOff = async () => {
     try {
       if (selectedDates.length === 0) {
-        if (Platform.OS === 'web') {
-          alert('Please select at least one date');
-        } else {
-          Alert.alert('Error', 'Please select at least one date');
-        }
+        setMessage({ type: 'warning', text: 'Please select at least one date' });
+        setTimeout(() => setMessage(null), 3000);
         return;
       }
 
@@ -269,11 +259,11 @@ export default function ManageAvailabilityScreen() {
         });
       }
 
-      if (Platform.OS === 'web') {
-        alert(`Time off added for ${selectedDates.length} date(s) successfully!`);
-      } else {
-        Alert.alert('Success', `Time off added for ${selectedDates.length} date(s) successfully!`);
-      }
+      setMessage({
+        type: 'success',
+        text: `Time off added for ${selectedDates.length} date(s) successfully!`,
+      });
+      setTimeout(() => setMessage(null), 4000);
 
       setNewTimeOff({
         start_date: '',
@@ -286,12 +276,9 @@ export default function ManageAvailabilityScreen() {
       loadAvailability();
     } catch (error: any) {
       console.error('Error adding time off:', error);
-      const message = error.response?.data?.detail || 'Failed to add time off';
-      if (Platform.OS === 'web') {
-        alert(message);
-      } else {
-        Alert.alert('Error', message);
-      }
+      const errMsg = error.response?.data?.detail || 'Failed to add time off';
+      setMessage({ type: 'error', text: errMsg });
+      setTimeout(() => setMessage(null), 3000);
     }
   };
 
@@ -300,18 +287,12 @@ export default function ManageAvailabilityScreen() {
       await ApiService.delete(`/availability/time-off/${id}`);
       loadAvailability();
 
-      if (Platform.OS === 'web') {
-        alert('Time off deleted');
-      } else {
-        Alert.alert('Success', 'Time off deleted');
-      }
+      setMessage({ type: 'success', text: 'Time off deleted' });
+      setTimeout(() => setMessage(null), 3000);
     } catch (error) {
       console.error('Error deleting time off:', error);
-      if (Platform.OS === 'web') {
-        alert('Failed to delete time off');
-      } else {
-        Alert.alert('Error', 'Failed to delete time off');
-      }
+      setMessage({ type: 'error', text: 'Failed to delete time off' });
+      setTimeout(() => setMessage(null), 3000);
     }
   };
 
@@ -346,6 +327,18 @@ export default function ManageAvailabilityScreen() {
         </TouchableOpacity>
         <Text style={styles.title}>📅 Manage Availability</Text>
       </View>
+
+      {/* Inline Message Display */}
+      {message && (
+        <View style={{ marginHorizontal: 16, marginBottom: 12 }}>
+          <InlineMessage
+            type={message.type}
+            message={message.text}
+            onDismiss={() => setMessage(null)}
+            autoDismissMs={0}
+          />
+        </View>
+      )}
 
       {/* Weekly Schedule */}
       <View style={styles.section}>

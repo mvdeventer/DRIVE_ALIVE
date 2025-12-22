@@ -7,7 +7,6 @@ import * as SecureStore from 'expo-secure-store';
 import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Platform,
   ScrollView,
   StyleSheet,
@@ -16,6 +15,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import InlineMessage from '../../components/InlineMessage';
 import ApiService from '../../services/api';
 
 // Conditional import for DateTimePicker
@@ -50,6 +50,7 @@ interface TimeSlot {
   start_time: string;
   end_time: string;
   duration_minutes: number;
+  is_booked?: boolean; // Whether this slot is already booked by another student
 }
 
 interface SelectedBooking {
@@ -89,6 +90,14 @@ export default function BookingScreen() {
   const [loadingExisting, setLoadingExisting] = useState(false);
   const [showSlotSelection, setShowSlotSelection] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [message, setMessage] = useState<{
+    type: 'success' | 'error' | 'warning' | 'info';
+    text: string;
+  } | null>(null);
+  const [confirmCancel, setConfirmCancel] = useState<{
+    booking: ExistingBooking;
+    fee: number;
+  } | null>(null);
 
   // Load existing bookings on mount
   useEffect(() => {
@@ -131,8 +140,9 @@ export default function BookingScreen() {
         {
           params: {
             start_date: dateStr,
-            end_date: dateStr, // Only get slots for this specific date
+            end_date: dateStr,
             duration_minutes: parseInt(formData.duration_minutes) || 60,
+            show_booked: true, // Include booked slots to show them as disabled
           },
         }
       );
@@ -140,20 +150,22 @@ export default function BookingScreen() {
       console.log('Available slots response:', response.data);
 
       if (response.data.availability && response.data.availability.length > 0) {
-        setAvailableSlotsForDate(response.data.availability[0].slots || []);
+        const slots = response.data.availability[0].slots || [];
+        console.log('✅ Slots received:', slots.length);
+        console.log('📋 Sample slot:', slots[0]);
+        console.log('🔒 Booked slots:', slots.filter((s: TimeSlot) => s.is_booked).length);
+        console.log('✨ Available slots:', slots.filter((s: TimeSlot) => !s.is_booked).length);
+        setAvailableSlotsForDate(slots);
         setShowSlotSelection(true);
       } else {
+        console.log('❌ No availability - instructor has no schedule for this date');
         setAvailableSlotsForDate([]);
-        setShowSlotSelection(true); // Still show the section to display "no slots" message
+        setShowSlotSelection(true);
       }
     } catch (error: any) {
       console.error('Error loading available slots:', error);
-
-      if (Platform.OS === 'web') {
-        alert('Failed to load available slots. Please try again.');
-      } else {
-        Alert.alert('Error', 'Failed to load available slots. Please try again.');
-      }
+      setMessage({ type: 'error', text: 'Failed to load available slots. Please try again.' });
+      setTimeout(() => setMessage(null), 3000);
       setAvailableSlotsForDate([]);
       setShowSlotSelection(false);
     } finally {
@@ -170,18 +182,25 @@ export default function BookingScreen() {
   const handleAddSlot = (slot: TimeSlot) => {
     if (!selectedDate) return;
 
+    // Prevent selecting booked slots
+    if (slot.is_booked) {
+      setMessage({
+        type: 'error',
+        text: 'This time slot is already booked by another student. Please select a different time.',
+      });
+      setTimeout(() => setMessage(null), 3000);
+      return;
+    }
+
     // Check if slot is in the past
     const slotDateTime = new Date(slot.start_time);
     const now = new Date();
     if (slotDateTime <= now) {
-      if (Platform.OS === 'web') {
-        alert('Cannot book lessons in the past. Please select a future time slot.');
-      } else {
-        Alert.alert(
-          'Invalid Time',
-          'Cannot book lessons in the past. Please select a future time slot.'
-        );
-      }
+      setMessage({
+        type: 'error',
+        text: 'Cannot book lessons in the past. Please select a future time slot.',
+      });
+      setTimeout(() => setMessage(null), 3000);
       return;
     }
 
@@ -200,11 +219,8 @@ export default function BookingScreen() {
     );
 
     if (exists) {
-      if (Platform.OS === 'web') {
-        alert('This time slot is already added to your bookings.');
-      } else {
-        Alert.alert('Already Added', 'This time slot is already added to your bookings.');
-      }
+      setMessage({ type: 'warning', text: 'This time slot is already added to your bookings.' });
+      setTimeout(() => setMessage(null), 3000);
       return;
     }
 
@@ -240,31 +256,22 @@ export default function BookingScreen() {
     const now = new Date();
     const hoursUntilLesson = (lessonDateTime.getTime() - now.getTime()) / (1000 * 60 * 60);
 
-    let confirmMessage = '';
     let cancelFee = 0;
 
     if (hoursUntilLesson < 6) {
       // Calculate 50% cancellation fee
       const hours = booking.duration_minutes / 60;
       cancelFee = instructor.hourly_rate * hours * 0.5;
-      confirmMessage = `⚠️ Cancellation within 6 hours requires a 50% cancellation fee of R${cancelFee.toFixed(
-        2
-      )}.\n\nDo you want to proceed with cancellation?`;
-    } else {
-      confirmMessage = 'Are you sure you want to cancel this lesson?';
     }
 
-    const proceed =
-      Platform.OS === 'web'
-        ? confirm(confirmMessage)
-        : await new Promise<boolean>(resolve => {
-            Alert.alert('Cancel Lesson', confirmMessage, [
-              { text: 'No', onPress: () => resolve(false), style: 'cancel' },
-              { text: 'Yes, Cancel', onPress: () => resolve(true), style: 'destructive' },
-            ]);
-          });
+    // Show inline confirmation
+    setConfirmCancel({ booking, fee: cancelFee });
+  };
 
-    if (!proceed) return;
+  const confirmCancellation = async () => {
+    if (!confirmCancel) return;
+    const { booking, fee: cancelFee } = confirmCancel;
+    setConfirmCancel(null);
 
     try {
       setLoading(true);
@@ -275,32 +282,21 @@ export default function BookingScreen() {
         cancellation_fee: cancelFee,
       });
 
-      if (Platform.OS === 'web') {
-        alert(
-          `✅ Lesson cancelled successfully.${
-            cancelFee > 0 ? ` A cancellation fee of R${cancelFee.toFixed(2)} will be charged.` : ''
-          }`
-        );
-      } else {
-        Alert.alert(
-          'Cancelled',
-          `Lesson cancelled successfully.${
-            cancelFee > 0 ? ` A cancellation fee of R${cancelFee.toFixed(2)} will be charged.` : ''
-          }`
-        );
-      }
+      setMessage({
+        type: 'success',
+        text: `✅ Lesson cancelled successfully.${
+          cancelFee > 0 ? ` A cancellation fee of R${cancelFee.toFixed(2)} will be charged.` : ''
+        }`,
+      });
+      setTimeout(() => setMessage(null), 5000);
 
       // Reload bookings
       await loadExistingBookings();
     } catch (error: any) {
       console.error('Cancellation error:', error);
       const errorMsg = error.response?.data?.detail || 'Failed to cancel booking';
-
-      if (Platform.OS === 'web') {
-        alert(`❌ Cancellation Failed\n\n${errorMsg}`);
-      } else {
-        Alert.alert('Cancellation Failed', errorMsg);
-      }
+      setMessage({ type: 'error', text: errorMsg });
+      setTimeout(() => setMessage(null), 3000);
     } finally {
       setLoading(false);
     }
@@ -332,8 +328,32 @@ export default function BookingScreen() {
 
     // Reload slots if duration changes and a date is already selected
     if (field === 'duration_minutes' && selectedDate) {
+      console.log('🔄 Duration changed to:', value, 'minutes - reloading slots...');
+
+      // Warn if there are existing bookings with different duration
+      if (selectedBookings.length > 0) {
+        const hasConflict = selectedBookings.some(
+          booking => booking.slot.duration_minutes !== parseInt(value)
+        );
+
+        if (hasConflict) {
+          setMessage({
+            type: 'warning',
+            text: `⚠️ Changing duration will clear your current selections. All lessons must have the same duration.`,
+          });
+          setTimeout(() => setMessage(null), 4000);
+          // Clear selected bookings since they have different durations
+          setSelectedBookings([]);
+        }
+      }
+
+      // Clear current slots first to show loading state
+      setAvailableSlotsForDate([]);
+      setLoadingSlots(true);
       // Use the new value directly instead of waiting for state update
-      loadSlotsWithDuration(selectedDate, parseInt(value));
+      setTimeout(() => {
+        loadSlotsWithDuration(selectedDate, parseInt(value));
+      }, 100); // Small delay to ensure loading state is visible
     }
   };
 
@@ -352,6 +372,7 @@ export default function BookingScreen() {
             start_date: dateStr,
             end_date: dateStr,
             duration_minutes: durationMinutes,
+            show_booked: true, // Include booked slots to show them as disabled
           },
         }
       );
@@ -359,7 +380,11 @@ export default function BookingScreen() {
       console.log('Available slots response:', response.data);
 
       if (response.data.availability && response.data.availability.length > 0) {
-        setAvailableSlotsForDate(response.data.availability[0].slots || []);
+        const slots = response.data.availability[0].slots || [];
+        console.log('Slots received:', slots.length);
+        console.log('Sample slot:', slots[0]);
+        console.log('Booked slots:', slots.filter((s: TimeSlot) => s.is_booked).length);
+        setAvailableSlotsForDate(slots);
         setShowSlotSelection(true);
       } else {
         setAvailableSlotsForDate([]);
@@ -367,12 +392,8 @@ export default function BookingScreen() {
       }
     } catch (error: any) {
       console.error('Error loading available slots:', error);
-
-      if (Platform.OS === 'web') {
-        alert('Failed to load available slots. Please try again.');
-      } else {
-        Alert.alert('Error', 'Failed to load available slots. Please try again.');
-      }
+      setMessage({ type: 'error', text: 'Failed to load available slots. Please try again.' });
+      setTimeout(() => setMessage(null), 3000);
       setAvailableSlotsForDate([]);
       setShowSlotSelection(false);
     } finally {
@@ -389,20 +410,14 @@ export default function BookingScreen() {
   const handleSubmitBooking = async () => {
     // Validate form
     if (selectedBookings.length === 0) {
-      if (Platform.OS === 'web') {
-        alert('Please select at least one time slot');
-      } else {
-        Alert.alert('Validation Error', 'Please select at least one time slot');
-      }
+      setMessage({ type: 'warning', text: 'Please select at least one time slot' });
+      setTimeout(() => setMessage(null), 3000);
       return;
     }
 
     if (!formData.pickup_address) {
-      if (Platform.OS === 'web') {
-        alert('Please enter your pickup address');
-      } else {
-        Alert.alert('Validation Error', 'Please enter your pickup address');
-      }
+      setMessage({ type: 'warning', text: 'Please enter your pickup address' });
+      setTimeout(() => setMessage(null), 3000);
       return;
     }
 
@@ -427,38 +442,35 @@ export default function BookingScreen() {
         };
       });
 
+      console.log('📤 Sending bookings data:', JSON.stringify(bookingsData, null, 2));
+
       // Use bulk booking endpoint for atomic creation
       const response = await ApiService.post('/bookings/bulk', bookingsData);
 
-      if (Platform.OS === 'web') {
-        alert(
-          `✅ ${response.data.length} Booking${
-            response.data.length > 1 ? 's' : ''
-          } confirmed!\n\nYou will receive confirmation shortly.`
-        );
-      } else {
-        Alert.alert(
-          '✅ Bookings Confirmed',
-          `${response.data.length} lesson${
-            response.data.length > 1 ? 's' : ''
-          } booked successfully!\n\nYou will receive confirmation shortly.`,
-          [{ text: 'OK' }]
-        );
-      }
+      setMessage({
+        type: 'success',
+        text: `✅ ${response.data.length} Booking${
+          response.data.length > 1 ? 's' : ''
+        } confirmed! You will receive confirmation shortly.`,
+      });
+      setTimeout(() => setMessage(null), 5000);
 
       // Clear new bookings and reload existing
       setSelectedBookings([]);
       setFormData({ duration_minutes: '60', pickup_address: '', notes: '' });
       await loadExistingBookings();
+
+      // Reload available slots to show newly booked slots as unavailable
+      if (selectedDate) {
+        await loadSlotsForDate(selectedDate);
+      }
     } catch (error: any) {
       console.error('Booking error:', error);
+      console.error('Error response:', error.response);
+      console.error('Error data:', error.response?.data);
       const errorMsg = error.response?.data?.detail || 'Failed to create bookings';
-
-      if (Platform.OS === 'web') {
-        alert(`❌ Booking Failed\n\n${errorMsg}`);
-      } else {
-        Alert.alert('Booking Failed', errorMsg);
-      }
+      setMessage({ type: 'error', text: errorMsg });
+      setTimeout(() => setMessage(null), 3000);
     } finally {
       setLoading(false);
     }
@@ -490,6 +502,46 @@ export default function BookingScreen() {
         </TouchableOpacity>
       </View>
 
+      {/* Inline Message Display */}
+      {message && (
+        <View style={{ marginHorizontal: 16, marginTop: 8 }}>
+          <InlineMessage
+            type={message.type}
+            message={message.text}
+            onDismiss={() => setMessage(null)}
+            autoDismissMs={0}
+          />
+        </View>
+      )}
+
+      {/* Inline Confirmation for Cancellation */}
+      {confirmCancel && (
+        <View style={styles.confirmCancelContainer}>
+          <Text style={styles.confirmCancelTitle}>⚠️ Cancel Lesson?</Text>
+          <Text style={styles.confirmCancelText}>
+            {confirmCancel.fee > 0
+              ? `Cancellation within 6 hours requires a 50% fee of R${confirmCancel.fee.toFixed(
+                  2
+                )}. Proceed with cancellation?`
+              : 'Are you sure you want to cancel this lesson?'}
+          </Text>
+          <View style={styles.confirmCancelButtons}>
+            <TouchableOpacity
+              style={[styles.confirmButton, styles.confirmButtonNo]}
+              onPress={() => setConfirmCancel(null)}
+            >
+              <Text style={styles.confirmButtonTextNo}>No, Keep It</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.confirmButton, styles.confirmButtonYes]}
+              onPress={confirmCancellation}
+            >
+              <Text style={styles.confirmButtonTextYes}>Yes, Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
+
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
         {/* Instructor Info Card */}
         <View style={styles.instructorCard}>
@@ -517,29 +569,18 @@ export default function BookingScreen() {
         <View style={styles.formCard}>
           <Text style={styles.sectionTitle}>Lesson Details</Text>
 
-          {/* Duration Selection */}
+          {/* Duration Selection - Fixed at 60 minutes */}
           <View style={styles.formGroup}>
             <Text style={styles.label}>Duration (minutes)</Text>
             <View style={styles.durationButtons}>
-              {['60', '90', '120'].map(duration => (
-                <TouchableOpacity
-                  key={duration}
-                  style={[
-                    styles.durationButton,
-                    formData.duration_minutes === duration && styles.durationButtonActive,
-                  ]}
-                  onPress={() => updateField('duration_minutes', duration)}
-                >
-                  <Text
-                    style={[
-                      styles.durationButtonText,
-                      formData.duration_minutes === duration && styles.durationButtonTextActive,
-                    ]}
-                  >
-                    {duration} min
-                  </Text>
-                </TouchableOpacity>
-              ))}
+              <TouchableOpacity
+                style={[styles.durationButton, styles.durationButtonActive]}
+                disabled
+              >
+                <Text style={[styles.durationButtonText, styles.durationButtonTextActive]}>
+                  60 min (Standard)
+                </Text>
+              </TouchableOpacity>
             </View>
           </View>
 
@@ -549,64 +590,138 @@ export default function BookingScreen() {
               Add Lesson Date & Time <Text style={styles.required}>*</Text>
             </Text>
 
-            {!showSlotSelection && !selectedDate && (
+            {/* Selected Bookings Display */}
+            {selectedBookings.length > 0 && (
+              <View style={styles.selectedBookingsContainer}>
+                <View style={styles.selectedBookingsHeader}>
+                  <Text style={styles.selectedBookingsTitle}>
+                    📅 Selected Lessons ({selectedBookings.length})
+                  </Text>
+                </View>
+                {selectedBookings.map((booking, index) => (
+                  <View key={index} style={styles.selectedBookingCard}>
+                    <View style={styles.selectedBookingInfo}>
+                      <Text style={styles.selectedBookingDate}>
+                        {new Date(booking.date + 'T00:00:00').toLocaleDateString('en-ZA', {
+                          weekday: 'short',
+                          year: 'numeric',
+                          month: 'short',
+                          day: 'numeric',
+                        })}
+                      </Text>
+                      <Text style={styles.selectedBookingTime}>
+                        🕐 {booking.time} ({booking.slot.duration_minutes} min)
+                      </Text>
+                      <Text style={styles.selectedBookingDetails}>
+                        💰 R
+                        {((instructor.hourly_rate * booking.slot.duration_minutes) / 60).toFixed(2)}
+                      </Text>
+                      {booking.pickup_address && (
+                        <Text style={styles.selectedBookingAddress}>
+                          📍 {booking.pickup_address}
+                        </Text>
+                      )}
+                    </View>
+                    <TouchableOpacity
+                      style={styles.removeBookingButton}
+                      onPress={() => handleRemoveBooking(index)}
+                    >
+                      <Text style={styles.removeBookingButtonText}>✕</Text>
+                    </TouchableOpacity>
+                  </View>
+                ))}
+
+                <TouchableOpacity
+                  style={styles.addAnotherButton}
+                  onPress={handleAddAnotherDateTime}
+                >
+                  <Text style={styles.addAnotherButtonText}>➕ Add Another Date/Time</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+
+            {!showSlotSelection && (
               <View>
                 <Text style={styles.instructionText}>Step 1: Select a date from the calendar</Text>
-                <TouchableOpacity
-                  style={styles.selectDateButton}
-                  onPress={() => setShowDatePicker(true)}
-                >
-                  <Text style={styles.selectDateButtonText}>📅 Select Date</Text>
-                </TouchableOpacity>
+                {Platform.OS === 'web' ? (
+                  <View>
+                    <TouchableOpacity
+                      style={styles.bigCalendarButton}
+                      onPress={() => {
+                        const input = document.getElementById(
+                          'booking-date-input'
+                        ) as HTMLInputElement;
+                        if (input) input.showPicker();
+                      }}
+                    >
+                      <Text style={styles.bigCalendarIcon}>📅</Text>
+                      <Text style={styles.bigCalendarText}>
+                        {selectedDate
+                          ? selectedDate.toLocaleDateString('en-ZA', {
+                              weekday: 'short',
+                              year: 'numeric',
+                              month: 'short',
+                              day: 'numeric',
+                            })
+                          : 'Click to Select Date'}
+                      </Text>
+                    </TouchableOpacity>
+                    <input
+                      id="booking-date-input"
+                      type="date"
+                      min={new Date().toISOString().split('T')[0]}
+                      max={
+                        new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+                      }
+                      value={selectedDate ? selectedDate.toISOString().split('T')[0] : ''}
+                      style={{
+                        position: 'absolute',
+                        opacity: 0,
+                        pointerEvents: 'none',
+                      }}
+                      onChange={(e: any) => {
+                        const date = new Date(e.target.value + 'T00:00:00');
+                        handleDateSelect(date);
+                      }}
+                    />
+                  </View>
+                ) : (
+                  <View>
+                    <TouchableOpacity
+                      style={styles.bigCalendarButton}
+                      onPress={() => setShowDatePicker(true)}
+                    >
+                      <Text style={styles.bigCalendarIcon}>📅</Text>
+                      <Text style={styles.bigCalendarText}>
+                        {selectedDate
+                          ? selectedDate.toLocaleDateString('en-ZA', {
+                              weekday: 'short',
+                              year: 'numeric',
+                              month: 'short',
+                              day: 'numeric',
+                            })
+                          : 'Tap to Select Date'}
+                      </Text>
+                    </TouchableOpacity>
+                    {showDatePicker && DateTimePicker && (
+                      <DateTimePicker
+                        value={selectedDate || new Date()}
+                        mode="date"
+                        display="default"
+                        minimumDate={new Date()}
+                        maximumDate={new Date(Date.now() + 90 * 24 * 60 * 60 * 1000)}
+                        onChange={(event: any, date?: Date) => {
+                          if (date) {
+                            handleDateSelect(date);
+                          } else {
+                            setShowDatePicker(false);
+                          }
+                        }}
+                      />
+                    )}
+                  </View>
+                )}
               </View>
-            )}
-
-            {/* Web Calendar Picker */}
-            {showDatePicker && Platform.OS === 'web' && (
-              <View style={styles.calendarContainer}>
-                <Text style={styles.calendarTitle}>Select a Date</Text>
-                <input
-                  type="date"
-                  min={new Date().toISOString().split('T')[0]}
-                  max={new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]}
-                  style={{
-                    padding: '12px',
-                    fontSize: '16px',
-                    borderRadius: '8px',
-                    border: '2px solid #007bff',
-                    width: '100%',
-                    marginBottom: '12px',
-                  }}
-                  onChange={(e: any) => {
-                    const date = new Date(e.target.value + 'T00:00:00');
-                    handleDateSelect(date);
-                  }}
-                />
-                <TouchableOpacity
-                  style={styles.cancelButton}
-                  onPress={() => setShowDatePicker(false)}
-                >
-                  <Text style={styles.cancelButtonText}>Cancel</Text>
-                </TouchableOpacity>
-              </View>
-            )}
-
-            {/* Native Date Picker */}
-            {showDatePicker && Platform.OS !== 'web' && DateTimePicker && (
-              <DateTimePicker
-                value={selectedDate || new Date()}
-                mode="date"
-                display="default"
-                minimumDate={new Date()}
-                maximumDate={new Date(Date.now() + 90 * 24 * 60 * 60 * 1000)}
-                onChange={(event: any, date?: Date) => {
-                  if (date) {
-                    handleDateSelect(date);
-                  } else {
-                    setShowDatePicker(false);
-                  }
-                }}
-              />
             )}
 
             {/* Loading Slots */}
@@ -661,7 +776,9 @@ export default function BookingScreen() {
                   <View>
                     <Text style={styles.instructionText}>Step 2: Select a time slot</Text>
                     <Text style={styles.slotCountText}>
-                      {availableSlotsForDate.length} slots available (scroll to see all)
+                      {availableSlotsForDate.filter(s => !s.is_booked).length} available,{' '}
+                      {availableSlotsForDate.filter(s => s.is_booked).length} booked (Total:{' '}
+                      {availableSlotsForDate.length} slots)
                     </Text>
                     <ScrollView
                       style={styles.slotsScrollView}
@@ -679,29 +796,43 @@ export default function BookingScreen() {
                               booking.date === dateStr &&
                               booking.slot.start_time === slot.start_time
                           );
+                          const isBooked = slot.is_booked || false;
 
                           return (
                             <TouchableOpacity
                               key={index}
-                              style={[styles.slotButton, isSelected && styles.slotButtonSelected]}
-                              onPress={() => handleAddSlot(slot)}
+                              style={[
+                                styles.slotButton,
+                                isSelected && styles.slotButtonSelected,
+                                isBooked && styles.slotButtonBooked,
+                              ]}
+                              onPress={() => {
+                                if (!isBooked) {
+                                  handleAddSlot(slot);
+                                }
+                              }}
+                              disabled={isBooked}
                             >
-                              <Text
-                                style={[
-                                  styles.slotButtonText,
-                                  isSelected && styles.slotButtonTextSelected,
-                                ]}
-                              >
-                                {startTime.toLocaleTimeString('en-ZA', {
-                                  hour: '2-digit',
-                                  minute: '2-digit',
-                                })}{' '}
-                                -{' '}
-                                {endTime.toLocaleTimeString('en-ZA', {
-                                  hour: '2-digit',
-                                  minute: '2-digit',
-                                })}
-                              </Text>
+                              <View style={styles.slotButtonContent}>
+                                <Text
+                                  style={[
+                                    styles.slotButtonText,
+                                    isSelected && styles.slotButtonTextSelected,
+                                    isBooked && styles.slotButtonTextBooked,
+                                  ]}
+                                >
+                                  {startTime.toLocaleTimeString('en-ZA', {
+                                    hour: '2-digit',
+                                    minute: '2-digit',
+                                  })}{' '}
+                                  -{' '}
+                                  {endTime.toLocaleTimeString('en-ZA', {
+                                    hour: '2-digit',
+                                    minute: '2-digit',
+                                  })}
+                                </Text>
+                                {isBooked && <Text style={styles.bookedBadge}>🔒 Booked</Text>}
+                              </View>
                             </TouchableOpacity>
                           );
                         })}
@@ -712,100 +843,6 @@ export default function BookingScreen() {
               </View>
             )}
           </View>
-
-          {/* Existing Bookings Display */}
-          {existingBookings.length > 0 && (
-            <View style={styles.existingBookingsContainer}>
-              <View style={styles.selectedBookingsHeader}>
-                <Text style={styles.selectedBookingsTitle}>
-                  📚 Your Upcoming Lessons ({existingBookings.length})
-                </Text>
-              </View>
-              {existingBookings.map((booking, index) => {
-                const lessonDate = new Date(booking.lesson_date);
-                const now = new Date();
-                const hoursUntilLesson = (lessonDate.getTime() - now.getTime()) / (1000 * 60 * 60);
-                const canCancelFree = hoursUntilLesson >= 6;
-
-                return (
-                  <View key={booking.id} style={styles.existingBookingCard}>
-                    <View style={styles.selectedBookingInfo}>
-                      <Text style={styles.selectedBookingDate}>
-                        {lessonDate.toLocaleDateString('en-ZA', {
-                          weekday: 'short',
-                          year: 'numeric',
-                          month: 'short',
-                          day: 'numeric',
-                        })}
-                      </Text>
-                      <Text style={styles.selectedBookingTime}>
-                        🕐{' '}
-                        {lessonDate.toLocaleTimeString('en-ZA', {
-                          hour: '2-digit',
-                          minute: '2-digit',
-                        })}{' '}
-                        ({booking.duration_minutes} min)
-                      </Text>
-                      {!canCancelFree && (
-                        <Text style={styles.cancellationWarning}>⚠️ 50% fee if cancelled</Text>
-                      )}
-                    </View>
-                    <TouchableOpacity
-                      style={styles.cancelBookingButton}
-                      onPress={() => handleCancelExistingBooking(booking)}
-                    >
-                      <Text style={styles.cancelBookingButtonText}>Cancel</Text>
-                    </TouchableOpacity>
-                  </View>
-                );
-              })}
-            </View>
-          )}
-
-          {/* Selected Bookings Display */}
-          {selectedBookings.length > 0 && (
-            <View style={styles.selectedBookingsContainer}>
-              <View style={styles.selectedBookingsHeader}>
-                <Text style={styles.selectedBookingsTitle}>
-                  📅 Selected Lessons ({selectedBookings.length})
-                </Text>
-              </View>
-              {selectedBookings.map((booking, index) => (
-                <View key={index} style={styles.selectedBookingCard}>
-                  <View style={styles.selectedBookingInfo}>
-                    <Text style={styles.selectedBookingDate}>
-                      {new Date(booking.date + 'T00:00:00').toLocaleDateString('en-ZA', {
-                        weekday: 'short',
-                        year: 'numeric',
-                        month: 'short',
-                        day: 'numeric',
-                      })}
-                    </Text>
-                    <Text style={styles.selectedBookingTime}>
-                      🕐 {booking.time} ({booking.slot.duration_minutes} min)
-                    </Text>
-                    <Text style={styles.selectedBookingDetails}>
-                      💰 R
-                      {((instructor.hourly_rate * booking.slot.duration_minutes) / 60).toFixed(2)}
-                    </Text>
-                    {booking.pickup_address && (
-                      <Text style={styles.selectedBookingAddress}>📍 {booking.pickup_address}</Text>
-                    )}
-                  </View>
-                  <TouchableOpacity
-                    style={styles.removeBookingButton}
-                    onPress={() => handleRemoveBooking(index)}
-                  >
-                    <Text style={styles.removeBookingButtonText}>✕</Text>
-                  </TouchableOpacity>
-                </View>
-              ))}
-
-              <TouchableOpacity style={styles.addAnotherButton} onPress={handleAddAnotherDateTime}>
-                <Text style={styles.addAnotherButtonText}>➕ Add Another Date/Time</Text>
-              </TouchableOpacity>
-            </View>
-          )}
 
           <View style={styles.formGroup}>
             <Text style={styles.label}>
@@ -1061,6 +1098,30 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     fontStyle: 'italic',
   },
+  bigCalendarButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#007bff',
+    padding: 20,
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: '#0056b3',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 4,
+  },
+  bigCalendarIcon: {
+    fontSize: 36,
+    marginRight: 12,
+  },
+  bigCalendarText: {
+    fontSize: 18,
+    color: '#fff',
+    fontWeight: '600',
+  },
   selectDateButton: {
     backgroundColor: '#007bff',
     padding: 16,
@@ -1198,6 +1259,16 @@ const styles = StyleSheet.create({
     backgroundColor: '#28a745',
     borderColor: '#28a745',
   },
+  slotButtonBooked: {
+    backgroundColor: '#f8f9fa',
+    borderColor: '#dee2e6',
+    opacity: 0.6,
+  },
+  slotButtonContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
   slotButtonText: {
     fontSize: 13,
     color: '#495057',
@@ -1206,6 +1277,16 @@ const styles = StyleSheet.create({
   slotButtonTextSelected: {
     color: '#fff',
     fontWeight: '600',
+  },
+  slotButtonTextBooked: {
+    color: '#999',
+    textDecorationLine: 'line-through',
+  },
+  bookedBadge: {
+    fontSize: 10,
+    color: '#dc3545',
+    fontWeight: '600',
+    marginLeft: 8,
   },
   selectedBookingsContainer: {
     backgroundColor: '#e7f5ff',
@@ -1398,6 +1479,60 @@ const styles = StyleSheet.create({
   backButtonText: {
     color: '#fff',
     fontSize: 16,
+    fontWeight: '600',
+  },
+  confirmCancelContainer: {
+    backgroundColor: '#fff3cd',
+    borderRadius: 12,
+    padding: 16,
+    marginHorizontal: 16,
+    marginTop: 8,
+    marginBottom: 8,
+    borderWidth: 2,
+    borderColor: '#ffc107',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  confirmCancelTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#856404',
+    marginBottom: 8,
+  },
+  confirmCancelText: {
+    fontSize: 14,
+    color: '#856404',
+    marginBottom: 16,
+    lineHeight: 20,
+  },
+  confirmCancelButtons: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  confirmButton: {
+    flex: 1,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  confirmButtonNo: {
+    backgroundColor: '#6c757d',
+  },
+  confirmButtonYes: {
+    backgroundColor: '#dc3545',
+  },
+  confirmButtonTextNo: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  confirmButtonTextYes: {
+    color: '#fff',
+    fontSize: 14,
     fontWeight: '600',
   },
 });

@@ -466,6 +466,12 @@ async def get_my_bookings(current_user: Annotated[User, Depends(get_current_user
             student = db.query(Student).filter(Student.id == booking.student_id).first()
             student_user = db.query(User).filter(User.id == student.user_id).first() if student else None
 
+            # DEBUG: Log student information
+            print(f"🔍 DEBUG - Booking ID: {booking.id}")
+            print(f"🔍 DEBUG - Student: {student}")
+            print(f"🔍 DEBUG - Student ID Number: {student.id_number if student else 'NO STUDENT'}")
+            print(f"🔍 DEBUG - Student User: {student_user}")
+
             booking_dict = {
                 "id": booking.id,
                 "student_id": student.id if student else None,
@@ -483,6 +489,8 @@ async def get_my_bookings(current_user: Annotated[User, Depends(get_current_user
                 "pickup_location": booking.pickup_address,
                 "student_notes": booking.student_notes,
             }
+            print(f"🔍 DEBUG - booking_dict keys: {booking_dict.keys()}")
+            print(f"🔍 DEBUG - student_id_number value: {booking_dict.get('student_id_number')}")
             bookings_list.append(booking_dict)
 
     return bookings_list
@@ -831,6 +839,19 @@ async def reschedule_booking(
             detail=f"Time {lesson_time} is outside your working hours ({schedule.start_time} - {schedule.end_time})",
         )
 
+    # Store original lesson date if this is the first reschedule
+    if booking.rebooking_count == 0:
+        booking.original_lesson_date = booking.lesson_date
+
+    # Check if rescheduling within 6 hours of lesson time
+    hours_until_lesson = (booking.lesson_date - datetime.utcnow()).total_seconds() / 3600
+    if hours_until_lesson < 6:
+        # Apply 50% cancellation fee
+        booking.cancellation_fee = booking.amount * 0.5
+
+    # Increment rebooking count
+    booking.rebooking_count += 1
+
     # Update the booking
     booking.lesson_date = new_lesson_datetime
     db.commit()
@@ -839,5 +860,8 @@ async def reschedule_booking(
     return {
         "message": "Booking rescheduled successfully",
         "booking_id": booking.id,
+        "booking_reference": booking.booking_reference,
+        "rebooking_count": booking.rebooking_count,
+        "cancellation_fee": booking.cancellation_fee,
         "new_datetime": new_lesson_datetime.isoformat(),
     }
