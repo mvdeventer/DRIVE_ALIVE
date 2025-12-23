@@ -37,6 +37,31 @@ class UserBase(BaseModel):
     first_name: str
     last_name: str
 
+    @field_validator("phone")
+    @classmethod
+    def validate_phone(cls, v: str) -> str:
+        """Validate phone number is in South African format (+27 followed by 9 digits)"""
+        # Remove any whitespace
+        v = v.strip()
+
+        # Check if it starts with +27
+        if not v.startswith("+27"):
+            raise ValueError("Phone number must start with +27 (South African country code)")
+
+        # Check total length (should be +27 + 9 digits = 12 characters)
+        if len(v) != 12:
+            if len(v) < 12:
+                raise ValueError(f"Phone number is too short (must be +27 followed by 9 digits, got {len(v)} characters)")
+            else:
+                raise ValueError(f"Phone number is too long (must be +27 followed by 9 digits, got {len(v)} characters)")
+
+        # Check if the part after +27 is all digits
+        phone_digits = v[3:]  # Skip '+27'
+        if not phone_digits.isdigit():
+            raise ValueError("Phone number must contain only digits after +27")
+
+        return v
+
 
 class UserCreate(UserBase):
     """User creation schema"""
@@ -58,6 +83,34 @@ class UserUpdate(BaseModel):
     first_name: Optional[str] = None
     last_name: Optional[str] = None
     phone: Optional[str] = None
+
+    @field_validator("phone")
+    @classmethod
+    def validate_phone(cls, v: Optional[str]) -> Optional[str]:
+        """Validate phone number is in South African format (+27 followed by 9 digits)"""
+        if v is None:
+            return v
+
+        # Remove any whitespace
+        v = v.strip()
+
+        # Check if it starts with +27
+        if not v.startswith("+27"):
+            raise ValueError("Phone number must start with +27 (South African country code)")
+
+        # Check total length (should be +27 + 9 digits = 12 characters)
+        if len(v) != 12:
+            if len(v) < 12:
+                raise ValueError(f"Phone number is too short (must be +27 followed by 9 digits, got {len(v)} characters)")
+            else:
+                raise ValueError(f"Phone number is too long (must be +27 followed by 9 digits, got {len(v)} characters)")
+
+        # Check if the part after +27 is all digits
+        phone_digits = v[3:]  # Skip '+27'
+        if not phone_digits.isdigit():
+            raise ValueError("Phone number must contain only digits after +27")
+
+        return v
 
 
 class ChangePasswordRequest(BaseModel):
@@ -100,6 +153,25 @@ class InstructorBase(BaseModel):
     max_travel_distance_km: float = 50.0
     rate_per_km_beyond_radius: float = 5.0
     bio: Optional[str] = None
+
+    @field_validator("id_number")
+    @classmethod
+    def validate_id_number(cls, v: str) -> str:
+        """Validate ID number is exactly 13 digits"""
+        # Remove any whitespace
+        v = v.strip()
+
+        # Check if it's all digits
+        if not v.isdigit():
+            raise ValueError("ID number must contain only numbers")
+
+        # Check length
+        if len(v) < 13:
+            raise ValueError(f"ID number is too short (must be 13 digits, got {len(v)})")
+        elif len(v) > 13:
+            raise ValueError(f"ID number is too long (must be 13 digits, got {len(v)})")
+
+        return v
 
 
 class InstructorCreate(UserCreate, InstructorBase):
@@ -182,6 +254,50 @@ class StudentBase(BaseModel):
     city: str
     suburb: Optional[str] = None
     postal_code: str
+
+    @field_validator("id_number")
+    @classmethod
+    def validate_id_number(cls, v: str) -> str:
+        """Validate ID number is exactly 13 digits"""
+        # Remove any whitespace
+        v = v.strip()
+
+        # Check if it's all digits
+        if not v.isdigit():
+            raise ValueError("ID number must contain only numbers")
+
+        # Check length
+        if len(v) < 13:
+            raise ValueError(f"ID number is too short (must be 13 digits, got {len(v)})")
+        elif len(v) > 13:
+            raise ValueError(f"ID number is too long (must be 13 digits, got {len(v)})")
+
+        return v
+
+    @field_validator("emergency_contact_phone")
+    @classmethod
+    def validate_emergency_phone(cls, v: str) -> str:
+        """Validate emergency contact phone number is in South African format (+27 followed by 9 digits)"""
+        # Remove any whitespace
+        v = v.strip()
+
+        # Check if it starts with +27
+        if not v.startswith("+27"):
+            raise ValueError("Emergency contact phone must start with +27 (South African country code)")
+
+        # Check total length (should be +27 + 9 digits = 12 characters)
+        if len(v) != 12:
+            if len(v) < 12:
+                raise ValueError(f"Emergency contact phone is too short (must be +27 followed by 9 digits, got {len(v)} characters)")
+            else:
+                raise ValueError(f"Emergency contact phone is too long (must be +27 followed by 9 digits, got {len(v)} characters)")
+
+        # Check if the part after +27 is all digits
+        phone_digits = v[3:]  # Skip '+27'
+        if not phone_digits.isdigit():
+            raise ValueError("Emergency contact phone must contain only digits after +27")
+
+        return v
 
 
 class StudentCreate(UserCreate, StudentBase):

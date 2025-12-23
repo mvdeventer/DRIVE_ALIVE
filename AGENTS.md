@@ -37,6 +37,53 @@ payments handled in-app, GPS pickup/drop-off, WhatsApp reminders, and compliance
 
 ## UI/UX Guidelines
 
+### Global Navigation Requirements ✅
+
+**Logout Button:**
+
+- ✅ **ALWAYS** include logout button in header for all authenticated screens
+- ✅ Appears in `headerRight` position (top-right corner)
+- ✅ **IMMEDIATE LOGOUT**: Logs out instantly on click (web: reloads page, mobile: resets navigation)
+- ✅ **SINGLE BUTTON ONLY**: Blue logout button in header (never duplicate in screen content)
+- ✅ Web-compatible: Works across all platforms (mobile, web)
+- ✅ Implemented globally in `App.tsx` navigation configuration
+- ✅ **MONITORS UNSAVED CHANGES**: Global logout button checks for unsaved changes via `beforeRemove` listeners
+- ❌ **NEVER** create a screen without logout functionality when authenticated
+- ❌ **NEVER** add red logout buttons within screen content (duplicates header button)
+- ❌ **NEVER** add separate `handleLogout` functions inside individual screens
+
+**Implementation:**
+
+```typescript
+// In App.tsx navigation config
+screenOptions={{
+  headerRight: isAuthenticated ? () => <LogoutButton /> : undefined,
+}}
+
+// Logout handler (immediate action, web reload)
+const handleLogout = async () => {
+  try {
+    await storage.removeItem('access_token');
+    await storage.removeItem('user_role');
+    setIsAuthenticated(false);
+    setUserRole(null);
+    if (Platform.OS === 'web') {
+      window.location.reload();
+    }
+  } catch (error) {
+    console.error('Error logging out:', error);
+  }
+};
+```
+
+**Unsaved Changes Detection:**
+
+- Screens with Save/Apply/Confirm buttons track form changes via `beforeRemove` navigation listeners
+- If unsaved changes exist when navigating away (including logout), show platform-specific confirmation dialog
+- User can Stay (cancel navigation) or Discard Changes (proceed with navigation/logout)
+- Applies to: ManageAvailabilityScreen, EditInstructorProfileScreen, EditStudentProfileScreen, BookingScreen
+- Logout button in header automatically respects these listeners
+
 ### Inline Message System ✅
 
 **NO Pop-up Alerts Policy:**
@@ -256,8 +303,9 @@ Critical messages (conflicts, security warnings) use 5000ms duration.
 - Use **React Native + Expo** for cross-platform frontend.
 - Use **FastAPI/Django** in Python venv for backend.
 - Ensure secure handling of payments and user data.
-- **Development Mode**: Instructors are auto-verified on registration for testing.
-- **Production Mode**: Will require admin dashboard for manual verification.
+- **Debug Mode** (DEBUG=True): Instructors are auto-verified on registration for testing only.
+- **Production Mode** (DEBUG=False): Instructors require manual verification via admin dashboard.
+- See [DEBUG_MODE_SETTINGS.md](DEBUG_MODE_SETTINGS.md) for configuration details.
 
 ## Recent Updates (Dec 23, 2025)
 

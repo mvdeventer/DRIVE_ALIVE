@@ -59,11 +59,6 @@ export default function RevenueAnalyticsScreen() {
     loadRevenueStats();
   };
 
-  const handleLogout = async () => {
-    await apiService.logout();
-    navigation.replace('Login');
-  };
-
   const renderTopInstructor = ({ item, index }: { item: any; index: number }) => (
     <View style={styles.instructorCard}>
       <View style={styles.rankBadge}>
@@ -102,9 +97,6 @@ export default function RevenueAnalyticsScreen() {
             <Text style={styles.headerTitle}>Revenue Analytics</Text>
             <Text style={styles.headerSubtitle}>Financial Overview</Text>
           </View>
-          <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
-            <Text style={styles.logoutButtonText}>Logout</Text>
-          </TouchableOpacity>
         </View>
       </View>
 

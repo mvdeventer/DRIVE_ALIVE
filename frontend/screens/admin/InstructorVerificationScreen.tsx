@@ -65,11 +65,6 @@ export default function InstructorVerificationScreen({ navigation }: any) {
     loadPendingInstructors();
   };
 
-  const handleLogout = async () => {
-    await apiService.logout();
-    navigation.replace('Login');
-  };
-
   const handleVerify = async (instructor: PendingInstructor, approve: boolean) => {
     const action = approve ? 'verify' : 'reject';
 
@@ -171,9 +166,6 @@ export default function InstructorVerificationScreen({ navigation }: any) {
             <Text style={styles.headerTitle}>Instructor Verification</Text>
             <Text style={styles.headerSubtitle}>{instructors.length} pending</Text>
           </View>
-          <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
-            <Text style={styles.logoutButtonText}>Logout</Text>
-          </TouchableOpacity>
         </View>
       </View>
 
@@ -233,17 +225,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#E0E0E0',
     marginTop: 5,
-  },
-  logoutButton: {
-    backgroundColor: '#DC3545',
-    paddingHorizontal: 15,
-    paddingVertical: 8,
-    borderRadius: 6,
-  },
-  logoutButtonText: {
-    color: '#FFF',
-    fontSize: 14,
-    fontWeight: 'bold',
   },
   listContainer: {
     padding: 15,

@@ -91,6 +91,7 @@ export default function BookingScreen() {
   const [existingBookings, setExistingBookings] = useState<ExistingBooking[]>([]);
   const [loadingExisting, setLoadingExisting] = useState(false);
   const [showSlotSelection, setShowSlotSelection] = useState(false);
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<{
     type: 'success' | 'error' | 'warning' | 'info';
@@ -105,6 +106,56 @@ export default function BookingScreen() {
   useEffect(() => {
     loadExistingBookings();
   }, [instructor.instructor_id]);
+
+  // Track unsaved changes (selected bookings or form data)
+  useEffect(() => {
+    const hasSelections = selectedBookings.length > 0;
+    const hasPickupAddress = formData.pickup_address.trim().length > 0;
+    const hasNotes = formData.notes.trim().length > 0;
+    setHasUnsavedChanges(hasSelections || hasPickupAddress || hasNotes);
+  }, [selectedBookings, formData.pickup_address, formData.notes]);
+
+  // Prevent navigation if there are unsaved changes
+  useEffect(() => {
+    const unsubscribe = navigation.addListener('beforeRemove', e => {
+      if (!hasUnsavedChanges) {
+        return;
+      }
+      e.preventDefault();
+
+      const message =
+        selectedBookings.length > 0
+          ? `You have ${selectedBookings.length} lesson${
+              selectedBookings.length > 1 ? 's' : ''
+            } selected but not yet booked.`
+          : 'You have entered booking information that has not been saved.';
+
+      if (Platform.OS === 'web') {
+        if (
+          window.confirm(
+            `⚠️ Unsaved Changes\n\n${message}\n\nAre you sure you want to leave? Your selections will be lost.`
+          )
+        ) {
+          navigation.dispatch(e.data.action);
+        }
+      } else {
+        const Alert = require('react-native').Alert;
+        Alert.alert(
+          '⚠️ Unsaved Changes',
+          `${message}\n\nAre you sure you want to leave? Your selections will be lost.`,
+          [
+            { text: 'Stay', style: 'cancel' },
+            {
+              text: 'Leave',
+              style: 'destructive',
+              onPress: () => navigation.dispatch(e.data.action),
+            },
+          ]
+        );
+      }
+    });
+    return unsubscribe;
+  }, [navigation, hasUnsavedChanges, selectedBookings.length]);
 
   const loadExistingBookings = async () => {
     try {
@@ -535,6 +586,9 @@ export default function BookingScreen() {
         } confirmed! Redirecting to dashboard...`,
       });
 
+      // Clear unsaved changes
+      setHasUnsavedChanges(false);
+
       // Wait a moment to show the success message, then navigate back
       setTimeout(() => {
         navigation.dispatch(
@@ -577,9 +631,7 @@ export default function BookingScreen() {
           <Text style={styles.headerBackButtonText}>← Back</Text>
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Book a Lesson</Text>
-        <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
-          <Text style={styles.logoutButtonText}>Logout</Text>
-        </TouchableOpacity>
+        <View style={{ width: 80 }} />
       </View>
 
       {/* Inline Message Display */}

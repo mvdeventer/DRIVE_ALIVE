@@ -564,9 +564,6 @@ export default function InstructorHomeScreen() {
             {profile?.first_name} {profile?.last_name}
           </Text>
         </View>
-        <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
-          <Text style={styles.logoutButtonText}>Logout</Text>
-        </TouchableOpacity>
       </View>
 
       {/* Availability Toggle */}

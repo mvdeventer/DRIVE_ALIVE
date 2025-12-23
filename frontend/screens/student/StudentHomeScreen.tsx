@@ -349,9 +349,6 @@ export default function StudentHomeScreen() {
           <Text style={styles.greeting}>Welcome back,</Text>
           <Text style={styles.name}>{profile?.first_name || 'Student'}</Text>
         </View>
-        <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
-          <Text style={styles.logoutButtonText}>Logout</Text>
-        </TouchableOpacity>
       </View>
 
       {/* Quick Stats */}

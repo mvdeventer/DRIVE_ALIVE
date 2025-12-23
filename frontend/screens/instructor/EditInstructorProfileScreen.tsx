@@ -5,8 +5,7 @@ import { useNavigation } from '@react-navigation/native';
 import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
-  Platform,
+  Modal,
   ScrollView,
   StyleSheet,
   Text,
@@ -14,21 +13,10 @@ import {
   View,
 } from 'react-native';
 import FormFieldWithTip from '../../components/FormFieldWithTip';
+import InlineMessage from '../../components/InlineMessage';
 import LicenseTypeSelector from '../../components/LicenseTypeSelector';
 import LocationSelector from '../../components/LocationSelector';
 import ApiService from '../../services/api';
-
-const showAlert = (title: string, message: string, buttons?: any[]) => {
-  if (Platform.OS === 'web') {
-    const fullMessage = `${title}\n\n${message}`;
-    alert(fullMessage);
-    if (buttons && buttons[0] && buttons[0].onPress) {
-      buttons[0].onPress();
-    }
-  } else {
-    Alert.alert(title, message, buttons);
-  }
-};
 
 export default function EditInstructorProfileScreen() {
   const navigation = useNavigation();
@@ -54,6 +42,8 @@ export default function EditInstructorProfileScreen() {
     bio: '',
     is_available: true,
   });
+  const [originalFormData, setOriginalFormData] = useState(formData);
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [showPasswordModal, setShowPasswordModal] = useState(false);
@@ -62,10 +52,34 @@ export default function EditInstructorProfileScreen() {
     newPassword: '',
     confirmPassword: '',
   });
+  const [showDiscardModal, setShowDiscardModal] = useState(false);
+  const [pendingNavigation, setPendingNavigation] = useState<any>(null);
+  const [successMessage, setSuccessMessage] = useState('');
+  const [errorMessage, setErrorMessage] = useState('');
 
   useEffect(() => {
     loadProfile();
   }, []);
+
+  useEffect(() => {
+    const unsubscribe = navigation.addListener('beforeRemove', e => {
+      if (!hasUnsavedChanges) {
+        return;
+      }
+      e.preventDefault();
+      setPendingNavigation(e.data.action);
+      setShowDiscardModal(true);
+    });
+    return unsubscribe;
+  }, [navigation, hasUnsavedChanges]);
+
+  const handleDiscardChanges = () => {
+    setShowDiscardModal(false);
+    if (pendingNavigation) {
+      navigation.dispatch(pendingNavigation);
+      setPendingNavigation(null);
+    }
+  };
 
   const loadProfile = async () => {
     try {
@@ -78,6 +92,28 @@ export default function EditInstructorProfileScreen() {
       const instructor = instructorRes.data;
 
       setFormData({
+        email: user.email || '',
+        phone: user.phone || '',
+        first_name: user.first_name || '',
+        last_name: user.last_name || '',
+        id_number: instructor.id_number || '',
+        license_number: instructor.license_number || '',
+        license_types: instructor.license_types ? instructor.license_types.split(',') : [],
+        vehicle_registration: instructor.vehicle_registration || '',
+        vehicle_make: instructor.vehicle_make || '',
+        vehicle_model: instructor.vehicle_model || '',
+        vehicle_year: instructor.vehicle_year?.toString() || '',
+        province: instructor.province || '',
+        city: instructor.city || '',
+        suburb: instructor.suburb || '',
+        hourly_rate: instructor.hourly_rate?.toString() || '',
+        service_radius_km: instructor.service_radius_km?.toString() || '20',
+        max_travel_distance_km: instructor.max_travel_distance_km?.toString() || '50',
+        rate_per_km_beyond_radius: instructor.rate_per_km_beyond_radius?.toString() || '5',
+        bio: instructor.bio || '',
+        is_available: instructor.is_available || false,
+      });
+      setOriginalFormData({
         email: user.email || '',
         phone: user.phone || '',
         first_name: user.first_name || '',
@@ -113,27 +149,11 @@ export default function EditInstructorProfileScreen() {
   };
 
   const updateField = (field: string, value: any) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
-  };
-
-  const handleLogout = async () => {
-    try {
-      if (Platform.OS === 'web') {
-        localStorage.clear();
-        window.location.reload();
-      } else {
-        await SecureStore.deleteItemAsync('access_token');
-        await SecureStore.deleteItemAsync('user_role');
-        navigation.dispatch(
-          CommonActions.reset({
-            index: 0,
-            routes: [{ name: 'Login' }],
-          })
-        );
-      }
-    } catch (error) {
-      console.error('Logout error:', error);
-    }
+    setFormData(prev => {
+      const updated = { ...prev, [field]: value };
+      setHasUnsavedChanges(JSON.stringify(updated) !== JSON.stringify(originalFormData));
+      return updated;
+    });
   };
 
   const handleSaveProfile = async () => {
@@ -187,13 +207,15 @@ export default function EditInstructorProfileScreen() {
         is_available: formData.is_available,
       });
 
-      showAlert('✅ Success', 'Profile updated successfully!', [
-        { text: 'OK', onPress: () => navigation.goBack() },
-      ]);
+      setSuccessMessage('Profile updated successfully!');
+      setTimeout(() => setSuccessMessage(''), 4000);
+      setHasUnsavedChanges(false);
+      setTimeout(() => navigation.goBack(), 1500);
     } catch (error: any) {
       console.error('Error saving profile:', error);
       const errorMsg = error.response?.data?.detail || 'Failed to update profile';
-      showAlert('Error', errorMsg);
+      setErrorMessage(errorMsg);
+      setTimeout(() => setErrorMessage(''), 5000);
     } finally {
       setSaving(false);
     }
@@ -205,17 +227,20 @@ export default function EditInstructorProfileScreen() {
       !passwordData.newPassword ||
       !passwordData.confirmPassword
     ) {
-      showAlert('Missing Fields', 'Please fill in all password fields');
+      setErrorMessage('Please fill in all password fields');
+      setTimeout(() => setErrorMessage(''), 5000);
       return;
     }
 
     if (passwordData.newPassword !== passwordData.confirmPassword) {
-      showAlert('Password Mismatch', 'New passwords do not match');
+      setErrorMessage('New passwords do not match');
+      setTimeout(() => setErrorMessage(''), 5000);
       return;
     }
 
     if (passwordData.newPassword.length < 6) {
-      showAlert('Password Too Short', 'Password must be at least 6 characters long');
+      setErrorMessage('Password must be at least 6 characters long');
+      setTimeout(() => setErrorMessage(''), 5000);
       return;
     }
 
@@ -227,10 +252,12 @@ export default function EditInstructorProfileScreen() {
 
       setShowPasswordModal(false);
       setPasswordData({ currentPassword: '', newPassword: '', confirmPassword: '' });
-      showAlert('✅ Success', 'Password changed successfully!');
+      setSuccessMessage('Password changed successfully!');
+      setTimeout(() => setSuccessMessage(''), 4000);
     } catch (error: any) {
       const errorMsg = error.response?.data?.detail || 'Failed to change password';
-      showAlert('Error', errorMsg);
+      setErrorMessage(errorMsg);
+      setTimeout(() => setErrorMessage(''), 5000);
     }
   };
 
@@ -250,10 +277,30 @@ export default function EditInstructorProfileScreen() {
           <Text style={styles.backButtonText}>← Back</Text>
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Edit Profile</Text>
-        <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
-          <Text style={styles.logoutButtonText}>Logout</Text>
-        </TouchableOpacity>
+        <View style={{ width: 80 }} />
       </View>
+
+      {/* Inline Messages */}
+      {successMessage && (
+        <View style={{ marginHorizontal: 16, marginTop: 16 }}>
+          <InlineMessage
+            type="success"
+            message={successMessage}
+            onDismiss={() => setSuccessMessage('')}
+            autoDismissMs={0}
+          />
+        </View>
+      )}
+      {errorMessage && (
+        <View style={{ marginHorizontal: 16, marginTop: 16 }}>
+          <InlineMessage
+            type="error"
+            message={errorMessage}
+            onDismiss={() => setErrorMessage('')}
+            autoDismissMs={0}
+          />
+        </View>
+      )}
 
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
         {/* Personal Information */}
@@ -497,6 +544,40 @@ export default function EditInstructorProfileScreen() {
           </View>
         </View>
       )}
+
+      {/* Discard Changes Confirmation Modal */}
+      <Modal
+        visible={showDiscardModal}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowDiscardModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.confirmModalContent}>
+            <Text style={styles.confirmModalTitle}>⚠️ Unsaved Changes</Text>
+            <Text style={styles.confirmModalText}>
+              You have unsaved changes! Please save your profile first or your changes will be lost.
+            </Text>
+            <View style={styles.confirmModalButtons}>
+              <TouchableOpacity
+                style={[styles.confirmModalButton, styles.cancelButton]}
+                onPress={() => {
+                  setShowDiscardModal(false);
+                  setPendingNavigation(null);
+                }}
+              >
+                <Text style={styles.cancelButtonText}>Stay</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.confirmModalButton, styles.deleteConfirmButton]}
+                onPress={handleDiscardChanges}
+              >
+                <Text style={styles.deleteConfirmButtonText}>Discard Changes</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -658,5 +739,59 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 16,
     fontWeight: '600',
+  },
+  confirmModalContent: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 24,
+    width: '85%',
+    maxWidth: 400,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  confirmModalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#333',
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  confirmModalText: {
+    fontSize: 16,
+    color: '#555',
+    marginBottom: 24,
+    textAlign: 'center',
+    lineHeight: 22,
+  },
+  confirmModalButtons: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  confirmModalButton: {
+    flex: 1,
+    padding: 14,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  cancelButton: {
+    backgroundColor: '#f8f9fa',
+    borderWidth: 1,
+    borderColor: '#ddd',
+  },
+  cancelButtonText: {
+    color: '#333',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  deleteConfirmButton: {
+    backgroundColor: '#dc3545',
+  },
+  deleteConfirmButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
   },
 });

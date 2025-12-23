@@ -354,9 +354,7 @@ export default function InstructorListScreen() {
           <Text style={styles.backButtonText}>← Back</Text>
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Find an Instructor</Text>
-        <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
-          <Text style={styles.logoutButtonText}>Logout</Text>
-        </TouchableOpacity>
+        <View style={{ width: 80 }} />
       </View>
 
       {/* Search Bar */}

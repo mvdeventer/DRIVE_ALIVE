@@ -3,7 +3,7 @@
  * Allows instructors to set up their weekly schedule and manage availability
  */
 import { useNavigation } from '@react-navigation/native';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -62,6 +62,7 @@ const DAY_LABELS: { [key: string]: string } = {
 
 export default function ManageAvailabilityScreen() {
   const navigation = useNavigation();
+  const scrollViewRef = useRef<ScrollView>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{
@@ -69,6 +70,8 @@ export default function ManageAvailabilityScreen() {
     text: string;
   } | null>(null);
   const [schedules, setSchedules] = useState<Schedule[]>([]);
+  const [originalSchedules, setOriginalSchedules] = useState<Schedule[]>([]);
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [timeOff, setTimeOff] = useState<TimeOff[]>([]);
   const [newTimeOff, setNewTimeOff] = useState<TimeOff>({
     start_date: '',
@@ -76,7 +79,7 @@ export default function ManageAvailabilityScreen() {
     reason: '',
     notes: '',
   });
-  const [selectedDates, setSelectedDates] = useState<string[]>([]); // Array of selected dates for multi-select
+  const [confirmDelete, setConfirmDelete] = useState<number | null>(null);
 
   // Time picker states
   const [showTimePicker, setShowTimePicker] = useState<{
@@ -89,10 +92,60 @@ export default function ManageAvailabilityScreen() {
     field?: 'start_date' | 'end_date';
   }>({});
   const [tempDate, setTempDate] = useState(new Date());
+  const [tempSelectedDate, setTempSelectedDate] = useState<Date | null>(null);
 
   useEffect(() => {
     loadAvailability();
   }, []);
+
+  // Track Time Off form changes (dates or reason entered)
+  useEffect(() => {
+    const hasTimeOffFormData =
+      newTimeOff.start_date.length > 0 ||
+      newTimeOff.end_date.length > 0 ||
+      newTimeOff.reason.trim().length > 0;
+    if (hasTimeOffFormData && !hasUnsavedChanges) {
+      setHasUnsavedChanges(true);
+    }
+  }, [newTimeOff.start_date, newTimeOff.end_date, newTimeOff.reason]);
+
+  useEffect(() => {
+    const unsubscribe = navigation.addListener('beforeRemove', e => {
+      if (!hasUnsavedChanges) {
+        return;
+      }
+
+      // Prevent default behavior of leaving the screen
+      e.preventDefault();
+
+      // Show confirmation dialog
+      if (Platform.OS === 'web') {
+        if (
+          window.confirm(
+            '⚠️ Unsaved Changes\n\nYou have unsaved changes to your schedule!\n\nAre you sure you want to leave? Your changes will be lost.'
+          )
+        ) {
+          // User confirmed - allow navigation
+          navigation.dispatch(e.data.action);
+        }
+      } else {
+        Alert.alert(
+          '⚠️ Unsaved Changes',
+          'You have unsaved changes to your schedule!\n\nAre you sure you want to leave? Your changes will be lost.',
+          [
+            { text: 'Stay', style: 'cancel' },
+            {
+              text: 'Discard Changes',
+              style: 'destructive',
+              onPress: () => navigation.dispatch(e.data.action),
+            },
+          ]
+        );
+      }
+    });
+
+    return unsubscribe;
+  }, [navigation, hasUnsavedChanges]);
 
   const loadAvailability = async () => {
     try {
@@ -102,21 +155,22 @@ export default function ManageAvailabilityScreen() {
         ApiService.get('/availability/time-off'),
       ]);
 
-      setSchedules(scheduleRes.data || []);
+      const initialSchedules = scheduleRes.data || [];
+      setSchedules(initialSchedules);
+      setOriginalSchedules(JSON.parse(JSON.stringify(initialSchedules))); // Deep copy
       setTimeOff(timeOffRes.data || []);
 
       // Initialize empty schedules for days without entries
       DAYS_OF_WEEK.forEach(day => {
         if (!scheduleRes.data.find((s: Schedule) => s.day_of_week === day)) {
-          setSchedules(prev => [
-            ...prev,
-            {
-              day_of_week: day,
-              start_time: '08:00',
-              end_time: '17:00',
-              is_active: false,
-            },
-          ]);
+          const newSchedule = {
+            day_of_week: day,
+            start_time: '08:00',
+            end_time: '17:00',
+            is_active: false,
+          };
+          setSchedules(prev => [...prev, newSchedule]);
+          setOriginalSchedules(prev => [...prev, JSON.parse(JSON.stringify(newSchedule))]);
         }
       });
     } catch (error) {
@@ -129,11 +183,13 @@ export default function ManageAvailabilityScreen() {
   };
 
   const updateSchedule = (day: string, field: string, value: any) => {
-    setSchedules(prev =>
-      prev.map(schedule =>
+    setSchedules(prev => {
+      const updated = prev.map(schedule =>
         schedule.day_of_week === day ? { ...schedule, [field]: value } : schedule
-      )
-    );
+      );
+      setHasUnsavedChanges(true);
+      return updated;
+    });
   };
 
   const handleTimeChange = (event: any, selectedDate?: Date) => {
@@ -183,6 +239,21 @@ export default function ManageAvailabilityScreen() {
     setShowTimePicker({ day, field });
   };
 
+  // Generate array of disabled dates from existing time off periods
+  const getDisabledDates = (): Date[] => {
+    const disabled: Date[] = [];
+    timeOff.forEach(period => {
+      const start = new Date(period.start_date);
+      const end = new Date(period.end_date);
+
+      // Add all dates in the range
+      for (let date = new Date(start); date <= end; date.setDate(date.getDate() + 1)) {
+        disabled.push(new Date(date));
+      }
+    });
+    return disabled;
+  };
+
   const saveSchedules = async () => {
     try {
       setSaving(true);
@@ -228,6 +299,8 @@ export default function ManageAvailabilityScreen() {
       });
 
       setMessage({ type: 'success', text: 'Schedule saved successfully!' });
+      setHasUnsavedChanges(false);
+      setOriginalSchedules(JSON.parse(JSON.stringify(activeSchedules)));
       setTimeout(() => setMessage(null), 4000);
 
       loadAvailability();
@@ -243,25 +316,69 @@ export default function ManageAvailabilityScreen() {
 
   const addTimeOff = async () => {
     try {
-      if (selectedDates.length === 0) {
-        setMessage({ type: 'warning', text: 'Please select at least one date' });
+      // Validate start date is provided
+      if (!newTimeOff.start_date) {
+        setMessage({ type: 'error', text: 'Please select at least a start date' });
+        scrollViewRef.current?.scrollTo({ y: 0, animated: true });
         setTimeout(() => setMessage(null), 3000);
         return;
       }
 
-      // Create time off entries for each selected date
-      for (const dateStr of selectedDates) {
-        await ApiService.post('/availability/time-off', {
-          start_date: dateStr,
-          end_date: dateStr,
-          reason: newTimeOff.reason || 'Unavailable',
-          notes: newTimeOff.notes,
-        });
+      const startDate = new Date(newTimeOff.start_date);
+      // If no end date provided, use start date (single day off)
+      const endDate = newTimeOff.end_date
+        ? new Date(newTimeOff.end_date)
+        : new Date(newTimeOff.start_date);
+
+      if (newTimeOff.end_date && endDate < startDate) {
+        setMessage({ type: 'error', text: 'End date cannot be before start date' });
+        scrollViewRef.current?.scrollTo({ y: 0, animated: true });
+        setTimeout(() => setMessage(null), 3000);
+        return;
       }
+
+      // Check for overlaps with existing time off
+      const hasOverlap = timeOff.some(existing => {
+        const existingStart = new Date(existing.start_date);
+        const existingEnd = new Date(existing.end_date);
+        return (
+          (startDate >= existingStart && startDate <= existingEnd) ||
+          (endDate >= existingStart && endDate <= existingEnd) ||
+          (startDate <= existingStart && endDate >= existingEnd)
+        );
+      });
+
+      if (hasOverlap) {
+        const overlapping = timeOff.find(existing => {
+          const existingStart = new Date(existing.start_date);
+          const existingEnd = new Date(existing.end_date);
+          return (
+            (startDate >= existingStart && startDate <= existingEnd) ||
+            (endDate >= existingStart && endDate <= existingEnd) ||
+            (startDate <= existingStart && endDate >= existingEnd)
+          );
+        });
+
+        setMessage({
+          type: 'error',
+          text: `This time off period overlaps with existing time off from ${overlapping?.start_date} to ${overlapping?.end_date}`,
+        });
+        scrollViewRef.current?.scrollTo({ y: 0, animated: true });
+        setTimeout(() => setMessage(null), 5000);
+        return;
+      }
+
+      // Create single time off entry for the date range
+      await ApiService.post('/availability/time-off', {
+        start_date: newTimeOff.start_date,
+        end_date: newTimeOff.end_date || newTimeOff.start_date, // Use start_date if end_date not provided
+        reason: newTimeOff.reason || 'Unavailable',
+        notes: newTimeOff.notes,
+      });
 
       setMessage({
         type: 'success',
-        text: `Time off added for ${selectedDates.length} date(s) successfully!`,
+        text: 'Time off added successfully!',
       });
       setTimeout(() => setMessage(null), 4000);
 
@@ -271,7 +388,9 @@ export default function ManageAvailabilityScreen() {
         reason: '',
         notes: '',
       });
-      setSelectedDates([]);
+
+      // Clear unsaved changes flag since we successfully saved
+      setHasUnsavedChanges(false);
 
       loadAvailability();
     } catch (error: any) {
@@ -297,15 +416,13 @@ export default function ManageAvailabilityScreen() {
   };
 
   const confirmDeleteTimeOff = (id: number) => {
-    if (Platform.OS === 'web') {
-      if (confirm('Are you sure you want to delete this time off?')) {
-        deleteTimeOff(id);
-      }
-    } else {
-      Alert.alert('Confirm Delete', 'Are you sure you want to delete this time off?', [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Delete', style: 'destructive', onPress: () => deleteTimeOff(id) },
-      ]);
+    setConfirmDelete(id);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (confirmDelete) {
+      await deleteTimeOff(confirmDelete);
+      setConfirmDelete(null);
     }
   };
 
@@ -319,13 +436,31 @@ export default function ManageAvailabilityScreen() {
   }
 
   return (
-    <ScrollView style={styles.container}>
+    <ScrollView ref={scrollViewRef} style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+        <TouchableOpacity
+          onPress={() => {
+            if (hasUnsavedChanges) {
+              setMessage({
+                type: 'warning',
+                text: '⚠️ You have unsaved changes! Please save your schedule or your changes will be lost.',
+              });
+              setTimeout(() => setMessage(null), 5000);
+            } else {
+              navigation.goBack();
+            }
+          }}
+          style={styles.backButton}
+        >
           <Text style={styles.backButtonText}>← Back</Text>
         </TouchableOpacity>
         <Text style={styles.title}>📅 Manage Availability</Text>
+        {hasUnsavedChanges && (
+          <View style={styles.unsavedBadge}>
+            <Text style={styles.unsavedBadgeText}>●</Text>
+          </View>
+        )}
       </View>
 
       {/* Inline Message Display */}
@@ -346,6 +481,35 @@ export default function ManageAvailabilityScreen() {
         <Text style={styles.sectionDescription}>
           Set your regular working hours for each day of the week
         </Text>
+
+        {/* Enable All Toggle */}
+        <View style={styles.enableAllCard}>
+          <View style={styles.enableAllHeader}>
+            <Text style={styles.enableAllLabel}>Enable All Days</Text>
+            <Switch
+              value={schedules.every(s => s.is_active)}
+              onValueChange={value => {
+                const updatedSchedules = DAYS_OF_WEEK.map(day => {
+                  const existingSchedule = schedules.find(s => s.day_of_week === day);
+                  return {
+                    day_of_week: day,
+                    start_time: existingSchedule?.start_time || '08:00',
+                    end_time: existingSchedule?.end_time || '17:00',
+                    is_active: value,
+                    ...(existingSchedule?.id && { id: existingSchedule.id }),
+                  };
+                });
+                setSchedules(updatedSchedules);
+                setHasUnsavedChanges(true);
+              }}
+              trackColor={{ false: '#ccc', true: '#28a745' }}
+              thumbColor={Platform.OS === 'android' ? '#fff' : undefined}
+            />
+          </View>
+          <Text style={styles.enableAllDescription}>
+            Quickly enable/disable all days with default times (08:00 - 17:00)
+          </Text>
+        </View>
 
         {DAYS_OF_WEEK.map(day => {
           const schedule = schedules.find(s => s.day_of_week === day) || {
@@ -418,39 +582,28 @@ export default function ManageAvailabilityScreen() {
         {/* Add Time Off Form */}
         <View style={styles.timeOffForm}>
           <View style={styles.formGroup}>
-            <Text style={styles.label}>Select Unavailable Dates</Text>
+            <Text style={styles.label}>From Date *</Text>
             <TouchableOpacity
               style={styles.datePickerButton}
               onPress={() => setShowDatePicker({ field: 'start_date' })}
             >
               <Text style={styles.datePickerText}>
-                {selectedDates.length > 0
-                  ? `${selectedDates.length} date(s) selected`
-                  : 'Select Dates'}
+                {newTimeOff.start_date || 'Select Start Date'}
               </Text>
               <Text style={styles.datePickerIcon}>📅</Text>
             </TouchableOpacity>
           </View>
 
-          {/* Display Selected Dates */}
-          {selectedDates.length > 0 && (
-            <View style={styles.selectedDatesContainer}>
-              <Text style={styles.selectedDatesLabel}>Selected Dates:</Text>
-              <View style={styles.selectedDatesList}>
-                {selectedDates.map((date, index) => (
-                  <View key={index} style={styles.selectedDateChip}>
-                    <Text style={styles.selectedDateText}>{date}</Text>
-                    <TouchableOpacity
-                      onPress={() => setSelectedDates(selectedDates.filter(d => d !== date))}
-                      style={styles.removeChipButton}
-                    >
-                      <Text style={styles.removeChipText}>✕</Text>
-                    </TouchableOpacity>
-                  </View>
-                ))}
-              </View>
-            </View>
-          )}
+          <View style={styles.formGroup}>
+            <Text style={styles.label}>To Date (optional - leave blank for single day)</Text>
+            <TouchableOpacity
+              style={styles.datePickerButton}
+              onPress={() => setShowDatePicker({ field: 'end_date' })}
+            >
+              <Text style={styles.datePickerText}>{newTimeOff.end_date || 'Select End Date'}</Text>
+              <Text style={styles.datePickerIcon}>📅</Text>
+            </TouchableOpacity>
+          </View>
 
           <View style={styles.formGroup}>
             <Text style={styles.label}>Reason (optional)</Text>
@@ -463,9 +616,7 @@ export default function ManageAvailabilityScreen() {
           </View>
 
           <TouchableOpacity style={styles.addButton} onPress={addTimeOff}>
-            <Text style={styles.addButtonText}>
-              ➕ Add Time Off {selectedDates.length > 0 ? `(${selectedDates.length})` : ''}
-            </Text>
+            <Text style={styles.addButtonText}>➕ Add Time Off</Text>
           </TouchableOpacity>
         </View>
 
@@ -545,36 +696,57 @@ export default function ManageAvailabilityScreen() {
           >
             <View style={styles.modalOverlay}>
               <View style={styles.modalContent}>
-                <Text style={styles.modalTitle}>Select Unavailable Dates</Text>
-                <Text style={styles.modalSubtitle}>Click multiple dates, then click Done</Text>
+                <Text style={styles.modalTitle}>
+                  Select {showDatePicker.field === 'start_date' ? 'Start' : 'End'} Date
+                </Text>
                 <CalendarPicker
-                  value={new Date()}
+                  value={
+                    tempSelectedDate ||
+                    (showDatePicker.field === 'start_date' && newTimeOff.start_date
+                      ? new Date(newTimeOff.start_date)
+                      : showDatePicker.field === 'end_date' && newTimeOff.end_date
+                      ? new Date(newTimeOff.end_date)
+                      : new Date())
+                  }
                   onChange={date => {
-                    const year = date.getFullYear();
-                    const month = (date.getMonth() + 1).toString().padStart(2, '0');
-                    const day = date.getDate().toString().padStart(2, '0');
-                    const dateString = `${year}-${month}-${day}`;
-
-                    // Toggle date selection
-                    setSelectedDates(prev =>
-                      prev.includes(dateString)
-                        ? prev.filter(d => d !== dateString)
-                        : [...prev, dateString]
-                    );
+                    setTempSelectedDate(date);
                   }}
-                  minDate={new Date()}
+                  minDate={
+                    showDatePicker.field === 'end_date' && newTimeOff.start_date
+                      ? new Date(newTimeOff.start_date)
+                      : new Date()
+                  }
+                  disabledDates={getDisabledDates()}
                 />
                 <View style={styles.modalFooter}>
-                  {selectedDates.length > 0 && (
-                    <Text style={styles.selectedCountText}>
-                      {selectedDates.length} date(s) selected
-                    </Text>
-                  )}
+                  <TouchableOpacity
+                    style={[styles.modalButton, { backgroundColor: '#6c757d', marginRight: 8 }]}
+                    onPress={() => {
+                      setShowDatePicker({});
+                      setTempSelectedDate(null);
+                    }}
+                  >
+                    <Text style={styles.modalButtonText}>Cancel</Text>
+                  </TouchableOpacity>
                   <TouchableOpacity
                     style={styles.modalButton}
-                    onPress={() => setShowDatePicker({})}
+                    onPress={() => {
+                      if (tempSelectedDate) {
+                        const year = tempSelectedDate.getFullYear();
+                        const month = (tempSelectedDate.getMonth() + 1).toString().padStart(2, '0');
+                        const day = tempSelectedDate.getDate().toString().padStart(2, '0');
+                        const dateString = `${year}-${month}-${day}`;
+
+                        setNewTimeOff({
+                          ...newTimeOff,
+                          [showDatePicker.field!]: dateString,
+                        });
+                      }
+                      setShowDatePicker({});
+                      setTempSelectedDate(null);
+                    }}
                   >
-                    <Text style={styles.modalButtonText}>Done</Text>
+                    <Text style={styles.modalButtonText}>Confirm</Text>
                   </TouchableOpacity>
                 </View>
               </View>
@@ -588,6 +760,38 @@ export default function ManageAvailabilityScreen() {
             onChange={handleDateChange}
           />
         ))}
+
+      {/* Delete Confirmation Modal */}
+      <Modal
+        visible={confirmDelete !== null}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setConfirmDelete(null)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.confirmModalContent}>
+            <Text style={styles.confirmModalTitle}>⚠️ Delete Time Off</Text>
+            <Text style={styles.confirmModalText}>
+              Are you sure you want to delete this time off period?
+            </Text>
+            <Text style={styles.confirmModalSubtext}>This action cannot be undone.</Text>
+            <View style={styles.confirmModalButtons}>
+              <TouchableOpacity
+                style={[styles.confirmModalButton, styles.cancelButton]}
+                onPress={() => setConfirmDelete(null)}
+              >
+                <Text style={styles.cancelButtonText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.confirmModalButton, styles.deleteConfirmButton]}
+                onPress={handleConfirmDelete}
+              >
+                <Text style={styles.deleteConfirmButtonText}>Delete</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </ScrollView>
   );
 }
@@ -627,6 +831,16 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#333',
   },
+  unsavedBadge: {
+    position: 'absolute',
+    top: -4,
+    right: 16,
+  },
+  unsavedBadgeText: {
+    fontSize: 32,
+    color: '#ffc107',
+    fontWeight: 'bold',
+  },
   section: {
     backgroundColor: '#fff',
     margin: 16,
@@ -648,6 +862,30 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#666',
     marginBottom: 16,
+  },
+  enableAllCard: {
+    backgroundColor: '#e8f5e9',
+    padding: 14,
+    borderRadius: 10,
+    marginBottom: 16,
+    borderWidth: 2,
+    borderColor: '#28a745',
+  },
+  enableAllHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  enableAllLabel: {
+    fontSize: 17,
+    fontWeight: 'bold',
+    color: '#1b5e20',
+  },
+  enableAllDescription: {
+    fontSize: 13,
+    color: '#2e7d32',
+    marginTop: 6,
+    fontStyle: 'italic',
   },
   dayCard: {
     backgroundColor: '#f8f9fa',
@@ -831,6 +1069,7 @@ const styles = StyleSheet.create({
   },
   modalFooter: {
     marginTop: 16,
+    flexDirection: 'row',
     gap: 8,
   },
   selectedCountText: {
@@ -899,8 +1138,70 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     alignItems: 'center',
     marginTop: 16,
+    flex: 1,
   },
   modalButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  confirmModalContent: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 24,
+    width: '85%',
+    maxWidth: 400,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  confirmModalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#333',
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  confirmModalText: {
+    fontSize: 16,
+    color: '#555',
+    marginBottom: 8,
+    textAlign: 'center',
+    lineHeight: 22,
+  },
+  confirmModalSubtext: {
+    fontSize: 14,
+    color: '#999',
+    marginBottom: 24,
+    textAlign: 'center',
+    fontStyle: 'italic',
+  },
+  confirmModalButtons: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  confirmModalButton: {
+    flex: 1,
+    padding: 14,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  cancelButton: {
+    backgroundColor: '#f8f9fa',
+    borderWidth: 1,
+    borderColor: '#ddd',
+  },
+  cancelButtonText: {
+    color: '#333',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  deleteConfirmButton: {
+    backgroundColor: '#dc3545',
+  },
+  deleteConfirmButtonText: {
     color: '#fff',
     fontSize: 16,
     fontWeight: 'bold',

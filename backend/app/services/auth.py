@@ -122,10 +122,13 @@ class AuthService:
                 bio=instructor_data.bio,
             )
 
-            # Auto-verify in development mode
-            if settings.AUTO_VERIFY_INSTRUCTORS:
+            # Auto-verify only in debug mode
+            if settings.should_auto_verify_instructors:
                 instructor.is_verified = True
                 instructor.verified_at = datetime.utcnow()
+                print(f"[DEBUG] Auto-verified instructor {instructor.id} (debug mode enabled)")
+            else:
+                print(f"[INFO] Instructor {instructor.id} created - requires manual verification")
 
             db.add(instructor)
 

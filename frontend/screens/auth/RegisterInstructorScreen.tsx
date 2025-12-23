@@ -18,31 +18,33 @@ import { DEBUG_CONFIG } from '../../config';
 import ApiService from '../../services/api';
 
 export default function RegisterInstructorScreen({ navigation }: any) {
-  // Pre-fill with test data in development mode for faster debugging
+  // Pre-fill with test data only when DEBUG_CONFIG is enabled
   // Use debug email and phone when in debug mode
-  const timestamp = __DEV__ ? Date.now().toString().slice(-6) : '';
+  const timestamp = DEBUG_CONFIG.ENABLED ? Date.now().toString().slice(-6) : '';
   const [formData, setFormData] = useState({
     email: DEBUG_CONFIG.ENABLED ? DEBUG_CONFIG.DEFAULT_EMAIL : '',
     phone: DEBUG_CONFIG.ENABLED ? DEBUG_CONFIG.DEFAULT_PHONE : '',
     password: '',
     confirmPassword: '',
-    first_name: __DEV__ ? 'LEEN' : '',
-    last_name: __DEV__ ? 'van Deventer' : '',
-    id_number: __DEV__ ? `790117510408${timestamp.slice(-1)}` : '',
-    license_number: __DEV__ ? `ABC${timestamp}` : '',
-    license_types: __DEV__ ? ['B', 'EB', 'C1'] : ([] as string[]),
-    vehicle_registration: __DEV__ ? 'ABC123GP' : '',
-    vehicle_make: __DEV__ ? 'Toyota' : '',
-    vehicle_model: __DEV__ ? 'Corolla' : '',
-    vehicle_year: __DEV__ ? '2020' : '',
-    province: __DEV__ ? 'Gauteng' : '',
-    city: __DEV__ ? 'Johannesburg' : '',
-    suburb: __DEV__ ? 'Sandton' : '',
-    hourly_rate: __DEV__ ? '350' : '',
+    first_name: DEBUG_CONFIG.ENABLED ? 'LEEN' : '',
+    last_name: DEBUG_CONFIG.ENABLED ? 'van Deventer' : '',
+    id_number: DEBUG_CONFIG.ENABLED ? `790117510408${timestamp.slice(-1)}` : '',
+    license_number: DEBUG_CONFIG.ENABLED ? `ABC${timestamp}` : '',
+    license_types: DEBUG_CONFIG.ENABLED ? ['B', 'EB', 'C1'] : ([] as string[]),
+    vehicle_registration: DEBUG_CONFIG.ENABLED ? 'ABC123GP' : '',
+    vehicle_make: DEBUG_CONFIG.ENABLED ? 'Toyota' : '',
+    vehicle_model: DEBUG_CONFIG.ENABLED ? 'Corolla' : '',
+    vehicle_year: DEBUG_CONFIG.ENABLED ? '2020' : '',
+    province: DEBUG_CONFIG.ENABLED ? 'Gauteng' : '',
+    city: DEBUG_CONFIG.ENABLED ? 'Johannesburg' : '',
+    suburb: DEBUG_CONFIG.ENABLED ? 'Sandton' : '',
+    hourly_rate: DEBUG_CONFIG.ENABLED ? '350' : '',
     service_radius_km: '20',
     max_travel_distance_km: '50',
     rate_per_km_beyond_radius: '5',
-    bio: __DEV__ ? 'Experienced driving instructor with 15 years teaching Code B, EB, and C1.' : '',
+    bio: DEBUG_CONFIG.ENABLED
+      ? 'Experienced driving instructor with 15 years teaching Code B, EB, and C1.'
+      : '',
   });
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<{
@@ -229,12 +231,13 @@ export default function RegisterInstructorScreen({ navigation }: any) {
 
         <FormFieldWithTip
           label="Phone Number"
-          tooltip="Enter your mobile number in South African format. Students may contact you for urgent matters or directions."
+          tooltip="Enter your mobile number in South African format (+27 followed by 9 digits). Students may contact you for urgent matters or directions."
           required
-          placeholder="e.g., 0821234567"
+          placeholder="e.g., +27821234567"
           value={formData.phone}
           onChangeText={text => updateFormData('phone', text)}
           keyboardType="phone-pad"
+          maxLength={12}
         />
 
         <FormFieldWithTip
@@ -245,6 +248,7 @@ export default function RegisterInstructorScreen({ navigation }: any) {
           value={formData.id_number}
           onChangeText={text => updateFormData('id_number', text)}
           keyboardType="numeric"
+          maxLength={13}
         />
 
         {/* Professional Information */}

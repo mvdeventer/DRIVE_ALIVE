@@ -6,16 +6,19 @@
 const isWeb = typeof window !== 'undefined' && window.document;
 
 // Change this to your backend URL
-// For Android emulator, use 10.0.2.2 to connect to host machine's localhost
+// Use local IP address (10.0.0.121) for mobile devices on same network
+// Use 10.0.2.2 for Android emulator, or localhost for web
 const API_BASE_URL = isWeb
   ? 'http://localhost:8000'
   : __DEV__
-  ? 'http://10.0.2.2:8000'
+  ? 'http://10.0.0.121:8000'
   : 'https://your-production-api.com';
 
 // Debug configuration
+// Set ENABLED to true to pre-fill registration forms for faster testing
+// Set to false for production-like behavior (empty forms with placeholders only)
 export const DEBUG_CONFIG = {
-  ENABLED: __DEV__ || process.env.NODE_ENV === 'development',
+  ENABLED: false, // Change to true to enable auto-fill in registration forms
   DEFAULT_EMAIL: 'mvdeventer123@gmail.com',
   DEFAULT_PHONE: '+27611154598',
   DEFAULT_PASSWORD: 'Test1234',

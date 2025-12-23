@@ -4,8 +4,10 @@ Main FastAPI application
 
 import sys
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request, status
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 from .config import settings
 from .database import Base, engine
@@ -38,6 +40,33 @@ app.add_middleware(
     allow_headers=["*"],
     expose_headers=["*"],
 )
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(_request: Request, exc: RequestValidationError):
+    """
+    Custom handler for validation errors to provide user-friendly error messages
+    """
+    errors = exc.errors()
+
+    # Extract the first error for a cleaner message
+    if errors:
+        first_error = errors[0]
+        field = first_error.get("loc", [])[-1] if first_error.get("loc") else "field"
+        msg = first_error.get("msg", "Validation error")
+
+        # Create a user-friendly error message
+        if "id_number" in str(field):
+            # Use the custom error message from the validator
+            error_detail = msg.replace("Value error, ", "")
+        else:
+            error_detail = f"{field}: {msg}"
+
+        return JSONResponse(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, content={"detail": error_detail})
+
+    return JSONResponse(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, content={"detail": "Validation error occurred"})
+
+
 # Force reload
 
 # Include routers

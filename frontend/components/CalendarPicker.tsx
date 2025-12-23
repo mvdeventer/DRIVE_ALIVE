@@ -10,9 +10,16 @@ interface CalendarPickerProps {
   onChange: (date: Date) => void;
   minDate?: Date;
   maxDate?: Date;
+  disabledDates?: Date[];
 }
 
-export default function CalendarPicker({ value, onChange, minDate, maxDate }: CalendarPickerProps) {
+export default function CalendarPicker({
+  value,
+  onChange,
+  minDate,
+  maxDate,
+  disabledDates,
+}: CalendarPickerProps) {
   const [currentMonth, setCurrentMonth] = useState(
     new Date(value.getFullYear(), value.getMonth(), 1)
   );
@@ -63,6 +70,19 @@ export default function CalendarPicker({ value, onChange, minDate, maxDate }: Ca
     const date = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), day);
     if (minDate && date < minDate) return true;
     if (maxDate && date > maxDate) return true;
+
+    // Check if date is in disabledDates array
+    if (disabledDates) {
+      const isDisabled = disabledDates.some(disabledDate => {
+        return (
+          date.getDate() === disabledDate.getDate() &&
+          date.getMonth() === disabledDate.getMonth() &&
+          date.getFullYear() === disabledDate.getFullYear()
+        );
+      });
+      if (isDisabled) return true;
+    }
+
     return false;
   };
 
@@ -83,6 +103,18 @@ export default function CalendarPicker({ value, onChange, minDate, maxDate }: Ca
     );
   };
 
+  const isInTimeOff = (day: number) => {
+    if (!disabledDates) return false;
+    const date = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), day);
+    return disabledDates.some(disabledDate => {
+      return (
+        date.getDate() === disabledDate.getDate() &&
+        date.getMonth() === disabledDate.getMonth() &&
+        date.getFullYear() === disabledDate.getFullYear()
+      );
+    });
+  };
+
   const renderCalendar = () => {
     const daysInMonth = getDaysInMonth(currentMonth);
     const firstDay = getFirstDayOfMonth(currentMonth);
@@ -98,6 +130,7 @@ export default function CalendarPicker({ value, onChange, minDate, maxDate }: Ca
       const disabled = isDateDisabled(day);
       const today = isToday(day);
       const selected = isSelected(day);
+      const inTimeOff = isInTimeOff(day);
 
       days.push(
         <TouchableOpacity
@@ -107,6 +140,7 @@ export default function CalendarPicker({ value, onChange, minDate, maxDate }: Ca
             today && styles.todayCell,
             selected && styles.selectedCell,
             disabled && styles.disabledCell,
+            inTimeOff && styles.timeOffCell,
           ]}
           onPress={() => !disabled && selectDate(day)}
           disabled={disabled}
@@ -117,6 +151,7 @@ export default function CalendarPicker({ value, onChange, minDate, maxDate }: Ca
               today && styles.todayText,
               selected && styles.selectedText,
               disabled && styles.disabledText,
+              inTimeOff && styles.timeOffText,
             ]}
           >
             {day}
@@ -221,6 +256,13 @@ const styles = StyleSheet.create({
   disabledCell: {
     opacity: 0.3,
   },
+  timeOffCell: {
+    backgroundColor: '#fff3e0',
+    borderRadius: 8,
+    borderWidth: 2,
+    borderColor: '#ff9800',
+    opacity: 1,
+  },
   dayText: {
     fontSize: 16,
     color: '#333',
@@ -235,5 +277,10 @@ const styles = StyleSheet.create({
   },
   disabledText: {
     color: '#ccc',
+  },
+  timeOffText: {
+    color: '#ff9800',
+    fontWeight: 'bold',
+    textDecorationLine: 'line-through',
   },
 });

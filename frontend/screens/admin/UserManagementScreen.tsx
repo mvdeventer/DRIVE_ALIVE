@@ -349,9 +349,6 @@ export default function UserManagementScreen() {
             <Text style={styles.headerTitle}>User Management</Text>
             <Text style={styles.headerSubtitle}>{users.length} users</Text>
           </View>
-          <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
-            <Text style={styles.logoutButtonText}>Logout</Text>
-          </TouchableOpacity>
         </View>
       </View>
 

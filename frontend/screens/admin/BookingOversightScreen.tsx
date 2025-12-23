@@ -82,11 +82,6 @@ export default function BookingOversightScreen() {
     loadBookings();
   };
 
-  const handleLogout = async () => {
-    await apiService.logout();
-    navigation.replace('Login');
-  };
-
   const handleCancelBooking = (booking: Booking) => {
     setConfirmCancel(booking);
   };
@@ -320,9 +315,6 @@ Lesson Type:    ${booking.lesson_type.toUpperCase()}
               {filteredBookings.length} of {bookings.length} bookings
             </Text>
           </View>
-          <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
-            <Text style={styles.logoutButtonText}>Logout</Text>
-          </TouchableOpacity>
         </View>
       </View>
 

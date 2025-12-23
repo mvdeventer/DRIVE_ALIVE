@@ -1,12 +1,12 @@
 /**
  * Main App Component
  */
-import { NavigationContainer } from '@react-navigation/native';
+import { CommonActions, NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import * as SecureStore from 'expo-secure-store';
 import { StatusBar } from 'expo-status-bar';
-import React, { useEffect, useState } from 'react';
-import { Platform } from 'react-native';
+import React, { useEffect, useRef, useState } from 'react';
+import { Platform, StyleSheet, Text, TouchableOpacity } from 'react-native';
 
 // Auth Screens
 import LoginScreen from './screens/auth/LoginScreen';
@@ -58,6 +58,7 @@ export default function App() {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [userRole, setUserRole] = useState<string | null>(null);
+  const navigationRef = useRef<any>(null);
 
   useEffect(() => {
     checkAuth();
@@ -84,10 +85,54 @@ export default function App() {
     checkAuth();
   };
 
+  const handleLogout = () => {
+    // Use navigation to go to Login - this will trigger beforeRemove listeners
+    // Only clear auth state if navigation succeeds (user confirms or no unsaved changes)
+    if (navigationRef.current) {
+      // Create a navigation state listener to detect when we actually reach Login
+      const unsubscribe = navigationRef.current.addListener('state', async () => {
+        const currentRoute = navigationRef.current?.getCurrentRoute();
+        if (currentRoute?.name === 'Login') {
+          // We successfully navigated to Login, now clear auth
+          try {
+            await storage.removeItem('access_token');
+            await storage.removeItem('user_role');
+            setIsAuthenticated(false);
+            setUserRole(null);
+
+            // Force reload on web to fully clear state
+            if (Platform.OS === 'web') {
+              setTimeout(() => {
+                window.location.reload();
+              }, 100);
+            }
+          } catch (error) {
+            console.error('Error clearing auth:', error);
+          }
+          unsubscribe(); // Clean up listener
+        }
+      });
+
+      // Attempt to navigate to Login - beforeRemove listeners will intercept if needed
+      navigationRef.current.dispatch(
+        CommonActions.reset({
+          index: 0,
+          routes: [{ name: 'Login' }],
+        })
+      );
+    }
+  };
+
+  const LogoutButton = () => (
+    <TouchableOpacity onPress={handleLogout} style={styles.logoutButton}>
+      <Text style={styles.logoutText}>Logout</Text>
+    </TouchableOpacity>
+  );
+
   return (
     <>
       <StatusBar style="auto" />
-      <NavigationContainer>
+      <NavigationContainer ref={navigationRef}>
         <Stack.Navigator
           initialRouteName={
             !isAuthenticated
@@ -106,6 +151,7 @@ export default function App() {
             headerTitleStyle: {
               fontWeight: 'bold',
             },
+            headerRight: isAuthenticated ? () => <LogoutButton /> : undefined,
           }}
         >
           {/* Auth Stack - Always available */}
@@ -201,3 +247,18 @@ export default function App() {
     </>
   );
 }
+
+const styles = StyleSheet.create({
+  logoutButton: {
+    marginRight: 15,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    borderRadius: 5,
+  },
+  logoutText: {
+    color: '#fff',
+    fontWeight: '600',
+    fontSize: 14,
+  },
+});

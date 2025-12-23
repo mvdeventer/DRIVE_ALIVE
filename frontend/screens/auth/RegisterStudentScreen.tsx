@@ -181,7 +181,8 @@ export default function RegisterStudentScreen({ navigation }: any) {
         value={formData.phone}
         onChangeText={value => updateField('phone', value)}
         keyboardType="phone-pad"
-        tip="Include country code (+27 for South Africa)"
+        tip="South African format: +27 followed by 9 digits"
+        maxLength={12}
         returnKeyType="next"
         onSubmitEditing={() => idNumberRef.current?.focus()}
         blurOnSubmit={false}
@@ -230,7 +231,8 @@ export default function RegisterStudentScreen({ navigation }: any) {
         value={formData.emergency_contact_phone}
         onChangeText={value => updateField('emergency_contact_phone', value)}
         keyboardType="phone-pad"
-        tip="Include country code"
+        tip="South African format: +27 followed by 9 digits"
+        maxLength={12}
         returnKeyType="next"
         onSubmitEditing={() => addressLine1Ref.current?.focus()}
         blurOnSubmit={false}

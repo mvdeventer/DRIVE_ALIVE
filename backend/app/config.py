@@ -41,7 +41,7 @@ class Settings(BaseSettings):
     ENVIRONMENT: str = "development"
     DEBUG: bool = True
     ALLOWED_ORIGINS: str = "http://localhost:3000"
-    AUTO_VERIFY_INSTRUCTORS: bool = True  # Set to False in production
+    AUTO_VERIFY_INSTRUCTORS: bool = False  # Only True in debug mode (controlled by DEBUG)
 
     # South Africa
     DEFAULT_TIMEZONE: str = "Africa/Johannesburg"
@@ -51,6 +51,11 @@ class Settings(BaseSettings):
     def origins_list(self) -> List[str]:
         """Parse ALLOWED_ORIGINS into list"""
         return [origin.strip() for origin in self.ALLOWED_ORIGINS.split(",")]
+
+    @property
+    def should_auto_verify_instructors(self) -> bool:
+        """Auto-verify instructors only in debug mode"""
+        return self.DEBUG and self.AUTO_VERIFY_INSTRUCTORS
 
     class Config:
         env_file = "../.env"  # Look in parent directory (backend/)

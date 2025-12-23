@@ -61,11 +61,6 @@ export default function AdminDashboardScreen({ navigation }: any) {
     loadStats();
   };
 
-  const handleLogout = async () => {
-    await apiService.logout();
-    navigation.replace('Login');
-  };
-
   if (loading) {
     return (
       <View style={styles.centerContainer}>
@@ -86,9 +81,6 @@ export default function AdminDashboardScreen({ navigation }: any) {
             <Text style={styles.headerTitle}>Admin Dashboard</Text>
             <Text style={styles.headerSubtitle}>System Overview & Management</Text>
           </View>
-          <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
-            <Text style={styles.logoutButtonText}>Logout</Text>
-          </TouchableOpacity>
         </View>
       </View>
 
@@ -268,17 +260,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#E0E0E0',
     marginTop: 5,
-  },
-  logoutButton: {
-    backgroundColor: '#DC3545',
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderRadius: 8,
-  },
-  logoutButtonText: {
-    color: '#FFF',
-    fontSize: 14,
-    fontWeight: 'bold',
   },
   section: {
     backgroundColor: '#FFF',
