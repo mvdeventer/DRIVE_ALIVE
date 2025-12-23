@@ -1,6 +1,7 @@
 /**
  * Login Screen
  */
+import * as SecureStore from 'expo-secure-store';
 import React, { useState } from 'react';
 import {
   ActivityIndicator,
@@ -12,7 +13,25 @@ import {
   View,
 } from 'react-native';
 import InlineMessage from '../../components/InlineMessage';
+import { API_CONFIG } from '../../config';
 import ApiService from '../../services/api';
+
+// Storage wrapper for web compatibility
+const storage = {
+  async getItem(key: string): Promise<string | null> {
+    if (Platform.OS === 'web') {
+      return localStorage.getItem(key);
+    }
+    return await SecureStore.getItemAsync(key);
+  },
+  async setItem(key: string, value: string): Promise<void> {
+    if (Platform.OS === 'web') {
+      localStorage.setItem(key, value);
+    } else {
+      await SecureStore.setItemAsync(key, value);
+    }
+  },
+};
 
 export default function LoginScreen({ navigation, onAuthChange }: any) {
   const [emailOrPhone, setEmailOrPhone] = useState('');
@@ -34,19 +53,41 @@ export default function LoginScreen({ navigation, onAuthChange }: any) {
 
     try {
       // Normalize phone number format for South African numbers
-      // Convert local format (0611154598) to international format (+27611154598)
       let normalizedEmailOrPhone = emailOrPhone.trim();
-
-      // Check if it's a phone number starting with 0 (South African local format)
       if (/^0\d{9}$/.test(normalizedEmailOrPhone)) {
-        // Replace leading 0 with +27
         normalizedEmailOrPhone = '+27' + normalizedEmailOrPhone.substring(1);
       }
 
-      await ApiService.login(normalizedEmailOrPhone, password);
+      // Try using fetch directly first to test connectivity
+      console.log('Attempting fetch-based login...');
+      const params = new URLSearchParams();
+      params.append('username', normalizedEmailOrPhone);
+      params.append('password', password);
+
+      const fetchResponse = await fetch(`${API_CONFIG.BASE_URL}/auth/login`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: params.toString(),
+      });
+
+      console.log('Fetch response status:', fetchResponse.status);
+      const data = await fetchResponse.json();
+      console.log('Fetch response data:', data);
+
+      if (!fetchResponse.ok) {
+        throw new Error(data.detail || 'Login failed');
+      }
+
+      // Store token and continue with ApiService for other calls
+      await ApiService.setAuthToken(data.access_token);
 
       // Get user info to determine role
       const user = await ApiService.getCurrentUser();
+
+      // Store user role BEFORE triggering auth change
+      await storage.setItem('user_role', user.role);
 
       // Trigger auth state update in App.tsx
       if (onAuthChange) {
@@ -62,21 +103,32 @@ export default function LoginScreen({ navigation, onAuthChange }: any) {
         navigation.replace('InstructorHome');
       }
 
-      // On web, reload after setting up navigation (ensures proper state)
-      if (Platform.OS === 'web') {
-        setTimeout(() => window.location.reload(), 100);
-      }
+      // REMOVED: window.location.reload() - causes navigation issues
     } catch (error: any) {
       console.error('Login error:', error);
       console.error('Error response:', error.response);
       console.error('Error data:', error.response?.data);
       console.error('Error detail:', error.response?.data?.detail);
       console.error('Error status:', error.response?.status);
+      console.error('Error code:', error.code);
+      console.error('Error request:', error.request);
 
-      // Debug: Show full error structure
-      const errorMessage =
-        error.response?.data?.detail || error.message || 'An error occurred during login';
-      const statusCode = error.response?.status || 'unknown';
+      // More detailed error message for debugging
+      let errorMessage = 'An error occurred during login';
+      let statusCode = 'unknown';
+
+      if (error.response) {
+        // Server responded with error
+        errorMessage = error.response.data?.detail || error.response.statusText || 'Server error';
+        statusCode = error.response.status;
+      } else if (error.request) {
+        // Request made but no response (network error)
+        errorMessage = `Network error: ${error.message}. Check if backend is running and firewall allows port 8000.`;
+        statusCode = 'network';
+      } else {
+        // Something else happened
+        errorMessage = error.message;
+      }
 
       console.error(`Showing error message: ${errorMessage} (${statusCode})`);
 
@@ -84,7 +136,7 @@ export default function LoginScreen({ navigation, onAuthChange }: any) {
         type: 'error',
         text: `Login Failed (${statusCode}): ${errorMessage}`,
       });
-      setTimeout(() => setMessage(null), 5000);
+      setTimeout(() => setMessage(null), 8000); // Longer timeout for network errors
       setLoading(false);
     }
   };
@@ -93,6 +145,31 @@ export default function LoginScreen({ navigation, onAuthChange }: any) {
     <View style={styles.container}>
       <Text style={styles.title}>Driving School</Text>
       <Text style={styles.subtitle}>Login to your account</Text>
+
+      {/* Debug: Show API URL */}
+      <View style={styles.debugBox}>
+        <Text style={styles.debugText}>API: {API_CONFIG.BASE_URL}</Text>
+        <Text style={styles.debugText}>Platform: {Platform.OS}</Text>
+        {Platform.OS === 'web' && typeof window !== 'undefined' && (
+          <Text style={styles.debugText}>
+            Page URL: {window.location.protocol}//{window.location.host}
+          </Text>
+        )}
+        <TouchableOpacity
+          onPress={async () => {
+            try {
+              const response = await fetch(`${API_CONFIG.BASE_URL}/docs`);
+              const text = await response.text();
+              alert(`Fetch test: ${response.status} - ${text.substring(0, 50)}`);
+            } catch (err: any) {
+              alert(`Fetch error: ${err.message}`);
+            }
+          }}
+          style={{ marginTop: 5, padding: 5, backgroundColor: '#ddd' }}
+        >
+          <Text style={{ fontSize: 10 }}>Test Connection</Text>
+        </TouchableOpacity>
+      </View>
 
       {message && (
         <View style={{ marginBottom: 16 }}>
@@ -191,5 +268,16 @@ const styles = StyleSheet.create({
   linkText: {
     color: '#007AFF',
     fontSize: 16,
+  },
+  debugBox: {
+    backgroundColor: '#f0f0f0',
+    padding: 10,
+    borderRadius: 5,
+    marginBottom: 20,
+  },
+  debugText: {
+    fontSize: 12,
+    color: '#666',
+    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
   },
 });

@@ -34,13 +34,30 @@ class ApiService {
   private api: AxiosInstance;
 
   constructor() {
+    // Debug: Log the API URL being used
+    console.log('API Service initialized with BASE_URL:', API_CONFIG.BASE_URL);
+    console.log('Platform:', Platform.OS);
+    console.log(
+      'Current hostname:',
+      Platform.OS === 'web'
+        ? typeof window !== 'undefined'
+          ? window.location.hostname
+          : 'N/A'
+        : 'Native'
+    );
+
     this.api = axios.create({
       baseURL: API_CONFIG.BASE_URL,
       timeout: API_CONFIG.TIMEOUT,
       headers: {
         'Content-Type': 'application/json',
       },
-      withCredentials: true,
+      // Only use withCredentials for same-origin requests (localhost to localhost)
+      // For cross-origin (IP-based), we rely on Authorization header instead
+      withCredentials:
+        Platform.OS === 'web' && typeof window !== 'undefined'
+          ? window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+          : false,
     });
 
     // Request interceptor to add auth token
@@ -102,6 +119,11 @@ class ApiService {
     const params = new URLSearchParams();
     params.append('username', email);
     params.append('password', password);
+
+    // Debug: Log the login request details
+    console.log('Login attempt:');
+    console.log('- URL:', `${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.LOGIN}`);
+    console.log('- Username:', email);
 
     const response = await this.api.post(API_CONFIG.ENDPOINTS.LOGIN, params.toString(), {
       headers: {
