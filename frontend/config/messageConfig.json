@@ -1,0 +1,89 @@
+{
+  "description": "Configuration for inline message display durations across the application",
+  "globalOverride": {
+    "enabled": true,
+    "defaultDuration": 1000,
+    "description": "When enabled, all messages use this duration (in milliseconds). Set to false to use screen-specific durations."
+  },
+  "screens": {
+    "UserManagementScreen": {
+      "statusChange": {
+        "success": 4000,
+        "error": 4000
+      },
+      "userEdit": {
+        "success": 4000,
+        "error": 4000
+      },
+      "passwordReset": {
+        "success": 4000,
+        "error": 4000
+      }
+    },
+    "BookingOversightScreen": {
+      "cancelBooking": {
+        "success": 4000,
+        "error": 4000
+      },
+      "copyDetails": {
+        "success": 3000
+      }
+    },
+    "StudentHomeScreen": {
+      "cancelBooking": {
+        "success": 4000,
+        "error": 4000
+      },
+      "general": {
+        "success": 4000,
+        "error": 4000
+      }
+    },
+    "InstructorVerificationScreen": {
+      "verification": {
+        "success": 4000,
+        "error": 4000
+      }
+    },
+    "RevenueAnalyticsScreen": {
+      "general": {
+        "error": 4000
+      }
+    },
+    "AdminDashboardScreen": {
+      "general": {
+        "error": 4000
+      }
+    },
+    "InstructorListScreen": {
+      "general": {
+        "error": 4000
+      }
+    },
+    "EditStudentProfileScreen": {
+      "profileUpdate": {
+        "success": 4000,
+        "error": 4000
+      }
+    },
+    "EditInstructorProfileScreen": {
+      "profileUpdate": {
+        "success": 4000,
+        "error": 4000
+      }
+    },
+    "BookingScreen": {
+      "booking": {
+        "success": 4000,
+        "error": 4000
+      }
+    }
+  },
+  "notes": [
+    "All durations are in milliseconds (1000ms = 1 second)",
+    "When globalOverride.enabled is true, all messages use defaultDuration",
+    "When globalOverride.enabled is false, screen-specific durations are used",
+    "Minimum recommended duration: 2000ms (2 seconds)",
+    "Maximum recommended duration: 6000ms (6 seconds)"
+  ]
+}

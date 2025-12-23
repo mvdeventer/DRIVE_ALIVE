@@ -20,6 +20,43 @@ from ..schemas.booking import BookingCancel, BookingCreate, BookingReschedule, B
 router = APIRouter(prefix="/bookings", tags=["Bookings"])
 
 
+def auto_update_past_bookings(db: Session):
+    """
+    Helper function to automatically mark past PENDING bookings as COMPLETED
+    Called before returning booking lists to keep statuses current
+    """
+    now = datetime.now(timezone.utc)
+
+    # Find all PENDING bookings where lesson has ended
+    # lesson_date is stored in local time (SAST = UTC+2)
+    past_pending = db.query(Booking).filter(Booking.status == BookingStatus.PENDING).all()
+
+    updated_count = 0
+    for booking in past_pending:
+        # Convert lesson_date to UTC for comparison
+        from datetime import timedelta as td
+
+        south_africa_offset = td(hours=2)
+
+        if booking.lesson_date.tzinfo is None:
+            lesson_date_utc = booking.lesson_date.replace(tzinfo=timezone.utc) - south_africa_offset
+        else:
+            lesson_date_utc = booking.lesson_date
+
+        # Add duration to get lesson end time
+        lesson_end_utc = lesson_date_utc + td(minutes=booking.duration_minutes)
+
+        # If lesson has ended, mark as completed
+        if lesson_end_utc < now:
+            booking.status = BookingStatus.COMPLETED
+            updated_count += 1
+
+    if updated_count > 0:
+        db.commit()
+
+    return updated_count
+
+
 @router.post("/", response_model=BookingResponse, status_code=status.HTTP_201_CREATED)
 async def create_booking(booking_data: BookingCreate, current_user: Annotated[User, Depends(get_current_user)], db: Session = Depends(get_db)):
     """
@@ -393,6 +430,9 @@ async def get_bookings(
     """
     Get bookings for current user
     """
+    # Auto-update past pending bookings to completed
+    auto_update_past_bookings(db)
+
     query = db.query(Booking)
 
     if current_user.role == UserRole.STUDENT:
@@ -418,6 +458,9 @@ async def get_my_bookings(current_user: Annotated[User, Depends(get_current_user
     Get all bookings for current user (student or instructor)
     Returns bookings with additional details like instructor/student names
     """
+    # Auto-update past pending bookings to completed
+    auto_update_past_bookings(db)
+
     bookings_list = []
 
     if current_user.role == UserRole.STUDENT:

@@ -271,6 +271,20 @@ class AuthService:
                 detail="Incorrect password",
             )
 
+        # Check user status - only active users can log in
+        from ..models.user import UserStatus
+
+        if user.status == UserStatus.INACTIVE:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Your account has been deactivated. Please contact support for assistance.",
+            )
+        elif user.status == UserStatus.SUSPENDED:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Your account has been suspended. Please contact support for more information.",
+            )
+
         # Update last login
         user.last_login = datetime.utcnow()
         db.commit()

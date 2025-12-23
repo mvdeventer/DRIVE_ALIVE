@@ -303,6 +303,11 @@ async def get_all_bookings(
     """
     Get overview of all bookings with optional status filter
     """
+    # Auto-update past pending bookings to completed
+    from ..routes.bookings import auto_update_past_bookings
+
+    auto_update_past_bookings(db)
+
     query = db.query(Booking)
 
     if status_filter:
@@ -467,4 +472,155 @@ async def get_instructor_revenue(
         "avg_per_booking": avg_per_booking,
         "hourly_rate": float(instructor.hourly_rate),
         "rating": float(instructor.rating) if instructor.rating else 0.0,
+    }
+
+
+# ==================== User Detail Management ====================
+
+
+@router.get("/users/{user_id}")
+async def get_user_details(
+    user_id: int,
+    current_admin: Annotated[User, Depends(require_admin)],
+    db: Session = Depends(get_db),
+):
+    """
+    Get detailed information about a specific user
+    """
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found",
+        )
+
+    result = {
+        "id": user.id,
+        "email": user.email,
+        "phone": user.phone,
+        "first_name": user.first_name,
+        "last_name": user.last_name,
+        "role": user.role.value,
+        "status": user.status.value,
+        "created_at": user.created_at,
+        "last_login": user.last_login,
+    }
+
+    # Get role-specific details
+    if user.role == UserRole.STUDENT:
+        student = db.query(Student).filter(Student.user_id == user_id).first()
+        if student:
+            result["student_details"] = {
+                "id_number": student.id_number,
+                "learners_permit_number": student.learners_permit_number,
+                "emergency_contact_name": student.emergency_contact_name,
+                "emergency_contact_phone": student.emergency_contact_phone,
+                "address_line1": student.address_line1,
+                "address_line2": student.address_line2,
+                "province": student.province,
+                "city": student.city,
+                "suburb": student.suburb,
+                "postal_code": student.postal_code,
+            }
+    elif user.role == UserRole.INSTRUCTOR:
+        instructor = db.query(Instructor).filter(Instructor.user_id == user_id).first()
+        if instructor:
+            result["instructor_details"] = {
+                "id_number": instructor.id_number,
+                "license_number": instructor.license_number,
+                "license_expiry": instructor.license_expiry,
+                "vehicle_make": instructor.vehicle_make,
+                "vehicle_model": instructor.vehicle_model,
+                "vehicle_registration": instructor.vehicle_registration,
+                "vehicle_year": instructor.vehicle_year,
+                "province": instructor.province,
+                "city": instructor.city,
+                "suburb": instructor.suburb,
+                "hourly_rate": float(instructor.hourly_rate),
+                "is_verified": instructor.is_verified,
+                "rating": float(instructor.rating) if instructor.rating else 0.0,
+            }
+
+    return result
+
+
+@router.put("/users/{user_id}")
+async def update_user_details(
+    user_id: int,
+    current_admin: Annotated[User, Depends(require_admin)],
+    db: Session = Depends(get_db),
+    first_name: Optional[str] = Query(None),
+    last_name: Optional[str] = Query(None),
+    phone: Optional[str] = Query(None),
+):
+    """
+    Update user basic details (name, phone)
+    """
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found",
+        )
+
+    # Update fields if provided
+    if first_name is not None:
+        user.first_name = first_name
+    if last_name is not None:
+        user.last_name = last_name
+    if phone is not None:
+        # Check if phone is already used by another user
+        existing = db.query(User).filter(User.phone == phone, User.id != user_id).first()
+        if existing:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Phone number already in use: {phone}",
+            )
+        user.phone = phone
+
+    db.commit()
+    db.refresh(user)
+
+    return {
+        "message": "User details updated successfully",
+        "user": {
+            "id": user.id,
+            "first_name": user.first_name,
+            "last_name": user.last_name,
+            "phone": user.phone,
+        },
+    }
+
+
+@router.post("/users/{user_id}/reset-password")
+async def admin_reset_password(
+    user_id: int,
+    current_admin: Annotated[User, Depends(require_admin)],
+    db: Session = Depends(get_db),
+    new_password: str = Query(...),
+):
+    """
+    Reset a user's password (admin only)
+    """
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found",
+        )
+
+    # Validate password length
+    if len(new_password) < 6:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Password must be at least 6 characters long",
+        )
+
+    # Update password
+    user.password_hash = get_password_hash(new_password)
+    db.commit()
+
+    return {
+        "message": f"Password reset successfully for {user.full_name}",
+        "user_id": user_id,
     }

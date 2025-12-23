@@ -35,6 +35,122 @@ payments handled in-app, GPS pickup/drop-off, WhatsApp reminders, and compliance
 
 ---
 
+## UI/UX Guidelines
+
+### Inline Message System ✅
+
+**NO Pop-up Alerts Policy:**
+
+- ❌ **NEVER** use `Alert.alert()` (doesn't work on React Native Web)
+- ❌ **NEVER** use `window.confirm()` or `window.alert()` (poor UX, blocking)
+- ✅ **ALWAYS** use inline messages with `InlineMessage` component
+- ✅ **ALWAYS** use confirmation modals for destructive actions
+
+**Message Configuration:**
+All inline message durations are centrally managed in `frontend/config/messageConfig.json`:
+
+```json
+{
+  "globalOverride": {
+    "enabled": true,
+    "defaultDuration": 4000
+  },
+  "screens": {
+    "UserManagementScreen": {
+      "statusChange": 4000,
+      "userUpdate": 4000,
+      "passwordReset": 5000,
+      "error": 5000
+    },
+    "BookingOversightScreen": {
+      "bookingCancel": 4000,
+      "error": 5000
+    }
+    // ... more screens
+  }
+}
+```
+
+**Global Override:**
+
+- When `globalOverride.enabled = true`, ALL messages use `defaultDuration` (4000ms)
+- Set `enabled = false` to use screen-specific durations
+- Useful for quick adjustments during testing/production
+
+**Implementation Pattern:**
+
+```typescript
+import { showMessage } from "../utils/messageConfig";
+
+const SCREEN_NAME = "YourScreenName";
+
+// Show success message
+showMessage(
+  setSuccessMessage, // State setter
+  "Operation successful!", // Message text
+  SCREEN_NAME, // Screen identifier
+  "actionName", // Action identifier (matches config)
+  "success" // Message type: 'success' | 'error'
+);
+
+// Show error message
+showMessage(
+  setErrorMessage,
+  "Something went wrong",
+  SCREEN_NAME,
+  "error",
+  "error"
+);
+```
+
+**Confirmation Modals:**
+For destructive actions (delete, deactivate, cancel), use modals:
+
+```typescript
+const [confirmAction, setConfirmAction] = useState<{
+  user: User;
+  newStatus: string;
+} | null>(null);
+
+// Trigger confirmation
+const handleAction = (user: User, status: string) => {
+  setConfirmAction({ user, newStatus: status });
+};
+
+// Confirm and execute
+const confirmAction = async () => {
+  // Execute action
+  setConfirmAction(null); // Close modal
+  showMessage(setSuccessMessage, 'Success!', SCREEN_NAME, 'action', 'success');
+};
+
+// Modal JSX
+<Modal visible={!!confirmAction} ...>
+  <Text>Are you sure?</Text>
+  <Button onPress={() => setConfirmAction(null)}>Cancel</Button>
+  <Button onPress={confirmAction}>Confirm</Button>
+</Modal>
+```
+
+**Screen-Specific Rules:**
+
+- **UserManagementScreen**: 4s for status/updates, 5s for password/errors
+- **BookingOversightScreen**: 4s for cancellations, 5s for errors
+- **StudentHomeScreen**: 4s for bookings, 5s for conflicts
+- **InstructorListScreen**: 4s for general, 5s for errors
+
+**Auto-Scroll on Error:**
+Messages automatically scroll to top for visibility:
+
+```typescript
+scrollViewRef.current?.scrollTo({ y: 0, animated: true });
+```
+
+**Extended Visibility:**
+Critical messages (conflicts, security warnings) use 5000ms duration.
+
+---
+
 ## Todo List by Priority
 
 ### Phase 1: Authentication & Core Backend ✅
@@ -244,6 +360,58 @@ payments handled in-app, GPS pickup/drop-off, WhatsApp reminders, and compliance
 - ✅ JWT token authentication
 - ✅ Input validation throughout API
 - ✅ SQL injection prevention (SQLAlchemy ORM)
+
+### Inline Message System Implementation ✅
+
+**Architecture:**
+
+- ✅ Created centralized message configuration system
+- ✅ `frontend/config/messageConfig.json` - Global and screen-specific durations
+- ✅ `frontend/utils/messageConfig.ts` - Utility functions (getMessageDuration, autoClearMessage, showMessage)
+- ✅ Global override feature (enabled by default, 4000ms duration)
+
+**No Pop-up Alerts Policy:**
+
+- ✅ Eliminated ALL `Alert.alert()` calls (React Native Web incompatible)
+- ✅ Eliminated ALL `window.confirm()` and `window.alert()` (poor UX)
+- ✅ Replaced with inline `InlineMessage` component
+- ✅ Confirmation modals for destructive actions (delete, deactivate, cancel)
+
+**Implementation Details:**
+
+- ✅ Auto-dismiss after configured duration (default 4s, errors 5s)
+- ✅ Auto-scroll to top on error messages for visibility
+- ✅ Color-coded messages (green=success, red=error)
+- ✅ Emoji support in confirmation modals (✅ activate, ⚠️ deactivate/suspend)
+- ✅ Screen-specific duration configuration for fine-tuned UX
+
+**Migrated Screens:**
+
+- ✅ UserManagementScreen - Status changes, user edits, password resets
+- ✅ BookingOversightScreen - Booking cancellations
+- ✅ StudentHomeScreen - Booking conflicts, lesson cancellations
+- ✅ InstructorListScreen - Booking confirmations
+
+**Message Types:**
+
+- **Success**: Green background, auto-dismiss after 4s
+- **Error**: Red background, extended visibility (5s)
+- **Conflict**: Red background, extended visibility (5s), scroll to top
+- **Warning**: Yellow background (in modals), requires confirmation
+
+**Developer Guidelines:**
+
+```typescript
+// Pattern for all screens:
+import { showMessage } from "../utils/messageConfig";
+const SCREEN_NAME = "YourScreenName";
+
+// Success:
+showMessage(setSuccessMessage, "Done!", SCREEN_NAME, "action", "success");
+
+// Error:
+showMessage(setErrorMessage, "Failed!", SCREEN_NAME, "error", "error");
+```
 
 ### API Additions
 

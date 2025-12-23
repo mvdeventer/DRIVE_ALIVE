@@ -284,6 +284,26 @@ class ApiService {
     const response = await this.api.post('/admin/create', data);
     return response.data;
   }
+
+  async getUserDetails(userId: number) {
+    const response = await this.api.get(`/admin/users/${userId}`);
+    return response.data;
+  }
+
+  async updateUserDetails(
+    userId: number,
+    data: { first_name?: string; last_name?: string; phone?: string }
+  ) {
+    const response = await this.api.put(`/admin/users/${userId}`, null, { params: data });
+    return response.data;
+  }
+
+  async resetUserPassword(userId: number, newPassword: string) {
+    const response = await this.api.post(`/admin/users/${userId}/reset-password`, null, {
+      params: { new_password: newPassword },
+    });
+    return response.data;
+  }
 }
 
 export default new ApiService();

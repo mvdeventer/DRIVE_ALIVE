@@ -7,10 +7,11 @@ import { useFocusEffect } from '@react-navigation/native';
 import React, { useCallback, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Clipboard,
   FlatList,
+  Modal,
   RefreshControl,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -19,6 +20,9 @@ import {
 } from 'react-native';
 import InlineMessage from '../../components/InlineMessage';
 import apiService from '../../services/api';
+import { showMessage } from '../../utils/messageConfig';
+
+const SCREEN_NAME = 'BookingOversightScreen';
 
 interface Booking {
   id: number;
@@ -48,6 +52,7 @@ export default function BookingOversightScreen() {
   const [searchQuery, setSearchQuery] = useState('');
   const [modalVisible, setModalVisible] = useState(false);
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
+  const [confirmCancel, setConfirmCancel] = useState<Booking | null>(null);
 
   const loadBookings = async () => {
     try {
@@ -83,40 +88,54 @@ export default function BookingOversightScreen() {
   };
 
   const handleCancelBooking = (booking: Booking) => {
-    Alert.alert(
-      'Cancel Booking',
-      `Cancel booking for ${booking.student_name} with ${booking.instructor_name}?`,
-      [
-        { text: 'No', style: 'cancel' },
-        {
-          text: 'Yes, Cancel',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              setError('');
-              await apiService.cancelBookingAdmin(booking.id);
-              setSuccess('Booking cancelled successfully');
-              setTimeout(() => setSuccess(''), 5000);
-              loadBookings();
-            } catch (err: any) {
-              setError(err.response?.data?.detail || 'Failed to cancel booking');
-            }
-          },
-        },
-      ]
-    );
+    setConfirmCancel(booking);
+  };
+
+  const confirmCancelBooking = async () => {
+    if (!confirmCancel) return;
+
+    try {
+      setError('');
+      await apiService.cancelBookingAdmin(confirmCancel.id);
+      showMessage(
+        setSuccess,
+        'Booking cancelled successfully',
+        SCREEN_NAME,
+        'bookingCancel',
+        'success'
+      );
+      setConfirmCancel(null);
+      loadBookings();
+    } catch (err: any) {
+      showMessage(
+        setError,
+        err.response?.data?.detail || 'Failed to cancel booking',
+        SCREEN_NAME,
+        'error',
+        'error'
+      );
+      setConfirmCancel(null);
+    }
   };
 
   // Filter bookings based on search query
   const filteredBookings = bookings.filter(booking => {
     if (!searchQuery) return true;
-    const query = searchQuery.toLowerCase();
+    const query = searchQuery.toLowerCase().trim();
+
+    // If query is purely numeric, do exact match on booking ID
+    const isNumeric = /^\d+$/.test(query);
+    if (isNumeric) {
+      return booking.id.toString() === query;
+    }
+
+    // Otherwise, do partial match on all fields
     return (
       booking.id.toString().includes(query) ||
-      booking.student_name.toLowerCase().includes(query) ||
-      booking.instructor_name.toLowerCase().includes(query) ||
-      booking.student_id_number.toLowerCase().includes(query) ||
-      booking.instructor_id_number.toLowerCase().includes(query)
+      (booking.student_name || '').toLowerCase().includes(query) ||
+      (booking.instructor_name || '').toLowerCase().includes(query) ||
+      (booking.student_id_number || '').toString().toLowerCase().includes(query) ||
+      (booking.instructor_id_number || '').toString().toLowerCase().includes(query)
     );
   });
 
@@ -465,6 +484,55 @@ Lesson Type:    ${booking.lesson_type.toUpperCase()}
           </View>
         </View>
       </Modal>
+
+      {/* Confirmation Modal */}
+      <Modal
+        animationType="fade"
+        transparent={true}
+        visible={!!confirmCancel}
+        onRequestClose={() => setConfirmCancel(null)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.confirmModalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>⚠️ Cancel Booking</Text>
+            </View>
+
+            <View style={styles.modalBody}>
+              <Text style={styles.confirmText}>Are you sure you want to cancel this booking?</Text>
+
+              {confirmCancel && (
+                <View style={styles.confirmDetails}>
+                  <Text style={styles.confirmDetailText}>
+                    <Text style={styles.boldText}>Student:</Text> {confirmCancel.student_name}
+                  </Text>
+                  <Text style={styles.confirmDetailText}>
+                    <Text style={styles.boldText}>Instructor:</Text> {confirmCancel.instructor_name}
+                  </Text>
+                  <Text style={styles.confirmDetailText}>
+                    <Text style={styles.boldText}>Date:</Text>{' '}
+                    {new Date(confirmCancel.lesson_date).toLocaleString()}
+                  </Text>
+                </View>
+              )}
+
+              <Text style={styles.warningText}>⚠️ This action cannot be undone.</Text>
+            </View>
+
+            <View style={styles.modalFooter}>
+              <TouchableOpacity
+                style={styles.cancelModalButton}
+                onPress={() => setConfirmCancel(null)}
+              >
+                <Text style={styles.cancelModalButtonText}>No, Keep It</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.confirmCancelButton} onPress={confirmCancelBooking}>
+                <Text style={styles.confirmCancelButtonText}>Yes, Cancel Booking</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -802,5 +870,73 @@ const styles = StyleSheet.create({
     color: '#FFF',
     fontSize: 14,
     fontWeight: '600',
+  },
+  confirmModalContent: {
+    backgroundColor: '#FFF',
+    borderRadius: 12,
+    width: '90%',
+    maxWidth: 500,
+  },
+  modalBody: {
+    padding: 20,
+  },
+  confirmText: {
+    fontSize: 16,
+    color: '#333',
+    textAlign: 'center',
+    marginBottom: 15,
+  },
+  confirmDetails: {
+    backgroundColor: '#F8F9FA',
+    padding: 15,
+    borderRadius: 8,
+    marginBottom: 15,
+  },
+  confirmDetailText: {
+    fontSize: 14,
+    color: '#333',
+    marginBottom: 5,
+  },
+  boldText: {
+    fontWeight: 'bold',
+    color: '#0066CC',
+  },
+  warningText: {
+    fontSize: 14,
+    color: '#DC3545',
+    textAlign: 'center',
+    fontStyle: 'italic',
+  },
+  modalFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    padding: 20,
+    borderTopWidth: 1,
+    borderTopColor: '#E0E0E0',
+  },
+  cancelModalButton: {
+    flex: 1,
+    backgroundColor: '#6C757D',
+    padding: 15,
+    borderRadius: 8,
+    marginRight: 10,
+    alignItems: 'center',
+  },
+  cancelModalButtonText: {
+    color: '#FFF',
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  confirmCancelButton: {
+    flex: 1,
+    backgroundColor: '#DC3545',
+    padding: 15,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  confirmCancelButtonText: {
+    color: '#FFF',
+    fontSize: 14,
+    fontWeight: 'bold',
   },
 });
