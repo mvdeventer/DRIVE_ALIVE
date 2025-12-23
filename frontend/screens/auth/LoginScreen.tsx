@@ -45,22 +45,26 @@ export default function LoginScreen({ navigation, onAuthChange }: any) {
 
       await ApiService.login(normalizedEmailOrPhone, password);
 
-      // On web, reload the page to trigger App.tsx to re-check auth
-      if (Platform.OS === 'web') {
-        window.location.reload();
-      } else {
-        // Trigger auth state update in App.tsx
-        if (onAuthChange) {
-          onAuthChange();
-        }
+      // Get user info to determine role
+      const user = await ApiService.getCurrentUser();
 
-        // Navigate based on user role
-        const user = await ApiService.getCurrentUser();
-        if (user.role === 'student') {
-          navigation.replace('StudentHome');
-        } else if (user.role === 'instructor') {
-          navigation.replace('InstructorHome');
-        }
+      // Trigger auth state update in App.tsx
+      if (onAuthChange) {
+        onAuthChange();
+      }
+
+      // Navigate based on user role
+      if (user.role === 'admin') {
+        navigation.replace('AdminDashboard');
+      } else if (user.role === 'student') {
+        navigation.replace('StudentHome');
+      } else if (user.role === 'instructor') {
+        navigation.replace('InstructorHome');
+      }
+
+      // On web, reload after setting up navigation (ensures proper state)
+      if (Platform.OS === 'web') {
+        setTimeout(() => window.location.reload(), 100);
       }
     } catch (error: any) {
       console.error('Login error:', error);

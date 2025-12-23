@@ -28,6 +28,13 @@ import ManageAvailabilityScreen from './screens/instructor/ManageAvailabilityScr
 // Payment Screens
 import PaymentScreen from './screens/payment/PaymentScreen';
 
+// Admin Screens
+import AdminDashboardScreen from './screens/admin/AdminDashboardScreen';
+import BookingOversightScreen from './screens/admin/BookingOversightScreen';
+import InstructorVerificationScreen from './screens/admin/InstructorVerificationScreen';
+import RevenueAnalyticsScreen from './screens/admin/RevenueAnalyticsScreen';
+import UserManagementScreen from './screens/admin/UserManagementScreen';
+
 const Stack = createNativeStackNavigator();
 
 // Storage wrapper for web compatibility
@@ -85,6 +92,8 @@ export default function App() {
           initialRouteName={
             !isAuthenticated
               ? 'Login'
+              : userRole === 'admin'
+              ? 'AdminDashboard'
               : userRole === 'instructor'
               ? 'InstructorHome'
               : 'StudentHome'
@@ -160,6 +169,33 @@ export default function App() {
 
           {/* Payment */}
           <Stack.Screen name="Payment" component={PaymentScreen} options={{ title: 'Payment' }} />
+
+          {/* Admin Stack */}
+          <Stack.Screen
+            name="AdminDashboard"
+            component={AdminDashboardScreen}
+            options={{ title: 'Admin Dashboard' }}
+          />
+          <Stack.Screen
+            name="InstructorVerification"
+            component={InstructorVerificationScreen}
+            options={{ title: 'Verify Instructors' }}
+          />
+          <Stack.Screen
+            name="UserManagement"
+            component={UserManagementScreen}
+            options={{ title: 'User Management' }}
+          />
+          <Stack.Screen
+            name="BookingOversight"
+            component={BookingOversightScreen}
+            options={{ title: 'Booking Oversight' }}
+          />
+          <Stack.Screen
+            name="RevenueAnalytics"
+            component={RevenueAnalyticsScreen}
+            options={{ title: 'Revenue Analytics' }}
+          />
         </Stack.Navigator>
       </NavigationContainer>
     </>

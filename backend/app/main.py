@@ -9,7 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from .config import settings
 from .database import Base, engine
-from .routes import auth, availability, bookings, instructors, payments, students
+from .routes import admin, auth, availability, bookings, instructors, payments, students
 
 # Create database tables
 Base.metadata.create_all(bind=engine)
@@ -41,6 +41,7 @@ app.add_middleware(
 # Force reload
 
 # Include routers
+app.include_router(admin.router)
 app.include_router(auth.router)
 app.include_router(availability.router)
 app.include_router(bookings.router)

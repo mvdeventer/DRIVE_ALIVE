@@ -395,6 +395,24 @@ export default function EditInstructorProfileScreen() {
         />
 
         <FormFieldWithTip
+          label="Maximum Travel Distance (km)"
+          placeholder="e.g., 50"
+          value={formData.max_travel_distance_km}
+          onChangeText={value => updateField('max_travel_distance_km', value)}
+          keyboardType="decimal-pad"
+          tooltip="Maximum distance you're willing to travel for lessons"
+        />
+
+        <FormFieldWithTip
+          label="Rate per Extra Kilometer (ZAR)"
+          placeholder="e.g., 5"
+          value={formData.rate_per_km_beyond_radius}
+          onChangeText={value => updateField('rate_per_km_beyond_radius', value)}
+          keyboardType="decimal-pad"
+          tooltip="Additional charge per kilometer beyond your service radius"
+        />
+
+        <FormFieldWithTip
           label="Bio (Optional)"
           placeholder="Tell students about your experience..."
           value={formData.bio}

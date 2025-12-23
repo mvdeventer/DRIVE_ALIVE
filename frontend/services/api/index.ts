@@ -210,6 +210,80 @@ class ApiService {
     });
     return response.data;
   }
+
+  // Admin methods
+  async getAdminStats() {
+    const response = await this.api.get('/admin/stats');
+    return response.data;
+  }
+
+  async getAdminStats() {
+    const response = await this.api.get('/admin/stats');
+    return response.data;
+  }
+
+  async getPendingInstructors(skip = 0, limit = 50) {
+    const response = await this.api.get('/admin/instructors/pending-verification', {
+      params: { skip, limit },
+    });
+    return response.data;
+  }
+
+  async verifyInstructor(instructorId: number, isVerified: boolean, deactivateAccount = false) {
+    const response = await this.api.post(`/admin/instructors/${instructorId}/verify`, {
+      is_verified: isVerified,
+      deactivate_account: deactivateAccount,
+    });
+    return response.data;
+  }
+
+  async getAllUsers(role?: string, status?: string, skip = 0, limit = 50) {
+    const params: any = { skip, limit };
+    if (role) params.role = role;
+    if (status) params.status = status;
+    const response = await this.api.get('/admin/users', { params });
+    return response.data;
+  }
+
+  async updateUserStatus(userId: number, newStatus: string) {
+    const response = await this.api.put(`/admin/users/${userId}/status`, null, {
+      params: { new_status: newStatus },
+    });
+    return response.data;
+  }
+
+  async getAllBookingsAdmin(statusFilter?: string, skip = 0, limit = 50) {
+    const params: any = { skip, limit };
+    if (statusFilter) params.status_filter = statusFilter;
+    const response = await this.api.get('/admin/bookings', { params });
+    return response.data;
+  }
+
+  async cancelBookingAdmin(bookingId: number) {
+    const response = await this.api.delete(`/admin/bookings/${bookingId}`);
+    return response.data;
+  }
+
+  async getRevenueStats() {
+    const response = await this.api.get('/admin/revenue/stats');
+    return response.data;
+  }
+
+  async getInstructorRevenue(instructorId: number) {
+    const response = await this.api.get(`/admin/revenue/by-instructor/${instructorId}`);
+    return response.data;
+  }
+
+  async createAdmin(data: {
+    email: string;
+    phone: string;
+    password: string;
+    first_name: string;
+    last_name: string;
+  }) {
+    const response = await this.api.post('/admin/create', data);
+    return response.data;
+  }
 }
 
 export default new ApiService();
