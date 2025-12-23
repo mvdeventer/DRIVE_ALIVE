@@ -1,9 +1,9 @@
 /**
  * Student Dashboard - Main hub for students to manage their driving lessons
  */
-import { CommonActions, useNavigation } from '@react-navigation/native';
+import { CommonActions, useFocusEffect, useNavigation } from '@react-navigation/native';
 import * as SecureStore from 'expo-secure-store';
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -61,6 +61,13 @@ export default function StudentHomeScreen() {
     loadDashboardData();
   }, []);
 
+  // Reload data when screen comes into focus (e.g., after booking lessons)
+  useFocusEffect(
+    useCallback(() => {
+      loadDashboardData();
+    }, [])
+  );
+
   const loadDashboardData = async () => {
     try {
       // Load student profile and bookings
@@ -77,10 +84,25 @@ export default function StudentHomeScreen() {
         console.log('🔍 First booking sample:', bookingsRes.data[0]);
       }
 
-      // Split bookings into upcoming and past
+      // Split bookings into upcoming and past (exclude cancelled bookings)
       const now = new Date();
-      const upcoming = bookingsRes.data.filter((b: Booking) => new Date(b.scheduled_time) >= now);
-      const past = bookingsRes.data.filter((b: Booking) => new Date(b.scheduled_time) < now);
+      const upcoming = bookingsRes.data
+        .filter(
+          (b: Booking) =>
+            new Date(b.scheduled_time) >= now && b.status.toLowerCase() !== 'cancelled'
+        )
+        .sort(
+          (a: Booking, b: Booking) =>
+            new Date(a.scheduled_time).getTime() - new Date(b.scheduled_time).getTime()
+        );
+      const past = bookingsRes.data
+        .filter(
+          (b: Booking) => new Date(b.scheduled_time) < now && b.status.toLowerCase() !== 'cancelled'
+        )
+        .sort(
+          (a: Booking, b: Booking) =>
+            new Date(b.scheduled_time).getTime() - new Date(a.scheduled_time).getTime()
+        );
 
       console.log(`✅ Loaded ${upcoming.length} upcoming and ${past.length} past bookings`);
 

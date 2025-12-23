@@ -214,13 +214,15 @@ export default function BookingScreen() {
     const timeStr = startTime.toTimeString().split(' ')[0].substring(0, 5);
 
     // Check if this exact slot is already selected
-    const exists = selectedBookings.some(
+    const existingIndex = selectedBookings.findIndex(
       booking => booking.date === dateStr && booking.slot.start_time === slot.start_time
     );
 
-    if (exists) {
-      setMessage({ type: 'warning', text: 'This time slot is already added to your bookings.' });
-      setTimeout(() => setMessage(null), 3000);
+    if (existingIndex !== -1) {
+      // Deselect: Remove from selected bookings
+      setSelectedBookings(prev => prev.filter((_, index) => index !== existingIndex));
+      setMessage({ type: 'info', text: '✓ Time slot deselected' });
+      setTimeout(() => setMessage(null), 2000);
       return;
     }
 
@@ -231,13 +233,8 @@ export default function BookingScreen() {
       { date: dateStr, slot, time: timeStr, pickup_address: pickupAddr },
     ]);
 
-    // Keep the date and slots visible so user can select more slots on the same date
-    // Don't reset - just show a brief confirmation
-    if (Platform.OS === 'web') {
-      // No alert for web to avoid interrupting flow
-    } else {
-      // Optional: Brief toast-like notification (currently skipped for better UX)
-    }
+    setMessage({ type: 'success', text: '✓ Time slot added' });
+    setTimeout(() => setMessage(null), 2000);
   };
 
   const handleAddAnotherDateTime = () => {
@@ -408,6 +405,10 @@ export default function BookingScreen() {
   };
 
   const handleSubmitBooking = async () => {
+    console.log('🔵 handleSubmitBooking called');
+    console.log('Selected bookings:', selectedBookings);
+    console.log('Pickup address:', formData.pickup_address);
+
     // Validate form
     if (selectedBookings.length === 0) {
       setMessage({ type: 'warning', text: 'Please select at least one time slot' });
@@ -421,6 +422,7 @@ export default function BookingScreen() {
       return;
     }
 
+    console.log('✅ Validation passed, proceeding with booking...');
     setLoading(true);
     try {
       // Prepare all bookings data
@@ -451,19 +453,18 @@ export default function BookingScreen() {
         type: 'success',
         text: `✅ ${response.data.length} Booking${
           response.data.length > 1 ? 's' : ''
-        } confirmed! You will receive confirmation shortly.`,
+        } confirmed! Redirecting to dashboard...`,
       });
-      setTimeout(() => setMessage(null), 5000);
 
-      // Clear new bookings and reload existing
-      setSelectedBookings([]);
-      setFormData({ duration_minutes: '60', pickup_address: '', notes: '' });
-      await loadExistingBookings();
-
-      // Reload available slots to show newly booked slots as unavailable
-      if (selectedDate) {
-        await loadSlotsForDate(selectedDate);
-      }
+      // Wait a moment to show the success message, then navigate back
+      setTimeout(() => {
+        navigation.dispatch(
+          CommonActions.reset({
+            index: 0,
+            routes: [{ name: 'StudentHome' }],
+          })
+        );
+      }, 1500);
     } catch (error: any) {
       console.error('Booking error:', error);
       console.error('Error response:', error.response);
@@ -555,7 +556,7 @@ export default function BookingScreen() {
               🚗 {instructor.vehicle_make} {instructor.vehicle_model} ({instructor.vehicle_year})
             </Text>
             <Text style={styles.instructorDetail}>
-              📍{' '}
+              {'📍 '}
               {[instructor.province, instructor.city, instructor.suburb].filter(Boolean).join(', ')}
             </Text>
             <Text style={styles.instructorDetail}>
@@ -790,48 +791,68 @@ export default function BookingScreen() {
                         {availableSlotsForDate.map((slot, index) => {
                           const startTime = new Date(slot.start_time);
                           const endTime = new Date(slot.end_time);
-                          const dateStr = selectedDate?.toISOString().split('T')[0] || '';
+                          const now = new Date();
+                          // Format date consistently with handleAddSlot
+                          const year = selectedDate?.getFullYear() || 0;
+                          const month = String((selectedDate?.getMonth() || 0) + 1).padStart(
+                            2,
+                            '0'
+                          );
+                          const day = String(selectedDate?.getDate() || 0).padStart(2, '0');
+                          const dateStr = `${year}-${month}-${day}`;
                           const isSelected = selectedBookings.some(
                             booking =>
                               booking.date === dateStr &&
                               booking.slot.start_time === slot.start_time
                           );
                           const isBooked = slot.is_booked || false;
+                          const isPast = startTime < now;
 
                           return (
                             <TouchableOpacity
                               key={index}
                               style={[
                                 styles.slotButton,
+                                !isSelected && isBooked && !isPast && styles.slotButtonBooked,
+                                !isSelected && isPast && styles.slotButtonPast,
                                 isSelected && styles.slotButtonSelected,
-                                isBooked && styles.slotButtonBooked,
                               ]}
                               onPress={() => {
-                                if (!isBooked) {
+                                if (!isBooked && !isPast) {
+                                  handleAddSlot(slot);
+                                } else if (isSelected) {
+                                  // Allow deselecting even if booked/past
                                   handleAddSlot(slot);
                                 }
                               }}
-                              disabled={isBooked}
+                              disabled={!isSelected && (isBooked || isPast)}
                             >
                               <View style={styles.slotButtonContent}>
                                 <Text
                                   style={[
                                     styles.slotButtonText,
+                                    !isSelected &&
+                                      isBooked &&
+                                      !isPast &&
+                                      styles.slotButtonTextBooked,
+                                    !isSelected && isPast && styles.slotButtonTextPast,
                                     isSelected && styles.slotButtonTextSelected,
-                                    isBooked && styles.slotButtonTextBooked,
                                   ]}
                                 >
                                   {startTime.toLocaleTimeString('en-ZA', {
                                     hour: '2-digit',
                                     minute: '2-digit',
-                                  })}{' '}
-                                  -{' '}
+                                  })}
+                                  {' - '}
                                   {endTime.toLocaleTimeString('en-ZA', {
                                     hour: '2-digit',
                                     minute: '2-digit',
                                   })}
                                 </Text>
-                                {isBooked && <Text style={styles.bookedBadge}>🔒 Booked</Text>}
+                                {isBooked && !isPast && (
+                                  <Text style={styles.bookedBadge}>🔒 Already Booked</Text>
+                                )}
+                                {isPast && <Text style={styles.pastBadge}>⏰ Time Passed</Text>}
                               </View>
                             </TouchableOpacity>
                           );
@@ -1260,9 +1281,13 @@ const styles = StyleSheet.create({
     borderColor: '#28a745',
   },
   slotButtonBooked: {
-    backgroundColor: '#f8f9fa',
-    borderColor: '#dee2e6',
-    opacity: 0.6,
+    backgroundColor: '#fff3cd',
+    borderColor: '#ffc107',
+  },
+  slotButtonPast: {
+    backgroundColor: '#f8d7da',
+    borderColor: '#dc3545',
+    opacity: 0.7,
   },
   slotButtonContent: {
     flexDirection: 'row',
@@ -1279,14 +1304,24 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   slotButtonTextBooked: {
-    color: '#999',
+    color: '#856404',
+    fontWeight: '500',
+  },
+  slotButtonTextPast: {
+    color: '#721c24',
     textDecorationLine: 'line-through',
   },
   bookedBadge: {
-    fontSize: 10,
-    color: '#dc3545',
+    fontSize: 9,
+    color: '#856404',
     fontWeight: '600',
-    marginLeft: 8,
+    marginLeft: 6,
+  },
+  pastBadge: {
+    fontSize: 9,
+    color: '#721c24',
+    fontWeight: '600',
+    marginLeft: 6,
   },
   selectedBookingsContainer: {
     backgroundColor: '#e7f5ff',

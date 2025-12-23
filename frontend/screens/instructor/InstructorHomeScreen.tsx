@@ -116,11 +116,13 @@ export default function InstructorHomeScreen() {
       const now = new Date();
       const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
-      // Sort all bookings by scheduled_time in ascending order
-      const sortedBookings = (bookingsRes.data || []).sort(
-        (a: Booking, b: Booking) =>
-          new Date(a.scheduled_time).getTime() - new Date(b.scheduled_time).getTime()
-      );
+      // Sort all bookings by scheduled_time in ascending order (exclude cancelled bookings)
+      const sortedBookings = (bookingsRes.data || [])
+        .filter((b: Booking) => b.status.toLowerCase() !== 'cancelled')
+        .sort(
+          (a: Booking, b: Booking) =>
+            new Date(a.scheduled_time).getTime() - new Date(b.scheduled_time).getTime()
+        );
       const tomorrow = new Date(today);
       tomorrow.setDate(tomorrow.getDate() + 1);
 
@@ -735,7 +737,7 @@ export default function InstructorHomeScreen() {
       {/* Today's Lessons */}
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>
-          Today's Lessons{' '}
+          {"Today's Lessons "}
           {selectedStudent
             ? `for ${selectedStudent.student_name} (${filterBookings(todayLessons).length})`
             : searchQuery
@@ -842,7 +844,7 @@ export default function InstructorHomeScreen() {
       {filterBookings(upcomingLessons).length > 0 && (
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>
-            Upcoming Lessons{' '}
+            {'Upcoming Lessons '}
             {selectedStudent
               ? `for ${selectedStudent.student_name} (${filterBookings(upcomingLessons).length})`
               : searchQuery
@@ -882,21 +884,15 @@ export default function InstructorHomeScreen() {
                     <Text style={styles.statusText}>{lesson.status}</Text>
                   </View>
                 </View>
-
-                {/* Student Contact Info */}
                 {lesson.student_phone && (
                   <Text style={styles.lessonDetail}>📞 {lesson.student_phone}</Text>
                 )}
-
-                {/* Student Location */}
                 {(lesson.student_city || lesson.student_suburb) && (
                   <Text style={styles.lessonDetail}>
                     🗺️ {lesson.student_suburb ? `${lesson.student_suburb}, ` : ''}
                     {lesson.student_city || ''}
                   </Text>
                 )}
-
-                {/* Pickup Location */}
                 {lesson.pickup_location && (
                   <Text style={styles.lessonDetail}>📌 Pickup: {lesson.pickup_location}</Text>
                 )}
