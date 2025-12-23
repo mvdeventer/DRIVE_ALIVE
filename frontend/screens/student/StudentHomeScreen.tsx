@@ -290,7 +290,8 @@ export default function StudentHomeScreen() {
       console.error('Error submitting rating:', error);
       const errorMsg = error.response?.data?.detail || 'Failed to submit rating';
       setMessage({ type: 'error', text: errorMsg });
-      setTimeout(() => setMessage(null), 3000);
+      // Show error for 5 seconds for better visibility
+      setTimeout(() => setMessage(null), 5000);
     }
   };
 

@@ -1,6 +1,6 @@
 """Test 15min spacing between 60min slots"""
 
-from datetime import date, datetime, timedelta
+from datetime import date, datetime
 
 from app.database import get_db
 from app.routes.availability import get_available_slots_for_date
@@ -40,7 +40,7 @@ try:
                 if gap > 0:
                     print(f"    └─ {int(gap)}min gap until next slot\n")
                 else:
-                    print(f"    └─ No gap (slots overlap or back-to-back)\n")
+                    print("    └─ No gap (slots overlap or back-to-back)\n")
 
         if len(slots) > 10:
             print(f"... and {len(slots) - 10} more slots")
@@ -49,7 +49,7 @@ try:
         print("✨ Expected pattern: 60min lesson + 15min gap = 75min between slot starts")
         print(f"{'='*70}\n")
 
-except Exception as e:
+except (ValueError, TypeError, AttributeError) as e:
     print(f"❌ ERROR: {e}")
     import traceback
 

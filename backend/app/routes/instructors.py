@@ -2,7 +2,7 @@
 Instructor routes
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Annotated, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -363,7 +363,7 @@ async def verify_instructor(
 
     # Update verification status
     instructor.is_verified = True
-    instructor.verified_at = datetime.utcnow()
+    instructor.verified_at = datetime.now(timezone.utc)
     db.commit()
 
     user = db.query(User).filter(User.id == instructor.user_id).first()

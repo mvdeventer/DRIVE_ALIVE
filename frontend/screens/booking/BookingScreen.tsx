@@ -62,7 +62,9 @@ interface SelectedBooking {
 
 interface ExistingBooking {
   id: number;
-  lesson_date: string;
+  instructor_id: number;
+  instructor_name: string;
+  scheduled_time: string;
   duration_minutes: number;
   status: string;
   created_at: string;
@@ -107,20 +109,42 @@ export default function BookingScreen() {
   const loadExistingBookings = async () => {
     try {
       setLoadingExisting(true);
-      const response = await ApiService.get('/bookings/');
+      const response = await ApiService.get('/bookings/my-bookings');
 
-      // Filter bookings for this instructor that are pending or confirmed
-      const instructorBookings = response.data.filter(
+      // Get ALL future bookings (not filtered by instructor) to check for conflicts across all instructors
+      const allFutureBookings = response.data.filter(
         (booking: ExistingBooking) =>
-          booking.status !== 'cancelled' && new Date(booking.lesson_date) > new Date()
+          booking.status !== 'cancelled' && new Date(booking.scheduled_time) > new Date()
       );
 
-      setExistingBookings(instructorBookings);
+      setExistingBookings(allFutureBookings);
+      console.log('📅 Loaded existing bookings:', allFutureBookings.length);
     } catch (error: any) {
       console.error('Error loading existing bookings:', error);
     } finally {
       setLoadingExisting(false);
     }
+  };
+
+  // Check if a slot conflicts with any existing student bookings (across ALL instructors)
+  // Returns the conflicting booking if found, otherwise null
+  const isSlotConflictingWithExisting = (
+    slotStart: string,
+    slotEnd: string
+  ): ExistingBooking | null => {
+    const slotStartTime = new Date(slotStart);
+    const slotEndTime = new Date(slotEnd);
+
+    for (const booking of existingBookings) {
+      const bookingStart = new Date(booking.scheduled_time);
+      const bookingEnd = new Date(bookingStart.getTime() + booking.duration_minutes * 60000);
+
+      // Check for overlap: slots conflict if they don't end before the other starts
+      if (!(slotEndTime <= bookingStart || slotStartTime >= bookingEnd)) {
+        return booking; // Return the conflicting booking
+      }
+    }
+    return null;
   };
 
   const loadSlotsForDate = async (date: Date) => {
@@ -151,11 +175,33 @@ export default function BookingScreen() {
 
       if (response.data.availability && response.data.availability.length > 0) {
         const slots = response.data.availability[0].slots || [];
-        console.log('✅ Slots received:', slots.length);
-        console.log('📋 Sample slot:', slots[0]);
-        console.log('🔒 Booked slots:', slots.filter((s: TimeSlot) => s.is_booked).length);
-        console.log('✨ Available slots:', slots.filter((s: TimeSlot) => !s.is_booked).length);
-        setAvailableSlotsForDate(slots);
+
+        // Mark slots that conflict with student's existing bookings (any instructor)
+        const slotsWithConflicts = slots.map((slot: TimeSlot) => {
+          const conflictingBooking = isSlotConflictingWithExisting(slot.start_time, slot.end_time);
+          const isDifferentInstructor =
+            conflictingBooking && conflictingBooking.instructor_id !== instructor.instructor_id;
+          return {
+            ...slot,
+            conflicting_booking: conflictingBooking, // Store reference to conflicting booking
+            has_student_conflict: conflictingBooking !== null, // Flag for student's own conflict
+            is_same_instructor_conflict: conflictingBooking !== null && !isDifferentInstructor, // Same instructor
+            is_different_instructor_conflict: isDifferentInstructor, // Different instructor
+            is_booked: slot.is_booked, // Keep original is_booked status (booked by others)
+          };
+        });
+
+        console.log('✅ Slots received:', slotsWithConflicts.length);
+        console.log('📋 Sample slot:', slotsWithConflicts[0]);
+        console.log(
+          '🔒 Booked/Conflict slots:',
+          slotsWithConflicts.filter((s: any) => s.is_booked).length
+        );
+        console.log(
+          '✨ Available slots:',
+          slotsWithConflicts.filter((s: any) => !s.is_booked).length
+        );
+        setAvailableSlotsForDate(slotsWithConflicts);
         setShowSlotSelection(true);
       } else {
         console.log('❌ No availability - instructor has no schedule for this date');
@@ -179,16 +225,49 @@ export default function BookingScreen() {
     loadSlotsForDate(date);
   };
 
-  const handleAddSlot = (slot: TimeSlot) => {
+  const handleAddSlot = (slot: any) => {
     if (!selectedDate) return;
 
-    // Prevent selecting booked slots
+    // Check if there's a conflicting booking with student's own appointment
+    if (slot.conflicting_booking) {
+      const conflictBooking = slot.conflicting_booking;
+      const conflictDate = new Date(conflictBooking.scheduled_time);
+      const conflictTime = conflictDate.toLocaleTimeString('en-ZA', {
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false,
+      });
+      const conflictDateStr = conflictDate.toLocaleDateString('en-ZA', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+      });
+
+      // Show detailed conflict information
+      if (conflictBooking.instructor_id !== instructor.instructor_id) {
+        // Different instructor - show error with instructor details
+        setMessage({
+          type: 'error',
+          text: `❌ Booking Conflict: You already have a booking with ${conflictBooking.instructor_name} on ${conflictDateStr} at ${conflictTime} (${conflictBooking.duration_minutes} minutes). Please cancel that lesson in your Student Home page first before booking with ${instructor.first_name} ${instructor.last_name}.`,
+        });
+      } else {
+        // Same instructor - show error message
+        setMessage({
+          type: 'error',
+          text: `❌ Already Booked: You already have a booking with this instructor (${instructor.first_name} ${instructor.last_name}) on ${conflictDateStr} at ${conflictTime} (${conflictBooking.duration_minutes} minutes). Please cancel it in your Student Home page first.`,
+        });
+      }
+      setTimeout(() => setMessage(null), 8000);
+      return;
+    }
+
+    // Prevent selecting booked slots (by other students)
     if (slot.is_booked) {
       setMessage({
         type: 'error',
-        text: 'This time slot is already booked by another student. Please select a different time.',
+        text: 'This time slot is already booked by another student with this instructor. Please select a different time.',
       });
-      setTimeout(() => setMessage(null), 3000);
+      setTimeout(() => setMessage(null), 4000);
       return;
     }
 
@@ -805,6 +884,10 @@ export default function BookingScreen() {
                               booking.date === dateStr &&
                               booking.slot.start_time === slot.start_time
                           );
+                          const hasSameInstructorConflict =
+                            (slot as any).is_same_instructor_conflict || false;
+                          const hasDifferentInstructorConflict =
+                            (slot as any).is_different_instructor_conflict || false;
                           const isBooked = slot.is_booked || false;
                           const isPast = startTime < now;
 
@@ -813,24 +896,46 @@ export default function BookingScreen() {
                               key={index}
                               style={[
                                 styles.slotButton,
-                                !isSelected && isBooked && !isPast && styles.slotButtonBooked,
+                                !isSelected &&
+                                  hasDifferentInstructorConflict &&
+                                  !isPast &&
+                                  styles.slotButtonConflict,
+                                !isSelected &&
+                                  hasSameInstructorConflict &&
+                                  !isPast &&
+                                  styles.slotButtonOverlap,
+                                !isSelected &&
+                                  isBooked &&
+                                  !hasSameInstructorConflict &&
+                                  !hasDifferentInstructorConflict &&
+                                  !isPast &&
+                                  styles.slotButtonBooked,
                                 !isSelected && isPast && styles.slotButtonPast,
                                 isSelected && styles.slotButtonSelected,
                               ]}
                               onPress={() => {
-                                if (!isBooked && !isPast) {
-                                  handleAddSlot(slot);
-                                } else if (isSelected) {
-                                  // Allow deselecting even if booked/past
-                                  handleAddSlot(slot);
-                                }
+                                handleAddSlot(slot);
                               }}
-                              disabled={!isSelected && (isBooked || isPast)}
+                              disabled={
+                                !isSelected &&
+                                ((isBooked &&
+                                  !hasSameInstructorConflict &&
+                                  !hasDifferentInstructorConflict) ||
+                                  isPast)
+                              }
                             >
                               <View style={styles.slotButtonContent}>
                                 <Text
                                   style={[
                                     styles.slotButtonText,
+                                    !isSelected &&
+                                      hasDifferentInstructorConflict &&
+                                      !isPast &&
+                                      styles.slotButtonTextConflict,
+                                    !isSelected &&
+                                      hasSameInstructorConflict &&
+                                      !isPast &&
+                                      styles.slotButtonTextOverlap,
                                     !isSelected &&
                                       isBooked &&
                                       !isPast &&
@@ -849,9 +954,18 @@ export default function BookingScreen() {
                                     minute: '2-digit',
                                   })}
                                 </Text>
-                                {isBooked && !isPast && (
-                                  <Text style={styles.bookedBadge}>🔒 Already Booked</Text>
+                                {hasDifferentInstructorConflict && !isPast && (
+                                  <Text style={styles.conflictBadge}>❌ Conflict</Text>
                                 )}
+                                {hasSameInstructorConflict && !isPast && (
+                                  <Text style={styles.overlapBadge}>⚠️ Booked</Text>
+                                )}
+                                {isBooked &&
+                                  !isPast &&
+                                  !hasSameInstructorConflict &&
+                                  !hasDifferentInstructorConflict && (
+                                    <Text style={styles.bookedBadge}>🔒 Already Booked</Text>
+                                  )}
                                 {isPast && <Text style={styles.pastBadge}>⏰ Time Passed</Text>}
                               </View>
                             </TouchableOpacity>
@@ -1280,6 +1394,16 @@ const styles = StyleSheet.create({
     backgroundColor: '#28a745',
     borderColor: '#28a745',
   },
+  slotButtonConflict: {
+    backgroundColor: '#fee2e2',
+    borderColor: '#dc2626',
+    borderWidth: 2,
+  },
+  slotButtonOverlap: {
+    backgroundColor: '#e9d5ff',
+    borderColor: '#9333ea',
+    borderWidth: 2,
+  },
   slotButtonBooked: {
     backgroundColor: '#fff3cd',
     borderColor: '#ffc107',
@@ -1303,6 +1427,14 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontWeight: '600',
   },
+  slotButtonTextConflict: {
+    color: '#dc2626',
+    fontWeight: '600',
+  },
+  slotButtonTextOverlap: {
+    color: '#7c3aed',
+    fontWeight: '600',
+  },
   slotButtonTextBooked: {
     color: '#856404',
     fontWeight: '500',
@@ -1314,6 +1446,18 @@ const styles = StyleSheet.create({
   bookedBadge: {
     fontSize: 9,
     color: '#856404',
+    fontWeight: '600',
+    marginLeft: 6,
+  },
+  conflictBadge: {
+    fontSize: 9,
+    color: '#dc2626',
+    fontWeight: '600',
+    marginLeft: 6,
+  },
+  overlapBadge: {
+    fontSize: 9,
+    color: '#7c3aed',
     fontWeight: '600',
     marginLeft: 6,
   },

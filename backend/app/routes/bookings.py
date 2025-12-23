@@ -3,7 +3,7 @@ Booking routes
 """
 
 import uuid
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Annotated, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -438,6 +438,7 @@ async def get_my_bookings(current_user: Annotated[User, Depends(get_current_user
 
             booking_dict = {
                 "id": booking.id,
+                "instructor_id": booking.instructor_id,
                 "instructor_name": f"{instructor_user.first_name} {instructor_user.last_name}" if instructor_user else "Unknown",
                 "instructor_phone": instructor_user.phone if instructor_user else None,
                 "vehicle_make": instructor.vehicle_make if instructor else None,
@@ -583,12 +584,22 @@ async def cancel_booking(
 
     # Update booking
     booking.status = BookingStatus.CANCELLED
-    booking.cancelled_at = datetime.utcnow()
+    booking.cancelled_at = datetime.now(timezone.utc)
     booking.cancelled_by = cancelled_by
     booking.cancellation_reason = cancel_data.cancellation_reason
 
     # Calculate refund based on cancellation policy (simplified)
-    hours_until_lesson = (booking.lesson_date - datetime.utcnow()).total_seconds() / 3600
+    # Note: lesson_date is stored as naive datetime in local time (SAST = UTC+2)
+    from datetime import timedelta as td
+
+    south_africa_offset = td(hours=2)
+
+    if booking.lesson_date.tzinfo is None:
+        lesson_date_utc = booking.lesson_date.replace(tzinfo=timezone.utc) - south_africa_offset
+    else:
+        lesson_date_utc = booking.lesson_date
+
+    hours_until_lesson = (lesson_date_utc - datetime.now(timezone.utc)).total_seconds() / 3600
     if hours_until_lesson >= 24:
         booking.refund_amount = booking.amount  # Full refund
     elif hours_until_lesson >= 12:
@@ -656,8 +667,23 @@ async def create_review(review_data: ReviewCreate, current_user: Annotated[User,
     if booking.student_id != student.id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You can only review your own bookings")
 
-    # Check if booking is in the past
-    if booking.lesson_date > datetime.utcnow():
+    # Check if booking is completed or in the past
+    # Allow reviews if status is COMPLETED or if lesson time has passed
+    # Note: lesson_date is stored as naive datetime in local time (SAST = UTC+2)
+    # Convert to UTC+2 for proper comparison
+    from datetime import timedelta as td
+
+    south_africa_offset = td(hours=2)  # SAST is UTC+2
+
+    if booking.lesson_date.tzinfo is None:
+        # Naive datetime - treat as SAST (UTC+2)
+        lesson_date_utc = booking.lesson_date.replace(tzinfo=timezone.utc) - south_africa_offset
+    else:
+        lesson_date_utc = booking.lesson_date
+
+    now_utc = datetime.now(timezone.utc)
+
+    if booking.status != BookingStatus.COMPLETED and lesson_date_utc > now_utc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot review a future lesson")
 
     # Validate rating
@@ -740,7 +766,7 @@ async def reschedule_booking(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid datetime format. Use ISO format (YYYY-MM-DDTHH:MM:SS)")
 
     # Validate new time is in the future
-    if new_lesson_datetime <= datetime.utcnow():
+    if new_lesson_datetime <= datetime.now(timezone.utc):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="New lesson time must be in the future")
 
     lesson_end = new_lesson_datetime + timedelta(minutes=booking.duration_minutes)
@@ -844,7 +870,17 @@ async def reschedule_booking(
         booking.original_lesson_date = booking.lesson_date
 
     # Check if rescheduling within 6 hours of lesson time
-    hours_until_lesson = (booking.lesson_date - datetime.utcnow()).total_seconds() / 3600
+    # Note: lesson_date is stored as naive datetime in local time (SAST = UTC+2)
+    from datetime import timedelta as td
+
+    south_africa_offset = td(hours=2)
+
+    if booking.lesson_date.tzinfo is None:
+        lesson_date_utc = booking.lesson_date.replace(tzinfo=timezone.utc) - south_africa_offset
+    else:
+        lesson_date_utc = booking.lesson_date
+
+    hours_until_lesson = (lesson_date_utc - datetime.now(timezone.utc)).total_seconds() / 3600
     if hours_until_lesson < 6:
         # Apply 50% cancellation fee
         booking.cancellation_fee = booking.amount * 0.5

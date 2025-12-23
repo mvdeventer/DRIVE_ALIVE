@@ -4,8 +4,6 @@
 import React, { useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
-  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -14,22 +12,10 @@ import {
   View,
 } from 'react-native';
 import FormFieldWithTip from '../../components/FormFieldWithTip';
+import InlineMessage from '../../components/InlineMessage';
 import LocationSelector from '../../components/LocationSelector';
 import { DEBUG_CONFIG } from '../../config';
 import ApiService from '../../services/api';
-
-// Web-compatible alert function
-const showAlert = (title: string, message: string, buttons?: any[]) => {
-  if (Platform.OS === 'web') {
-    const fullMessage = `${title}\n\n${message}`;
-    alert(fullMessage);
-    if (buttons && buttons[0] && buttons[0].onPress) {
-      buttons[0].onPress();
-    }
-  } else {
-    Alert.alert(title, message, buttons);
-  }
-};
 
 export default function RegisterStudentScreen({ navigation }: any) {
   // Create refs for all input fields
@@ -66,50 +52,69 @@ export default function RegisterStudentScreen({ navigation }: any) {
     postal_code: DEBUG_CONFIG.ENABLED ? '2000' : '',
   });
   const [loading, setLoading] = useState(false);
+  const [message, setMessage] = useState<{
+    type: 'success' | 'error' | 'warning' | 'info';
+    text: string;
+  } | null>(null);
+  const scrollViewRef = useRef<ScrollView>(null);
 
   const handleRegister = async () => {
     // Validation
     if (!formData.email || !formData.password || !formData.first_name || !formData.last_name) {
-      showAlert('❌ Missing Fields', 'Please fill in all required fields');
+      setMessage({
+        type: 'error',
+        text: '❌ Missing Fields: Please fill in all required fields',
+      });
+      scrollViewRef.current?.scrollTo({ y: 0, animated: true });
       return;
     }
 
     if (formData.password !== formData.confirmPassword) {
-      showAlert(
-        '🔒 Password Mismatch',
-        'Passwords do not match. Please make sure both passwords are identical.'
-      );
+      setMessage({
+        type: 'error',
+        text: '🔒 Password Mismatch: Passwords do not match. Please make sure both passwords are identical.',
+      });
+      scrollViewRef.current?.scrollTo({ y: 0, animated: true });
       return;
     }
 
     if (formData.password.length < 6) {
-      showAlert(
-        '🔒 Password Too Short',
-        'Password must be at least 6 characters long for security.'
-      );
+      setMessage({
+        type: 'error',
+        text: '🔒 Password Too Short: Password must be at least 6 characters long for security.',
+      });
+      scrollViewRef.current?.scrollTo({ y: 0, animated: true });
       return;
     }
 
+    setMessage(null);
     setLoading(true);
 
     try {
       const { confirmPassword, ...registrationData } = formData;
       await ApiService.registerStudent(registrationData);
 
-      showAlert('✅ Success!', 'Registration successful! Please login to continue.', [
-        {
-          text: 'Login Now',
-          onPress: () => {
-            navigation.reset({
-              index: 0,
-              routes: [{ name: 'Login' }],
-            });
-          },
-        },
-      ]);
+      // Show success message and scroll to top
+      setMessage({
+        type: 'success',
+        text: '✅ Success! Registration successful! Redirecting to login...',
+      });
+      scrollViewRef.current?.scrollTo({ y: 0, animated: true });
+
+      // Auto-navigate to login after 4 seconds
+      setTimeout(() => {
+        navigation.reset({
+          index: 0,
+          routes: [{ name: 'Login' }],
+        });
+      }, 4000);
     } catch (error: any) {
       const errorMessage = error.response?.data?.detail || 'An error occurred during registration';
-      showAlert('❌ Registration Failed', errorMessage);
+      setMessage({
+        type: 'error',
+        text: `❌ Registration Failed: ${errorMessage}`,
+      });
+      scrollViewRef.current?.scrollTo({ y: 0, animated: true });
     } finally {
       setLoading(false);
     }
@@ -120,8 +125,18 @@ export default function RegisterStudentScreen({ navigation }: any) {
   };
 
   return (
-    <ScrollView style={styles.container}>
+    <ScrollView ref={scrollViewRef} style={styles.container}>
       <Text style={styles.title}>Student Registration</Text>
+
+      {/* Message Display */}
+      {message && (
+        <InlineMessage
+          type={message.type}
+          message={message.text}
+          onDismiss={() => setMessage(null)}
+          autoDismissMs={4000}
+        />
+      )}
 
       <Text style={styles.sectionTitle}>Personal Information</Text>
       <FormFieldWithTip

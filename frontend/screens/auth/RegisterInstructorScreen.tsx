@@ -1,11 +1,9 @@
 /**
  * Instructor Registration Screen
  */
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
-  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -13,27 +11,11 @@ import {
   View,
 } from 'react-native';
 import FormFieldWithTip from '../../components/FormFieldWithTip';
+import InlineMessage from '../../components/InlineMessage';
 import LicenseTypeSelector from '../../components/LicenseTypeSelector';
 import LocationSelector from '../../components/LocationSelector';
 import { DEBUG_CONFIG } from '../../config';
 import ApiService from '../../services/api';
-
-// Web-compatible alert function
-const showAlert = (title: string, message: string, buttons?: any[]) => {
-  console.log('[showAlert] Called with:', { title, message, platform: Platform.OS });
-  if (Platform.OS === 'web') {
-    // Use browser's native alert for web
-    const fullMessage = `${title}\n\n${message}`;
-    alert(fullMessage);
-    // Execute callback if provided
-    if (buttons && buttons[0] && buttons[0].onPress) {
-      buttons[0].onPress();
-    }
-  } else {
-    // Use React Native Alert for mobile
-    Alert.alert(title, message, buttons);
-  }
-};
 
 export default function RegisterInstructorScreen({ navigation }: any) {
   // Pre-fill with test data in development mode for faster debugging
@@ -44,10 +26,10 @@ export default function RegisterInstructorScreen({ navigation }: any) {
     phone: DEBUG_CONFIG.ENABLED ? DEBUG_CONFIG.DEFAULT_PHONE : '',
     password: '',
     confirmPassword: '',
-    first_name: __DEV__ ? 'Martin' : '',
+    first_name: __DEV__ ? 'LEEN' : '',
     last_name: __DEV__ ? 'van Deventer' : '',
-    id_number: __DEV__ ? '7901175104084' : '',
-    license_number: __DEV__ ? 'ML123456789' : '',
+    id_number: __DEV__ ? `790117510408${timestamp.slice(-1)}` : '',
+    license_number: __DEV__ ? `ABC${timestamp}` : '',
     license_types: __DEV__ ? ['B', 'EB', 'C1'] : ([] as string[]),
     vehicle_registration: __DEV__ ? 'ABC123GP' : '',
     vehicle_make: __DEV__ ? 'Toyota' : '',
@@ -63,6 +45,11 @@ export default function RegisterInstructorScreen({ navigation }: any) {
     bio: __DEV__ ? 'Experienced driving instructor with 15 years teaching Code B, EB, and C1.' : '',
   });
   const [loading, setLoading] = useState(false);
+  const [message, setMessage] = useState<{
+    type: 'success' | 'error' | 'warning' | 'info';
+    text: string;
+  } | null>(null);
+  const scrollViewRef = useRef<ScrollView>(null);
 
   const handleRegister = async () => {
     console.log('Register button clicked!');
@@ -91,30 +78,33 @@ export default function RegisterInstructorScreen({ navigation }: any) {
 
     if (missingFields.length > 0) {
       console.log('Validation failed - missing fields:', missingFields);
-      showAlert(
-        '📝 Missing Required Fields',
-        `Please fill in the following fields:\n\n${missingFields
-          .map(field => `• ${field}`)
-          .join('\n')}`
-      );
+      setMessage({
+        type: 'error',
+        text: `📝 Missing Required Fields: ${missingFields.join(', ')}`,
+      });
+      scrollViewRef.current?.scrollTo({ y: 0, animated: true });
       return;
     }
 
     if (formData.password !== formData.confirmPassword) {
-      showAlert(
-        '🔒 Password Mismatch',
-        'Passwords do not match. Please make sure both passwords are identical.'
-      );
+      setMessage({
+        type: 'error',
+        text: '🔒 Password Mismatch: Passwords do not match. Please make sure both passwords are identical.',
+      });
+      scrollViewRef.current?.scrollTo({ y: 0, animated: true });
       return;
     }
 
     if (formData.password.length < 6) {
-      showAlert(
-        '🔒 Password Too Short',
-        'Password must be at least 6 characters long for security.'
-      );
+      setMessage({
+        type: 'error',
+        text: '🔒 Password Too Short: Password must be at least 6 characters long for security.',
+      });
+      scrollViewRef.current?.scrollTo({ y: 0, animated: true });
       return;
     }
+
+    setMessage(null);
 
     setLoading(true);
 
@@ -144,21 +134,20 @@ export default function RegisterInstructorScreen({ navigation }: any) {
 
       const response = await ApiService.post('/auth/register/instructor', registrationData);
 
-      // Don't store token - require login after registration
-      // This ensures proper authentication flow and navigation
+      // Show success message and scroll to top
+      setMessage({
+        type: 'success',
+        text: '✅ Success! Registration successful! Redirecting to login...',
+      });
+      scrollViewRef.current?.scrollTo({ y: 0, animated: true });
 
-      showAlert('✅ Success!', 'Registration successful! Please login to continue.', [
-        {
-          text: 'Login Now',
-          onPress: () => {
-            // Navigate to Login screen
-            navigation.reset({
-              index: 0,
-              routes: [{ name: 'Login' }],
-            });
-          },
-        },
-      ]);
+      // Auto-navigate to login after 4 seconds
+      setTimeout(() => {
+        navigation.reset({
+          index: 0,
+          routes: [{ name: 'Login' }],
+        });
+      }, 4000);
     } catch (error: any) {
       console.error('Registration error:', error);
       console.error('Error response:', error.response);
@@ -173,13 +162,12 @@ export default function RegisterInstructorScreen({ navigation }: any) {
         errorMessage = error.message;
       }
 
-      // Make error message more user-friendly
-      if (errorMessage.includes('email or phone already exists')) {
-        errorMessage =
-          '⚠️ This email or phone number is already registered.\n\nPlease use a different email or phone number, or try logging in instead.';
-      }
-
-      showAlert('❌ Registration Failed', errorMessage);
+      // Display error message inline
+      setMessage({
+        type: 'error',
+        text: `❌ Registration Failed: ${errorMessage}`,
+      });
+      scrollViewRef.current?.scrollTo({ y: 0, animated: true });
     } finally {
       setLoading(false);
     }
@@ -191,9 +179,19 @@ export default function RegisterInstructorScreen({ navigation }: any) {
 
   return (
     <View style={styles.container}>
-      <ScrollView contentContainerStyle={styles.scrollContent}>
+      <ScrollView ref={scrollViewRef} contentContainerStyle={styles.scrollContent}>
         <Text style={styles.title}>Register as Instructor</Text>
         <Text style={styles.subtitle}>Join our driving school network</Text>
+
+        {/* Message Display */}
+        {message && (
+          <InlineMessage
+            type={message.type}
+            message={message.text}
+            onDismiss={() => setMessage(null)}
+            autoDismissMs={4000}
+          />
+        )}
 
         {/* Personal Information */}
         <Text style={styles.sectionTitle}>Personal Information</Text>
@@ -404,11 +402,7 @@ export default function RegisterInstructorScreen({ navigation }: any) {
 
         <TouchableOpacity
           style={[styles.button, loading && styles.buttonDisabled]}
-          onPress={() => {
-            console.log('!!!!! BUTTON PRESSED !!!!!');
-            Alert.alert('Debug', 'Button was clicked!');
-            handleRegister();
-          }}
+          onPress={handleRegister}
           disabled={loading}
           activeOpacity={0.7}
         >

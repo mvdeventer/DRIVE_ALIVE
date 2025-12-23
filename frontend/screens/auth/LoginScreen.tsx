@@ -33,7 +33,17 @@ export default function LoginScreen({ navigation, onAuthChange }: any) {
     setLoading(true);
 
     try {
-      await ApiService.login(emailOrPhone, password);
+      // Normalize phone number format for South African numbers
+      // Convert local format (0611154598) to international format (+27611154598)
+      let normalizedEmailOrPhone = emailOrPhone.trim();
+
+      // Check if it's a phone number starting with 0 (South African local format)
+      if (/^0\d{9}$/.test(normalizedEmailOrPhone)) {
+        // Replace leading 0 with +27
+        normalizedEmailOrPhone = '+27' + normalizedEmailOrPhone.substring(1);
+      }
+
+      await ApiService.login(normalizedEmailOrPhone, password);
 
       // On web, reload the page to trigger App.tsx to re-check auth
       if (Platform.OS === 'web') {

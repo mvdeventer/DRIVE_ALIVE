@@ -54,41 +54,91 @@ class AuthService:
         """
         Create a new instructor with profile
         """
-        # Set role to instructor
-        instructor_data.role = UserRole.INSTRUCTOR
-        # Create user
-        user = AuthService.create_user(db, instructor_data)
-
-        # Create instructor profile
-        instructor = Instructor(
-            user_id=user.id,
-            license_number=instructor_data.license_number,
-            license_types=instructor_data.license_types,
-            id_number=instructor_data.id_number,
-            vehicle_registration=instructor_data.vehicle_registration,
-            vehicle_make=instructor_data.vehicle_make,
-            vehicle_model=instructor_data.vehicle_model,
-            vehicle_year=instructor_data.vehicle_year,
-            province=instructor_data.province,
-            city=instructor_data.city,
-            suburb=instructor_data.suburb,
-            hourly_rate=instructor_data.hourly_rate,
-            service_radius_km=instructor_data.service_radius_km,
-            max_travel_distance_km=instructor_data.max_travel_distance_km,
-            rate_per_km_beyond_radius=instructor_data.rate_per_km_beyond_radius,
-            bio=instructor_data.bio,
-        )
-
-        # Auto-verify in development mode
-        if settings.AUTO_VERIFY_INSTRUCTORS:
-            instructor.is_verified = True
-            instructor.verified_at = datetime.utcnow()
-
-        db.add(instructor)
-
         try:
+            # Check if email exists
+            existing_email = db.query(User).filter(User.email == instructor_data.email).first()
+            if existing_email:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Email '{instructor_data.email}' is already registered. Please use a different email or try logging in.",
+                )
+
+            # Check if phone exists
+            existing_phone = db.query(User).filter(User.phone == instructor_data.phone).first()
+            if existing_phone:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Phone number '{instructor_data.phone}' is already registered. Please use a different phone number or try logging in.",
+                )
+
+            # Check if ID number exists
+            existing_id = db.query(Instructor).filter(Instructor.id_number == instructor_data.id_number).first()
+            if existing_id:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"ID number '{instructor_data.id_number}' is already registered. Please check your ID number.",
+                )
+
+            # Check if license number exists
+            existing_license = db.query(Instructor).filter(Instructor.license_number == instructor_data.license_number).first()
+            if existing_license:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"License number '{instructor_data.license_number}' is already registered. Please check your license number.",
+                )
+
+            # Set role to instructor
+            instructor_data.role = UserRole.INSTRUCTOR
+
+            # Create user (don't commit yet)
+            user = User(
+                email=instructor_data.email,
+                phone=instructor_data.phone,
+                first_name=instructor_data.first_name,
+                last_name=instructor_data.last_name,
+                password_hash=get_password_hash(instructor_data.password),
+                role=instructor_data.role,
+            )
+            db.add(user)
+            db.flush()  # Flush to get user.id without committing
+
+            # Create instructor profile
+            instructor = Instructor(
+                user_id=user.id,
+                license_number=instructor_data.license_number,
+                license_types=instructor_data.license_types,
+                id_number=instructor_data.id_number,
+                vehicle_registration=instructor_data.vehicle_registration,
+                vehicle_make=instructor_data.vehicle_make,
+                vehicle_model=instructor_data.vehicle_model,
+                vehicle_year=instructor_data.vehicle_year,
+                province=instructor_data.province,
+                city=instructor_data.city,
+                suburb=instructor_data.suburb,
+                hourly_rate=instructor_data.hourly_rate,
+                service_radius_km=instructor_data.service_radius_km,
+                max_travel_distance_km=instructor_data.max_travel_distance_km,
+                rate_per_km_beyond_radius=instructor_data.rate_per_km_beyond_radius,
+                bio=instructor_data.bio,
+            )
+
+            # Auto-verify in development mode
+            if settings.AUTO_VERIFY_INSTRUCTORS:
+                instructor.is_verified = True
+                instructor.verified_at = datetime.utcnow()
+
+            db.add(instructor)
+
+            # Commit both user and instructor together
             db.commit()
+            db.refresh(user)
             db.refresh(instructor)
+
+            return user, instructor
+
+        except HTTPException:
+            db.rollback()
+            raise
         except IntegrityError as e:
             db.rollback()
             # Check if it's a duplicate ID number error
@@ -97,44 +147,92 @@ class AuthService:
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail="ID number already in use. Please check your ID number.",
                 )
+            elif "license_number" in str(e.orig):
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="License number already in use. Please check your license number.",
+                )
             # Re-raise other integrity errors
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Registration failed due to duplicate data.",
             )
-
-        return user, instructor
+        except Exception as e:
+            db.rollback()
+            raise
 
     @staticmethod
     def create_student(db: Session, student_data: StudentCreate) -> tuple[User, Student]:
         """
         Create a new student with profile
         """
-        # Set role to student
-        student_data.role = UserRole.STUDENT
-        # Create user
-        user = AuthService.create_user(db, student_data)
-
-        # Create student profile
-        student = Student(
-            user_id=user.id,
-            id_number=student_data.id_number,
-            learners_permit_number=student_data.learners_permit_number,
-            emergency_contact_name=student_data.emergency_contact_name,
-            emergency_contact_phone=student_data.emergency_contact_phone,
-            address_line1=student_data.address_line1,
-            address_line2=student_data.address_line2,
-            province=student_data.province,
-            city=student_data.city,
-            suburb=student_data.suburb,
-            postal_code=student_data.postal_code,
-        )
-
-        db.add(student)
-
         try:
+            # Check if email exists
+            existing_email = db.query(User).filter(User.email == student_data.email).first()
+            if existing_email:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Email '{student_data.email}' is already registered. Please use a different email or try logging in.",
+                )
+
+            # Check if phone exists
+            existing_phone = db.query(User).filter(User.phone == student_data.phone).first()
+            if existing_phone:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Phone number '{student_data.phone}' is already registered. Please use a different phone number or try logging in.",
+                )
+
+            # Check if ID number exists
+            existing_id = db.query(Student).filter(Student.id_number == student_data.id_number).first()
+            if existing_id:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"ID number '{student_data.id_number}' is already registered. Please check your ID number.",
+                )
+
+            # Set role to student
+            student_data.role = UserRole.STUDENT
+
+            # Create user (don't commit yet)
+            user = User(
+                email=student_data.email,
+                phone=student_data.phone,
+                first_name=student_data.first_name,
+                last_name=student_data.last_name,
+                password_hash=get_password_hash(student_data.password),
+                role=student_data.role,
+            )
+            db.add(user)
+            db.flush()  # Flush to get user.id without committing
+
+            # Create student profile
+            student = Student(
+                user_id=user.id,
+                id_number=student_data.id_number,
+                learners_permit_number=student_data.learners_permit_number,
+                emergency_contact_name=student_data.emergency_contact_name,
+                emergency_contact_phone=student_data.emergency_contact_phone,
+                address_line1=student_data.address_line1,
+                address_line2=student_data.address_line2,
+                province=student_data.province,
+                city=student_data.city,
+                suburb=student_data.suburb,
+                postal_code=student_data.postal_code,
+            )
+
+            db.add(student)
+
+            # Commit both user and student together
             db.commit()
+            db.refresh(user)
             db.refresh(student)
+
+            return user, student
+
+        except HTTPException:
+            db.rollback()
+            raise
         except IntegrityError as e:
             db.rollback()
             # Check if it's a duplicate ID number error
@@ -148,8 +246,9 @@ class AuthService:
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Registration failed due to duplicate data.",
             )
-
-        return user, student
+        except Exception as e:
+            db.rollback()
+            raise
 
     @staticmethod
     def authenticate_user(db: Session, email_or_phone: str, password: str) -> Optional[User]:
