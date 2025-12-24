@@ -348,15 +348,6 @@ export default function InstructorListScreen() {
 
   return (
     <View style={styles.container}>
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
-          <Text style={styles.backButtonText}>← Back</Text>
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Find an Instructor</Text>
-        <View style={{ width: 80 }} />
-      </View>
-
       {/* Search Bar */}
       <View style={styles.searchContainer}>
         <TextInput
@@ -493,40 +484,6 @@ const styles = StyleSheet.create({
     marginTop: 16,
     fontSize: 16,
     color: '#666',
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 20,
-    backgroundColor: '#fff',
-    borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
-  },
-  backButton: {
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-  },
-  backButtonText: {
-    fontSize: 16,
-    color: '#007bff',
-    fontWeight: '600',
-  },
-  headerTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#333',
-  },
-  logoutButton: {
-    backgroundColor: '#dc3545',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 6,
-  },
-  logoutButtonText: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: '600',
   },
   searchContainer: {
     padding: 16,
@@ -684,9 +641,9 @@ const styles = StyleSheet.create({
   },
   instructorCard: {
     backgroundColor: '#fff',
-    borderRadius: 10,
-    padding: 12,
-    marginBottom: 10,
+    borderRadius: 8,
+    padding: 10,
+    marginBottom: 8,
     flex: 1,
     maxWidth: Platform.OS === 'web' ? '100%' : undefined,
     shadowColor: '#000',
@@ -696,42 +653,42 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   instructorHeader: {
-    marginBottom: 8,
+    marginBottom: 6,
   },
   nameRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 4,
+    marginBottom: 3,
   },
   instructorInfo: {
     flex: 1,
   },
   instructorName: {
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: 'bold',
     color: '#333',
     flex: 1,
   },
   vehicleInfo: {
-    fontSize: 13,
+    fontSize: 11,
     color: '#666',
   },
   availabilityBadge: {
-    paddingHorizontal: 10,
-    paddingVertical: 3,
-    borderRadius: 10,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 8,
   },
   availabilityText: {
     color: '#fff',
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: '600',
   },
   instructorDetails: {
-    marginBottom: 8,
+    marginBottom: 6,
   },
   detailRow: {
-    marginBottom: 3,
+    marginBottom: 2,
   },
   infoRow: {
     flexDirection: 'row',
@@ -739,30 +696,30 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   detailLabel: {
-    fontSize: 12,
+    fontSize: 11,
     color: '#666',
   },
   detailValue: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '600',
     color: '#333',
   },
   actionButtonsContainer: {
-    marginTop: 6,
+    marginTop: 5,
   },
   primaryButton: {
     backgroundColor: '#007bff',
-    padding: 10,
-    borderRadius: 6,
+    padding: 8,
+    borderRadius: 5,
     alignItems: 'center',
-    marginBottom: 6,
+    marginBottom: 5,
   },
   primaryButtonDisabled: {
     backgroundColor: '#6c757d',
   },
   primaryButtonText: {
     color: '#fff',
-    fontSize: 14,
+    fontSize: 12,
     fontWeight: '600',
   },
   secondaryButtonsRow: {
@@ -772,8 +729,8 @@ const styles = StyleSheet.create({
   secondaryButton: {
     flex: 1,
     backgroundColor: '#f8f9fa',
-    padding: 8,
-    borderRadius: 6,
+    padding: 6,
+    borderRadius: 5,
     alignItems: 'center',
     borderWidth: 1,
     borderColor: '#dee2e6',
@@ -781,13 +738,13 @@ const styles = StyleSheet.create({
   },
   secondaryButtonText: {
     color: '#495057',
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '600',
   },
   bookButton: {
     backgroundColor: '#007bff',
-    padding: 12,
-    borderRadius: 8,
+    padding: 10,
+    borderRadius: 6,
     alignItems: 'center',
   },
   bookButtonDisabled: {
@@ -795,7 +752,7 @@ const styles = StyleSheet.create({
   },
   bookButtonText: {
     color: '#fff',
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '600',
   },
   emptyState: {

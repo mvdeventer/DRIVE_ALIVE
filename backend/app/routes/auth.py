@@ -123,6 +123,7 @@ async def get_current_user_info(
         if instructor:
             user_data.update(
                 {
+                    "instructor_id": instructor.id,
                     "license_types": instructor.license_types,
                     "hourly_rate": float(instructor.hourly_rate),
                     "is_available": instructor.is_available,

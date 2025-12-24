@@ -326,6 +326,16 @@ class ApiService {
     });
     return response.data;
   }
+
+  async getInstructorSchedule(instructorId: number) {
+    const response = await this.api.get(`/admin/instructors/${instructorId}/schedule`);
+    return response.data;
+  }
+
+  async getInstructorTimeOff(instructorId: number) {
+    const response = await this.api.get(`/admin/instructors/${instructorId}/time-off`);
+    return response.data;
+  }
 }
 
 export default new ApiService();

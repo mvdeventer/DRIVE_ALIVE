@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 
 from ..database import get_db
 from ..middleware.admin import require_admin
+from ..models.availability import InstructorSchedule, TimeOffException
 from ..models.booking import Booking, BookingStatus
 from ..models.user import Instructor, Student, User, UserRole, UserStatus
 from ..schemas.admin import (
@@ -238,19 +239,34 @@ async def get_all_users(
 
     users = query.offset(skip).limit(limit).all()
 
-    return [
-        UserManagementResponse(
-            id=user.id,
-            email=user.email,
-            phone=user.phone,
-            full_name=user.full_name,
-            role=user.role,
-            status=user.status,
-            created_at=user.created_at,
-            last_login=user.last_login,
+    result = []
+    for user in users:
+        # Get id_number from instructor or student profile
+        id_number = None
+        if user.role == UserRole.INSTRUCTOR:
+            instructor = db.query(Instructor).filter(Instructor.user_id == user.id).first()
+            if instructor:
+                id_number = instructor.id_number
+        elif user.role == UserRole.STUDENT:
+            student = db.query(Student).filter(Student.user_id == user.id).first()
+            if student:
+                id_number = student.id_number
+
+        result.append(
+            UserManagementResponse(
+                id=user.id,
+                email=user.email,
+                phone=user.phone,
+                full_name=user.full_name,
+                role=user.role,
+                status=user.status,
+                id_number=id_number,
+                created_at=user.created_at,
+                last_login=user.last_login,
+            )
         )
-        for user in users
-    ]
+
+    return result
 
 
 @router.put("/users/{user_id}/status")
@@ -297,11 +313,12 @@ async def get_all_bookings(
     current_admin: Annotated[User, Depends(require_admin)],
     db: Session = Depends(get_db),
     status_filter: Optional[BookingStatus] = Query(None),
+    instructor_id: Optional[int] = Query(None),
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
 ):
     """
-    Get overview of all bookings with optional status filter
+    Get overview of all bookings with optional status filter and instructor filter
     """
     # Auto-update past pending bookings to completed
     from ..routes.bookings import auto_update_past_bookings
@@ -312,6 +329,9 @@ async def get_all_bookings(
 
     if status_filter:
         query = query.filter(Booking.status == status_filter)
+
+    if instructor_id:
+        query = query.filter(Booking.instructor_id == instructor_id)
 
     bookings = query.order_by(Booking.lesson_date.desc()).offset(skip).limit(limit).all()
 
@@ -329,6 +349,7 @@ async def get_all_bookings(
                 student_id=booking.student_id,
                 student_name=student_user.full_name if student_user else "Unknown",
                 student_id_number=student.id_number if student else "Unknown",
+                student_phone=student_user.phone if student_user else None,
                 instructor_id=booking.instructor_id,
                 instructor_name=instructor_user.full_name if instructor_user else "Unknown",
                 instructor_id_number=instructor.id_number if instructor else "Unknown",
@@ -624,3 +645,82 @@ async def admin_reset_password(
         "message": f"Password reset successfully for {user.full_name}",
         "user_id": user_id,
     }
+
+
+# ==================== Instructor Schedule & Time Off Viewing ====================
+
+
+@router.get("/instructors/{instructor_id}/schedule")
+async def get_instructor_schedule(
+    instructor_id: int,
+    current_admin: Annotated[User, Depends(require_admin)],
+    db: Session = Depends(get_db),
+):
+    """
+    Get instructor's weekly schedule (admin view)
+    """
+    print(f"🔍 Fetching schedule for instructor_id: {instructor_id}")
+
+    instructor = db.query(Instructor).filter(Instructor.id == instructor_id).first()
+    if not instructor:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Instructor not found",
+        )
+
+    print(f"✅ Found instructor: {instructor.id}")
+
+    schedules = db.query(InstructorSchedule).filter(InstructorSchedule.instructor_id == instructor_id).all()
+
+    print(f"📅 Found {len(schedules)} schedule records")
+    for sched in schedules:
+        print(f"   - {sched.day_of_week.value}: {sched.start_time} - {sched.end_time} (Active: {sched.is_active})")
+
+    result = [
+        {
+            "id": sched.id,
+            "day_of_week": sched.day_of_week.value,
+            "start_time": sched.start_time.strftime("%H:%M"),
+            "end_time": sched.end_time.strftime("%H:%M"),
+            "is_active": sched.is_active,
+        }
+        for sched in schedules
+    ]
+
+    print(f"📤 Returning {len(result)} schedule items")
+    print(f"   Result: {result}")
+
+    return result
+
+
+@router.get("/instructors/{instructor_id}/time-off")
+async def get_instructor_time_off(
+    instructor_id: int,
+    current_admin: Annotated[User, Depends(require_admin)],
+    db: Session = Depends(get_db),
+):
+    """
+    Get instructor's time off dates - ALL dates including past ones (admin view)
+    """
+    instructor = db.query(Instructor).filter(Instructor.id == instructor_id).first()
+    if not instructor:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Instructor not found",
+        )
+
+    # Get ALL time off dates (no filtering by date)
+    time_offs = db.query(TimeOffException).filter(TimeOffException.instructor_id == instructor_id).all()
+
+    return [
+        {
+            "id": time_off.id,
+            "start_date": time_off.start_date.strftime("%Y-%m-%d"),
+            "end_date": time_off.end_date.strftime("%Y-%m-%d"),
+            "start_time": time_off.start_time.strftime("%H:%M") if time_off.start_time else None,
+            "end_time": time_off.end_time.strftime("%H:%M") if time_off.end_time else None,
+            "reason": time_off.reason,
+            "notes": time_off.notes,
+        }
+        for time_off in time_offs
+    ]

@@ -91,15 +91,6 @@ export default function RevenueAnalyticsScreen() {
       style={styles.container}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
     >
-      <View style={styles.header}>
-        <View style={styles.headerContent}>
-          <View style={styles.headerTextContainer}>
-            <Text style={styles.headerTitle}>Revenue Analytics</Text>
-            <Text style={styles.headerSubtitle}>Financial Overview</Text>
-          </View>
-        </View>
-      </View>
-
       {error && <InlineMessage message={error} type="error" />}
 
       {stats && (
@@ -198,40 +189,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#666',
   },
-  header: {
-    backgroundColor: '#0066CC',
-    padding: 20,
-    paddingTop: 40,
-  },
-  headerContent: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  headerTextContainer: {
-    flex: 1,
-  },
-  headerTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#FFF',
-  },
-  headerSubtitle: {
-    fontSize: 16,
-    color: '#E0E0E0',
-    marginTop: 5,
-  },
-  logoutButton: {
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    paddingHorizontal: 15,
-    paddingVertical: 8,
-    borderRadius: 6,
-  },
-  logoutButtonText: {
-    color: '#FFF',
-    fontSize: 14,
-    fontWeight: '600',
-  },
+
   section: {
     backgroundColor: '#FFF',
     padding: 15,
@@ -248,19 +206,19 @@ const styles = StyleSheet.create({
   },
   revenueCard: {
     backgroundColor: '#F8F9FA',
-    borderRadius: 8,
-    padding: 15,
+    borderRadius: 6,
+    padding: 10,
   },
   revenueItem: {
-    paddingVertical: 10,
+    paddingVertical: 8,
   },
   revenueLabel: {
-    fontSize: 14,
+    fontSize: 12,
     color: '#666',
-    marginBottom: 5,
+    marginBottom: 4,
   },
   revenueValue: {
-    fontSize: 24,
+    fontSize: 20,
     fontWeight: 'bold',
     color: '#333',
   },
@@ -273,27 +231,27 @@ const styles = StyleSheet.create({
   divider: {
     height: 1,
     backgroundColor: '#E0E0E0',
-    marginVertical: 5,
+    marginVertical: 4,
   },
   instructorCard: {
     flexDirection: 'row',
     backgroundColor: '#F8F9FA',
-    borderRadius: 8,
-    padding: 15,
-    marginBottom: 10,
+    borderRadius: 6,
+    padding: 10,
+    marginBottom: 8,
     alignItems: 'center',
   },
   rankBadge: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 35,
+    height: 35,
+    borderRadius: 18,
     backgroundColor: '#0066CC',
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 15,
+    marginRight: 12,
   },
   rankText: {
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: 'bold',
     color: '#FFF',
   },
@@ -301,17 +259,17 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   instructorName: {
-    fontSize: 16,
+    fontSize: 13,
     fontWeight: 'bold',
     color: '#333',
-    marginBottom: 5,
+    marginBottom: 4,
   },
   instructorStats: {
     flexDirection: 'row',
     justifyContent: 'space-between',
   },
   instructorStat: {
-    fontSize: 12,
+    fontSize: 10,
     color: '#666',
   },
   metricsGrid: {
@@ -321,19 +279,19 @@ const styles = StyleSheet.create({
   metricCard: {
     flex: 1,
     backgroundColor: '#F8F9FA',
-    borderRadius: 8,
-    padding: 15,
-    marginHorizontal: 5,
+    borderRadius: 6,
+    padding: 10,
+    marginHorizontal: 4,
     alignItems: 'center',
   },
   metricValue: {
-    fontSize: 20,
+    fontSize: 16,
     fontWeight: 'bold',
     color: '#0066CC',
-    marginBottom: 5,
+    marginBottom: 4,
   },
   metricLabel: {
-    fontSize: 12,
+    fontSize: 10,
     color: '#666',
     textAlign: 'center',
   },

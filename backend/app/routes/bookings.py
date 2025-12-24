@@ -255,6 +255,11 @@ async def create_bulk_bookings(
     for booking_data in bookings_data:
         instructor = instructor_map[booking_data.instructor_id]
         lesson_datetime = booking_data.lesson_date
+
+        # Ensure datetime is timezone-aware (assume UTC if naive)
+        if lesson_datetime.tzinfo is None:
+            lesson_datetime = lesson_datetime.replace(tzinfo=timezone.utc)
+
         lesson_end = lesson_datetime + timedelta(minutes=booking_data.duration_minutes)
         lesson_date = lesson_datetime.date()
         lesson_time = lesson_datetime.time()
@@ -334,9 +339,13 @@ async def create_bulk_bookings(
         )
 
         for existing in existing_bookings:
-            existing_end = existing.lesson_date + timedelta(minutes=existing.duration_minutes)
+            # Make existing booking datetime timezone-aware if needed
+            existing_lesson_date = existing.lesson_date
+            if existing_lesson_date.tzinfo is None:
+                existing_lesson_date = existing_lesson_date.replace(tzinfo=timezone.utc)
+            existing_end = existing_lesson_date + timedelta(minutes=existing.duration_minutes)
             # Check for overlap
-            if not (existing_end <= lesson_datetime or existing.lesson_date >= lesson_end):
+            if not (existing_end <= lesson_datetime or existing_lesson_date >= lesson_end):
                 raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Time slot {lesson_datetime} conflicts with an existing booking")
 
         # Check for student's existing bookings with ANY instructor (prevent double-booking)
@@ -350,9 +359,13 @@ async def create_bulk_bookings(
         )
 
         for existing in student_existing_bookings:
-            existing_end = existing.lesson_date + timedelta(minutes=existing.duration_minutes)
+            # Make existing booking datetime timezone-aware if needed
+            existing_lesson_date = existing.lesson_date
+            if existing_lesson_date.tzinfo is None:
+                existing_lesson_date = existing_lesson_date.replace(tzinfo=timezone.utc)
+            existing_end = existing_lesson_date + timedelta(minutes=existing.duration_minutes)
             # Check for overlap
-            if not (existing_end <= lesson_datetime or existing.lesson_date >= lesson_end):
+            if not (existing_end <= lesson_datetime or existing_lesson_date >= lesson_end):
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail=f"You already have a booking at {lesson_datetime}. You cannot book multiple lessons at the same time.",
@@ -360,18 +373,23 @@ async def create_bulk_bookings(
 
         # Check for conflicts with other bookings in this batch
         for other_booking in new_bookings:
+            # Ensure other booking datetime is timezone-aware
+            other_lesson_date = other_booking["lesson_date"]
+            if other_lesson_date.tzinfo is None:
+                other_lesson_date = other_lesson_date.replace(tzinfo=timezone.utc)
+
             # Check same instructor conflicts
             if other_booking["instructor_id"] == instructor.id:
-                other_end = other_booking["lesson_date"] + timedelta(minutes=other_booking["duration_minutes"])
-                if not (other_end <= lesson_datetime or other_booking["lesson_date"] >= lesson_end):
+                other_end = other_lesson_date + timedelta(minutes=other_booking["duration_minutes"])
+                if not (other_end <= lesson_datetime or other_lesson_date >= lesson_end):
                     raise HTTPException(
                         status_code=status.HTTP_400_BAD_REQUEST,
                         detail=f"Multiple bookings in your request conflict with each other at {lesson_datetime}",
                     )
             # Check student's overlapping bookings (different instructors)
             else:
-                other_end = other_booking["lesson_date"] + timedelta(minutes=other_booking["duration_minutes"])
-                if not (other_end <= lesson_datetime or other_booking["lesson_date"] >= lesson_end):
+                other_end = other_lesson_date + timedelta(minutes=other_booking["duration_minutes"])
+                if not (other_end <= lesson_datetime or other_lesson_date >= lesson_end):
                     raise HTTPException(
                         status_code=status.HTTP_400_BAD_REQUEST,
                         detail=f"You cannot book multiple lessons at the same time ({lesson_datetime}). Please choose different times.",
@@ -805,6 +823,9 @@ async def reschedule_booking(
     # Parse new datetime
     try:
         new_lesson_datetime = datetime.fromisoformat(reschedule_data.new_datetime.replace("Z", "+00:00"))
+        # Make timezone-aware if naive (treat as local SAST time = UTC+2)
+        if new_lesson_datetime.tzinfo is None:
+            new_lesson_datetime = new_lesson_datetime.replace(tzinfo=timezone.utc)
     except ValueError:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid datetime format. Use ISO format (YYYY-MM-DDTHH:MM:SS)")
 
@@ -852,9 +873,13 @@ async def reschedule_booking(
     )
 
     for existing in existing_bookings:
-        existing_end = existing.lesson_date + timedelta(minutes=existing.duration_minutes)
+        # Make existing booking datetime timezone-aware if needed
+        existing_lesson_date = existing.lesson_date
+        if existing_lesson_date.tzinfo is None:
+            existing_lesson_date = existing_lesson_date.replace(tzinfo=timezone.utc)
+        existing_end = existing_lesson_date + timedelta(minutes=existing.duration_minutes)
         # Check for overlap
-        if not (existing_end <= new_lesson_datetime or existing.lesson_date >= lesson_end):
+        if not (existing_end <= new_lesson_datetime or existing_lesson_date >= lesson_end):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST, detail=f"Time slot conflicts with an existing booking at {existing.lesson_date}"
             )
@@ -871,9 +896,13 @@ async def reschedule_booking(
     )
 
     for existing in student_bookings:
-        existing_end = existing.lesson_date + timedelta(minutes=existing.duration_minutes)
+        # Make existing booking datetime timezone-aware if needed
+        existing_lesson_date = existing.lesson_date
+        if existing_lesson_date.tzinfo is None:
+            existing_lesson_date = existing_lesson_date.replace(tzinfo=timezone.utc)
+        existing_end = existing_lesson_date + timedelta(minutes=existing.duration_minutes)
         # Check for overlap
-        if not (existing_end <= new_lesson_datetime or existing.lesson_date >= lesson_end):
+        if not (existing_end <= new_lesson_datetime or existing_lesson_date >= lesson_end):
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Student has another booking at this time")
 
     # Check instructor's schedule

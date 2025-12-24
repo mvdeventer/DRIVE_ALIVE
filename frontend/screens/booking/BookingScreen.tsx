@@ -7,6 +7,7 @@ import * as SecureStore from 'expo-secure-store';
 import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
+  Modal,
   Platform,
   ScrollView,
   StyleSheet,
@@ -15,14 +16,9 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import CalendarPicker from '../../components/CalendarPicker';
 import InlineMessage from '../../components/InlineMessage';
 import ApiService from '../../services/api';
-
-// Conditional import for DateTimePicker
-let DateTimePicker: any;
-if (Platform.OS !== 'web') {
-  DateTimePicker = require('@react-native-community/datetimepicker').default;
-}
 
 interface Instructor {
   id: number;
@@ -85,6 +81,11 @@ export default function BookingScreen() {
   // Step-by-step booking flow
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [showDatePicker, setShowDatePicker] = useState(false);
+  const [showCalendarModal, setShowCalendarModal] = useState(false);
+  const [instructorTimeOff, setInstructorTimeOff] = useState<Date[]>([]);
+  const [fullyBookedDates, setFullyBookedDates] = useState<Date[]>([]);
+  const [instructorSchedule, setInstructorSchedule] = useState<string[]>([]);
+  const [unavailableDays, setUnavailableDays] = useState<Date[]>([]);
   const [availableSlotsForDate, setAvailableSlotsForDate] = useState<TimeSlot[]>([]);
   const [loadingSlots, setLoadingSlots] = useState(false);
   const [selectedBookings, setSelectedBookings] = useState<SelectedBooking[]>([]);
@@ -102,9 +103,12 @@ export default function BookingScreen() {
     fee: number;
   } | null>(null);
 
-  // Load existing bookings on mount
+  // Load existing bookings and instructor time-off on mount
   useEffect(() => {
     loadExistingBookings();
+    loadInstructorTimeOff();
+    loadFullyBookedDates();
+    loadInstructorSchedule();
   }, [instructor.instructor_id]);
 
   // Track unsaved changes (selected bookings or form data)
@@ -156,6 +160,124 @@ export default function BookingScreen() {
     });
     return unsubscribe;
   }, [navigation, hasUnsavedChanges, selectedBookings.length]);
+
+  const loadInstructorTimeOff = async () => {
+    try {
+      const response = await ApiService.get(
+        `/availability/instructor/${instructor.instructor_id}/time-off`
+      );
+      const timeOffDates: Date[] = [];
+
+      if (response.data && Array.isArray(response.data)) {
+        response.data.forEach((period: any) => {
+          const start = new Date(period.start_date + 'T00:00:00');
+          const end = new Date(period.end_date + 'T00:00:00');
+
+          // Add all dates in the range
+          for (let date = new Date(start); date <= end; date.setDate(date.getDate() + 1)) {
+            timeOffDates.push(new Date(date));
+          }
+        });
+      }
+
+      setInstructorTimeOff(timeOffDates);
+      console.log('📅 Instructor time-off dates loaded:', timeOffDates.length);
+    } catch (error) {
+      console.error('Error loading instructor time-off:', error);
+    }
+  };
+
+  const loadInstructorSchedule = async () => {
+    try {
+      console.log('📋 Loading instructor schedule...');
+      const response = await ApiService.get(
+        `/availability/instructor/${instructor.instructor_id}/schedule`
+      );
+
+      // Extract active days (lowercase for comparison)
+      const activeDays: string[] = response.data.map((sched: any) =>
+        sched.day_of_week.toLowerCase()
+      );
+
+      setInstructorSchedule(activeDays);
+      console.log('✅ Instructor active days:', activeDays);
+
+      // Calculate unavailable days for the next 90 days
+      const unavailable: Date[] = [];
+      const today = new Date();
+      const endDate = new Date(today);
+      endDate.setDate(endDate.getDate() + 90);
+
+      const dayNames = [
+        'sunday',
+        'monday',
+        'tuesday',
+        'wednesday',
+        'thursday',
+        'friday',
+        'saturday',
+      ];
+
+      for (let d = new Date(today); d <= endDate; d.setDate(d.getDate() + 1)) {
+        const dayName = dayNames[d.getDay()];
+        if (!activeDays.includes(dayName)) {
+          unavailable.push(new Date(d));
+        }
+      }
+
+      setUnavailableDays(unavailable);
+      console.log('🚫 Unavailable days count:', unavailable.length);
+    } catch (error) {
+      console.error('Error loading instructor schedule:', error);
+    }
+  };
+
+  const loadFullyBookedDates = async () => {
+    try {
+      // Get the next 60 days of availability to find fully booked dates (backend limit)
+      const today = new Date();
+      const endDate = new Date(today);
+      endDate.setDate(endDate.getDate() + 60);
+
+      const startDateStr = today.toISOString().split('T')[0];
+      const endDateStr = endDate.toISOString().split('T')[0];
+
+      console.log('🔍 Loading fully booked dates from', startDateStr, 'to', endDateStr);
+
+      const response = await ApiService.get(
+        `/availability/instructor/${instructor.instructor_id}/slots`,
+        {
+          params: {
+            start_date: startDateStr,
+            end_date: endDateStr,
+            duration_minutes: parseInt(formData.duration_minutes) || 60,
+            show_booked: true,
+          },
+        }
+      );
+
+      const fullyBooked: Date[] = [];
+
+      if (response.data.availability && Array.isArray(response.data.availability)) {
+        response.data.availability.forEach((dayData: any) => {
+          // A day is fully booked if it has slots AND all slots are booked
+          if (dayData.slots && dayData.slots.length > 0) {
+            const allSlotsBooked = dayData.slots.every((slot: TimeSlot) => slot.is_booked);
+            if (allSlotsBooked) {
+              const bookedDate = new Date(dayData.date + 'T00:00:00');
+              fullyBooked.push(bookedDate);
+              console.log('🔴 Fully booked date found:', dayData.date);
+            }
+          }
+        });
+      }
+
+      setFullyBookedDates(fullyBooked);
+      console.log('🔴 Total fully booked dates:', fullyBooked.length);
+    } catch (error) {
+      console.error('Error loading fully booked dates:', error);
+    }
+  };
 
   const loadExistingBookings = async () => {
     try {
@@ -487,7 +609,11 @@ export default function BookingScreen() {
   const loadSlotsWithDuration = async (date: Date, durationMinutes: number) => {
     try {
       setLoadingSlots(true);
-      const dateStr = date.toISOString().split('T')[0];
+      // Use local date to avoid timezone shifts
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const day = String(date.getDate()).padStart(2, '0');
+      const dateStr = `${year}-${month}-${day}`;
 
       console.log('Loading slots for date:', dateStr);
       console.log('Duration:', durationMinutes, 'minutes');
@@ -625,15 +751,6 @@ export default function BookingScreen() {
 
   return (
     <View style={styles.container}>
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity style={styles.headerBackButton} onPress={() => navigation.goBack()}>
-          <Text style={styles.headerBackButtonText}>← Back</Text>
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Book a Lesson</Text>
-        <View style={{ width: 80 }} />
-      </View>
-
       {/* Inline Message Display */}
       {message && (
         <View style={{ marginHorizontal: 16, marginTop: 8 }}>
@@ -716,145 +833,34 @@ export default function BookingScreen() {
             </View>
           </View>
 
+          {/* Date Selection - Above Title */}
+          {!showSlotSelection && (
+            <View style={styles.formGroup}>
+              <Text style={styles.instructionText}>Step 1: Select a date</Text>
+              <TouchableOpacity
+                style={styles.datePickerButton}
+                onPress={() => setShowCalendarModal(true)}
+              >
+                <Text style={styles.datePickerIcon}>📅</Text>
+                <Text style={styles.datePickerText}>
+                  {selectedDate
+                    ? selectedDate.toLocaleDateString('en-ZA', {
+                        weekday: 'short',
+                        year: 'numeric',
+                        month: 'short',
+                        day: 'numeric',
+                      })
+                    : 'Click to Select Date'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          )}
+
           {/* Step-by-Step Date and Time Selection */}
           <View style={styles.formGroup}>
             <Text style={styles.label}>
               Add Lesson Date & Time <Text style={styles.required}>*</Text>
             </Text>
-
-            {/* Selected Bookings Display */}
-            {selectedBookings.length > 0 && (
-              <View style={styles.selectedBookingsContainer}>
-                <View style={styles.selectedBookingsHeader}>
-                  <Text style={styles.selectedBookingsTitle}>
-                    📅 Selected Lessons ({selectedBookings.length})
-                  </Text>
-                </View>
-                {selectedBookings.map((booking, index) => (
-                  <View key={index} style={styles.selectedBookingCard}>
-                    <View style={styles.selectedBookingInfo}>
-                      <Text style={styles.selectedBookingDate}>
-                        {new Date(booking.date + 'T00:00:00').toLocaleDateString('en-ZA', {
-                          weekday: 'short',
-                          year: 'numeric',
-                          month: 'short',
-                          day: 'numeric',
-                        })}
-                      </Text>
-                      <Text style={styles.selectedBookingTime}>
-                        🕐 {booking.time} ({booking.slot.duration_minutes} min)
-                      </Text>
-                      <Text style={styles.selectedBookingDetails}>
-                        💰 R
-                        {((instructor.hourly_rate * booking.slot.duration_minutes) / 60).toFixed(2)}
-                      </Text>
-                      {booking.pickup_address && (
-                        <Text style={styles.selectedBookingAddress}>
-                          📍 {booking.pickup_address}
-                        </Text>
-                      )}
-                    </View>
-                    <TouchableOpacity
-                      style={styles.removeBookingButton}
-                      onPress={() => handleRemoveBooking(index)}
-                    >
-                      <Text style={styles.removeBookingButtonText}>✕</Text>
-                    </TouchableOpacity>
-                  </View>
-                ))}
-
-                <TouchableOpacity
-                  style={styles.addAnotherButton}
-                  onPress={handleAddAnotherDateTime}
-                >
-                  <Text style={styles.addAnotherButtonText}>➕ Add Another Date/Time</Text>
-                </TouchableOpacity>
-              </View>
-            )}
-
-            {!showSlotSelection && (
-              <View>
-                <Text style={styles.instructionText}>Step 1: Select a date from the calendar</Text>
-                {Platform.OS === 'web' ? (
-                  <View>
-                    <TouchableOpacity
-                      style={styles.bigCalendarButton}
-                      onPress={() => {
-                        const input = document.getElementById(
-                          'booking-date-input'
-                        ) as HTMLInputElement;
-                        if (input) input.showPicker();
-                      }}
-                    >
-                      <Text style={styles.bigCalendarIcon}>📅</Text>
-                      <Text style={styles.bigCalendarText}>
-                        {selectedDate
-                          ? selectedDate.toLocaleDateString('en-ZA', {
-                              weekday: 'short',
-                              year: 'numeric',
-                              month: 'short',
-                              day: 'numeric',
-                            })
-                          : 'Click to Select Date'}
-                      </Text>
-                    </TouchableOpacity>
-                    <input
-                      id="booking-date-input"
-                      type="date"
-                      min={new Date().toISOString().split('T')[0]}
-                      max={
-                        new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
-                      }
-                      value={selectedDate ? selectedDate.toISOString().split('T')[0] : ''}
-                      style={{
-                        position: 'absolute',
-                        opacity: 0,
-                        pointerEvents: 'none',
-                      }}
-                      onChange={(e: any) => {
-                        const date = new Date(e.target.value + 'T00:00:00');
-                        handleDateSelect(date);
-                      }}
-                    />
-                  </View>
-                ) : (
-                  <View>
-                    <TouchableOpacity
-                      style={styles.bigCalendarButton}
-                      onPress={() => setShowDatePicker(true)}
-                    >
-                      <Text style={styles.bigCalendarIcon}>📅</Text>
-                      <Text style={styles.bigCalendarText}>
-                        {selectedDate
-                          ? selectedDate.toLocaleDateString('en-ZA', {
-                              weekday: 'short',
-                              year: 'numeric',
-                              month: 'short',
-                              day: 'numeric',
-                            })
-                          : 'Tap to Select Date'}
-                      </Text>
-                    </TouchableOpacity>
-                    {showDatePicker && DateTimePicker && (
-                      <DateTimePicker
-                        value={selectedDate || new Date()}
-                        mode="date"
-                        display="default"
-                        minimumDate={new Date()}
-                        maximumDate={new Date(Date.now() + 90 * 24 * 60 * 60 * 1000)}
-                        onChange={(event: any, date?: Date) => {
-                          if (date) {
-                            handleDateSelect(date);
-                          } else {
-                            setShowDatePicker(false);
-                          }
-                        }}
-                      />
-                    )}
-                  </View>
-                )}
-              </View>
-            )}
 
             {/* Loading Slots */}
             {loadingSlots && (
@@ -1029,6 +1035,56 @@ export default function BookingScreen() {
                 )}
               </View>
             )}
+
+            {/* Selected Bookings Display */}
+            {selectedBookings.length > 0 && (
+              <View style={styles.selectedBookingsContainer}>
+                <View style={styles.selectedBookingsHeader}>
+                  <Text style={styles.selectedBookingsTitle}>
+                    📅 Selected Lessons ({selectedBookings.length})
+                  </Text>
+                </View>
+                {selectedBookings.map((booking, index) => (
+                  <View key={index} style={styles.selectedBookingCard}>
+                    <View style={styles.selectedBookingInfo}>
+                      <Text style={styles.selectedBookingDate}>
+                        {new Date(booking.date + 'T00:00:00').toLocaleDateString('en-ZA', {
+                          weekday: 'short',
+                          year: 'numeric',
+                          month: 'short',
+                          day: 'numeric',
+                        })}
+                      </Text>
+                      <Text style={styles.selectedBookingTime}>
+                        🕐 {booking.time} ({booking.slot.duration_minutes} min)
+                      </Text>
+                      <Text style={styles.selectedBookingDetails}>
+                        💰 R
+                        {((instructor.hourly_rate * booking.slot.duration_minutes) / 60).toFixed(2)}
+                      </Text>
+                      {booking.pickup_address && (
+                        <Text style={styles.selectedBookingAddress}>
+                          📍 {booking.pickup_address}
+                        </Text>
+                      )}
+                    </View>
+                    <TouchableOpacity
+                      style={styles.removeBookingButton}
+                      onPress={() => handleRemoveBooking(index)}
+                    >
+                      <Text style={styles.removeBookingButtonText}>✕</Text>
+                    </TouchableOpacity>
+                  </View>
+                ))}
+
+                <TouchableOpacity
+                  style={styles.addAnotherButton}
+                  onPress={handleAddAnotherDateTime}
+                >
+                  <Text style={styles.addAnotherButtonText}>➕ Add Another Date/Time</Text>
+                </TouchableOpacity>
+              </View>
+            )}
           </View>
 
           <View style={styles.formGroup}>
@@ -1108,6 +1164,45 @@ export default function BookingScreen() {
           </Text>
         </TouchableOpacity>
       </ScrollView>
+
+      {/* Calendar Modal */}
+      <Modal
+        visible={showCalendarModal}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setShowCalendarModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.calendarModalContent}>
+            <View style={styles.calendarModalHeader}>
+              <Text style={styles.calendarModalTitle}>📅 Select Date</Text>
+              <TouchableOpacity
+                onPress={() => setShowCalendarModal(false)}
+                style={styles.calendarModalClose}
+              >
+                <Text style={styles.calendarModalCloseText}>✕</Text>
+              </TouchableOpacity>
+            </View>
+            <CalendarPicker
+              value={selectedDate || new Date()}
+              onChange={date => {
+                handleDateSelect(date);
+                setShowCalendarModal(false);
+              }}
+              minDate={new Date()}
+              maxDate={new Date(Date.now() + 90 * 24 * 60 * 60 * 1000)}
+              timeOffDates={instructorTimeOff}
+              noScheduleDates={unavailableDays}
+              fullyBookedDates={fullyBookedDates}
+            />
+            <View style={styles.calendarLegendContainer}>
+              <Text style={styles.noScheduleLegend}>⚫ Grey = No schedule</Text>
+              <Text style={styles.timeOffLegend}>🟧 Orange = Time-off</Text>
+              <Text style={styles.fullyBookedLegend}>🟥 Red = Fully booked</Text>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -1116,40 +1211,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#f5f5f5',
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 20,
-    backgroundColor: '#fff',
-    borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
-  },
-  headerBackButton: {
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-  },
-  headerBackButtonText: {
-    fontSize: 16,
-    color: '#007bff',
-    fontWeight: '600',
-  },
-  headerTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#333',
-  },
-  logoutButton: {
-    backgroundColor: '#dc3545',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 6,
-  },
-  logoutButtonText: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: '600',
   },
   scrollView: {
     flex: 1,
@@ -1756,5 +1817,77 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 14,
     fontWeight: '600',
+  },
+  datePickerButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+    borderWidth: 2,
+    borderColor: '#007bff',
+    borderRadius: 8,
+    padding: 16,
+    marginTop: 12,
+    gap: 12,
+  },
+  datePickerIcon: {
+    fontSize: 24,
+  },
+  datePickerText: {
+    fontSize: 16,
+    color: '#333',
+    flex: 1,
+  },
+  calendarModalContent: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 20,
+    maxWidth: 400,
+    width: '90%',
+  },
+  calendarModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  calendarModalTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#333',
+  },
+  calendarModalClose: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#f0f0f0',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  calendarModalCloseText: {
+    fontSize: 20,
+    color: '#666',
+    fontWeight: 'bold',
+  },
+  calendarLegendContainer: {
+    marginTop: 12,
+    gap: 4,
+  },
+  noScheduleLegend: {
+    fontSize: 12,
+    color: '#666',
+    textAlign: 'center',
+    fontStyle: 'italic',
+  },
+  timeOffLegend: {
+    fontSize: 12,
+    color: '#666',
+    textAlign: 'center',
+    fontStyle: 'italic',
+  },
+  fullyBookedLegend: {
+    fontSize: 12,
+    color: '#666',
+    textAlign: 'center',
+    fontStyle: 'italic',
   },
 });

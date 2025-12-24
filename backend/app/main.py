@@ -20,30 +20,28 @@ Base.metadata.create_all(bind=engine)
 app = FastAPI(title="Driving School Booking API", description="API for South African driving school booking system", version="1.0.0")
 
 # Configure CORS - Allow specific origins with credentials
-# TEMPORARY: Allow all origins for mobile testing debugging
-origins = ["*"]  # Allow all origins temporarily
-# origins = [
-#     "http://localhost:8081",
-#     "http://localhost:8082",
-#     "http://localhost:8080",
-#     "http://localhost:3000",
-#     "http://127.0.0.1:8081",
-#     "http://127.0.0.1:8082",
-#     "http://127.0.0.1:8080",
-#     "http://127.0.0.1:3000",
-#     "http://localhost:19000",
-#     "http://localhost:19001",
-#     "http://localhost:19006",
-#     "http://10.0.0.121:8081",  # Allow connections from local network (for mobile testing)
-#     "http://10.0.0.121:8082",
-#     "http://10.0.0.121:19000",
-#     "http://10.0.0.121:19006",
-# ]
+origins = [
+    "http://localhost:8081",
+    "http://localhost:8082",
+    "http://localhost:8080",
+    "http://localhost:3000",
+    "http://127.0.0.1:8081",
+    "http://127.0.0.1:8082",
+    "http://127.0.0.1:8080",
+    "http://127.0.0.1:3000",
+    "http://localhost:19000",
+    "http://localhost:19001",
+    "http://localhost:19006",
+    "http://10.0.0.121:8081",  # Allow connections from local network (for mobile testing)
+    "http://10.0.0.121:8082",
+    "http://10.0.0.121:19000",
+    "http://10.0.0.121:19006",
+]
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,  # Wildcard for testing
-    allow_credentials=False,  # Must be False with wildcard
+    allow_origins=origins,  # Specific origins for credentials support
+    allow_credentials=True,  # Must be True with specific origins
     allow_methods=["*"],
     allow_headers=["*"],
     expose_headers=["*"],

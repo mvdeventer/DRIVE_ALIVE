@@ -192,6 +192,11 @@ echo.
 :: Always stop any existing servers first with graceful shutdown
 echo %COLOR_YELLOW%Stopping any existing servers...%COLOR_RESET%
 
+:: First: List and kill all Python processes from this project
+echo %COLOR_CYAN%Checking for existing Python processes from this project...%COLOR_RESET%
+powershell -Command "$processes = Get-Process python -ErrorAction SilentlyContinue | Where-Object {$_.Path -like '*DRIVE_ALIVE*'}; if ($processes) { Write-Host '  Found Python processes:' -ForegroundColor Yellow; $processes | Select-Object Id, @{Name='Path';Expression={$_.Path.Substring($_.Path.LastIndexOf('\')+1)}} | Format-Table -AutoSize; Write-Host '  Stopping project Python processes...' -ForegroundColor Yellow; $processes | Stop-Process -Force; Write-Host '  All project Python processes stopped.' -ForegroundColor Green } else { Write-Host '  No project Python processes found.' -ForegroundColor Green }"
+echo.
+
 :: Kill CMD windows by process ID using WMIC
 for /f "tokens=2 delims=," %%a in ('wmic process where "name='cmd.exe' and CommandLine like '%%Drive Alive - Backend%%'" get ProcessId /format:csv 2^>nul ^| findstr /r "[0-9]"') do (
     taskkill /F /PID %%a >nul 2>&1

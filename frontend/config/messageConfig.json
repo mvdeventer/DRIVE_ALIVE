@@ -18,6 +18,13 @@
       "passwordReset": {
         "success": 4000,
         "error": 4000
+      },
+      "scheduleLoad": {
+        "error": 5000
+      },
+      "scheduleRefresh": {
+        "success": 3000,
+        "error": 5000
       }
     },
     "BookingOversightScreen": {

@@ -307,17 +307,6 @@ Lesson Type:    ${booking.lesson_type.toUpperCase()}
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <View style={styles.headerContent}>
-          <View style={styles.headerTextContainer}>
-            <Text style={styles.headerTitle}>Booking Oversight</Text>
-            <Text style={styles.headerSubtitle}>
-              {filteredBookings.length} of {bookings.length} bookings
-            </Text>
-          </View>
-        </View>
-      </View>
-
       {error && <InlineMessage message={error} type="error" />}
       {success && <InlineMessage message={success} type="success" />}
 
@@ -545,35 +534,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#666',
   },
-  header: {
-    backgroundColor: '#0066CC',
-    padding: 20,
-    paddingTop: 40,
-  },
-  headerContent: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  headerTextContainer: {
-    flex: 1,
-  },
-  headerTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#FFF',
-  },
-  headerSubtitle: {
-    fontSize: 16,
-    color: '#E0E0E0',
-    marginTop: 5,
-  },
-  logoutButton: {
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    paddingHorizontal: 15,
-    paddingVertical: 8,
-    borderRadius: 6,
-  },
   logoutButtonText: {
     color: '#FFF',
     fontSize: 14,
@@ -624,9 +584,9 @@ const styles = StyleSheet.create({
   },
   bookingCard: {
     backgroundColor: '#FFF',
-    borderRadius: 8,
-    padding: 12,
-    margin: 5,
+    borderRadius: 6,
+    padding: 10,
+    margin: 4,
     flex: 1,
     maxWidth: '32%',
     minWidth: 280,
@@ -636,8 +596,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    marginBottom: 10,
-    paddingBottom: 10,
+    marginBottom: 8,
+    paddingBottom: 8,
     borderBottomWidth: 1,
     borderBottomColor: '#E0E0E0',
   },
@@ -645,35 +605,35 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   bookingId: {
-    fontSize: 10,
+    fontSize: 9,
     fontWeight: '600',
     color: '#0066CC',
-    marginBottom: 3,
+    marginBottom: 2,
   },
   studentName: {
-    fontSize: 14,
+    fontSize: 12,
     fontWeight: 'bold',
     color: '#333',
-    marginBottom: 3,
+    marginBottom: 2,
   },
   instructorName: {
-    fontSize: 12,
+    fontSize: 11,
     color: '#666',
     marginBottom: 2,
   },
   idNumber: {
-    fontSize: 9,
+    fontSize: 8,
     color: '#999',
     fontStyle: 'italic',
-    marginBottom: 3,
+    marginBottom: 2,
   },
   statusBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 5,
+    paddingHorizontal: 6,
+    paddingVertical: 3,
+    borderRadius: 4,
   },
   statusText: {
-    fontSize: 9,
+    fontSize: 8,
     fontWeight: 'bold',
     color: '#FFF',
   },
@@ -693,54 +653,54 @@ const styles = StyleSheet.create({
     backgroundColor: '#6C757D',
   },
   bookingDetails: {
-    marginBottom: 10,
+    marginBottom: 8,
   },
   detailRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 6,
+    marginBottom: 5,
   },
   detailLabel: {
-    fontSize: 11,
+    fontSize: 10,
     color: '#666',
   },
   detailValue: {
-    fontSize: 11,
+    fontSize: 10,
     color: '#333',
     fontWeight: '500',
   },
   amountText: {
-    fontSize: 11,
+    fontSize: 10,
     color: '#28A745',
     fontWeight: 'bold',
   },
   actionButtons: {
     flexDirection: 'row',
-    gap: 8,
-    marginTop: 8,
+    gap: 6,
+    marginTop: 6,
   },
   copyButton: {
     flex: 1,
     backgroundColor: '#0066CC',
-    padding: 10,
-    borderRadius: 6,
+    padding: 8,
+    borderRadius: 5,
     alignItems: 'center',
   },
   copyButtonText: {
     color: '#FFF',
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: '600',
   },
   cancelButton: {
     flex: 1,
     backgroundColor: '#DC3545',
-    padding: 10,
-    borderRadius: 6,
+    padding: 8,
+    borderRadius: 5,
     alignItems: 'center',
   },
   cancelButtonText: {
     color: '#FFF',
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '600',
   },
   // Modal styles

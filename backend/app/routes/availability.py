@@ -631,3 +631,76 @@ async def get_instructor_available_slots(
         current_date += timedelta(days=1)
 
     return AvailableSlotsByDateResponse(instructor_id=instructor_id, availability=availability_by_date)
+
+
+@router.get("/instructor/{instructor_id}/time-off")
+async def get_instructor_time_off_public(
+    instructor_id: int,
+    db: Session = Depends(get_db),
+):
+    """
+    Get instructor's future time-off dates (public endpoint for students)
+    Returns only future time-off periods for calendar display
+    """
+    instructor = db.query(Instructor).filter(Instructor.id == instructor_id).first()
+    if not instructor:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Instructor not found",
+        )
+
+    # Get only FUTURE time off dates (today and beyond)
+    today = date.today()
+    time_offs = (
+        db.query(TimeOffException)
+        .filter(
+            TimeOffException.instructor_id == instructor_id,
+            TimeOffException.end_date >= today,  # Only future/current time-off
+        )
+        .all()
+    )
+
+    return [
+        {
+            "id": time_off.id,
+            "start_date": time_off.start_date.strftime("%Y-%m-%d"),
+            "end_date": time_off.end_date.strftime("%Y-%m-%d"),
+            "reason": time_off.reason if time_off.reason != "Time Off" else "Unavailable",  # Generic message
+        }
+        for time_off in time_offs
+    ]
+
+
+@router.get("/instructor/{instructor_id}/schedule")
+async def get_instructor_schedule_public(
+    instructor_id: int,
+    db: Session = Depends(get_db),
+):
+    """
+    Get instructor's weekly schedule (public endpoint for students)
+    Returns active days of the week with working hours
+    """
+    instructor = db.query(Instructor).filter(Instructor.id == instructor_id).first()
+    if not instructor:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Instructor not found",
+        )
+
+    schedules = (
+        db.query(InstructorSchedule)
+        .filter(
+            InstructorSchedule.instructor_id == instructor_id,
+            InstructorSchedule.is_active == True,
+        )
+        .all()
+    )
+
+    return [
+        {
+            "day_of_week": schedule.day_of_week.value,
+            "start_time": schedule.start_time.strftime("%H:%M"),
+            "end_time": schedule.end_time.strftime("%H:%M"),
+        }
+        for schedule in schedules
+    ]

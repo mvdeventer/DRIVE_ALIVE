@@ -160,15 +160,6 @@ export default function InstructorVerificationScreen({ navigation }: any) {
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <View style={styles.headerContent}>
-          <View>
-            <Text style={styles.headerTitle}>Instructor Verification</Text>
-            <Text style={styles.headerSubtitle}>{instructors.length} pending</Text>
-          </View>
-        </View>
-      </View>
-
       {error && <InlineMessage message={error} type="error" />}
       {success && <InlineMessage message={success} type="success" />}
 
@@ -206,91 +197,71 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#666',
   },
-  header: {
-    backgroundColor: '#0066CC',
-    padding: 20,
-    paddingTop: 40,
-  },
-  headerContent: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-  },
-  headerTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#FFF',
-  },
-  headerSubtitle: {
-    fontSize: 16,
-    color: '#E0E0E0',
-    marginTop: 5,
-  },
   listContainer: {
     padding: 15,
   },
   instructorCard: {
     backgroundColor: '#FFF',
-    borderRadius: 10,
-    padding: 15,
-    marginBottom: 15,
+    borderRadius: 8,
+    padding: 10,
+    marginBottom: 10,
     boxShadow: '0px 2px 4px rgba(0,0,0,0.1)',
   },
   instructorHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    marginBottom: 15,
-    paddingBottom: 15,
+    marginBottom: 10,
+    paddingBottom: 10,
     borderBottomWidth: 1,
     borderBottomColor: '#E0E0E0',
   },
   instructorName: {
-    fontSize: 18,
+    fontSize: 14,
     fontWeight: 'bold',
     color: '#333',
-    marginBottom: 5,
+    marginBottom: 4,
   },
   instructorEmail: {
-    fontSize: 14,
+    fontSize: 12,
     color: '#666',
     marginBottom: 2,
   },
   instructorPhone: {
-    fontSize: 14,
+    fontSize: 12,
     color: '#666',
   },
   registrationDate: {
-    fontSize: 12,
+    fontSize: 10,
     color: '#999',
   },
   detailsSection: {
-    marginBottom: 15,
+    marginBottom: 10,
   },
   detailRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 8,
+    marginBottom: 6,
   },
   detailLabel: {
-    fontSize: 14,
+    fontSize: 12,
     color: '#666',
     fontWeight: '600',
   },
   detailValue: {
-    fontSize: 14,
+    fontSize: 12,
     color: '#333',
     fontWeight: '400',
   },
   actionButtons: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    gap: 10,
+    gap: 8,
   },
   actionButton: {
     flex: 1,
-    padding: 12,
-    borderRadius: 8,
+    padding: 10,
+    borderRadius: 6,
     alignItems: 'center',
   },
   approveButton: {
@@ -301,7 +272,7 @@ const styles = StyleSheet.create({
   },
   actionButtonText: {
     color: '#FFF',
-    fontSize: 16,
+    fontSize: 13,
     fontWeight: 'bold',
   },
   emptyContainer: {

@@ -7,8 +7,9 @@ import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import React, { useCallback, useState } from 'react';
 import {
   ActivityIndicator,
-  FlatList,
+  Dimensions,
   Modal,
+  Platform,
   RefreshControl,
   ScrollView,
   StyleSheet,
@@ -21,6 +22,10 @@ import InlineMessage from '../../components/InlineMessage';
 import apiService from '../../services/api';
 import { showMessage } from '../../utils/messageConfig';
 
+const { width } = Dimensions.get('window');
+const isWeb = Platform.OS === 'web';
+const isLargeScreen = width >= 768;
+
 const SCREEN_NAME = 'UserManagementScreen';
 
 interface User {
@@ -30,6 +35,7 @@ interface User {
   full_name: string;
   role: string;
   status: string;
+  id_number?: string;
   created_at: string;
   last_login: string | null;
 }
@@ -41,8 +47,10 @@ export default function UserManagementScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
-  const [roleFilter, setRoleFilter] = useState('');
+  const [activeTab, setActiveTab] = useState<'admin' | 'instructor' | 'student'>('instructor');
+  const [roleFilter, setRoleFilter] = useState('instructor');
   const [statusFilter, setStatusFilter] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
   const [editModalVisible, setEditModalVisible] = useState(false);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [editFormData, setEditFormData] = useState({
@@ -57,6 +65,9 @@ export default function UserManagementScreen() {
     user: User;
     newStatus: string;
   } | null>(null);
+  const [scheduleModalVisible, setScheduleModalVisible] = useState(false);
+  const [instructorSchedule, setInstructorSchedule] = useState<any>(null);
+  const [loadingSchedule, setLoadingSchedule] = useState(false);
 
   const loadUsers = async () => {
     try {
@@ -86,6 +97,38 @@ export default function UserManagementScreen() {
     await apiService.logout();
     (navigation as any).replace('Login');
   };
+
+  const handleTabChange = (tab: 'admin' | 'instructor' | 'student') => {
+    setActiveTab(tab);
+    setRoleFilter(tab);
+    setSearchQuery('');
+  };
+
+  const normalizePhone = (phone: string) => {
+    // Remove spaces, dashes, and convert +27 to 0
+    return phone.replace(/[\s-]/g, '').replace(/^\+27/, '0');
+  };
+
+  const filteredUsers = users
+    .filter(user => {
+      const roleMatch = user.role === activeTab;
+      const statusMatch = !statusFilter || user.status === statusFilter;
+
+      if (!searchQuery) return roleMatch && statusMatch;
+
+      const query = searchQuery.toLowerCase();
+      const normalizedQuery = normalizePhone(searchQuery);
+      const userPhone = normalizePhone(user.phone);
+
+      const searchMatch =
+        user.full_name.toLowerCase().includes(query) ||
+        user.email.toLowerCase().includes(query) ||
+        userPhone.includes(normalizedQuery) ||
+        (user.id_number && user.id_number.includes(searchQuery));
+
+      return roleMatch && statusMatch && searchMatch;
+    })
+    .sort((a, b) => a.full_name.localeCompare(b.full_name));
 
   const handleStatusChange = (user: User, newStatus: string) => {
     console.log('handleStatusChange called:', user.full_name, newStatus);
@@ -253,6 +296,101 @@ export default function UserManagementScreen() {
     }
   };
 
+  const handleViewSchedule = async (user: User) => {
+    setSelectedUser(user);
+    setInstructorSchedule(null); // Clear previous schedule data
+    setScheduleModalVisible(true);
+    setLoadingSchedule(true);
+
+    try {
+      // First, get the instructor record to find the instructor_id
+      const instructorRes = await apiService.get(`/instructors/by-user/${user.id}`);
+      const instructorId = instructorRes.data.instructor_id;
+
+      console.log('👤 User ID:', user.id);
+      console.log('👨‍🏫 Instructor ID:', instructorId);
+
+      // Add timestamp to prevent caching
+      const timestamp = new Date().getTime();
+
+      // Fetch instructor's schedule and time off using the instructor_id
+      const [scheduleRes, timeOffRes, bookingsRes] = await Promise.all([
+        apiService.get(`/admin/instructors/${instructorId}/schedule?t=${timestamp}`),
+        apiService.get(`/admin/instructors/${instructorId}/time-off?t=${timestamp}`),
+        apiService.get(`/admin/bookings?instructor_id=${instructorId}&t=${timestamp}`),
+      ]);
+
+      console.log('📅 Schedule data:', scheduleRes.data);
+      console.log('🚫 Time off data:', timeOffRes.data);
+      console.log('📚 Bookings data:', bookingsRes.data);
+      console.log('📚 First booking:', bookingsRes.data?.[0]);
+
+      setInstructorSchedule({
+        schedule: scheduleRes.data || [],
+        timeOff: timeOffRes.data || [],
+        bookings: bookingsRes.data || [],
+      });
+    } catch (err: any) {
+      showMessage(
+        setError,
+        err.response?.data?.detail || 'Failed to load instructor schedule',
+        SCREEN_NAME,
+        'scheduleLoad',
+        'error'
+      );
+    } finally {
+      setLoadingSchedule(false);
+    }
+  };
+
+  const refreshScheduleData = async () => {
+    if (!selectedUser) return;
+
+    setLoadingSchedule(true);
+
+    try {
+      const instructorRes = await apiService.get(`/instructors/by-user/${selectedUser.id}`);
+      const instructorId = instructorRes.data.instructor_id;
+      const timestamp = new Date().getTime();
+
+      const [scheduleRes, timeOffRes, bookingsRes] = await Promise.all([
+        apiService.get(`/admin/instructors/${instructorId}/schedule?t=${timestamp}`),
+        apiService.get(`/admin/instructors/${instructorId}/time-off?t=${timestamp}`),
+        apiService.get(`/admin/bookings?instructor_id=${instructorId}&t=${timestamp}`),
+      ]);
+
+      setInstructorSchedule({
+        schedule: scheduleRes.data || [],
+        timeOff: timeOffRes.data || [],
+        bookings: bookingsRes.data || [],
+      });
+
+      showMessage(
+        setSuccess,
+        'Schedule refreshed successfully',
+        SCREEN_NAME,
+        'scheduleRefresh',
+        'success'
+      );
+    } catch (err: any) {
+      showMessage(
+        setError,
+        err.response?.data?.detail || 'Failed to refresh schedule',
+        SCREEN_NAME,
+        'scheduleRefresh',
+        'error'
+      );
+    } finally {
+      setLoadingSchedule(false);
+    }
+  };
+
+  const closeScheduleModal = () => {
+    setScheduleModalVisible(false);
+    setSelectedUser(null);
+    setInstructorSchedule(null);
+  };
+
   const renderUser = ({ item }: { item: User }) => (
     <View style={styles.userCard}>
       <View style={styles.userHeader}>
@@ -260,6 +398,7 @@ export default function UserManagementScreen() {
           <Text style={styles.userName}>{item.full_name}</Text>
           <Text style={styles.userEmail}>{item.email}</Text>
           <Text style={styles.userPhone}>{item.phone}</Text>
+          {item.id_number && <Text style={styles.userIdNumber}>ID: {item.id_number}</Text>}
         </View>
         <View style={styles.badges}>
           <View style={[styles.badge, getRoleBadgeStyle(item.role)]}>
@@ -296,6 +435,15 @@ export default function UserManagementScreen() {
           >
             <Text style={styles.actionButtonText}>🔑 Reset PW</Text>
           </TouchableOpacity>
+          {item.role === 'instructor' && (
+            <TouchableOpacity
+              style={[styles.actionButton, styles.scheduleButton]}
+              onPress={() => handleViewSchedule(item)}
+            >
+              <Text style={styles.scheduleButtonLabel}>Schedule</Text>
+              <Text style={styles.scheduleButtonText}>📅</Text>
+            </TouchableOpacity>
+          )}
           {item.status === 'suspended' ? (
             <TouchableOpacity
               style={[styles.actionButton, styles.activateButton]}
@@ -343,37 +491,57 @@ export default function UserManagementScreen() {
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <View style={styles.headerContent}>
-          <View style={styles.headerTextContainer}>
-            <Text style={styles.headerTitle}>User Management</Text>
-            <Text style={styles.headerSubtitle}>{users.length} users</Text>
-          </View>
-        </View>
-      </View>
-
       {error && <InlineMessage message={error} type="error" />}
       {success && <InlineMessage message={success} type="success" />}
 
+      {/* Tab Navigation */}
+      <View style={styles.tabContainer}>
+        <TouchableOpacity
+          style={[styles.tab, activeTab === 'admin' && styles.activeTab]}
+          onPress={() => handleTabChange('admin')}
+        >
+          <Text style={[styles.tabText, activeTab === 'admin' && styles.activeTabText]}>
+            👤 Admins
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.tab, activeTab === 'instructor' && styles.activeTab]}
+          onPress={() => handleTabChange('instructor')}
+        >
+          <Text style={[styles.tabText, activeTab === 'instructor' && styles.activeTabText]}>
+            🚗 Instructors
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.tab, activeTab === 'student' && styles.activeTab]}
+          onPress={() => handleTabChange('student')}
+        >
+          <Text style={[styles.tabText, activeTab === 'student' && styles.activeTabText]}>
+            📚 Students
+          </Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* Search Bar */}
+      <View style={styles.searchContainer}>
+        <TextInput
+          style={styles.searchInput}
+          placeholder={`Search ${activeTab}s by name, ID, phone, or email...`}
+          value={searchQuery}
+          onChangeText={setSearchQuery}
+          placeholderTextColor="#999"
+        />
+        {searchQuery.length > 0 && (
+          <TouchableOpacity style={styles.clearSearchButton} onPress={() => setSearchQuery('')}>
+            <Text style={styles.clearSearchText}>✕</Text>
+          </TouchableOpacity>
+        )}
+      </View>
+
+      {/* Status Filter */}
       <View style={styles.filters}>
         <View style={styles.filterGroup}>
-          <Text style={styles.filterLabel}>Role:</Text>
-          <View style={styles.pickerContainer}>
-            <Picker
-              selectedValue={roleFilter}
-              onValueChange={value => setRoleFilter(value)}
-              style={styles.picker}
-            >
-              <Picker.Item label="All Roles" value="" />
-              <Picker.Item label="Admin" value="admin" />
-              <Picker.Item label="Instructor" value="instructor" />
-              <Picker.Item label="Student" value="student" />
-            </Picker>
-          </View>
-        </View>
-
-        <View style={styles.filterGroup}>
-          <Text style={styles.filterLabel}>Status:</Text>
+          <Text style={styles.filterLabel}>Filter by Status:</Text>
           <View style={styles.pickerContainer}>
             <Picker
               selectedValue={statusFilter}
@@ -389,13 +557,18 @@ export default function UserManagementScreen() {
         </View>
       </View>
 
-      <FlatList
-        data={users}
-        renderItem={renderUser}
-        keyExtractor={item => item.id.toString()}
+      <ScrollView
         contentContainerStyle={styles.listContainer}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-      />
+      >
+        <View style={styles.gridContainer}>
+          {filteredUsers.map(item => (
+            <View key={item.id.toString()} style={styles.cardWrapper}>
+              {renderUser({ item })}
+            </View>
+          ))}
+        </View>
+      </ScrollView>
 
       {/* Edit User Modal */}
       <Modal
@@ -594,6 +767,170 @@ export default function UserManagementScreen() {
           </View>
         </View>
       </Modal>
+
+      {/* View Schedule Modal */}
+      <Modal
+        visible={scheduleModalVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={closeScheduleModal}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContainer}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>📅 {selectedUser?.full_name}'s Schedule</Text>
+              <View style={styles.headerButtons}>
+                <TouchableOpacity
+                  onPress={refreshScheduleData}
+                  style={styles.refreshButton}
+                  disabled={loadingSchedule}
+                >
+                  <Text style={styles.refreshButtonText}>🔄 Refresh</Text>
+                </TouchableOpacity>
+                <TouchableOpacity onPress={closeScheduleModal} style={styles.closeButton}>
+                  <Text style={styles.closeButtonText}>✕</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            <ScrollView style={styles.modalContent}>
+              {loadingSchedule ? (
+                <View style={styles.loadingContainer}>
+                  <ActivityIndicator size="large" color="#0066CC" />
+                  <Text style={styles.loadingText}>Loading schedule...</Text>
+                </View>
+              ) : instructorSchedule ? (
+                <>
+                  {/* Weekly Schedule */}
+                  <View style={styles.scheduleSection}>
+                    <Text style={styles.scheduleSectionTitle}>📅 Weekly Schedule</Text>
+                    {instructorSchedule.schedule && instructorSchedule.schedule.length > 0 ? (
+                      instructorSchedule.schedule.map((day: any) => (
+                        <View key={day.day_of_week} style={styles.scheduleItem}>
+                          <Text style={styles.scheduleDay}>
+                            {day.day_of_week.charAt(0).toUpperCase() + day.day_of_week.slice(1)}
+                          </Text>
+                          <Text style={styles.scheduleTime}>
+                            {day.is_active ? `${day.start_time} - ${day.end_time}` : 'Unavailable'}
+                          </Text>
+                        </View>
+                      ))
+                    ) : (
+                      <Text style={styles.emptyText}>No weekly schedule set</Text>
+                    )}
+                  </View>
+
+                  {/* Time Off */}
+                  <View style={styles.scheduleSection}>
+                    <Text style={styles.scheduleSectionTitle}>🚫 Time Off (All Dates)</Text>
+                    {instructorSchedule.timeOff && instructorSchedule.timeOff.length > 0 ? (
+                      instructorSchedule.timeOff.map((timeOff: any, index: number) => (
+                        <View key={index} style={styles.timeOffItem}>
+                          <Text style={styles.timeOffDates}>
+                            {timeOff.start_date} to {timeOff.end_date}
+                          </Text>
+                          {timeOff.reason && (
+                            <Text style={styles.timeOffReason}>{timeOff.reason}</Text>
+                          )}
+                        </View>
+                      ))
+                    ) : (
+                      <Text style={styles.emptyText}>No time off scheduled</Text>
+                    )}
+                  </View>
+
+                  {/* Recent Bookings */}
+                  <View style={styles.scheduleSection}>
+                    <Text style={styles.scheduleSectionTitle}>📚 Recent Bookings</Text>
+                    {instructorSchedule.bookings && instructorSchedule.bookings.length > 0 ? (
+                      instructorSchedule.bookings
+                        .sort((a: any, b: any) => {
+                          // Sort by lesson_date from earliest to latest
+                          const dateA = a.lesson_date ? new Date(a.lesson_date).getTime() : 0;
+                          const dateB = b.lesson_date ? new Date(b.lesson_date).getTime() : 0;
+                          return dateA - dateB;
+                        })
+                        .slice(0, 10)
+                        .map((booking: any) => {
+                          // Parse the lesson_date field
+                          const lessonDate = booking.lesson_date
+                            ? new Date(booking.lesson_date)
+                            : null;
+
+                          const dateStr =
+                            lessonDate && !isNaN(lessonDate.getTime())
+                              ? lessonDate.toLocaleDateString()
+                              : 'Invalid Date';
+                          const timeStr =
+                            lessonDate && !isNaN(lessonDate.getTime())
+                              ? lessonDate.toLocaleTimeString([], {
+                                  hour: '2-digit',
+                                  minute: '2-digit',
+                                })
+                              : 'Invalid Time';
+
+                          // Determine status color
+                          const status = booking.status ? booking.status.toUpperCase() : 'UNKNOWN';
+                          let statusColor = '#6c757d'; // Default gray
+
+                          if (status === 'COMPLETED') {
+                            statusColor = '#28a745'; // Green
+                          } else if (status === 'PENDING' || status === 'CONFIRMED') {
+                            statusColor = '#ffc107'; // Yellow/Orange
+                          } else if (status === 'CANCELLED' || status === 'NO_SHOW') {
+                            statusColor = '#dc3545'; // Red
+                          } else if (status === 'IN_PROGRESS') {
+                            statusColor = '#007bff'; // Blue
+                          }
+
+                          return (
+                            <View key={booking.id} style={styles.bookingItem}>
+                              <View style={styles.bookingHeader}>
+                                <Text style={styles.bookingDate}>
+                                  📅 {dateStr} at {timeStr}
+                                </Text>
+                                <Text
+                                  style={[styles.bookingStatus, { backgroundColor: statusColor }]}
+                                >
+                                  {status}
+                                </Text>
+                              </View>
+                              <View style={styles.bookingDetails}>
+                                <Text style={styles.bookingStudent}>
+                                  👤 {booking.student_name || 'Unknown'}
+                                </Text>
+                                {booking.student_phone && (
+                                  <Text style={styles.bookingPhone}>
+                                    📞 {booking.student_phone}
+                                  </Text>
+                                )}
+                                {booking.student_id_number && (
+                                  <Text style={styles.bookingIdNumber}>
+                                    🆔 {booking.student_id_number}
+                                  </Text>
+                                )}
+                              </View>
+                            </View>
+                          );
+                        })
+                    ) : (
+                      <Text style={styles.emptyText}>No bookings found</Text>
+                    )}
+                  </View>
+                </>
+              ) : (
+                <Text style={styles.emptyText}>Failed to load schedule</Text>
+              )}
+            </ScrollView>
+
+            <View style={styles.modalFooter}>
+              <TouchableOpacity style={styles.cancelModalButton} onPress={closeScheduleModal}>
+                <Text style={styles.cancelModalButtonText}>Close</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -614,35 +951,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#666',
   },
-  header: {
-    backgroundColor: '#0066CC',
-    padding: 20,
-    paddingTop: 40,
-  },
-  headerContent: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  headerTextContainer: {
-    flex: 1,
-  },
-  headerTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#FFF',
-  },
-  headerSubtitle: {
-    fontSize: 16,
-    color: '#E0E0E0',
-    marginTop: 5,
-  },
-  logoutButton: {
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    paddingHorizontal: 15,
-    paddingVertical: 8,
-    borderRadius: 6,
-  },
   logoutButtonText: {
     color: '#FFF',
     fontSize: 14,
@@ -650,75 +958,149 @@ const styles = StyleSheet.create({
   },
   filters: {
     backgroundColor: '#FFF',
-    padding: 15,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+    padding: 10,
     borderBottomWidth: 1,
     borderBottomColor: '#E0E0E0',
   },
-  filterGroup: {
+  tabContainer: {
+    flexDirection: 'row',
+    backgroundColor: '#FFF',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E0E0E0',
+  },
+  tab: {
     flex: 1,
-    marginHorizontal: 5,
+    paddingVertical: 10,
+    paddingHorizontal: 6,
+    alignItems: 'center',
+    borderBottomWidth: 2,
+    borderBottomColor: 'transparent',
+  },
+  activeTab: {
+    borderBottomColor: '#0066CC',
+    backgroundColor: '#F0F8FF',
+  },
+  tabText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#666',
+  },
+  activeTabText: {
+    color: '#0066CC',
+    fontWeight: 'bold',
+  },
+  filterGroup: {
+    width: '100%',
   },
   filterLabel: {
-    fontSize: 14,
+    fontSize: 12,
     fontWeight: '600',
     color: '#333',
-    marginBottom: 5,
+    marginBottom: 4,
   },
   pickerContainer: {
     borderWidth: 1,
     borderColor: '#CCC',
     borderRadius: 8,
     backgroundColor: '#FFF',
+    overflow: 'hidden',
   },
   picker: {
-    height: 40,
+    height: 50,
+    width: '100%',
+  },
+  searchContainer: {
+    backgroundColor: '#FFF',
+    padding: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E0E0E0',
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  searchInput: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: '#CCC',
+    borderRadius: 6,
+    padding: 8,
+    fontSize: 14,
+    backgroundColor: '#F8F9FA',
+  },
+  clearSearchButton: {
+    marginLeft: 8,
+    padding: 6,
+    backgroundColor: '#DC3545',
+    borderRadius: 16,
+    width: 28,
+    height: 28,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  clearSearchText: {
+    color: '#FFF',
+    fontSize: 14,
+    fontWeight: 'bold',
   },
   listContainer: {
-    padding: 15,
+    padding: 8,
+  },
+  gridContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: isLargeScreen ? 'flex-start' : 'center',
+    gap: 8,
+  },
+  cardWrapper: {
+    width: isLargeScreen ? '32%' : '100%',
+    minWidth: isLargeScreen ? 300 : undefined,
   },
   userCard: {
     backgroundColor: '#FFF',
-    borderRadius: 10,
-    padding: 15,
-    marginBottom: 15,
-    boxShadow: '0px 2px 4px rgba(0,0,0,0.1)',
+    borderRadius: 8,
+    padding: 10,
+    boxShadow: '0px 1px 3px rgba(0,0,0,0.1)',
+    width: '100%',
   },
   userHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 10,
+    marginBottom: 6,
   },
   userInfo: {
     flex: 1,
   },
   userName: {
-    fontSize: 18,
+    fontSize: 15,
     fontWeight: 'bold',
     color: '#333',
-    marginBottom: 5,
+    marginBottom: 3,
   },
   userEmail: {
-    fontSize: 14,
+    fontSize: 12,
     color: '#666',
     marginBottom: 2,
   },
   userPhone: {
-    fontSize: 14,
+    fontSize: 12,
     color: '#666',
+  },
+  userIdNumber: {
+    fontSize: 11,
+    color: '#0066CC',
+    fontWeight: '600',
+    marginTop: 3,
   },
   badges: {
     alignItems: 'flex-end',
   },
   badge: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 4,
-    marginBottom: 5,
+    paddingHorizontal: 6,
+    paddingVertical: 3,
+    borderRadius: 3,
+    marginBottom: 3,
   },
   badgeText: {
-    fontSize: 10,
+    fontSize: 9,
     fontWeight: 'bold',
     color: '#FFF',
   },
@@ -747,28 +1129,28 @@ const styles = StyleSheet.create({
     backgroundColor: '#6C757D',
   },
   userDetails: {
-    paddingTop: 10,
+    paddingTop: 6,
     borderTopWidth: 1,
     borderTopColor: '#E0E0E0',
-    marginBottom: 10,
+    marginBottom: 6,
   },
   userDetailText: {
-    fontSize: 12,
+    fontSize: 10,
     color: '#666',
-    marginBottom: 3,
+    marginBottom: 2,
   },
   actionButtons: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    justifyContent: 'space-around',
-    marginTop: 10,
-    gap: 8,
+    justifyContent: 'flex-start',
+    marginTop: 6,
+    gap: 6,
   },
   actionButton: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 6,
-    minWidth: 80,
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    borderRadius: 5,
+    minWidth: 65,
     alignItems: 'center',
   },
   editButton: {
@@ -776,6 +1158,24 @@ const styles = StyleSheet.create({
   },
   passwordButton: {
     backgroundColor: '#6610F2',
+  },
+  scheduleButton: {
+    backgroundColor: '#FF6B35',
+    flexDirection: 'column',
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    minWidth: 70,
+    borderWidth: 1.5,
+    borderColor: '#FF8C5A',
+  },
+  scheduleButtonText: {
+    fontSize: 24,
+    marginBottom: 2,
+  },
+  scheduleButtonLabel: {
+    color: '#FFF',
+    fontSize: 10,
+    fontWeight: 'bold',
   },
   activateButton: {
     backgroundColor: '#28A745',
@@ -788,7 +1188,7 @@ const styles = StyleSheet.create({
   },
   actionButtonText: {
     color: '#FFF',
-    fontSize: 13,
+    fontSize: 11,
     fontWeight: 'bold',
   },
   modalOverlay: {
@@ -817,6 +1217,22 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#333',
     flex: 1,
+  },
+  headerButtons: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  refreshButton: {
+    backgroundColor: '#28a745',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 6,
+  },
+  refreshButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
   },
   closeButton: {
     padding: 5,
@@ -901,5 +1317,108 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: 15,
     fontStyle: 'italic',
+  },
+  scheduleSection: {
+    marginBottom: 20,
+    padding: 15,
+    backgroundColor: '#F8F9FA',
+    borderRadius: 8,
+  },
+  scheduleSectionTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#333',
+    marginBottom: 12,
+  },
+  scheduleItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E0E0E0',
+  },
+  scheduleDay: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+  },
+  scheduleTime: {
+    fontSize: 16,
+    color: '#666',
+  },
+  timeOffItem: {
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E0E0E0',
+  },
+  timeOffDates: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 4,
+  },
+  timeOffReason: {
+    fontSize: 14,
+    color: '#666',
+    fontStyle: 'italic',
+  },
+  bookingItem: {
+    paddingVertical: 12,
+    paddingHorizontal: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E0E0E0',
+    backgroundColor: '#F9F9F9',
+    borderRadius: 6,
+    marginBottom: 8,
+  },
+  bookingHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  bookingDate: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#333',
+  },
+  bookingStatus: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#fff',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 4,
+  },
+  bookingDetails: {
+    marginTop: 4,
+  },
+  bookingStudent: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#0066CC',
+    marginBottom: 4,
+  },
+  bookingPhone: {
+    fontSize: 13,
+    color: '#666',
+    marginBottom: 2,
+  },
+  bookingIdNumber: {
+    fontSize: 13,
+    color: '#666',
+  },
+  emptyText: {
+    fontSize: 14,
+    color: '#999',
+    fontStyle: 'italic',
+    textAlign: 'center',
+    paddingVertical: 10,
+  },
+  loadingContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 40,
   },
 });

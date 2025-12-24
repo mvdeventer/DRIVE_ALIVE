@@ -161,7 +161,7 @@ async def get_instructor_profile(
 @router.get("/{instructor_id}", response_model=InstructorResponse)
 async def get_instructor(instructor_id: int, db: Session = Depends(get_db)):
     """
-    Get instructor by ID
+    Get instructor by instructor_id (NOT user_id!)
     """
     instructor = db.query(InstructorModel).filter(InstructorModel.id == instructor_id).first()
 
@@ -169,6 +169,59 @@ async def get_instructor(instructor_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Instructor not found")
 
     user = db.query(User).filter(User.id == instructor.user_id).first()
+
+    return InstructorResponse(
+        id=user.id,
+        email=user.email,
+        phone=user.phone,
+        first_name=user.first_name,
+        last_name=user.last_name,
+        role=user.role,
+        status=user.status,
+        created_at=user.created_at,
+        instructor_id=instructor.id,
+        id_number=instructor.id_number,
+        license_number=instructor.license_number,
+        license_types=instructor.license_types,
+        vehicle_registration=instructor.vehicle_registration,
+        vehicle_make=instructor.vehicle_make,
+        vehicle_model=instructor.vehicle_model,
+        vehicle_year=instructor.vehicle_year,
+        province=instructor.province,
+        city=instructor.city,
+        suburb=instructor.suburb,
+        is_available=instructor.is_available,
+        hourly_rate=instructor.hourly_rate,
+        service_radius_km=instructor.service_radius_km,
+        max_travel_distance_km=instructor.max_travel_distance_km,
+        rate_per_km_beyond_radius=instructor.rate_per_km_beyond_radius,
+        bio=instructor.bio,
+        rating=instructor.rating,
+        total_reviews=instructor.total_reviews,
+        is_verified=instructor.is_verified,
+        current_latitude=instructor.current_latitude,
+        current_longitude=instructor.current_longitude,
+    )
+
+
+@router.get("/by-user/{user_id}", response_model=InstructorResponse)
+async def get_instructor_by_user_id(user_id: int, db: Session = Depends(get_db)):
+    """
+    Get instructor by user_id (for admin looking up instructors by user record)
+    """
+    # First verify the user exists and is an instructor
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+
+    if user.role != UserRole.INSTRUCTOR:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="User is not an instructor")
+
+    # Now get the instructor record
+    instructor = db.query(InstructorModel).filter(InstructorModel.user_id == user_id).first()
+
+    if not instructor:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Instructor profile not found")
 
     return InstructorResponse(
         id=user.id,

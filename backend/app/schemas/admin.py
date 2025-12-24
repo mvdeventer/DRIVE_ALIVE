@@ -87,6 +87,7 @@ class UserManagementResponse(BaseModel):
     full_name: str
     role: UserRole
     status: UserStatus
+    id_number: Optional[str] = None
     created_at: datetime
     last_login: Optional[datetime] = None
 
@@ -104,6 +105,7 @@ class BookingOverview(BaseModel):
     student_id: int
     student_name: str
     student_id_number: str
+    student_phone: Optional[str] = None
     instructor_id: int
     instructor_name: str
     instructor_id_number: str
