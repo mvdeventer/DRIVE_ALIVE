@@ -323,7 +323,24 @@ export default function UserManagementScreen() {
       console.log('📅 Schedule data:', scheduleRes.data);
       console.log('🚫 Time off data:', timeOffRes.data);
       console.log('📚 Bookings data:', bookingsRes.data);
+      console.log('📚 Number of bookings received:', bookingsRes.data?.length);
       console.log('📚 First booking:', bookingsRes.data?.[0]);
+
+      // DEBUG: Log status breakdown
+      if (bookingsRes.data && bookingsRes.data.length > 0) {
+        const statusCounts: any = {};
+        bookingsRes.data.forEach((b: any) => {
+          const status = b.status || 'unknown';
+          statusCounts[status] = (statusCounts[status] || 0) + 1;
+        });
+        console.log('📊 Status breakdown:', statusCounts);
+        console.log('📚 Sample bookings (first 5):');
+        bookingsRes.data.slice(0, 5).forEach((b: any, idx: number) => {
+          console.log(
+            `  [${idx}] Status: "${b.status}", Date: ${b.lesson_date}, Student: ${b.student_name}`
+          );
+        });
+      }
 
       setInstructorSchedule({
         schedule: scheduleRes.data || [],

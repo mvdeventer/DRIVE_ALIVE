@@ -335,6 +335,14 @@ async def get_all_bookings(
 
     bookings = query.order_by(Booking.lesson_date.desc()).offset(skip).limit(limit).all()
 
+    # DEBUG: Log query details
+    print(f"🔍 Admin bookings query - instructor_id: {instructor_id}, status_filter: {status_filter}, total found: {len(bookings)}")
+    if len(bookings) > 0:
+        status_counts = {}
+        for b in bookings:
+            status_counts[b.status.value] = status_counts.get(b.status.value, 0) + 1
+        print(f"  Status breakdown: {status_counts}")
+
     result = []
     for booking in bookings:
         student = db.query(Student).filter(Student.id == booking.student_id).first()
