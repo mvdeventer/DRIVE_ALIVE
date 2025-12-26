@@ -1,7 +1,7 @@
 /**
  * Main App Component
  */
-import { CommonActions, NavigationContainer } from '@react-navigation/native';
+import { CommonActions, NavigationContainer, StackActions } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import * as SecureStore from 'expo-secure-store';
 import { StatusBar } from 'expo-status-bar';
@@ -31,6 +31,7 @@ import PaymentScreen from './screens/payment/PaymentScreen';
 // Admin Screens
 import AdminDashboardScreen from './screens/admin/AdminDashboardScreen';
 import BookingOversightScreen from './screens/admin/BookingOversightScreen';
+import EditAdminProfileScreen from './screens/admin/EditAdminProfileScreen';
 import InstructorVerificationScreen from './screens/admin/InstructorVerificationScreen';
 import RevenueAnalyticsScreen from './screens/admin/RevenueAnalyticsScreen';
 import UserManagementScreen from './screens/admin/UserManagementScreen';
@@ -85,15 +86,18 @@ export default function App() {
     checkAuth();
   };
 
-  const handleLogout = () => {
-    // Use navigation to go to Login - this will trigger beforeRemove listeners
-    // Only clear auth state if navigation succeeds (user confirms or no unsaved changes)
+  const handleLogout = async () => {
+    // Try to navigate back to Login using popToTop, which will trigger beforeRemove
     if (navigationRef.current) {
+      const currentRoute = navigationRef.current?.getCurrentRoute();
+      console.log('🚪 Logout clicked, current route:', currentRoute?.name);
+
       // Create a navigation state listener to detect when we actually reach Login
       const unsubscribe = navigationRef.current.addListener('state', async () => {
-        const currentRoute = navigationRef.current?.getCurrentRoute();
-        if (currentRoute?.name === 'Login') {
+        const route = navigationRef.current?.getCurrentRoute();
+        if (route?.name === 'Login') {
           // We successfully navigated to Login, now clear auth
+          console.log('✅ Reached Login screen, clearing auth...');
           try {
             await storage.removeItem('access_token');
             await storage.removeItem('user_role');
@@ -113,13 +117,38 @@ export default function App() {
         }
       });
 
-      // Attempt to navigate to Login - beforeRemove listeners will intercept if needed
-      navigationRef.current.dispatch(
-        CommonActions.reset({
-          index: 0,
-          routes: [{ name: 'Login' }],
-        })
-      );
+      // If already on Login screen, clear immediately
+      if (currentRoute?.name === 'Login') {
+        console.log('Already on Login, clearing immediately');
+        try {
+          await storage.removeItem('access_token');
+          await storage.removeItem('user_role');
+          setIsAuthenticated(false);
+          setUserRole(null);
+          if (Platform.OS === 'web') {
+            window.location.reload();
+          }
+        } catch (error) {
+          console.error('Error clearing auth:', error);
+        }
+        unsubscribe();
+        return;
+      }
+
+      // Try popToTop first to trigger beforeRemove on all screens
+      console.log('📤 Dispatching popToTop...');
+      try {
+        navigationRef.current.dispatch(StackActions.popToTop());
+      } catch (error) {
+        console.error('popToTop failed:', error);
+        // Fallback to reset if popToTop fails
+        navigationRef.current.dispatch(
+          CommonActions.reset({
+            index: 0,
+            routes: [{ name: 'Login' }],
+          })
+        );
+      }
     }
   };
 
@@ -221,6 +250,11 @@ export default function App() {
             name="AdminDashboard"
             component={AdminDashboardScreen}
             options={{ title: 'Admin Dashboard' }}
+          />
+          <Stack.Screen
+            name="EditAdminProfile"
+            component={EditAdminProfileScreen}
+            options={{ title: 'Edit Admin Profile' }}
           />
           <Stack.Screen
             name="InstructorVerification"

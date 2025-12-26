@@ -6,7 +6,6 @@ import { useNavigation } from '@react-navigation/native';
 import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Modal,
   Platform,
   ScrollView,
@@ -80,6 +79,8 @@ export default function ManageAvailabilityScreen() {
     notes: '',
   });
   const [confirmDelete, setConfirmDelete] = useState<number | null>(null);
+  const [showDiscardModal, setShowDiscardModal] = useState(false);
+  const [pendingNavigation, setPendingNavigation] = useState<any>(null);
 
   // Time picker states
   const [showTimePicker, setShowTimePicker] = useState<{
@@ -114,38 +115,26 @@ export default function ManageAvailabilityScreen() {
       if (!hasUnsavedChanges) {
         return;
       }
-
-      // Prevent default behavior of leaving the screen
       e.preventDefault();
-
-      // Show confirmation dialog
-      if (Platform.OS === 'web') {
-        if (
-          window.confirm(
-            '⚠️ Unsaved Changes\n\nYou have unsaved changes to your schedule!\n\nAre you sure you want to leave? Your changes will be lost.'
-          )
-        ) {
-          // User confirmed - allow navigation
-          navigation.dispatch(e.data.action);
-        }
-      } else {
-        Alert.alert(
-          '⚠️ Unsaved Changes',
-          'You have unsaved changes to your schedule!\n\nAre you sure you want to leave? Your changes will be lost.',
-          [
-            { text: 'Stay', style: 'cancel' },
-            {
-              text: 'Discard Changes',
-              style: 'destructive',
-              onPress: () => navigation.dispatch(e.data.action),
-            },
-          ]
-        );
-      }
+      setPendingNavigation(e.data.action);
+      setShowDiscardModal(true);
     });
-
     return unsubscribe;
   }, [navigation, hasUnsavedChanges]);
+
+  const handleDiscardChanges = () => {
+    setShowDiscardModal(false);
+    if (pendingNavigation) {
+      navigation.dispatch(pendingNavigation);
+      setPendingNavigation(null);
+    }
+  };
+
+  const handleSaveAndContinue = async () => {
+    setShowDiscardModal(false);
+    await handleSaveSchedule();
+    // After save completes, navigation will happen via the save handler if successful
+  };
 
   const loadAvailability = async () => {
     try {
@@ -792,6 +781,49 @@ export default function ManageAvailabilityScreen() {
           </View>
         </View>
       </Modal>
+
+      {/* Unsaved Changes Confirmation Modal */}
+      <Modal
+        visible={showDiscardModal}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowDiscardModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.confirmModalContent}>
+            <Text style={styles.confirmModalTitle}>⚠️ Unsaved Changes</Text>
+            <Text style={styles.confirmModalText}>
+              You have unsaved changes to your schedule! Choose an option below:
+            </Text>
+            <View style={styles.confirmModalButtons}>
+              <TouchableOpacity
+                style={[styles.confirmModalButton, styles.cancelButton]}
+                onPress={() => {
+                  setShowDiscardModal(false);
+                  setPendingNavigation(null);
+                }}
+              >
+                <Text style={styles.cancelButtonText}>Stay</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.confirmModalButton, styles.saveAndContinueButton]}
+                onPress={handleSaveAndContinue}
+                disabled={saving}
+              >
+                <Text style={styles.saveAndContinueButtonText}>
+                  {saving ? 'Saving...' : 'Save & Continue'}
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.confirmModalButton, styles.deleteConfirmButton]}
+                onPress={handleDiscardChanges}
+              >
+                <Text style={styles.deleteConfirmButtonText}>Discard</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </ScrollView>
   );
 }
@@ -1197,6 +1229,14 @@ const styles = StyleSheet.create({
     color: '#333',
     fontSize: 16,
     fontWeight: '600',
+  },
+  saveAndContinueButton: {
+    backgroundColor: '#28a745',
+  },
+  saveAndContinueButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
   },
   deleteConfirmButton: {
     backgroundColor: '#dc3545',

@@ -1,11 +1,13 @@
 /**
  * Edit Student Profile Screen
  */
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useRoute } from '@react-navigation/native';
 import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   Modal,
+  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -17,8 +19,20 @@ import InlineMessage from '../../components/InlineMessage';
 import LocationSelector from '../../components/LocationSelector';
 import ApiService from '../../services/api';
 
+const showAlert = (title: string, message: string) => {
+  if (Platform.OS === 'web') {
+    alert(`${title}\n\n${message}`);
+  } else {
+    Alert.alert(title, message);
+  }
+};
+
 export default function EditStudentProfileScreen() {
   const navigation = useNavigation();
+  const route = useRoute();
+  const params = route.params as { userId?: number } | undefined;
+  const isAdminEditing = params?.userId !== undefined;
+  const [studentId, setStudentId] = useState<number | null>(null);
   const [formData, setFormData] = useState({
     email: '',
     phone: '',
@@ -74,12 +88,33 @@ export default function EditStudentProfileScreen() {
     }
   };
 
+  const handleSaveAndContinue = async () => {
+    setShowDiscardModal(false);
+    await handleSaveProfile();
+    // After save completes, navigation will happen automatically via the save handler
+  };
+
   const loadProfile = async () => {
     try {
-      const [userRes, studentRes] = await Promise.all([
-        ApiService.get('/auth/me'),
-        ApiService.get('/students/me'),
-      ]);
+      let userRes, studentRes;
+
+      if (isAdminEditing && params?.userId) {
+        // Admin is editing another user's profile
+        const studentByUserRes = await ApiService.get(`/students/by-user/${params.userId}`);
+        const fetchedStudentId = studentByUserRes.data.student_id;
+        setStudentId(fetchedStudentId); // Store for later use in save handler
+
+        [userRes, studentRes] = await Promise.all([
+          ApiService.get(`/admin/users/${params.userId}`),
+          ApiService.get(`/students/${fetchedStudentId}`),
+        ]);
+      } else {
+        // User is editing their own profile
+        [userRes, studentRes] = await Promise.all([
+          ApiService.get('/auth/me'),
+          ApiService.get('/students/me'),
+        ]);
+      }
 
       const user = userRes.data;
       const student = studentRes.data;
@@ -155,26 +190,60 @@ export default function EditStudentProfileScreen() {
 
     setSaving(true);
     try {
-      // Update user info
-      await ApiService.put('/auth/me', {
-        first_name: formData.first_name,
-        last_name: formData.last_name,
-        phone: formData.phone,
-      });
+      if (isAdminEditing && params?.userId && studentId) {
+        // Admin editing mode - use admin endpoints
+        console.log('💾 Saving student via admin endpoints...');
+        console.log('  userId:', params.userId);
+        console.log('  studentId:', studentId);
 
-      // Update student profile
-      await ApiService.put('/students/me', {
-        id_number: formData.id_number,
-        learners_permit_number: formData.learners_permit_number,
-        emergency_contact_name: formData.emergency_contact_name,
-        emergency_contact_phone: formData.emergency_contact_phone,
-        address_line1: formData.address_line1,
-        address_line2: formData.address_line2,
-        province: formData.province,
-        city: formData.city,
-        suburb: formData.suburb,
-        postal_code: formData.postal_code,
-      });
+        // Update user basic info via admin endpoint
+        await ApiService.put(
+          `/admin/users/${params.userId}?first_name=${encodeURIComponent(
+            formData.first_name
+          )}&last_name=${encodeURIComponent(formData.last_name)}&phone=${encodeURIComponent(
+            formData.phone
+          )}`
+        );
+
+        // Update student profile via admin endpoint
+        const studentParams = new URLSearchParams({
+          address: `${formData.address_line1}${
+            formData.address_line2 ? ', ' + formData.address_line2 : ''
+          }`,
+          city: formData.city,
+          province: formData.province,
+          emergency_contact_name: formData.emergency_contact_name,
+          emergency_contact_phone: formData.emergency_contact_phone,
+        });
+
+        await ApiService.put(`/admin/students/${studentId}?${studentParams.toString()}`);
+        console.log('✅ Admin save successful');
+      } else {
+        // Self-editing mode - use regular endpoints
+        console.log('💾 Saving student via self-edit endpoints...');
+
+        // Update user info
+        await ApiService.put('/auth/me', {
+          first_name: formData.first_name,
+          last_name: formData.last_name,
+          phone: formData.phone,
+        });
+
+        // Update student profile
+        await ApiService.put('/students/me', {
+          id_number: formData.id_number,
+          learners_permit_number: formData.learners_permit_number,
+          emergency_contact_name: formData.emergency_contact_name,
+          emergency_contact_phone: formData.emergency_contact_phone,
+          address_line1: formData.address_line1,
+          address_line2: formData.address_line2,
+          province: formData.province,
+          city: formData.city,
+          suburb: formData.suburb,
+          postal_code: formData.postal_code,
+        });
+        console.log('✅ Self-edit save successful');
+      }
 
       setSuccessMessage('Profile updated successfully!');
       setTimeout(() => setSuccessMessage(''), 4000);
@@ -487,7 +556,7 @@ export default function EditStudentProfileScreen() {
           <View style={styles.confirmModalContent}>
             <Text style={styles.confirmModalTitle}>⚠️ Unsaved Changes</Text>
             <Text style={styles.confirmModalText}>
-              You have unsaved changes! Please save your profile first or your changes will be lost.
+              You have unsaved changes! Choose an option below:
             </Text>
             <View style={styles.confirmModalButtons}>
               <TouchableOpacity
@@ -500,10 +569,19 @@ export default function EditStudentProfileScreen() {
                 <Text style={styles.cancelButtonText}>Stay</Text>
               </TouchableOpacity>
               <TouchableOpacity
+                style={[styles.confirmModalButton, styles.saveAndContinueButton]}
+                onPress={handleSaveAndContinue}
+                disabled={saving}
+              >
+                <Text style={styles.saveAndContinueButtonText}>
+                  {saving ? 'Saving...' : 'Save & Continue'}
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
                 style={[styles.confirmModalButton, styles.deleteConfirmButton]}
                 onPress={handleDiscardChanges}
               >
-                <Text style={styles.deleteConfirmButtonText}>Discard Changes</Text>
+                <Text style={styles.deleteConfirmButtonText}>Discard</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -705,6 +783,14 @@ const styles = StyleSheet.create({
     color: '#333',
     fontSize: 16,
     fontWeight: '600',
+  },
+  saveAndContinueButton: {
+    backgroundColor: '#28a745',
+  },
+  saveAndContinueButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
   },
   deleteConfirmButton: {
     backgroundColor: '#dc3545',

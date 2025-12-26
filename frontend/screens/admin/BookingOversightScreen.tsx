@@ -2,7 +2,6 @@
  * Booking Oversight Screen
  * View and manage all bookings across the system
  */
-import { Picker } from '@react-native-picker/picker';
 import { useFocusEffect } from '@react-navigation/native';
 import React, { useCallback, useState } from 'react';
 import {
@@ -48,7 +47,7 @@ export default function BookingOversightScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
-  const [statusFilter, setStatusFilter] = useState('');
+  const [activeTab, setActiveTab] = useState<'all' | 'pending' | 'cancelled' | 'completed'>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [modalVisible, setModalVisible] = useState(false);
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
@@ -57,7 +56,7 @@ export default function BookingOversightScreen() {
   const loadBookings = async () => {
     try {
       setError('');
-      const data = await apiService.getAllBookingsAdmin(statusFilter);
+      const data = await apiService.getAllBookingsAdmin(''); // Load all bookings
       // Sort by lesson_date (earliest first)
       const sorted = data.sort(
         (a, b) => new Date(a.lesson_date).getTime() - new Date(b.lesson_date).getTime()
@@ -74,7 +73,7 @@ export default function BookingOversightScreen() {
   useFocusEffect(
     useCallback(() => {
       loadBookings();
-    }, [statusFilter])
+    }, [])
   );
 
   const onRefresh = () => {
@@ -113,26 +112,45 @@ export default function BookingOversightScreen() {
     }
   };
 
-  // Filter bookings based on search query
-  const filteredBookings = bookings.filter(booking => {
-    if (!searchQuery) return true;
-    const query = searchQuery.toLowerCase().trim();
+  // Filter bookings based on active tab and search query
+  const filteredBookings = bookings
+    .filter(booking => {
+      // Tab filter
+      if (activeTab !== 'all') {
+        if (booking.status.toLowerCase() !== activeTab) return false;
+      }
 
-    // If query is purely numeric, do exact match on booking ID
-    const isNumeric = /^\d+$/.test(query);
-    if (isNumeric) {
-      return booking.id.toString() === query;
-    }
+      // Search filter
+      if (!searchQuery) return true;
+      const query = searchQuery.toLowerCase().trim();
 
-    // Otherwise, do partial match on all fields
-    return (
-      booking.id.toString().includes(query) ||
-      (booking.student_name || '').toLowerCase().includes(query) ||
-      (booking.instructor_name || '').toLowerCase().includes(query) ||
-      (booking.student_id_number || '').toString().toLowerCase().includes(query) ||
-      (booking.instructor_id_number || '').toString().toLowerCase().includes(query)
-    );
-  });
+      // Format lesson date for searching (multiple formats)
+      const lessonDate = new Date(booking.lesson_date);
+      const dateStr = lessonDate.toLocaleDateString(); // e.g., "12/26/2025"
+      const dateStrShort = lessonDate.toLocaleDateString('en-ZA'); // e.g., "2025/12/26"
+      const dateStrLong = lessonDate.toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+      }); // e.g., "December 26, 2025"
+      const dateStrISO = booking.lesson_date.split('T')[0]; // e.g., "2025-12-26"
+
+      // Search by booking ID, student/instructor name, ID numbers, or date
+      return (
+        booking.id.toString().includes(query) ||
+        (booking.student_name || '').toLowerCase().includes(query) ||
+        (booking.instructor_name || '').toLowerCase().includes(query) ||
+        (booking.student_id_number || '').toString().toLowerCase().includes(query) ||
+        (booking.instructor_id_number || '').toString().toLowerCase().includes(query) ||
+        booking.student_id.toString().includes(query) ||
+        booking.instructor_id.toString().includes(query) ||
+        dateStr.toLowerCase().includes(query) ||
+        dateStrShort.toLowerCase().includes(query) ||
+        dateStrLong.toLowerCase().includes(query) ||
+        dateStrISO.toLowerCase().includes(query)
+      );
+    })
+    .sort((a, b) => new Date(a.lesson_date).getTime() - new Date(b.lesson_date).getTime());
 
   const copyBookingDetails = (booking: Booking) => {
     const details = `
@@ -310,31 +328,50 @@ Lesson Type:    ${booking.lesson_type.toUpperCase()}
       {error && <InlineMessage message={error} type="error" />}
       {success && <InlineMessage message={success} type="success" />}
 
+      {/* Tab Navigation */}
+      <View style={styles.tabContainer}>
+        <TouchableOpacity
+          style={[styles.tab, activeTab === 'all' && styles.activeTab]}
+          onPress={() => setActiveTab('all')}
+        >
+          <Text style={[styles.tabText, activeTab === 'all' && styles.activeTabText]}>
+            All ({bookings.length})
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.tab, activeTab === 'pending' && styles.activeTab]}
+          onPress={() => setActiveTab('pending')}
+        >
+          <Text style={[styles.tabText, activeTab === 'pending' && styles.activeTabText]}>
+            Pending ({bookings.filter(b => b.status.toLowerCase() === 'pending').length})
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.tab, activeTab === 'completed' && styles.activeTab]}
+          onPress={() => setActiveTab('completed')}
+        >
+          <Text style={[styles.tabText, activeTab === 'completed' && styles.activeTabText]}>
+            Completed ({bookings.filter(b => b.status.toLowerCase() === 'completed').length})
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.tab, activeTab === 'cancelled' && styles.activeTab]}
+          onPress={() => setActiveTab('cancelled')}
+        >
+          <Text style={[styles.tabText, activeTab === 'cancelled' && styles.activeTabText]}>
+            Cancelled ({bookings.filter(b => b.status.toLowerCase() === 'cancelled').length})
+          </Text>
+        </TouchableOpacity>
+      </View>
+
       <View style={styles.searchContainer}>
         <TextInput
           style={styles.searchInput}
-          placeholder="Search by name, booking ID, or ID number..."
+          placeholder="Search by name, booking ID, student/instructor ID, or date (e.g., 2025-12-26)..."
           value={searchQuery}
           onChangeText={setSearchQuery}
           placeholderTextColor="#999"
         />
-      </View>
-
-      <View style={styles.filterContainer}>
-        <Text style={styles.filterLabel}>Filter by Status:</Text>
-        <View style={styles.pickerContainer}>
-          <Picker
-            selectedValue={statusFilter}
-            onValueChange={value => setStatusFilter(value)}
-            style={styles.picker}
-          >
-            <Picker.Item label="All Statuses" value="" />
-            <Picker.Item label="Pending" value="pending" />
-            <Picker.Item label="Confirmed" value="confirmed" />
-            <Picker.Item label="Completed" value="completed" />
-            <Picker.Item label="Cancelled" value="cancelled" />
-          </Picker>
-        </View>
       </View>
 
       <FlatList
@@ -538,6 +575,33 @@ const styles = StyleSheet.create({
     color: '#FFF',
     fontSize: 14,
     fontWeight: '600',
+  },
+  tabContainer: {
+    flexDirection: 'row',
+    backgroundColor: '#FFF',
+    borderBottomWidth: 2,
+    borderBottomColor: '#E0E0E0',
+  },
+  tab: {
+    flex: 1,
+    paddingVertical: 15,
+    paddingHorizontal: 10,
+    alignItems: 'center',
+    borderBottomWidth: 3,
+    borderBottomColor: 'transparent',
+  },
+  activeTab: {
+    borderBottomColor: '#0066CC',
+    backgroundColor: '#F0F7FF',
+  },
+  tabText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#666',
+  },
+  activeTabText: {
+    color: '#0066CC',
+    fontWeight: 'bold',
   },
   searchContainer: {
     backgroundColor: '#FFF',

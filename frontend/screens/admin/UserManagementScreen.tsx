@@ -196,14 +196,14 @@ export default function UserManagementScreen() {
   };
 
   const handleEditUser = (user: User) => {
-    setSelectedUser(user);
-    const names = user.full_name.split(' ');
-    setEditFormData({
-      first_name: names[0] || '',
-      last_name: names.slice(1).join(' ') || '',
-      phone: user.phone,
-    });
-    setEditModalVisible(true);
+    // Navigate to the appropriate profile edit screen based on user role
+    if (user.role === 'instructor') {
+      (navigation as any).navigate('EditInstructorProfile', { userId: user.id });
+    } else if (user.role === 'student') {
+      (navigation as any).navigate('EditStudentProfile', { userId: user.id });
+    } else if (user.role === 'admin') {
+      (navigation as any).navigate('EditAdminProfile', { userId: user.id });
+    }
   };
 
   const handleSaveUserEdit = async () => {

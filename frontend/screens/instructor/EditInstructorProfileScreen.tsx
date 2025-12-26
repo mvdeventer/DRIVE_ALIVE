@@ -1,11 +1,13 @@
 /**
  * Edit Instructor Profile Screen
  */
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useRoute } from '@react-navigation/native';
 import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   Modal,
+  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -18,8 +20,20 @@ import LicenseTypeSelector from '../../components/LicenseTypeSelector';
 import LocationSelector from '../../components/LocationSelector';
 import ApiService from '../../services/api';
 
+const showAlert = (title: string, message: string) => {
+  if (Platform.OS === 'web') {
+    alert(`${title}\n\n${message}`);
+  } else {
+    Alert.alert(title, message);
+  }
+};
+
 export default function EditInstructorProfileScreen() {
   const navigation = useNavigation();
+  const route = useRoute();
+  const params = route.params as { userId?: number } | undefined;
+  const isAdminEditing = params?.userId !== undefined;
+  const [instructorId, setInstructorId] = useState<number | null>(null);
   const [formData, setFormData] = useState({
     email: '',
     phone: '',
@@ -63,9 +77,13 @@ export default function EditInstructorProfileScreen() {
 
   useEffect(() => {
     const unsubscribe = navigation.addListener('beforeRemove', e => {
+      console.log('🚪 beforeRemove triggered');
+      console.log('  hasUnsavedChanges:', hasUnsavedChanges);
       if (!hasUnsavedChanges) {
+        console.log('  ✅ No unsaved changes, allowing navigation');
         return;
       }
+      console.log('  ⚠️ Unsaved changes detected, preventing navigation');
       e.preventDefault();
       setPendingNavigation(e.data.action);
       setShowDiscardModal(true);
@@ -81,15 +99,52 @@ export default function EditInstructorProfileScreen() {
     }
   };
 
+  const handleSaveAndContinue = async () => {
+    setShowDiscardModal(false);
+    await handleSaveProfile();
+    // After save completes, navigation will happen automatically via the save handler
+  };
+
   const loadProfile = async () => {
     try {
-      const [userRes, instructorRes] = await Promise.all([
-        ApiService.get('/auth/me'),
-        ApiService.get('/instructors/me'),
-      ]);
+      console.log('🔍 Loading profile...');
+      console.log('  isAdminEditing:', isAdminEditing);
+      console.log('  params?.userId:', params?.userId);
+
+      let userRes, instructorRes;
+
+      if (isAdminEditing && params?.userId) {
+        // Admin is editing another user's profile
+        console.log('📝 Admin editing mode - loading user', params.userId);
+        const instructorByUserRes = await ApiService.get(`/instructors/by-user/${params.userId}`);
+        console.log('  instructorByUserRes:', instructorByUserRes.data);
+        const fetchedInstructorId = instructorByUserRes.data.instructor_id;
+        console.log('  instructorId:', fetchedInstructorId);
+        setInstructorId(fetchedInstructorId); // Store for later use in save handler
+
+        [userRes, instructorRes] = await Promise.all([
+          ApiService.get(`/admin/users/${params.userId}`),
+          ApiService.get(`/instructors/${fetchedInstructorId}`),
+        ]);
+        console.log('  userRes.data:', userRes.data);
+        console.log('  instructorRes.data:', instructorRes.data);
+      } else {
+        // User is editing their own profile
+        console.log('👤 Self-editing mode');
+        [userRes, instructorRes] = await Promise.all([
+          ApiService.get('/auth/me'),
+          ApiService.get('/instructors/me'),
+        ]);
+      }
 
       const user = userRes.data;
       const instructor = instructorRes.data;
+
+      console.log('📊 Setting form data:');
+      console.log('  first_name:', user.first_name);
+      console.log('  last_name:', user.last_name);
+      console.log('  email:', user.email);
+      console.log('  phone:', user.phone);
 
       setFormData({
         email: user.email || '',
@@ -135,8 +190,9 @@ export default function EditInstructorProfileScreen() {
         bio: instructor.bio || '',
         is_available: instructor.is_available || false,
       });
+      console.log('✅ Form data set successfully');
     } catch (error: any) {
-      console.error('Error loading profile:', error);
+      console.error('❌ Error loading profile:', error);
       console.error('Error response:', error.response?.data);
       console.error('Error status:', error.response?.status);
       showAlert(
@@ -151,7 +207,10 @@ export default function EditInstructorProfileScreen() {
   const updateField = (field: string, value: any) => {
     setFormData(prev => {
       const updated = { ...prev, [field]: value };
-      setHasUnsavedChanges(JSON.stringify(updated) !== JSON.stringify(originalFormData));
+      const hasChanges = JSON.stringify(updated) !== JSON.stringify(originalFormData);
+      console.log('📝 Field updated:', field);
+      console.log('  Has changes:', hasChanges);
+      setHasUnsavedChanges(hasChanges);
       return updated;
     });
   };
@@ -181,31 +240,73 @@ export default function EditInstructorProfileScreen() {
 
     setSaving(true);
     try {
-      // Update user info
-      await ApiService.put('/auth/me', {
-        first_name: formData.first_name,
-        last_name: formData.last_name,
-        phone: formData.phone,
-      });
+      if (isAdminEditing && params?.userId && instructorId) {
+        // Admin editing mode - use admin endpoints
+        console.log('💾 Saving via admin endpoints...');
+        console.log('  userId:', params.userId);
+        console.log('  instructorId:', instructorId);
 
-      // Update instructor profile
-      await ApiService.put('/instructors/me', {
-        license_number: formData.license_number,
-        license_types: formData.license_types.join(','),
-        vehicle_registration: formData.vehicle_registration,
-        vehicle_make: formData.vehicle_make,
-        vehicle_model: formData.vehicle_model,
-        vehicle_year: parseInt(formData.vehicle_year),
-        province: formData.province,
-        city: formData.city,
-        suburb: formData.suburb,
-        hourly_rate: parseFloat(formData.hourly_rate),
-        service_radius_km: parseFloat(formData.service_radius_km),
-        max_travel_distance_km: parseFloat(formData.max_travel_distance_km),
-        rate_per_km_beyond_radius: parseFloat(formData.rate_per_km_beyond_radius),
-        bio: formData.bio,
-        is_available: formData.is_available,
-      });
+        // Update user basic info via admin endpoint
+        await ApiService.put(
+          `/admin/users/${params.userId}?first_name=${encodeURIComponent(
+            formData.first_name
+          )}&last_name=${encodeURIComponent(formData.last_name)}&phone=${encodeURIComponent(
+            formData.phone
+          )}`
+        );
+
+        // Update instructor profile via admin endpoint
+        const instructorParams = new URLSearchParams({
+          license_number: formData.license_number,
+          license_types: formData.license_types.join(','),
+          vehicle_registration: formData.vehicle_registration,
+          vehicle_make: formData.vehicle_make,
+          vehicle_model: formData.vehicle_model,
+          vehicle_year: formData.vehicle_year,
+          province: formData.province,
+          city: formData.city,
+          suburb: formData.suburb,
+          hourly_rate: formData.hourly_rate,
+          service_radius_km: formData.service_radius_km || '20',
+          max_travel_distance_km: formData.max_travel_distance_km || '50',
+          rate_per_km_beyond_radius: formData.rate_per_km_beyond_radius || '5',
+          bio: formData.bio,
+          is_available: formData.is_available.toString(),
+        });
+
+        await ApiService.put(`/admin/instructors/${instructorId}?${instructorParams.toString()}`);
+        console.log('✅ Admin save successful');
+      } else {
+        // Self-editing mode - use regular endpoints
+        console.log('💾 Saving via self-edit endpoints...');
+
+        // Update user info
+        await ApiService.put('/auth/me', {
+          first_name: formData.first_name,
+          last_name: formData.last_name,
+          phone: formData.phone,
+        });
+
+        // Update instructor profile
+        await ApiService.put('/instructors/me', {
+          license_number: formData.license_number,
+          license_types: formData.license_types.join(','),
+          vehicle_registration: formData.vehicle_registration,
+          vehicle_make: formData.vehicle_make,
+          vehicle_model: formData.vehicle_model,
+          vehicle_year: parseInt(formData.vehicle_year),
+          province: formData.province,
+          city: formData.city,
+          suburb: formData.suburb,
+          hourly_rate: parseFloat(formData.hourly_rate),
+          service_radius_km: parseFloat(formData.service_radius_km),
+          max_travel_distance_km: parseFloat(formData.max_travel_distance_km),
+          rate_per_km_beyond_radius: parseFloat(formData.rate_per_km_beyond_radius),
+          bio: formData.bio,
+          is_available: formData.is_available,
+        });
+        console.log('✅ Self-edit save successful');
+      }
 
       setSuccessMessage('Profile updated successfully!');
       setTimeout(() => setSuccessMessage(''), 4000);
@@ -556,7 +657,7 @@ export default function EditInstructorProfileScreen() {
           <View style={styles.confirmModalContent}>
             <Text style={styles.confirmModalTitle}>⚠️ Unsaved Changes</Text>
             <Text style={styles.confirmModalText}>
-              You have unsaved changes! Please save your profile first or your changes will be lost.
+              You have unsaved changes! Choose an option below:
             </Text>
             <View style={styles.confirmModalButtons}>
               <TouchableOpacity
@@ -569,10 +670,19 @@ export default function EditInstructorProfileScreen() {
                 <Text style={styles.cancelButtonText}>Stay</Text>
               </TouchableOpacity>
               <TouchableOpacity
+                style={[styles.confirmModalButton, styles.saveAndContinueButton]}
+                onPress={handleSaveAndContinue}
+                disabled={saving}
+              >
+                <Text style={styles.saveAndContinueButtonText}>
+                  {saving ? 'Saving...' : 'Save & Continue'}
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
                 style={[styles.confirmModalButton, styles.deleteConfirmButton]}
                 onPress={handleDiscardChanges}
               >
-                <Text style={styles.deleteConfirmButtonText}>Discard Changes</Text>
+                <Text style={styles.deleteConfirmButtonText}>Discard</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -785,6 +895,14 @@ const styles = StyleSheet.create({
     color: '#333',
     fontSize: 16,
     fontWeight: '600',
+  },
+  saveAndContinueButton: {
+    backgroundColor: '#28a745',
+  },
+  saveAndContinueButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
   },
   deleteConfirmButton: {
     backgroundColor: '#dc3545',

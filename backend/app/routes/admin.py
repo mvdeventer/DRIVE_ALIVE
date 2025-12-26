@@ -557,7 +557,7 @@ async def get_user_details(
             result["instructor_details"] = {
                 "id_number": instructor.id_number,
                 "license_number": instructor.license_number,
-                "license_expiry": instructor.license_expiry,
+                "license_types": instructor.license_types,
                 "vehicle_make": instructor.vehicle_make,
                 "vehicle_model": instructor.vehicle_model,
                 "vehicle_registration": instructor.vehicle_registration,
@@ -732,3 +732,123 @@ async def get_instructor_time_off(
         }
         for time_off in time_offs
     ]
+
+
+# ==================== Admin Update Instructor Profile ====================
+
+
+@router.put("/instructors/{instructor_id}")
+async def admin_update_instructor(
+    instructor_id: int,
+    current_admin: Annotated[User, Depends(require_admin)],
+    db: Session = Depends(get_db),
+    license_number: Optional[str] = Query(None),
+    license_types: Optional[str] = Query(None),
+    vehicle_registration: Optional[str] = Query(None),
+    vehicle_make: Optional[str] = Query(None),
+    vehicle_model: Optional[str] = Query(None),
+    vehicle_year: Optional[int] = Query(None),
+    province: Optional[str] = Query(None),
+    city: Optional[str] = Query(None),
+    suburb: Optional[str] = Query(None),
+    hourly_rate: Optional[float] = Query(None),
+    service_radius_km: Optional[float] = Query(None),
+    max_travel_distance_km: Optional[float] = Query(None),
+    rate_per_km_beyond_radius: Optional[float] = Query(None),
+    bio: Optional[str] = Query(None),
+    is_available: Optional[bool] = Query(None),
+):
+    """
+    Admin update instructor profile details
+    """
+    instructor = db.query(Instructor).filter(Instructor.id == instructor_id).first()
+    if not instructor:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Instructor not found",
+        )
+
+    # Update fields if provided
+    if license_number is not None:
+        instructor.license_number = license_number
+    if license_types is not None:
+        instructor.license_types = license_types
+    if vehicle_registration is not None:
+        instructor.vehicle_registration = vehicle_registration
+    if vehicle_make is not None:
+        instructor.vehicle_make = vehicle_make
+    if vehicle_model is not None:
+        instructor.vehicle_model = vehicle_model
+    if vehicle_year is not None:
+        instructor.vehicle_year = vehicle_year
+    if province is not None:
+        instructor.province = province
+    if city is not None:
+        instructor.city = city
+    if suburb is not None:
+        instructor.suburb = suburb
+    if hourly_rate is not None:
+        instructor.hourly_rate = hourly_rate
+    if service_radius_km is not None:
+        instructor.service_radius_km = service_radius_km
+    if max_travel_distance_km is not None:
+        instructor.max_travel_distance_km = max_travel_distance_km
+    if rate_per_km_beyond_radius is not None:
+        instructor.rate_per_km_beyond_radius = rate_per_km_beyond_radius
+    if bio is not None:
+        instructor.bio = bio
+    if is_available is not None:
+        instructor.is_available = is_available
+
+    db.commit()
+    db.refresh(instructor)
+
+    return {
+        "message": "Instructor profile updated successfully",
+        "instructor_id": instructor.id,
+    }
+
+
+# ==================== Admin Update Student Profile ====================
+
+
+@router.put("/students/{student_id}")
+async def admin_update_student(
+    student_id: int,
+    current_admin: Annotated[User, Depends(require_admin)],
+    db: Session = Depends(get_db),
+    address: Optional[str] = Query(None),
+    city: Optional[str] = Query(None),
+    province: Optional[str] = Query(None),
+    emergency_contact_name: Optional[str] = Query(None),
+    emergency_contact_phone: Optional[str] = Query(None),
+):
+    """
+    Admin update student profile details
+    """
+    student = db.query(Student).filter(Student.id == student_id).first()
+    if not student:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Student not found",
+        )
+
+    # Update fields if provided
+    if address is not None:
+        student.address = address
+    if city is not None:
+        student.city = city
+    if province is not None:
+        student.province = province
+    if emergency_contact_name is not None:
+        student.emergency_contact_name = emergency_contact_name
+    if emergency_contact_phone is not None:
+        student.emergency_contact_phone = emergency_contact_phone
+
+    db.commit()
+    db.refresh(student)
+
+    return {
+        "message": "Student profile updated successfully",
+        "student_id": student.id,
+    }
