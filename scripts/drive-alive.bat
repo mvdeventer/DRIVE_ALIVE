@@ -212,8 +212,24 @@ if not exist "venv\Scripts\activate.bat" (
     goto main
 )
 
+echo %COLOR_CYAN%Activating virtual environment...%COLOR_RESET%
 call venv\Scripts\activate.bat
-pip install -q pyinstaller
+
+:: Check if PyInstaller is installed
+python -m pip show pyinstaller >nul 2>&1
+if errorlevel 1 (
+    echo %COLOR_YELLOW%Installing PyInstaller...%COLOR_RESET%
+    python -m pip install pyinstaller
+    if errorlevel 1 (
+        echo %COLOR_RED%Failed to install PyInstaller!%COLOR_RESET%
+        pause
+        goto main
+    )
+    echo %COLOR_GREEN%PyInstaller installed successfully!%COLOR_RESET%
+    echo.
+)
+
+echo %COLOR_CYAN%Building executable with PyInstaller...%COLOR_RESET%
 pyinstaller drive-alive.spec --clean --noconfirm
 
 if not exist "dist\drive-alive-api.exe" (
