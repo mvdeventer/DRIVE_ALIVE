@@ -307,9 +307,55 @@ cd /d "%PROJECT_ROOT%"
 where gh >nul 2>&1
 if errorlevel 1 (
     echo %COLOR_RED%GitHub CLI not installed!%COLOR_RESET%
-    echo Install from: https://cli.github.com/
-    pause
-    goto main
+    echo.
+    echo %COLOR_YELLOW%Installing GitHub CLI...%COLOR_RESET%
+    echo Option 1: winget install GitHub.cli
+    echo Option 2: https://cli.github.com/
+    echo.
+    set /p "install_gh=Install via winget now? (Y/n): "
+    if /i not "!install_gh!"=="n" (
+        winget install GitHub.cli
+        if errorlevel 1 (
+            echo %COLOR_RED%Installation failed! Please install manually.%COLOR_RESET%
+            pause
+            goto main
+        )
+        echo %COLOR_GREEN%GitHub CLI installed! Please restart the script.%COLOR_RESET%
+        pause
+        goto main
+    ) else (
+        pause
+        goto main
+    )
+)
+
+:: Check GitHub CLI authentication (automatic using git credentials)
+gh auth status >nul 2>&1
+if errorlevel 1 (
+    echo %COLOR_YELLOW%Setting up GitHub CLI authentication...%COLOR_RESET%
+    echo.
+    echo %COLOR_CYAN%This is a ONE-TIME setup. Your credentials will be saved.%COLOR_RESET%
+    echo.
+
+    :: Try to use git credentials automatically
+    echo %COLOR_YELLOW%Attempting automatic authentication...%COLOR_RESET%
+    gh auth login --git-protocol https --web >nul 2>&1
+
+    if errorlevel 1 (
+        echo %COLOR_YELLOW%Please complete authentication in your browser...%COLOR_RESET%
+        gh auth login
+        if errorlevel 1 (
+            echo %COLOR_RED%Authentication failed!%COLOR_RESET%
+            echo.
+            echo %COLOR_CYAN%Try manual authentication:%COLOR_RESET%
+            echo   gh auth login
+            pause
+            goto main
+        )
+    )
+
+    echo %COLOR_GREEN%Authentication successful! Credentials saved.%COLOR_RESET%
+    echo.
 )
 
 :: Auto-commit if changes exist
@@ -372,19 +418,66 @@ powershell -Command "$json = Get-Content '%FRONTEND_DIR%\app.json' -Raw | Conver
 echo %COLOR_GREEN%Version updated to !NEW_VER!%COLOR_RESET%
 echo.
 
-:: Commit version bump
+:: Commit version bump (only if changes exist)
 echo %COLOR_YELLOW%Committing version bump...%COLOR_RESET%
 git add VERSION frontend/package.json frontend/app.json
-git commit -m "chore: bump version to !NEW_VER!"
+git diff --cached --quiet >nul 2>&1
+if errorlevel 1 (
+    git commit -m "chore: bump version to !NEW_VER!"
+    echo %COLOR_GREEN%Version changes committed%COLOR_RESET%
+) else (
+    echo %COLOR_CYAN%No version changes to commit%COLOR_RESET%
+)
+echo.
+
+:: Check if tag exists and handle it
+git tag -l "v!NEW_VER!" | findstr "v!NEW_VER!" >nul
+if not errorlevel 1 (
+    echo %COLOR_YELLOW%Tag v!NEW_VER! already exists%COLOR_RESET%
+    set /p "delete_tag=Delete and recreate tag? (Y/n): "
+    if /i not "!delete_tag!"=="n" (
+        echo %COLOR_YELLOW%Deleting old tag...%COLOR_RESET%
+        git tag -d "v!NEW_VER!"
+        git push origin --delete "v!NEW_VER!" 2>nul
+    ) else (
+        echo %COLOR_YELLOW%Skipping tag creation%COLOR_RESET%
+        goto skip_tag
+    )
+)
 
 :: Create tag
 echo %COLOR_YELLOW%Creating git tag v!NEW_VER!...%COLOR_RESET%
 git tag -a "v!NEW_VER!" -m "Release v!NEW_VER!"
+if errorlevel 1 (
+    echo %COLOR_RED%Tag creation failed!%COLOR_RESET%
+    pause
+    goto main
+)
+echo %COLOR_GREEN%Tag created%COLOR_RESET%
+
+:skip_tag
+echo.
 
 :: Push
 echo %COLOR_YELLOW%Pushing to GitHub...%COLOR_RESET%
 git push origin main
-git push origin "v!NEW_VER!"
+if errorlevel 1 (
+    echo %COLOR_RED%Push failed!%COLOR_RESET%
+    pause
+    goto main
+)
+
+:: Push tag if it was created/updated
+git tag -l "v!NEW_VER!" | findstr "v!NEW_VER!" >nul
+if not errorlevel 1 (
+    git push origin "v!NEW_VER!" 2>nul
+    if errorlevel 1 (
+        echo %COLOR_YELLOW%Tag already on remote%COLOR_RESET%
+    ) else (
+        echo %COLOR_GREEN%Tag pushed%COLOR_RESET%
+    )
+)
+echo.
 
 echo.
 echo %COLOR_GREEN%Creating GitHub release...%COLOR_RESET%
