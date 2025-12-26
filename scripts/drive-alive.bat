@@ -973,12 +973,40 @@ if "%GIT_CHECK%"=="0" (
 
 cd /d "%PROJECT_ROOT%"
 
-:: Check for uncommitted changes
+:: Check for uncommitted changes and commit them
 git diff --quiet >nul 2>&1
 if errorlevel 1 (
-    echo %COLOR_RED%You have uncommitted changes. Please commit or stash them first.%COLOR_RESET%
+    echo %COLOR_YELLOW%Uncommitted changes detected. Auto-generating commit message...%COLOR_RESET%
+    echo.
+
+    :: Show current changes
+    echo %COLOR_YELLOW%Analyzing changes:%COLOR_RESET%
     git status --short
-    exit /b 1
+    echo.
+
+    :: Auto-generate commit message based on changed files
+    call :generate_commit_message
+
+    :: Show generated message
+    echo %COLOR_CYAN%Generated commit message:%COLOR_RESET%
+    echo   %AUTO_COMMIT_MESSAGE%
+    echo.
+
+    :: Stage all changes
+    echo %COLOR_YELLOW%Staging all changes...%COLOR_RESET%
+    git add .
+
+    :: Commit changes
+    echo %COLOR_YELLOW%Committing changes...%COLOR_RESET%
+    git commit -m "%AUTO_COMMIT_MESSAGE%"
+
+    if errorlevel 1 (
+        echo %COLOR_RED%Commit failed%COLOR_RESET%
+        exit /b 1
+    )
+
+    echo %COLOR_GREEN%Changes committed successfully!%COLOR_RESET%
+    echo.
 )
 
 :: Get version
@@ -1469,6 +1497,87 @@ if errorlevel 1 (
     echo Install from: %CMD_URL%
     exit /b 1
 )
+exit /b 0
+
+:generate_commit_message
+:: Auto-generate commit message based on git changes
+
+:: Get list of changed files (both staged and unstaged)
+set "CHANGED_FILES="
+for /f "tokens=*" %%f in ('git status --short 2^>nul') do (
+    set "CHANGED_FILES=!CHANGED_FILES! %%f"
+)
+
+:: Analyze changes to determine type and scope
+set "HAS_FRONTEND=0"
+set "HAS_BACKEND=0"
+set "HAS_SCRIPTS=0"
+set "HAS_DOCS=0"
+set "HAS_CONFIG=0"
+set "HAS_TESTS=0"
+
+echo !CHANGED_FILES! | findstr /i "frontend" >nul && set "HAS_FRONTEND=1"
+echo !CHANGED_FILES! | findstr /i "backend" >nul && set "HAS_BACKEND=1"
+echo !CHANGED_FILES! | findstr /i "scripts" >nul && set "HAS_SCRIPTS=1"
+echo !CHANGED_FILES! | findstr /i ".md" >nul && set "HAS_DOCS=1"
+echo !CHANGED_FILES! | findstr /i "package.json app.json config" >nul && set "HAS_CONFIG=1"
+echo !CHANGED_FILES! | findstr /i "test" >nul && set "HAS_TESTS=1"
+
+:: Determine commit type
+set "COMMIT_TYPE=chore"
+set "COMMIT_SCOPE="
+set "COMMIT_DESC=update project files"
+
+if "!HAS_TESTS!"=="1" (
+    set "COMMIT_TYPE=test"
+    set "COMMIT_DESC=update test files"
+)
+
+if "!HAS_DOCS!"=="1" (
+    set "COMMIT_TYPE=docs"
+    set "COMMIT_DESC=update documentation"
+)
+
+if "!HAS_CONFIG!"=="1" (
+    set "COMMIT_TYPE=chore"
+    set "COMMIT_DESC=update configuration files"
+)
+
+if "!HAS_SCRIPTS!"=="1" (
+    set "COMMIT_TYPE=build"
+    set "COMMIT_SCOPE=scripts"
+    set "COMMIT_DESC=update build and deployment scripts"
+)
+
+if "!HAS_BACKEND!"=="1" (
+    set "COMMIT_TYPE=feat"
+    set "COMMIT_SCOPE=backend"
+    set "COMMIT_DESC=update backend components"
+)
+
+if "!HAS_FRONTEND!"=="1" (
+    set "COMMIT_TYPE=feat"
+    set "COMMIT_SCOPE=frontend"
+    set "COMMIT_DESC=update frontend components"
+)
+
+:: Handle multiple areas
+if "!HAS_FRONTEND!"=="1" if "!HAS_BACKEND!"=="1" (
+    set "COMMIT_SCOPE=app"
+    set "COMMIT_DESC=update application components"
+)
+
+:: Get number of files changed
+set "FILE_COUNT=0"
+for /f "tokens=*" %%f in ('git status --short 2^>nul ^| find /c /v ""') do set "FILE_COUNT=%%f"
+
+:: Build final commit message
+if "!COMMIT_SCOPE!"=="" (
+    set "AUTO_COMMIT_MESSAGE=!COMMIT_TYPE!: !COMMIT_DESC! (!FILE_COUNT! files)"
+) else (
+    set "AUTO_COMMIT_MESSAGE=!COMMIT_TYPE!(!COMMIT_SCOPE!): !COMMIT_DESC! (!FILE_COUNT! files)"
+)
+
 exit /b 0
 
 endlocal
