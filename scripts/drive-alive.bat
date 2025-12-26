@@ -18,8 +18,10 @@
 ::   install         Install all dependencies (backend + frontend)
 ::   test            Run all tests (backend + frontend)
 ::   build           Build production bundles (dry-run)
-::   commit          Commit changes with GitHub CLI
+::   build-installer Build complete Windows installer package
+::   commit          Commit changes with auto-version detection
 ::   release         Create a release with GitHub CLI (auto-updates versions)
+::   version         Manage versions (get/major/minor/patch/set)
 ::   status          Show Git and server status
 ::   update-version  Update version in all project files
 ::   help            Show this help message
@@ -33,11 +35,18 @@
 ::   --port [PORT]           Custom backend port (default: 8000)
 ::   --message [MSG], -m     Commit message (for commit command)
 ::   --version [VER], -v     Version tag (for release command)
+::   --major                 Increment major version (x.0.0)
+::   --minor                 Increment minor version (0.x.0)
+::   --patch                 Increment patch version (0.0.x)
 ::
 :: EXAMPLES:
-::   drive-alive.bat start                    # Start both servers and open browsers
-::   drive-alive.bat start --backend-only     # Start only backend server
-::   drive-alive.bat check                    # Check all dependencies
+::   drive-alive.bat version get              # Get current version
+::   drive-alive.bat commit -m "feat: new feature" --patch
+::   drive-alive.bat commit -m "feat: breaking change" --major
+::   drive-alive.bat release -v v1.0.0        # Create release with specific version
+::   drive-alive.bat release --minor          # Auto-increment minor version
+::   drive-alive.bat build                    # Dry-run production build
+::   drive-alive.bat build-installer          # Build Windows installer
 ::   drive-alive.bat commit -m "feat: new feature"
 ::   drive-alive.bat release -v v1.0.0
 ::   drive-alive.bat build                    # Dry-run production build
@@ -78,6 +87,7 @@ set "DEBUG=0"
 set "CLEAR_DB=0"
 set "COMMIT_MESSAGE="
 set "RELEASE_VERSION="
+set "VERSION_INCREMENT="
 
 if "%COMMAND%"=="" set "COMMAND=start"
 
@@ -116,6 +126,9 @@ if /i "%~1"=="-v" (
     shift
     set "RELEASE_VERSION=%~1"
 )
+if /i "%~1"=="--major" set "VERSION_INCREMENT=major"
+if /i "%~1"=="--minor" set "VERSION_INCREMENT=minor"
+if /i "%~1"=="--patch" set "VERSION_INCREMENT=patch"
 goto :parse_args
 
 :end_parse
@@ -135,6 +148,8 @@ if /i "%COMMAND%"=="check" goto :cmd_check
 if /i "%COMMAND%"=="install" goto :cmd_install
 if /i "%COMMAND%"=="test" goto :cmd_test
 if /i "%COMMAND%"=="build" goto :cmd_build
+if /i "%COMMAND%"=="build-installer" goto :cmd_build_installer
+if /i "%COMMAND%"=="version" goto :cmd_version
 if /i "%COMMAND%"=="commit" goto :cmd_commit
 if /i "%COMMAND%"=="release" goto :cmd_release
 if /i "%COMMAND%"=="status" goto :cmd_status
@@ -742,7 +757,7 @@ goto :eof
 :: COMMAND: COMMIT
 :: ==============================================================================
 :cmd_commit
-echo %COLOR_BLUE%Committing changes with GitHub CLI...%COLOR_RESET%
+echo %COLOR_BLUE%Committing changes with version management...%COLOR_RESET%
 echo.
 
 :: Check if GitHub CLI is installed
@@ -776,6 +791,22 @@ if "%COMMIT_MESSAGE%"=="" (
     exit /b 1
 )
 
+:: Handle version increment if specified
+if not "%VERSION_INCREMENT%"=="" (
+    echo.
+    echo %COLOR_YELLOW%Incrementing %VERSION_INCREMENT% version...%COLOR_RESET%
+    call "%SCRIPTS_DIR%\version-manager.bat" %VERSION_INCREMENT%
+    if errorlevel 1 (
+        echo %COLOR_RED%Failed to increment version%COLOR_RESET%
+        exit /b 1
+    )
+
+    :: Get the new version
+    for /f "tokens=*" %%v in ('call "%SCRIPTS_DIR%\version-manager.bat" get') do set "NEW_VERSION=%%v"
+    echo %COLOR_GREEN%Version updated to: %NEW_VERSION%%COLOR_RESET%
+    echo.
+)
+
 echo.
 echo %COLOR_YELLOW%Staging all changes...%COLOR_RESET%
 git add .
@@ -788,6 +819,17 @@ if errorlevel 1 (
     exit /b 1
 )
 
+:: Create git tag if version was incremented
+if not "%VERSION_INCREMENT%"=="" (
+    echo %COLOR_YELLOW%Creating git tag v%NEW_VERSION%...%COLOR_RESET%
+    git tag -a "v%NEW_VERSION%" -m "Version %NEW_VERSION%"
+    if errorlevel 1 (
+        echo %COLOR_YELLOW%Warning: Failed to create git tag%COLOR_RESET%
+    ) else (
+        echo %COLOR_GREEN%Git tag v%NEW_VERSION% created%COLOR_RESET%
+    )
+)
+
 echo.
 echo %COLOR_GREEN%Changes committed successfully!%COLOR_RESET%
 echo.
@@ -795,9 +837,115 @@ set /p "PUSH=Push to remote? (y/N): "
 if /i "%PUSH%"=="y" (
     echo %COLOR_YELLOW%Pushing to remote...%COLOR_RESET%
     git push
+    if errorlevel 1 (
+        echo %COLOR_RED%Push failed%COLOR_RESET%
+        exit /b 1
+    )
+
+    :: Push tags if created
+    if not "%VERSION_INCREMENT%"=="" (
+        echo %COLOR_YELLOW%Pushing tags...%COLOR_RESET%
+        git push --tags
+        if errorlevel 1 (
+            echo %COLOR_YELLOW%Warning: Failed to push tags%COLOR_RESET%
+        ) else (
+            echo %COLOR_GREEN%Tags pushed successfully!%COLOR_RESET%
+        )
+    )
     echo %COLOR_GREEN%Pushed successfully!%COLOR_RESET%
 )
 goto :eof
+
+:: ==============================================================================
+:: COMMAND: BUILD INSTALLER
+:: ==============================================================================
+:cmd_build_installer
+echo %COLOR_BLUE%Building Windows Installer Package...%COLOR_RESET%
+echo.
+
+:: Check if build script exists
+if not exist "%SCRIPTS_DIR%\build-installer.bat" (
+    echo %COLOR_RED%Build script not found: %SCRIPTS_DIR%\build-installer.bat%COLOR_RESET%
+    exit /b 1
+)
+
+:: Run the build script
+call "%SCRIPTS_DIR%\build-installer.bat"
+
+if errorlevel 1 (
+    echo.
+    echo %COLOR_RED%Installer build failed%COLOR_RESET%
+    exit /b 1
+)
+
+echo.
+echo %COLOR_GREEN%Installer built successfully!%COLOR_RESET%
+goto :eof
+
+:: ==============================================================================
+:: COMMAND: VERSION
+:: ==============================================================================
+:cmd_version
+:: Get version subcommand
+set "VERSION_CMD=%~1"
+shift
+
+if "%VERSION_CMD%"=="" (
+    echo %COLOR_RED%Error: Version command required%COLOR_RESET%
+    echo.
+    echo Usage: drive-alive.bat version [command] [options]
+    echo.
+    echo Commands:
+    echo   get              Get current version
+    echo   major            Increment major version ^(x.0.0^)
+    echo   minor            Increment minor version ^(0.x.0^)
+    echo   patch            Increment patch version ^(0.0.x^)
+    echo   set [version]    Set specific version ^(e.g., 2.1.3^)
+    echo.
+    exit /b 1
+)
+
+:: Check if version manager exists
+if not exist "%SCRIPTS_DIR%\version-manager.bat" (
+    echo %COLOR_RED%Version manager not found: %SCRIPTS_DIR%\version-manager.bat%COLOR_RESET%
+    exit /b 1
+)
+
+:: Execute version command
+if /i "%VERSION_CMD%"=="get" (
+    call "%SCRIPTS_DIR%\version-manager.bat" get
+    goto :eof
+)
+
+if /i "%VERSION_CMD%"=="major" (
+    call "%SCRIPTS_DIR%\version-manager.bat" major
+    goto :eof
+)
+
+if /i "%VERSION_CMD%"=="minor" (
+    call "%SCRIPTS_DIR%\version-manager.bat" minor
+    goto :eof
+)
+
+if /i "%VERSION_CMD%"=="patch" (
+    call "%SCRIPTS_DIR%\version-manager.bat" patch
+    goto :eof
+)
+
+if /i "%VERSION_CMD%"=="set" (
+    set "NEW_VER=%~1"
+    if "%NEW_VER%"=="" (
+        echo %COLOR_RED%Error: Version number required%COLOR_RESET%
+        echo Usage: drive-alive.bat version set [version]
+        exit /b 1
+    )
+    call "%SCRIPTS_DIR%\version-manager.bat" set "%NEW_VER%"
+    goto :eof
+)
+
+echo %COLOR_RED%Error: Unknown version command '%VERSION_CMD%'%COLOR_RESET%
+echo Run 'drive-alive.bat version' for usage information.
+exit /b 1
 
 :: ==============================================================================
 :: COMMAND: RELEASE
@@ -807,16 +955,18 @@ echo %COLOR_BLUE%Creating release with GitHub CLI and version control...%COLOR_R
 echo.
 
 :: Check if GitHub CLI is installed
-gh --version >nul 2>&1
-if errorlevel 1 (
-    echo %COLOR_RED%GitHub CLI (gh) is not installed.%COLOR_RESET%
+set "GH_CHECK=0"
+gh --version >nul 2>nul && set "GH_CHECK=1"
+if "%GH_CHECK%"=="0" (
+    echo %COLOR_RED%GitHub CLI ^(gh^) is not installed.%COLOR_RESET%
     echo Install from: https://cli.github.com/
     exit /b 1
 )
 
 :: Check if Git is installed
-git --version >nul 2>&1
-if errorlevel 1 (
+set "GIT_CHECK=0"
+git --version >nul 2>nul && set "GIT_CHECK=1"
+if "%GIT_CHECK%"=="0" (
     echo %COLOR_RED%Git is not installed.%COLOR_RESET%
     exit /b 1
 )
@@ -824,7 +974,7 @@ if errorlevel 1 (
 cd /d "%PROJECT_ROOT%"
 
 :: Check for uncommitted changes
-git diff --quiet
+git diff --quiet >nul 2>&1
 if errorlevel 1 (
     echo %COLOR_RED%You have uncommitted changes. Please commit or stash them first.%COLOR_RESET%
     git status --short
@@ -930,12 +1080,14 @@ set /p "RELEASE_NOTES="
 
 if "%RELEASE_NOTES%"=="" (
     echo %COLOR_YELLOW%Using auto-generated release notes...%COLOR_RESET%
-    gh release create %RELEASE_VERSION% --title "%RELEASE_TITLE%" --generate-notes
+    gh release create "%RELEASE_VERSION%" --title "%RELEASE_TITLE%" --generate-notes
+    set "RELEASE_RESULT=!errorlevel!"
 ) else (
-    gh release create %RELEASE_VERSION% --title "%RELEASE_TITLE%" --notes "%RELEASE_NOTES%"
+    gh release create "%RELEASE_VERSION%" --title "%RELEASE_TITLE%" --notes "%RELEASE_NOTES%"
+    set "RELEASE_RESULT=!errorlevel!"
 )
 
-if errorlevel 1 (
+if !RELEASE_RESULT! neq 0 (
     echo %COLOR_RED%GitHub release creation failed%COLOR_RESET%
     echo %COLOR_YELLOW%Note: Commits and tags have been pushed. You can create the release manually.%COLOR_RESET%
     exit /b 1
@@ -1073,7 +1225,9 @@ echo   check           Check all dependencies and environment
 echo   install         Install all dependencies (backend + frontend)
 echo   test            Run all tests (backend + frontend)
 echo   build           Build production bundles (dry-run)
-echo   commit          Commit changes with GitHub CLI
+echo   build-installer Build complete Windows installer package
+echo   version         Manage versions (get/major/minor/patch/set)
+echo   commit          Commit changes with auto-version detection
 echo   release         Create a release with GitHub CLI (auto-updates versions)
 echo   status          Show Git and server status
 echo   update-version  Update version in all project files
@@ -1087,6 +1241,9 @@ echo   --debug, -d             Show detailed debug information
 echo   --port [PORT]           Custom backend port (default: 8000)
 echo   --message [MSG], -m     Commit message (for commit command)
 echo   --version [VER], -v     Version tag (for release/update-version command)
+echo   --major                 Increment major version (x.0.0)
+echo   --minor                 Increment minor version (0.x.0)
+echo   --patch                 Increment patch version (0.0.x)
 echo.
 echo EXAMPLES:
 echo   drive-alive.bat start
@@ -1094,13 +1251,29 @@ echo   drive-alive.bat start --backend-only --port 8080
 echo   drive-alive.bat check
 echo   drive-alive.bat install
 echo   drive-alive.bat test --backend-only
-echo   drive-alive.bat commit -m "feat: add new feature"
-echo   drive-alive.bat update-version -v 1.0.1
+echo   drive-alive.bat version get
+echo   drive-alive.bat version patch
+echo   drive-alive.bat commit -m "fix: bug fix" --patch
+echo   drive-alive.bat commit -m "feat: new feature" --minor
+echo   drive-alive.bat build-installer
 echo   drive-alive.bat release -v v1.0.0
 echo   drive-alive.bat stop
 echo.
 echo VERSION MANAGEMENT:
-echo   The 'release' command performs the following steps:
+echo   'version' command - Manage version numbers:
+echo     version get            Get current version
+echo     version major          Increment major (1.0.0 -^> 2.0.0)
+echo     version minor          Increment minor (1.0.0 -^> 1.1.0)
+echo     version patch          Increment patch (1.0.0 -^> 1.0.1)
+echo     version set X.Y.Z      Set specific version
+echo.
+echo   'commit' command - Commit with optional version bump:
+echo     --patch                Increment patch version
+echo     --minor                Increment minor version
+echo     --major                Increment major version
+echo     Creates git tag automatically (e.g., v1.2.3)
+echo.
+echo   'release' command - Full release workflow:
 echo     1. Checks for uncommitted changes
 echo     2. Updates version in all project files
 echo     3. Commits version changes
@@ -1108,7 +1281,7 @@ echo     4. Creates a Git tag
 echo     5. Pushes changes and tag to GitHub
 echo     6. Creates a GitHub release
 echo.
-echo   The 'update-version' command only updates version files without
+echo   'update-version' command - Only updates version files without
 echo   creating a release. Use this for pre-release version bumps.
 echo.
 echo REQUIREMENTS:
@@ -1116,6 +1289,7 @@ echo   - Python 3.9+ (for backend)
 echo   - Node.js 18+ ^& npm (for frontend)
 echo   - GitHub CLI (gh) [optional, for commit/release operations]
 echo   - Git (for version control)
+echo   - Inno Setup [optional, for build-installer command]
 echo.
 goto :eof
 
@@ -1278,6 +1452,21 @@ set "INIT_FILE=%BACKEND_DIR%\app\__init__.py"
 powershell -Command "(Get-Content '%INIT_FILE%') -replace '__version__ = \".*\"', '__version__ = \"%NEW_VERSION%\"' | Set-Content '%INIT_FILE%'"
 if errorlevel 1 (
     echo %COLOR_RED%Failed to update __init__.py%COLOR_RESET%
+    exit /b 1
+)
+exit /b 0
+
+:check_command_exists
+:: Check if a command exists
+:: Usage: call :check_command_exists command_name "Display Name" "Download URL"
+set "CMD_TO_CHECK=%~1"
+set "CMD_DISPLAY=%~2"
+set "CMD_URL=%~3"
+
+where "%CMD_TO_CHECK%" >nul 2>&1
+if errorlevel 1 (
+    echo %COLOR_RED%%CMD_DISPLAY% is not installed.%COLOR_RESET%
+    echo Install from: %CMD_URL%
     exit /b 1
 )
 exit /b 0

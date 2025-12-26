@@ -30,7 +30,8 @@ export default function EditAdminProfileScreen() {
   const navigation = useNavigation();
   const route = useRoute();
   const params = route.params as { userId?: number } | undefined;
-  const isEditingOtherAdmin = params?.userId !== undefined;
+  const [currentUserId, setCurrentUserId] = useState<number | null>(null);
+  const [isEditingOtherAdmin, setIsEditingOtherAdmin] = useState(false);
 
   const [formData, setFormData] = useState({
     email: '',
@@ -90,14 +91,21 @@ export default function EditAdminProfileScreen() {
 
   const loadProfile = async () => {
     try {
+      // First, get current user to determine if editing self or another admin
+      const meRes = await ApiService.get('/auth/me');
+      const currentUser = meRes.data;
+      setCurrentUserId(currentUser.id);
+
       let userRes;
 
-      if (isEditingOtherAdmin && params?.userId) {
+      if (params?.userId && params.userId !== currentUser.id) {
         // Editing another admin's profile
+        setIsEditingOtherAdmin(true);
         userRes = await ApiService.get(`/admin/users/${params.userId}`);
       } else {
         // Editing own profile
-        userRes = await ApiService.get('/auth/me');
+        setIsEditingOtherAdmin(false);
+        userRes = meRes; // Use already fetched current user data
       }
 
       const user = userRes.data;

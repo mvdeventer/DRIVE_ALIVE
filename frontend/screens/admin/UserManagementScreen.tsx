@@ -438,62 +438,60 @@ export default function UserManagementScreen() {
         )}
       </View>
 
-      {item.role !== 'admin' && (
-        <View style={styles.actionButtons}>
+      <View style={styles.actionButtons}>
+        <TouchableOpacity
+          style={[styles.actionButton, styles.editButton]}
+          onPress={() => handleEditUser(item)}
+        >
+          <Text style={styles.actionButtonText}>✏️ Edit</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.actionButton, styles.passwordButton]}
+          onPress={() => handleOpenResetPassword(item)}
+        >
+          <Text style={styles.actionButtonText}>🔑 Reset PW</Text>
+        </TouchableOpacity>
+        {item.role === 'instructor' && (
           <TouchableOpacity
-            style={[styles.actionButton, styles.editButton]}
-            onPress={() => handleEditUser(item)}
+            style={[styles.actionButton, styles.scheduleButton]}
+            onPress={() => handleViewSchedule(item)}
           >
-            <Text style={styles.actionButtonText}>✏️ Edit</Text>
+            <Text style={styles.scheduleButtonLabel}>Schedule</Text>
+            <Text style={styles.scheduleButtonText}>📅</Text>
           </TouchableOpacity>
+        )}
+        {item.status === 'suspended' ? (
           <TouchableOpacity
-            style={[styles.actionButton, styles.passwordButton]}
-            onPress={() => handleOpenResetPassword(item)}
+            style={[styles.actionButton, styles.activateButton]}
+            onPress={() => handleStatusChange(item, 'active')}
           >
-            <Text style={styles.actionButtonText}>🔑 Reset PW</Text>
+            <Text style={styles.actionButtonText}>✅ Unsuspend</Text>
           </TouchableOpacity>
-          {item.role === 'instructor' && (
+        ) : item.status === 'inactive' ? (
+          <TouchableOpacity
+            style={[styles.actionButton, styles.activateButton]}
+            onPress={() => handleStatusChange(item, 'active')}
+          >
+            <Text style={styles.actionButtonText}>✅ Activate</Text>
+          </TouchableOpacity>
+        ) : null}
+        {item.status === 'active' && (
+          <>
             <TouchableOpacity
-              style={[styles.actionButton, styles.scheduleButton]}
-              onPress={() => handleViewSchedule(item)}
+              style={[styles.actionButton, styles.deactivateButton]}
+              onPress={() => handleStatusChange(item, 'inactive')}
             >
-              <Text style={styles.scheduleButtonLabel}>Schedule</Text>
-              <Text style={styles.scheduleButtonText}>📅</Text>
+              <Text style={styles.actionButtonText}>❌ Deactivate</Text>
             </TouchableOpacity>
-          )}
-          {item.status === 'suspended' ? (
             <TouchableOpacity
-              style={[styles.actionButton, styles.activateButton]}
-              onPress={() => handleStatusChange(item, 'active')}
+              style={[styles.actionButton, styles.suspendButton]}
+              onPress={() => handleStatusChange(item, 'suspended')}
             >
-              <Text style={styles.actionButtonText}>✅ Unsuspend</Text>
+              <Text style={styles.actionButtonText}>🚫 Suspend</Text>
             </TouchableOpacity>
-          ) : item.status === 'inactive' ? (
-            <TouchableOpacity
-              style={[styles.actionButton, styles.activateButton]}
-              onPress={() => handleStatusChange(item, 'active')}
-            >
-              <Text style={styles.actionButtonText}>✅ Activate</Text>
-            </TouchableOpacity>
-          ) : null}
-          {item.status === 'active' && (
-            <>
-              <TouchableOpacity
-                style={[styles.actionButton, styles.deactivateButton]}
-                onPress={() => handleStatusChange(item, 'inactive')}
-              >
-                <Text style={styles.actionButtonText}>❌ Deactivate</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.actionButton, styles.suspendButton]}
-                onPress={() => handleStatusChange(item, 'suspended')}
-              >
-                <Text style={styles.actionButtonText}>🚫 Suspend</Text>
-              </TouchableOpacity>
-            </>
-          )}
-        </View>
-      )}
+          </>
+        )}
+      </View>
     </View>
   );
 
