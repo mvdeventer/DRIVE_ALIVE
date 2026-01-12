@@ -96,6 +96,20 @@
       "todayLessons": {
         "success": 4000
       }
+    },
+    "EarningsReportScreen": {
+      "exportNotAvailable": {
+        "error": 5000
+      },
+      "exportStart": {
+        "success": 3000
+      },
+      "exportSuccess": {
+        "success": 4000
+      },
+      "exportError": {
+        "error": 5000
+      }
     }
   },
   "notes": [

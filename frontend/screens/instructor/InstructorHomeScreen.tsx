@@ -1,9 +1,9 @@
 /**
  * Instructor Dashboard - Main hub for instructors to manage their lessons and availability
  */
-import { CommonActions, useNavigation } from '@react-navigation/native';
+import { CommonActions, useFocusEffect, useNavigation } from '@react-navigation/native';
 import * as SecureStore from 'expo-secure-store';
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -108,6 +108,13 @@ export default function InstructorHomeScreen() {
   useEffect(() => {
     loadDashboardData();
   }, []);
+
+  // Reload data when screen comes into focus (e.g., after editing profile)
+  useFocusEffect(
+    useCallback(() => {
+      loadDashboardData();
+    }, [])
+  );
 
   const loadDashboardData = async () => {
     try {

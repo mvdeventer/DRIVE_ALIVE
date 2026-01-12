@@ -2,9 +2,10 @@
  * Detailed Earnings Report Screen for Instructors
  * Comprehensive earnings breakdown with filters and export functionality
  */
+import { useFocusEffect } from '@react-navigation/native';
 import ExcelJS from 'exceljs';
 import jsPDF from 'jspdf';
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Platform,
@@ -15,7 +16,9 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import InlineMessage from '../../components/InlineMessage';
 import ApiService from '../../services/api';
+import { showMessage } from '../../utils/messageConfig';
 
 interface EarningsData {
   total_earnings: number;
@@ -58,10 +61,19 @@ export default function EarningsReportScreen({ navigation }: any) {
   const [earningsData, setEarningsData] = useState<EarningsData | null>(null);
   const [detailedBookings, setDetailedBookings] = useState<any[]>([]);
   const [timeFilter, setTimeFilter] = useState<'all' | 'month' | 'week'>('all');
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   useEffect(() => {
     loadData();
   }, []);
+
+  // Reload data when screen comes into focus (e.g., after editing profile)
+  useFocusEffect(
+    useCallback(() => {
+      loadData();
+    }, [])
+  );
 
   const loadData = async () => {
     try {
@@ -102,20 +114,44 @@ export default function EarningsReportScreen({ navigation }: any) {
 
   const exportReport = async () => {
     if (Platform.OS !== 'web') {
-      alert('Export functionality is only available on web');
+      showMessage(
+        setErrorMessage,
+        'Export functionality is only available on web',
+        'EarningsReportScreen',
+        'exportNotAvailable',
+        'error'
+      );
       return;
     }
 
-    alert('Generating PDF and Excel reports...');
+    showMessage(
+      setSuccessMessage,
+      'Generating PDF and Excel reports...',
+      'EarningsReportScreen',
+      'exportStart',
+      'success'
+    );
 
     try {
       // Export both PDF and Excel
       await exportToPDF();
       await exportToExcel();
-      alert('✅ Reports exported successfully!\n\nPDF and Excel files have been downloaded.');
+      showMessage(
+        setSuccessMessage,
+        '✅ Reports exported successfully!\n\nPDF and Excel files have been downloaded.',
+        'EarningsReportScreen',
+        'exportSuccess',
+        'success'
+      );
     } catch (error) {
       console.error('Export error:', error);
-      alert('❌ Error exporting reports. Please try again.');
+      showMessage(
+        setErrorMessage,
+        '❌ Error exporting reports. Please try again.',
+        'EarningsReportScreen',
+        'exportError',
+        'error'
+      );
     }
   };
 
@@ -631,6 +667,24 @@ export default function EarningsReportScreen({ navigation }: any) {
       style={styles.container}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
     >
+      {/* Inline Messages */}
+      {successMessage && (
+        <InlineMessage
+          type="success"
+          message={successMessage}
+          onDismiss={() => setSuccessMessage(null)}
+          autoDismissMs={4000}
+        />
+      )}
+      {errorMessage && (
+        <InlineMessage
+          type="error"
+          message={errorMessage}
+          onDismiss={() => setErrorMessage(null)}
+          autoDismissMs={5000}
+        />
+      )}
+
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>

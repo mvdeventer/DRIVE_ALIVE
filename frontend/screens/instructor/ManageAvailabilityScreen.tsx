@@ -2,8 +2,8 @@
  * Instructor Availability Management Screen
  * Allows instructors to set up their weekly schedule and manage availability
  */
-import { useNavigation } from '@react-navigation/native';
-import React, { useEffect, useRef, useState } from 'react';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Modal,
@@ -98,6 +98,13 @@ export default function ManageAvailabilityScreen() {
   useEffect(() => {
     loadAvailability();
   }, []);
+
+  // Reload availability when screen comes into focus (e.g., after changes)
+  useFocusEffect(
+    useCallback(() => {
+      loadAvailability();
+    }, [])
+  );
 
   // Track Time Off form changes (dates or reason entered)
   useEffect(() => {
