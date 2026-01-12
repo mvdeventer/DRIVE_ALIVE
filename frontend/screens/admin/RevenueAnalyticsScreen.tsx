@@ -149,7 +149,7 @@ export default function RevenueAnalyticsScreen() {
               <View style={styles.metricCard}>
                 <Text style={styles.metricValue}>
                   {stats.completed_bookings > 0
-                    ? ((stats.total_revenue / stats.completed_bookings) * 1.0).toFixed(2)
+                    ? (stats.total_revenue / stats.completed_bookings).toFixed(2)
                     : '0.00'}
                 </Text>
                 <Text style={styles.metricLabel}>Revenue per Booking</Text>
@@ -196,7 +196,7 @@ const styles = StyleSheet.create({
     marginTop: 15,
     marginHorizontal: 15,
     borderRadius: 10,
-    boxShadow: '0px 2px 4px rgba(0,0,0,0.1)',
+    boxShadow: '0px 2px 4px #0000001A',
   },
   sectionTitle: {
     fontSize: 18,

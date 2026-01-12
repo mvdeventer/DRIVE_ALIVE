@@ -236,9 +236,9 @@ Lesson Type:    ${booking.lesson_type.toUpperCase()}
         <View style={styles.bookingInfo}>
           <Text style={styles.bookingId}>ID: #{item.id}</Text>
           <Text style={styles.studentName}>👤 {item.student_name}</Text>
-          <Text style={styles.idNumber}> ID: {item.student_id_number}</Text>
+          <Text style={styles.idNumber}>ID: {item.student_id_number}</Text>
           <Text style={styles.instructorName}>🚗 {item.instructor_name}</Text>
-          <Text style={styles.idNumber}> ID: {item.instructor_id_number}</Text>
+          <Text style={styles.idNumber}>ID: {item.instructor_id_number}</Text>
         </View>
         <View style={[styles.statusBadge, getStatusStyle(item.status)]}>
           <Text style={styles.statusText}>{item.status.toUpperCase()}</Text>
@@ -292,21 +292,11 @@ Lesson Type:    ${booking.lesson_type.toUpperCase()}
       </View>
 
       <View style={styles.actionButtons}>
-        <TouchableOpacity
-          style={styles.copyButton}
-          onPress={() => copyBookingDetails(item)}
-          onStartShouldSetResponder={() => true}
-          onResponderTerminationRequest={() => false}
-        >
+        <TouchableOpacity style={styles.copyButton} onPress={() => copyBookingDetails(item)}>
           <Text style={styles.copyButtonText}>📋 Copy Details</Text>
         </TouchableOpacity>
         {item.status.toLowerCase() !== 'cancelled' && item.status.toLowerCase() !== 'completed' && (
-          <TouchableOpacity
-            style={styles.cancelButton}
-            onPress={() => handleCancelBooking(item)}
-            onStartShouldSetResponder={() => true}
-            onResponderTerminationRequest={() => false}
-          >
+          <TouchableOpacity style={styles.cancelButton} onPress={() => handleCancelBooking(item)}>
             <Text style={styles.cancelButtonText}>Cancel</Text>
           </TouchableOpacity>
         )}
@@ -522,14 +512,16 @@ Lesson Type:    ${booking.lesson_type.toUpperCase()}
               {confirmCancel && (
                 <View style={styles.confirmDetails}>
                   <Text style={styles.confirmDetailText}>
-                    <Text style={styles.boldText}>Student:</Text> {confirmCancel.student_name}
+                    <Text style={styles.boldText}>Student: </Text>
+                    <Text>{confirmCancel.student_name}</Text>
                   </Text>
                   <Text style={styles.confirmDetailText}>
-                    <Text style={styles.boldText}>Instructor:</Text> {confirmCancel.instructor_name}
+                    <Text style={styles.boldText}>Instructor: </Text>
+                    <Text>{confirmCancel.instructor_name}</Text>
                   </Text>
                   <Text style={styles.confirmDetailText}>
-                    <Text style={styles.boldText}>Date:</Text>{' '}
-                    {new Date(confirmCancel.lesson_date).toLocaleString()}
+                    <Text style={styles.boldText}>Date: </Text>
+                    <Text>{new Date(confirmCancel.lesson_date).toLocaleString()}</Text>
                   </Text>
                 </View>
               )}
@@ -654,7 +646,7 @@ const styles = StyleSheet.create({
     flex: 1,
     maxWidth: '32%',
     minWidth: 280,
-    boxShadow: '0px 2px 4px rgba(0,0,0,0.1)',
+    boxShadow: '0px 2px 4px #0000001A',
   },
   bookingHeader: {
     flexDirection: 'row',
@@ -770,7 +762,7 @@ const styles = StyleSheet.create({
   // Modal styles
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: '#00000080',
     justifyContent: 'center',
     alignItems: 'center',
     padding: 20,
@@ -781,7 +773,7 @@ const styles = StyleSheet.create({
     width: '90%',
     maxWidth: 600,
     maxHeight: '90%',
-    boxShadow: '0px 4px 15px rgba(0,0,0,0.3)',
+    boxShadow: '0px 4px 15px #0000004D',
   },
   modalHeader: {
     flexDirection: 'row',

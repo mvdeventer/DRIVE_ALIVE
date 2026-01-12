@@ -24,7 +24,7 @@ const API_BASE_URL = isWeb
 // Set ENABLED to true to pre-fill registration forms for faster testing
 // Set to false for production-like behavior (empty forms with placeholders only)
 export const DEBUG_CONFIG = {
-  ENABLED: false, // Change to true to enable auto-fill in registration forms
+  ENABLED: true, // Change to true to enable auto-fill in registration forms
   DEFAULT_EMAIL: 'mvdeventer123@gmail.com',
   DEFAULT_PHONE: '+27611154598',
   DEFAULT_PASSWORD: 'Test1234',

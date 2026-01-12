@@ -10,7 +10,7 @@ from geopy.distance import geodesic
 from sqlalchemy.orm import Session
 
 from ..database import get_db
-from ..models.booking import Booking
+from ..models.booking import Booking, BookingStatus
 from ..models.user import Instructor as InstructorModel
 from ..models.user import User, UserRole
 from ..routes.auth import get_current_user
@@ -43,14 +43,23 @@ async def get_instructors(
         instructors = query.all()
 
         # Filter by distance if location provided
-        if latitude is not None and longitude is not None and max_distance_km is not None:
+        if (
+            latitude is not None
+            and longitude is not None
+            and max_distance_km is not None
+        ):
             student_location = (latitude, longitude)
             filtered_instructors = []
 
             for instructor in instructors:
                 if instructor.current_latitude and instructor.current_longitude:
-                    instructor_location = (instructor.current_latitude, instructor.current_longitude)
-                    distance = geodesic(student_location, instructor_location).kilometers
+                    instructor_location = (
+                        instructor.current_latitude,
+                        instructor.current_longitude,
+                    )
+                    distance = geodesic(
+                        student_location, instructor_location
+                    ).kilometers
 
                     if distance <= max_distance_km:
                         filtered_instructors.append(instructor)
@@ -119,10 +128,16 @@ async def get_instructor_profile(
             detail="Only instructors can access instructor profile",
         )
 
-    instructor = db.query(InstructorModel).filter(InstructorModel.user_id == current_user.id).first()
+    instructor = (
+        db.query(InstructorModel)
+        .filter(InstructorModel.user_id == current_user.id)
+        .first()
+    )
 
     if not instructor:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Instructor profile not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Instructor profile not found"
+        )
 
     return InstructorResponse(
         id=current_user.id,
@@ -158,15 +173,130 @@ async def get_instructor_profile(
     )
 
 
+@router.get("/earnings-report", response_model=None)
+async def get_earnings_report(
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Session = Depends(get_db),
+):
+    """
+    Get comprehensive earnings report for the current instructor
+    """
+    print(
+        f"🔍 EARNINGS ENDPOINT CALLED for user: {current_user.email}, role: {current_user.role}"
+    )
+
+    if current_user.role != UserRole.INSTRUCTOR:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only instructors can access this endpoint",
+        )
+
+    instructor = (
+        db.query(InstructorModel)
+        .filter(InstructorModel.user_id == current_user.id)
+        .first()
+    )
+    if not instructor:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Instructor profile not found"
+        )
+
+    # Get all bookings for this instructor
+    from ..models.user import Student
+
+    bookings = db.query(Booking).filter(Booking.instructor_id == instructor.id).all()
+
+    # Calculate statistics
+    completed_bookings = [b for b in bookings if b.status == BookingStatus.COMPLETED]
+    pending_bookings = [b for b in bookings if b.status == BookingStatus.PENDING]
+    cancelled_bookings = [b for b in bookings if b.status == BookingStatus.CANCELLED]
+
+    total_earnings = sum(float(b.amount) for b in completed_bookings)
+    completed_lessons = len(completed_bookings)
+
+    # Calculate earnings by month
+    from collections import defaultdict
+
+    earnings_by_month = defaultdict(lambda: {"earnings": 0.0, "lessons": 0})
+    for booking in completed_bookings:
+        month_key = booking.lesson_date.strftime("%Y-%m")  # Format: "2024-12"
+        earnings_by_month[month_key]["earnings"] += float(booking.amount)
+        earnings_by_month[month_key]["lessons"] += 1
+
+    # Convert to sorted list (most recent first)
+    monthly_breakdown = []
+    for month, data in sorted(earnings_by_month.items(), reverse=True):
+        # Convert "2024-12" to "December 2024"
+        from datetime import datetime
+
+        month_obj = datetime.strptime(month, "%Y-%m")
+        month_name = month_obj.strftime("%B %Y")
+
+        monthly_breakdown.append(
+            {
+                "month": month_name,
+                "earnings": data["earnings"],
+                "lessons": data["lessons"],
+            }
+        )
+
+    # Get recent earnings (last 20 completed bookings)
+    recent_completed = sorted(
+        [b for b in completed_bookings], key=lambda x: x.lesson_date, reverse=True
+    )[:20]
+
+    recent_earnings = []
+    for booking in recent_completed:
+        student = db.query(Student).filter(Student.id == booking.student_id).first()
+        student_user = (
+            db.query(User).filter(User.id == student.user_id).first()
+            if student
+            else None
+        )
+
+        recent_earnings.append(
+            {
+                "id": booking.id,
+                "student_name": (
+                    f"{student_user.first_name} {student_user.last_name}"
+                    if student_user
+                    else "Unknown"
+                ),
+                "lesson_date": booking.lesson_date.isoformat(),
+                "duration_minutes": booking.duration_minutes,
+                "amount": float(booking.amount),
+                "status": booking.status.value,
+            }
+        )
+
+    response_data = {
+        "total_earnings": total_earnings,
+        "hourly_rate": float(instructor.hourly_rate) if instructor.hourly_rate else 0.0,
+        "completed_lessons": completed_lessons,
+        "pending_lessons": len(pending_bookings),
+        "cancelled_lessons": len(cancelled_bookings),
+        "total_lessons": len(bookings),
+        "earnings_by_month": monthly_breakdown,
+        "recent_earnings": recent_earnings,
+    }
+
+    print(f"✅ RETURNING EARNINGS DATA: {response_data}")
+    return response_data
+
+
 @router.get("/{instructor_id}", response_model=InstructorResponse)
 async def get_instructor(instructor_id: int, db: Session = Depends(get_db)):
     """
     Get instructor by instructor_id (NOT user_id!)
     """
-    instructor = db.query(InstructorModel).filter(InstructorModel.id == instructor_id).first()
+    instructor = (
+        db.query(InstructorModel).filter(InstructorModel.id == instructor_id).first()
+    )
 
     if not instructor:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Instructor not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Instructor not found"
+        )
 
     user = db.query(User).filter(User.id == instructor.user_id).first()
 
@@ -212,16 +342,24 @@ async def get_instructor_by_user_id(user_id: int, db: Session = Depends(get_db))
     # First verify the user exists and is an instructor
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
+        )
 
     if user.role != UserRole.INSTRUCTOR:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="User is not an instructor")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="User is not an instructor"
+        )
 
     # Now get the instructor record
-    instructor = db.query(InstructorModel).filter(InstructorModel.user_id == user_id).first()
+    instructor = (
+        db.query(InstructorModel).filter(InstructorModel.user_id == user_id).first()
+    )
 
     if not instructor:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Instructor profile not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Instructor profile not found"
+        )
 
     return InstructorResponse(
         id=user.id,
@@ -259,18 +397,29 @@ async def get_instructor_by_user_id(user_id: int, db: Session = Depends(get_db))
 
 @router.put("/me", response_model=InstructorResponse)
 async def update_instructor_profile(
-    instructor_data: InstructorUpdate, current_user: Annotated[User, Depends(get_current_user)], db: Session = Depends(get_db)
+    instructor_data: InstructorUpdate,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Session = Depends(get_db),
 ):
     """
     Update instructor profile (instructors only)
     """
     if current_user.role != UserRole.INSTRUCTOR:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only instructors can update instructor profile")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only instructors can update instructor profile",
+        )
 
-    instructor = db.query(InstructorModel).filter(InstructorModel.user_id == current_user.id).first()
+    instructor = (
+        db.query(InstructorModel)
+        .filter(InstructorModel.user_id == current_user.id)
+        .first()
+    )
 
     if not instructor:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Instructor profile not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Instructor profile not found"
+        )
 
     # Update fields
     for field, value in instructor_data.dict(exclude_unset=True).items():
@@ -315,61 +464,109 @@ async def update_instructor_profile(
 
 @router.put("/me/location", response_model=dict)
 async def update_instructor_location(
-    location: InstructorLocation, current_user: Annotated[User, Depends(get_current_user)], db: Session = Depends(get_db)
+    location: InstructorLocation,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Session = Depends(get_db),
 ):
     """
     Update instructor GPS location (instructors only)
     """
     if current_user.role != UserRole.INSTRUCTOR:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only instructors can update location")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only instructors can update location",
+        )
 
-    instructor = db.query(InstructorModel).filter(InstructorModel.user_id == current_user.id).first()
+    instructor = (
+        db.query(InstructorModel)
+        .filter(InstructorModel.user_id == current_user.id)
+        .first()
+    )
 
     if not instructor:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Instructor profile not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Instructor profile not found"
+        )
 
     instructor.current_latitude = location.latitude
     instructor.current_longitude = location.longitude
 
     db.commit()
 
-    return {"message": "Location updated successfully", "latitude": location.latitude, "longitude": location.longitude}
+    return {
+        "message": "Location updated successfully",
+        "latitude": location.latitude,
+        "longitude": location.longitude,
+    }
 
 
 @router.get("/my-bookings")
-async def get_my_bookings(current_user: Annotated[User, Depends(get_current_user)], db: Session = Depends(get_db)):
+async def get_my_bookings(
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Session = Depends(get_db),
+):
     """
     Get all bookings for the current instructor
     """
     if current_user.role != UserRole.INSTRUCTOR:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only instructors can access this endpoint")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only instructors can access this endpoint",
+        )
 
-    instructor = db.query(InstructorModel).filter(InstructorModel.user_id == current_user.id).first()
+    instructor = (
+        db.query(InstructorModel)
+        .filter(InstructorModel.user_id == current_user.id)
+        .first()
+    )
     if not instructor:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Instructor profile not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Instructor profile not found"
+        )
 
-    bookings = db.query(Booking).filter(Booking.instructor_id == instructor.id).order_by(Booking.lesson_date.desc()).all()
+    bookings = (
+        db.query(Booking)
+        .filter(Booking.instructor_id == instructor.id)
+        .order_by(Booking.lesson_date.desc())
+        .all()
+    )
 
     bookings_list = []
     for booking in bookings:
         from ..models.user import Student
 
         student = db.query(Student).filter(Student.id == booking.student_id).first()
-        student_user = db.query(User).filter(User.id == student.user_id).first() if student else None
+        student_user = (
+            db.query(User).filter(User.id == student.user_id).first()
+            if student
+            else None
+        )
 
         booking_dict = {
             "id": booking.id,
             "booking_reference": booking.booking_reference,
-            "student_name": f"{student_user.first_name} {student_user.last_name}" if student_user else "Unknown",
+            "student_name": (
+                f"{student_user.first_name} {student_user.last_name}"
+                if student_user
+                else "Unknown"
+            ),
             "scheduled_time": booking.lesson_date.isoformat(),
             "duration_minutes": booking.duration_minutes,
             "status": booking.status.value,
             "payment_status": booking.payment_status.value,
             "total_price": float(booking.amount),
             "pickup_location": booking.pickup_address,
-            "rebooking_count": booking.rebooking_count if booking.rebooking_count else 0,
-            "cancellation_fee": float(booking.cancellation_fee) if booking.cancellation_fee else 0.0,
-            "original_lesson_date": booking.original_lesson_date.isoformat() if booking.original_lesson_date else None,
+            "rebooking_count": (
+                booking.rebooking_count if booking.rebooking_count else 0
+            ),
+            "cancellation_fee": (
+                float(booking.cancellation_fee) if booking.cancellation_fee else 0.0
+            ),
+            "original_lesson_date": (
+                booking.original_lesson_date.isoformat()
+                if booking.original_lesson_date
+                else None
+            ),
         }
         bookings_list.append(booking_dict)
 
@@ -377,21 +574,39 @@ async def get_my_bookings(current_user: Annotated[User, Depends(get_current_user
 
 
 @router.put("/availability")
-async def update_availability(availability_data: dict, current_user: Annotated[User, Depends(get_current_user)], db: Session = Depends(get_db)):
+async def update_availability(
+    availability_data: dict,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Session = Depends(get_db),
+):
     """
     Update instructor availability status
     """
     if current_user.role != UserRole.INSTRUCTOR:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only instructors can update availability")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only instructors can update availability",
+        )
 
-    instructor = db.query(InstructorModel).filter(InstructorModel.user_id == current_user.id).first()
+    instructor = (
+        db.query(InstructorModel)
+        .filter(InstructorModel.user_id == current_user.id)
+        .first()
+    )
     if not instructor:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Instructor profile not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Instructor profile not found"
+        )
 
-    instructor.is_available = availability_data.get("is_available", instructor.is_available)
+    instructor.is_available = availability_data.get(
+        "is_available", instructor.is_available
+    )
     db.commit()
 
-    return {"message": "Availability updated successfully", "is_available": instructor.is_available}
+    return {
+        "message": "Availability updated successfully",
+        "is_available": instructor.is_available,
+    }
 
 
 # ==================== Admin Routes ====================
@@ -410,9 +625,13 @@ async def verify_instructor(
     # TODO: Add admin role check when admin functionality is implemented
     # For now, only allow instructors to verify themselves (temporary for development)
 
-    instructor = db.query(InstructorModel).filter(InstructorModel.id == instructor_id).first()
+    instructor = (
+        db.query(InstructorModel).filter(InstructorModel.id == instructor_id).first()
+    )
     if not instructor:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Instructor not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Instructor not found"
+        )
 
     # Update verification status
     instructor.is_verified = True
@@ -441,9 +660,13 @@ async def unverify_instructor(
     """
     # TODO: Add admin role check when admin functionality is implemented
 
-    instructor = db.query(InstructorModel).filter(InstructorModel.id == instructor_id).first()
+    instructor = (
+        db.query(InstructorModel).filter(InstructorModel.id == instructor_id).first()
+    )
     if not instructor:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Instructor not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Instructor not found"
+        )
 
     # Update verification status
     instructor.is_verified = False
@@ -471,7 +694,9 @@ async def get_unverified_instructors(
     # TODO: Add admin role check when admin functionality is implemented
 
     # Query unverified instructors
-    instructors = db.query(InstructorModel).filter(InstructorModel.is_verified == False).all()
+    instructors = (
+        db.query(InstructorModel).filter(InstructorModel.is_verified == False).all()
+    )
 
     # Build responses
     responses = []
@@ -512,4 +737,6 @@ async def get_unverified_instructors(
             )
             responses.append(response)
 
+    return responses
+    return responses
     return responses

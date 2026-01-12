@@ -127,6 +127,15 @@ export default function AdminDashboardScreen({ navigation }: any) {
                 <Text style={styles.actionTitle}>Revenue</Text>
                 <Text style={styles.actionSubtitle}>Total Earned</Text>
               </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.actionCard, styles.actionInfo]}
+                onPress={() => navigation.navigate('InstructorEarningsOverview')}
+              >
+                <Text style={styles.actionBadge}>{stats.verified_instructors}</Text>
+                <Text style={styles.actionTitle}>Instructor Earnings</Text>
+                <Text style={styles.actionSubtitle}>Detailed Reports</Text>
+              </TouchableOpacity>
             </View>
           </View>
 
@@ -267,7 +276,7 @@ const styles = StyleSheet.create({
     marginTop: 15,
     marginHorizontal: 15,
     borderRadius: 10,
-    boxShadow: '0px 2px 4px rgba(0,0,0,0.1)',
+    boxShadow: '0px 2px 4px #0000001A',
   },
   sectionTitle: {
     fontSize: 18,
@@ -298,6 +307,9 @@ const styles = StyleSheet.create({
   },
   actionWarning: {
     backgroundColor: '#FFC107',
+  },
+  actionInfo: {
+    backgroundColor: '#17A2B8',
   },
   actionBadge: {
     fontSize: 24,

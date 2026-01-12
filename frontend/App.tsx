@@ -1,12 +1,15 @@
 /**
  * Main App Component
  */
-import { CommonActions, NavigationContainer, StackActions } from '@react-navigation/native';
+import { CommonActions, NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import * as SecureStore from 'expo-secure-store';
 import { StatusBar } from 'expo-status-bar';
 import React, { useEffect, useRef, useState } from 'react';
 import { Platform, StyleSheet, Text, TouchableOpacity } from 'react-native';
+
+// Global Top Bar
+import GlobalTopBar from './components/GlobalTopBar';
 
 // Auth Screens
 import LoginScreen from './screens/auth/LoginScreen';
@@ -21,6 +24,7 @@ import InstructorListScreen from './screens/student/InstructorListScreen';
 import StudentHomeScreen from './screens/student/StudentHomeScreen';
 
 // Instructor Screens
+import EarningsReportScreen from './screens/instructor/EarningsReportScreen';
 import EditInstructorProfileScreen from './screens/instructor/EditInstructorProfileScreen';
 import InstructorHomeScreen from './screens/instructor/InstructorHomeScreen';
 import ManageAvailabilityScreen from './screens/instructor/ManageAvailabilityScreen';
@@ -28,10 +32,14 @@ import ManageAvailabilityScreen from './screens/instructor/ManageAvailabilityScr
 // Payment Screens
 import PaymentScreen from './screens/payment/PaymentScreen';
 
+// API Service
+import ApiService from './services/api';
+
 // Admin Screens
 import AdminDashboardScreen from './screens/admin/AdminDashboardScreen';
 import BookingOversightScreen from './screens/admin/BookingOversightScreen';
 import EditAdminProfileScreen from './screens/admin/EditAdminProfileScreen';
+import InstructorEarningsOverviewScreen from './screens/admin/InstructorEarningsOverviewScreen';
 import InstructorVerificationScreen from './screens/admin/InstructorVerificationScreen';
 import RevenueAnalyticsScreen from './screens/admin/RevenueAnalyticsScreen';
 import UserManagementScreen from './screens/admin/UserManagementScreen';
@@ -59,6 +67,7 @@ export default function App() {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [userRole, setUserRole] = useState<string | null>(null);
+  const [userName, setUserName] = useState<string>('');
   const navigationRef = useRef<any>(null);
 
   useEffect(() => {
@@ -71,6 +80,11 @@ export default function App() {
       const role = await storage.getItem('user_role');
       setIsAuthenticated(!!token);
       setUserRole(role);
+
+      // Fetch user profile if authenticated
+      if (token && role) {
+        fetchUserProfile(role);
+      }
     } catch (error) {
       console.error('Error checking auth:', error);
     } finally {
@@ -78,79 +92,67 @@ export default function App() {
     }
   };
 
+  const fetchUserProfile = async (role: string) => {
+    try {
+      let endpoint = '';
+      if (role === 'instructor') {
+        endpoint = '/instructors/me';
+      } else if (role === 'student') {
+        endpoint = '/students/me';
+      } else if (role === 'admin') {
+        endpoint = '/auth/me';
+      }
+
+      if (endpoint) {
+        const response = await ApiService.get(endpoint);
+        const firstName = response.data.first_name || '';
+        const lastName = response.data.last_name || '';
+        const roleName = role.charAt(0).toUpperCase() + role.slice(1);
+        setUserName(`${firstName} ${lastName} (${roleName})`);
+      }
+    } catch (error) {
+      console.error('Error fetching user profile:', error);
+      // Set generic name if profile fetch fails
+      const roleName = role ? role.charAt(0).toUpperCase() + role.slice(1) : 'User';
+      setUserName(roleName);
+    }
+  };
+
   if (isLoading) {
     return null; // Or a loading screen
   }
 
-  const handleAuthChange = () => {
-    checkAuth();
+  const handleAuthChange = async () => {
+    await checkAuth();
   };
 
   const handleLogout = async () => {
-    // Try to navigate back to Login using popToTop, which will trigger beforeRemove
-    if (navigationRef.current) {
-      const currentRoute = navigationRef.current?.getCurrentRoute();
-      console.log('🚪 Logout clicked, current route:', currentRoute?.name);
+    // IMMEDIATE LOGOUT: Clear auth tokens and reload (per AGENTS.md)
+    try {
+      await storage.removeItem('access_token');
+      await storage.removeItem('user_role');
+      setIsAuthenticated(false);
+      setUserRole(null);
+      setUserName('');
 
-      // Create a navigation state listener to detect when we actually reach Login
-      const unsubscribe = navigationRef.current.addListener('state', async () => {
-        const route = navigationRef.current?.getCurrentRoute();
-        if (route?.name === 'Login') {
-          // We successfully navigated to Login, now clear auth
-          console.log('✅ Reached Login screen, clearing auth...');
-          try {
-            await storage.removeItem('access_token');
-            await storage.removeItem('user_role');
-            setIsAuthenticated(false);
-            setUserRole(null);
-
-            // Force reload on web to fully clear state
-            if (Platform.OS === 'web') {
-              setTimeout(() => {
-                window.location.reload();
-              }, 100);
-            }
-          } catch (error) {
-            console.error('Error clearing auth:', error);
-          }
-          unsubscribe(); // Clean up listener
-        }
-      });
-
-      // If already on Login screen, clear immediately
-      if (currentRoute?.name === 'Login') {
-        console.log('Already on Login, clearing immediately');
-        try {
-          await storage.removeItem('access_token');
-          await storage.removeItem('user_role');
-          setIsAuthenticated(false);
-          setUserRole(null);
-          if (Platform.OS === 'web') {
-            window.location.reload();
-          }
-        } catch (error) {
-          console.error('Error clearing auth:', error);
-        }
-        unsubscribe();
-        return;
-      }
-
-      // Try popToTop first to trigger beforeRemove on all screens
-      console.log('📤 Dispatching popToTop...');
-      try {
-        navigationRef.current.dispatch(StackActions.popToTop());
-      } catch (error) {
-        console.error('popToTop failed:', error);
-        // Fallback to reset if popToTop fails
-        navigationRef.current.dispatch(
+      // Web: Reload page to clear all state
+      if (Platform.OS === 'web') {
+        window.location.reload();
+      } else {
+        // Mobile: Reset navigation to Login screen
+        navigationRef.current?.dispatch(
           CommonActions.reset({
             index: 0,
             routes: [{ name: 'Login' }],
           })
         );
       }
+    } catch (error) {
+      console.error('Error logging out:', error);
     }
   };
+
+  const UserNameDisplay = () => <Text style={styles.userNameText}>{userName}</Text>;
 
   const LogoutButton = () => (
     <TouchableOpacity onPress={handleLogout} style={styles.logoutButton}>
@@ -161,7 +163,13 @@ export default function App() {
   return (
     <>
       <StatusBar style="auto" />
-      <NavigationContainer ref={navigationRef}>
+      {isAuthenticated && Platform.OS === 'web' && (
+        <GlobalTopBar userName={userName} userRole={userRole} onLogout={handleLogout} />
+      )}
+      <NavigationContainer
+        ref={navigationRef}
+        style={isAuthenticated && Platform.OS === 'web' ? styles.navigationWithTopBar : {}}
+      >
         <Stack.Navigator
           initialRouteName={
             !isAuthenticated
@@ -172,7 +180,7 @@ export default function App() {
               ? 'InstructorHome'
               : 'StudentHome'
           }
-          screenOptions={{
+          screenOptions={({ navigation, route }) => ({
             headerStyle: {
               backgroundColor: '#007AFF',
             },
@@ -180,8 +188,14 @@ export default function App() {
             headerTitleStyle: {
               fontWeight: 'bold',
             },
+            headerBackVisible: true,
+            headerBackTitle: 'Back',
+            headerLeft:
+              isAuthenticated && userName && !navigation.canGoBack()
+                ? () => <UserNameDisplay />
+                : undefined,
             headerRight: isAuthenticated ? () => <LogoutButton /> : undefined,
-          }}
+          })}
         >
           {/* Auth Stack - Always available */}
           <Stack.Screen name="Login" options={{ title: 'Login', headerShown: !isAuthenticated }}>
@@ -241,6 +255,11 @@ export default function App() {
             component={ManageAvailabilityScreen}
             options={{ title: 'Manage Availability' }}
           />
+          <Stack.Screen
+            name="EarningsReport"
+            component={EarningsReportScreen}
+            options={{ title: 'Earnings Report' }}
+          />
 
           {/* Payment */}
           <Stack.Screen name="Payment" component={PaymentScreen} options={{ title: 'Payment' }} />
@@ -276,6 +295,11 @@ export default function App() {
             component={RevenueAnalyticsScreen}
             options={{ title: 'Revenue Analytics' }}
           />
+          <Stack.Screen
+            name="InstructorEarningsOverview"
+            component={InstructorEarningsOverviewScreen}
+            options={{ title: 'Instructor Earnings' }}
+          />
         </Stack.Navigator>
       </NavigationContainer>
     </>
@@ -283,6 +307,13 @@ export default function App() {
 }
 
 const styles = StyleSheet.create({
+  userNameText: {
+    color: '#fff',
+    fontWeight: '600',
+    fontSize: 14,
+    marginLeft: 15,
+    maxWidth: Platform.OS === 'web' ? 250 : 180,
+  },
   logoutButton: {
     marginRight: 15,
     paddingHorizontal: 12,
@@ -294,5 +325,8 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontWeight: '600',
     fontSize: 14,
+  },
+  navigationWithTopBar: {
+    marginTop: Platform.OS === 'web' ? 70 : 0,
   },
 });

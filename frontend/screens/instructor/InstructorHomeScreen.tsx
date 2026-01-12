@@ -3,7 +3,7 @@
  */
 import { CommonActions, useNavigation } from '@react-navigation/native';
 import * as SecureStore from 'expo-secure-store';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -19,7 +19,9 @@ import {
   View,
 } from 'react-native';
 import CalendarPicker from '../../components/CalendarPicker';
+import InlineMessage from '../../components/InlineMessage';
 import ApiService from '../../services/api';
+import { showMessage } from '../../utils/messageConfig';
 
 // Conditional import for DateTimePicker
 let DateTimePicker: any;
@@ -69,6 +71,7 @@ export default function InstructorHomeScreen() {
   const [profile, setProfile] = useState<InstructorProfile | null>(null);
   const [upcomingLessons, setUpcomingLessons] = useState<Booking[]>([]);
   const [todayLessons, setTodayLessons] = useState<Booking[]>([]);
+  const [allBookings, setAllBookings] = useState<Booking[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [showSearchDropdown, setShowSearchDropdown] = useState(false);
   const [uniqueStudents, setUniqueStudents] = useState<Booking[]>([]);
@@ -92,7 +95,15 @@ export default function InstructorHomeScreen() {
     hourly_rate: '',
     is_available: true,
   });
-  const [activeTab, setActiveTab] = useState<'lessons' | 'profile'>('lessons');
+  const [activeTab, setActiveTab] = useState<
+    'pending' | 'completed' | 'cancelled' | 'all' | 'profile'
+  >('pending');
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [showAllBookings, setShowAllBookings] = useState(false);
+  const scrollViewRef = useRef<ScrollView>(null);
+
+  const SCREEN_NAME = 'InstructorHomeScreen';
 
   useEffect(() => {
     loadDashboardData();
@@ -100,10 +111,11 @@ export default function InstructorHomeScreen() {
 
   const loadDashboardData = async () => {
     try {
-      // Load instructor profile and bookings
-      const [profileRes, bookingsRes] = await Promise.all([
+      // Load instructor profile, bookings, and earnings
+      const [profileRes, bookingsRes, earningsRes] = await Promise.all([
         ApiService.get('/auth/me'),
         ApiService.get('/bookings/my-bookings'),
+        ApiService.get('/instructors/earnings-report'),
       ]);
 
       console.log('🔍 API Response - First Booking:', JSON.stringify(bookingsRes.data[0], null, 2));
@@ -115,7 +127,13 @@ export default function InstructorHomeScreen() {
         '🔍 FRONTEND - All keys in first booking:',
         Object.keys(bookingsRes.data[0] || {})
       );
-      setProfile(profileRes.data);
+
+      // Merge earnings data into profile
+      const profileWithEarnings = {
+        ...profileRes.data,
+        total_earnings: earningsRes.data.total_earnings || 0,
+      };
+      setProfile(profileWithEarnings);
 
       // Filter bookings for today and upcoming, sorted in ascending order
       const now = new Date();
@@ -143,6 +161,13 @@ export default function InstructorHomeScreen() {
 
       setTodayLessons(todayBookings);
       setUpcomingLessons(upcomingBookings);
+
+      // Store ALL bookings (including cancelled and completed) sorted by date
+      const allBookingsSorted = (bookingsRes.data || []).sort(
+        (a: Booking, b: Booking) =>
+          new Date(a.scheduled_time).getTime() - new Date(b.scheduled_time).getTime()
+      );
+      setAllBookings(allBookingsSorted);
 
       // Extract unique students by student_id (to handle students with same name)
       const allBookings = [...todayBookings, ...upcomingBookings];
@@ -188,18 +213,12 @@ export default function InstructorHomeScreen() {
       await ApiService.put('/instructors/availability', { is_available: value });
       setProfile(prev => (prev ? { ...prev, is_available: value } : null));
       const message = value ? 'You are now available for bookings' : 'You are now unavailable';
-      if (Platform.OS === 'web') {
-        alert(message);
-      } else {
-        Alert.alert('Availability Updated', message);
-      }
+      scrollViewRef.current?.scrollTo({ y: 0, animated: true });
+      showMessage(setSuccessMessage, message, SCREEN_NAME, 'toggleAvailability', 'success');
     } catch (error) {
       console.error('Error toggling availability:', error);
-      if (Platform.OS === 'web') {
-        alert('Failed to update availability');
-      } else {
-        Alert.alert('Error', 'Failed to update availability');
-      }
+      scrollViewRef.current?.scrollTo({ y: 0, animated: true });
+      showMessage(setErrorMessage, 'Failed to update availability', SCREEN_NAME, 'error', 'error');
     }
   };
 
@@ -273,16 +292,7 @@ export default function InstructorHomeScreen() {
   };
 
   const handleViewEarnings = () => {
-    const details = `Total Earnings: R${
-      profile?.total_earnings?.toFixed(2) || '0.00'
-    }\nHourly Rate: R${profile?.hourly_rate || 0}\nToday's Lessons: ${
-      todayLessons.length
-    }\nUpcoming Lessons: ${upcomingLessons.length}\n\n(Detailed earnings report coming soon!)`;
-    if (Platform.OS === 'web') {
-      alert(`💰 Earnings Report\n\n${details}`);
-    } else {
-      Alert.alert('💰 Earnings Report', details);
-    }
+    navigation.navigate('EarningsReport' as never);
   };
 
   const handleViewLessonDetails = (lesson: Booking) => {
@@ -601,42 +611,74 @@ export default function InstructorHomeScreen() {
 
   return (
     <ScrollView
+      ref={scrollViewRef}
       style={styles.container}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
     >
+      {/* Inline Messages */}
+      {successMessage && <InlineMessage message={successMessage} type="success" />}
+      {errorMessage && <InlineMessage message={errorMessage} type="error" />}
+
       {/* Header */}
       <View style={styles.header}>
-        <View>
+        <View style={{ flex: 1 }}>
           <Text style={styles.greeting}>Instructor Dashboard</Text>
           <Text style={styles.name}>
             {profile?.first_name} {profile?.last_name}
           </Text>
+        </View>
+        <View style={styles.headerRate}>
+          <Text style={styles.headerRateLabel}>Hourly Rate</Text>
+          <Text style={styles.headerRateAmount}>R{profile?.hourly_rate || 0}/hour</Text>
         </View>
       </View>
 
       {/* Tab Navigation */}
       <View style={styles.tabContainer}>
         <TouchableOpacity
-          style={[styles.tab, activeTab === 'lessons' && styles.activeTab]}
-          onPress={() => setActiveTab('lessons')}
+          style={[styles.tab, activeTab === 'pending' && styles.activeTab]}
+          onPress={() => setActiveTab('pending')}
         >
-          <Text style={[styles.tabText, activeTab === 'lessons' && styles.activeTabText]}>
-            📚 Upcoming Lessons
+          <Text style={[styles.tabText, activeTab === 'pending' && styles.activeTabText]}>
+            ⏳ Pending
           </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.tab, activeTab === 'completed' && styles.activeTab]}
+          onPress={() => setActiveTab('completed')}
+        >
+          <Text style={[styles.tabText, activeTab === 'completed' && styles.activeTabText]}>
+            ✅ Completed
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.tab, activeTab === 'cancelled' && styles.activeTab]}
+          onPress={() => setActiveTab('cancelled')}
+        >
+          <Text style={[styles.tabText, activeTab === 'cancelled' && styles.activeTabText]}>
+            ❌ Cancelled
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.tab, activeTab === 'all' && styles.activeTab]}
+          onPress={() => setActiveTab('all')}
+        >
+          <Text style={[styles.tabText, activeTab === 'all' && styles.activeTabText]}>📋 All</Text>
         </TouchableOpacity>
         <TouchableOpacity
           style={[styles.tab, activeTab === 'profile' && styles.activeTab]}
           onPress={() => setActiveTab('profile')}
         >
           <Text style={[styles.tabText, activeTab === 'profile' && styles.activeTabText]}>
-            👤 My Profile
+            👤 Profile
           </Text>
         </TouchableOpacity>
       </View>
 
       {/* Tab Content */}
-      {activeTab === 'lessons' ? (
+      {activeTab !== 'profile' ? (
         <>
+          {/* Bookings by Status Tabs */}
           {/* Search Bar */}
           <View style={styles.searchContainer}>
             <TextInput
@@ -646,6 +688,7 @@ export default function InstructorHomeScreen() {
               onChangeText={text => {
                 setSearchQuery(text);
                 setSelectedStudent(null); // Clear selected student when typing
+                setShowAllBookings(false); // Reset to normal view when searching
                 if (text.length > 0) {
                   setShowSearchDropdown(true);
                 }
@@ -658,6 +701,7 @@ export default function InstructorHomeScreen() {
                   setSearchQuery('');
                   setShowSearchDropdown(false);
                   setSelectedStudent(null); // Clear selected student
+                  setShowAllBookings(false); // Reset to normal view
                 }}
                 style={styles.clearButton}
               >
@@ -730,28 +774,54 @@ export default function InstructorHomeScreen() {
             )}
           </View>
 
-          {/* Today's Lessons */}
+          {/* Bookings by Status */}
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>
-              {"Today's Lessons "}
-              {selectedStudent
-                ? `for ${selectedStudent.student_name} (${filterBookings(todayLessons).length})`
-                : searchQuery
-                ? `(${filterBookings(todayLessons).length} results)`
-                : ''}
+              {activeTab === 'pending' && 'Pending Bookings'}
+              {activeTab === 'completed' && 'Completed Bookings'}
+              {activeTab === 'cancelled' && 'Cancelled Bookings'}
+              {activeTab === 'all' && 'All Bookings'} (
+              {
+                filterBookings(
+                  activeTab === 'pending'
+                    ? allBookings.filter(b => b.status.toLowerCase() === 'pending')
+                    : activeTab === 'completed'
+                    ? allBookings.filter(b => b.status.toLowerCase() === 'completed')
+                    : activeTab === 'cancelled'
+                    ? allBookings.filter(b => b.status.toLowerCase() === 'cancelled')
+                    : allBookings
+                ).length
+              }
+              )
             </Text>
-            {filterBookings(todayLessons).length === 0 ? (
+            {filterBookings(
+              activeTab === 'pending'
+                ? allBookings.filter(b => b.status.toLowerCase() === 'pending')
+                : activeTab === 'completed'
+                ? allBookings.filter(b => b.status.toLowerCase() === 'completed')
+                : activeTab === 'cancelled'
+                ? allBookings.filter(b => b.status.toLowerCase() === 'cancelled')
+                : allBookings
+            ).length === 0 ? (
               <View style={styles.emptyState}>
                 <Text style={styles.emptyStateText}>
-                  {searchQuery ? 'No lessons found' : 'No lessons scheduled for today'}
-                </Text>
-                <Text style={styles.emptyStateSubtext}>
-                  {searchQuery ? 'Try a different search' : 'Enjoy your free time! 🎉'}
+                  {activeTab === 'pending' && 'No pending bookings'}
+                  {activeTab === 'completed' && 'No completed bookings'}
+                  {activeTab === 'cancelled' && 'No cancelled bookings'}
+                  {activeTab === 'all' && 'No bookings'}
                 </Text>
               </View>
             ) : (
               <View style={styles.lessonsGrid}>
-                {filterBookings(todayLessons).map(lesson => (
+                {filterBookings(
+                  activeTab === 'pending'
+                    ? allBookings.filter(b => b.status.toLowerCase() === 'pending')
+                    : activeTab === 'completed'
+                    ? allBookings.filter(b => b.status.toLowerCase() === 'completed')
+                    : activeTab === 'cancelled'
+                    ? allBookings.filter(b => b.status.toLowerCase() === 'cancelled')
+                    : allBookings
+                ).map(lesson => (
                   <View key={lesson.id} style={styles.lessonCard}>
                     <View style={styles.lessonHeader}>
                       <View style={{ flex: 1 }}>
@@ -764,6 +834,9 @@ export default function InstructorHomeScreen() {
                             🆔 ID Number: {lesson.student_id_number}
                           </Text>
                         )}
+                        <Text style={styles.lessonDate}>
+                          📅 {formatDate(lesson.scheduled_time)}
+                        </Text>
                         <Text style={styles.lessonTime}>
                           🕒 {formatTime(lesson.scheduled_time)}
                         </Text>
@@ -844,123 +917,13 @@ export default function InstructorHomeScreen() {
               </View>
             )}
           </View>
-
-          {/* Upcoming Lessons */}
-          {filterBookings(upcomingLessons).length > 0 && (
-            <View style={styles.section}>
-              <Text style={styles.sectionTitle}>
-                {'Upcoming Lessons '}
-                {selectedStudent
-                  ? `for ${selectedStudent.student_name} (${
-                      filterBookings(upcomingLessons).length
-                    })`
-                  : searchQuery
-                  ? `(${filterBookings(upcomingLessons).length} results)`
-                  : ''}
-              </Text>
-              <View style={styles.lessonsGrid}>
-                {filterBookings(upcomingLessons).map(lesson => (
-                  <View key={lesson.id} style={styles.lessonCard}>
-                    <View style={styles.lessonHeader}>
-                      <View style={{ flex: 1 }}>
-                        <Text style={styles.studentName}>👤 {lesson.student_name}</Text>
-                        {lesson.booking_reference && (
-                          <Text style={styles.bookingReference}>🎫 {lesson.booking_reference}</Text>
-                        )}
-                        {lesson.student_id_number && (
-                          <Text style={styles.studentId}>
-                            🆔 ID Number: {lesson.student_id_number}
-                          </Text>
-                        )}
-                        <Text style={styles.lessonDate}>
-                          📅 {formatDate(lesson.scheduled_time)} at{' '}
-                          {formatTime(lesson.scheduled_time)}
-                        </Text>
-                        <Text style={styles.lessonDuration}>
-                          ⏱️ {lesson.duration_minutes} minutes
-                        </Text>
-                        {lesson.rebooking_count > 0 && (
-                          <Text style={styles.rebookingBadge}>
-                            🔄 Rescheduled {lesson.rebooking_count}x
-                          </Text>
-                        )}
-                        {lesson.cancellation_fee > 0 && (
-                          <Text style={styles.cancellationFee}>
-                            ⚠️ Fee: R{lesson.cancellation_fee.toFixed(2)}
-                          </Text>
-                        )}
-                      </View>
-                      <View
-                        style={[
-                          styles.statusBadge,
-                          { backgroundColor: getStatusColor(lesson.status) },
-                        ]}
-                      >
-                        <Text style={styles.statusText}>{lesson.status}</Text>
-                      </View>
-                    </View>
-                    {lesson.student_phone && (
-                      <Text style={styles.lessonDetail}>📞 {lesson.student_phone}</Text>
-                    )}
-                    {(lesson.student_city || lesson.student_suburb) && (
-                      <Text style={styles.lessonDetail}>
-                        🗺️ {lesson.student_suburb ? `${lesson.student_suburb}, ` : ''}
-                        {lesson.student_city || ''}
-                      </Text>
-                    )}
-                    {lesson.pickup_location && (
-                      <Text style={styles.lessonDetail}>📌 Pickup: {lesson.pickup_location}</Text>
-                    )}
-
-                    {/* Student Comments */}
-                    <View style={styles.notesContainer}>
-                      <Text style={styles.notesLabel}>💬 Student Comments:</Text>
-                      <Text style={styles.notesText}>
-                        {lesson.student_notes || 'No special requests'}
-                      </Text>
-                    </View>
-
-                    <View style={styles.lessonFooter}>
-                      <Text style={styles.lessonPrice}>R{lesson.total_price.toFixed(2)}</Text>
-                      <View style={styles.lessonActions}>
-                        {lesson.status.toLowerCase() === 'pending' && (
-                          <TouchableOpacity
-                            style={styles.rescheduleButton}
-                            onPress={() => openRescheduleModal(lesson)}
-                          >
-                            <Text style={styles.rescheduleButtonText}>🔄 Reschedule</Text>
-                          </TouchableOpacity>
-                        )}
-                        <TouchableOpacity
-                          style={styles.deleteButton}
-                          onPress={() => handleDeleteLesson(lesson)}
-                        >
-                          <Text style={styles.deleteButtonText}>🗑️ Delete</Text>
-                        </TouchableOpacity>
-                      </View>
-                    </View>
-                  </View>
-                ))}
-              </View>
-            </View>
-          )}
         </>
       ) : (
         <>
           {/* My Profile Tab Content */}
           {/* Availability Toggle */}
           <View style={styles.availabilityCard}>
-            <View style={styles.availabilityInfo}>
-              <Text style={styles.availabilityLabel}>Availability Status</Text>
-              <Text
-                style={[
-                  styles.availabilityStatus,
-                  { color: profile?.is_available ? '#28a745' : '#dc3545' },
-                ]}
-              >
-                {profile?.is_available ? '🟢 Available' : '🔴 Unavailable'}
-              </Text>
-            </View>
+            <Text style={styles.availabilityLabel}>Availability Status</Text>
             <Switch
               value={profile?.is_available || false}
               onValueChange={toggleAvailability}
@@ -969,64 +932,14 @@ export default function InstructorHomeScreen() {
             />
           </View>
 
-          {/* Quick Action Buttons */}
-          <View style={styles.quickActionsRow}>
-            <TouchableOpacity
-              style={styles.quickActionButton}
-              onPress={() => (navigation as any).navigate('ManageAvailability')}
-            >
-              <Text style={styles.quickActionIcon}>📅</Text>
-              <Text style={styles.quickActionText}>Schedule</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.quickActionButton}
-              onPress={() => (navigation as any).navigate('EditInstructorProfile')}
-            >
-              <Text style={styles.quickActionIcon}>👤</Text>
-              <Text style={styles.quickActionText}>Edit Profile</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.quickActionButton}
-              onPress={() => {
-                setMessage({ type: 'info', text: 'Earnings report coming soon!' });
-                setTimeout(() => setMessage(null), 3000);
-              }}
-            >
-              <Text style={styles.quickActionIcon}>📊</Text>
-              <Text style={styles.quickActionText}>Earnings</Text>
-            </TouchableOpacity>
-          </View>
-
-          {/* Earnings & Stats */}
-          <View style={styles.statsContainer}>
-            <View style={styles.statCard}>
-              <Text style={styles.statNumber}>
-                R{profile?.total_earnings?.toFixed(2) || '0.00'}
-              </Text>
-              <Text style={styles.statLabel}>Total Earnings</Text>
-            </View>
-            <View style={styles.statCard}>
-              <Text style={styles.statNumber}>{todayLessons.length}</Text>
-              <Text style={styles.statLabel}>Today</Text>
-            </View>
-            <View style={styles.statCard}>
-              <Text style={styles.statNumber}>{upcomingLessons.length}</Text>
-              <Text style={styles.statLabel}>Upcoming</Text>
-            </View>
-          </View>
-
-          {/* Rate Info */}
-          <View style={styles.rateCard}>
-            <Text style={styles.rateLabel}>Hourly Rate</Text>
-            <Text style={styles.rateAmount}>R{profile?.hourly_rate || 0}/hour</Text>
-            <Text style={styles.licenseType}>License: {profile?.license_type}</Text>
-          </View>
-
           {/* Quick Actions */}
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Quick Actions</Text>
-            <TouchableOpacity style={styles.actionButton} onPress={handleManageAvailability}>
-              <Text style={styles.actionButtonText}>📅 Manage Availability</Text>
+            <TouchableOpacity
+              style={styles.actionButton}
+              onPress={() => (navigation as any).navigate('ManageAvailability')}
+            >
+              <Text style={styles.actionButtonText}>📅 Schedule</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={[styles.actionButton, styles.secondaryButton]}
@@ -1035,10 +948,15 @@ export default function InstructorHomeScreen() {
               <Text style={styles.actionButtonText}>👤 Edit Profile</Text>
             </TouchableOpacity>
             <TouchableOpacity
-              style={[styles.actionButton, styles.secondaryButton]}
+              style={[styles.actionButton, styles.earningsButton]}
               onPress={handleViewEarnings}
             >
-              <Text style={styles.actionButtonText}>💰 View Earnings Report</Text>
+              <View style={styles.earningsButtonContent}>
+                <Text style={styles.earningsButtonText}>💰 View Earnings Report</Text>
+                <Text style={styles.earningsAmount}>
+                  R{profile?.total_earnings?.toFixed(2) || '0.00'}
+                </Text>
+              </View>
             </TouchableOpacity>
           </View>
         </>
@@ -1704,6 +1622,29 @@ const styles = StyleSheet.create({
   },
   secondaryButton: {
     backgroundColor: '#6c757d',
+  },
+  infoButton: {
+    backgroundColor: '#17a2b8',
+  },
+  earningsButton: {
+    backgroundColor: '#28a745',
+    padding: 20,
+  },
+  earningsButtonContent: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    width: '100%',
+  },
+  earningsButtonText: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: 'bold',
+  },
+  earningsAmount: {
+    color: '#fff',
+    fontSize: 22,
+    fontWeight: 'bold',
   },
   actionButtonText: {
     color: '#fff',

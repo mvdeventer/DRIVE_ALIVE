@@ -852,3 +852,128 @@ async def admin_update_student(
         "message": "Student profile updated successfully",
         "student_id": student.id,
     }
+
+
+# ==================== Instructor Earnings Reports (Admin) ====================
+
+
+@router.get("/instructors/{instructor_id}/earnings-report")
+async def get_instructor_earnings_report_admin(
+    instructor_id: int,
+    current_admin: Annotated[User, Depends(require_admin)],
+    db: Session = Depends(get_db),
+):
+    """
+    Get comprehensive earnings report for a specific instructor (Admin only)
+    """
+    instructor = db.query(Instructor).filter(Instructor.id == instructor_id).first()
+    if not instructor:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Instructor not found")
+
+    user = db.query(User).filter(User.id == instructor.user_id).first()
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+
+    # Get all bookings for this instructor
+    bookings = db.query(Booking).filter(Booking.instructor_id == instructor.id).all()
+
+    # Calculate statistics
+    completed_bookings = [b for b in bookings if b.status == BookingStatus.COMPLETED]
+    pending_bookings = [b for b in bookings if b.status == BookingStatus.PENDING]
+    cancelled_bookings = [b for b in bookings if b.status == BookingStatus.CANCELLED]
+
+    total_earnings = sum(float(b.amount) for b in completed_bookings)
+    completed_lessons = len(completed_bookings)
+
+    # Calculate earnings by month
+    from collections import defaultdict
+
+    earnings_by_month = defaultdict(lambda: {"earnings": 0.0, "lessons": 0})
+    for booking in completed_bookings:
+        month_key = booking.lesson_date.strftime("%Y-%m")
+        earnings_by_month[month_key]["earnings"] += float(booking.amount)
+        earnings_by_month[month_key]["lessons"] += 1
+
+    # Convert to sorted list
+    monthly_breakdown = []
+    for month, data in sorted(earnings_by_month.items(), reverse=True):
+        month_obj = datetime.strptime(month, "%Y-%m")
+        month_name = month_obj.strftime("%B %Y")
+        monthly_breakdown.append({"month": month_name, "earnings": data["earnings"], "lessons": data["lessons"]})
+
+    # Get recent earnings
+    recent_completed = sorted([b for b in completed_bookings], key=lambda x: x.lesson_date, reverse=True)[:20]
+
+    recent_earnings = []
+    for booking in recent_completed:
+        student = db.query(Student).filter(Student.id == booking.student_id).first()
+        student_user = db.query(User).filter(User.id == student.user_id).first() if student else None
+
+        recent_earnings.append(
+            {
+                "id": booking.id,
+                "student_name": f"{student_user.first_name} {student_user.last_name}" if student_user else "Unknown",
+                "lesson_date": booking.lesson_date.isoformat(),
+                "duration_minutes": booking.duration_minutes,
+                "amount": float(booking.amount),
+                "status": booking.status.value,
+            }
+        )
+
+    return {
+        "instructor_id": instructor.id,
+        "instructor_name": f"{user.first_name} {user.last_name}",
+        "total_earnings": total_earnings,
+        "hourly_rate": float(instructor.hourly_rate),
+        "completed_lessons": completed_lessons,
+        "pending_lessons": len(pending_bookings),
+        "cancelled_lessons": len(cancelled_bookings),
+        "total_lessons": len(bookings),
+        "earnings_by_month": monthly_breakdown,
+        "recent_earnings": recent_earnings,
+    }
+
+
+@router.get("/instructors/earnings-summary")
+async def get_all_instructors_earnings_summary(
+    current_admin: Annotated[User, Depends(require_admin)],
+    db: Session = Depends(get_db),
+):
+    """
+    Get earnings summary for all instructors (Admin overview)
+    """
+    instructors = db.query(Instructor).all()
+
+    summary = []
+    for instructor in instructors:
+        user = db.query(User).filter(User.id == instructor.user_id).first()
+        if not user:
+            continue
+
+        # Get completed bookings
+        completed_bookings = db.query(Booking).filter(Booking.instructor_id == instructor.id, Booking.status == BookingStatus.COMPLETED).all()
+
+        total_earnings = sum(float(b.amount) for b in completed_bookings)
+        completed_lessons = len(completed_bookings)
+
+        summary.append(
+            {
+                "instructor_id": instructor.id,
+                "user_id": user.id,
+                "instructor_name": f"{user.first_name} {user.last_name}",
+                "email": user.email,
+                "phone": user.phone,
+                "total_earnings": total_earnings,
+                "completed_lessons": completed_lessons,
+                "hourly_rate": float(instructor.hourly_rate),
+                "is_verified": instructor.is_verified,
+                "is_available": instructor.is_available,
+                "rating": float(instructor.rating) if instructor.rating else 0.0,
+                "total_reviews": instructor.total_reviews or 0,
+            }
+        )
+
+    # Sort by total earnings (highest first)
+    summary.sort(key=lambda x: x["total_earnings"], reverse=True)
+
+    return {"instructors": summary, "total_instructors": len(summary)}

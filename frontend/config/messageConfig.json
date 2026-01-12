@@ -84,6 +84,18 @@
         "success": 4000,
         "error": 4000
       }
+    },
+    "InstructorHomeScreen": {
+      "toggleAvailability": {
+        "success": 4000,
+        "error": 4000
+      },
+      "allBookings": {
+        "success": 4000
+      },
+      "todayLessons": {
+        "success": 4000
+      }
     }
   },
   "notes": [

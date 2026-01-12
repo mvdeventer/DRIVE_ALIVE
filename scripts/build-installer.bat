@@ -35,25 +35,35 @@ echo Step 1: Building Backend Executable
 echo ------------------------------------
 cd /d "%BACKEND_DIR%"
 
-REM Activate virtual environment
-if exist "venv\Scripts\activate.bat" (
-    call venv\Scripts\activate.bat
-) else (
+REM Check virtual environment
+if not exist "venv\Scripts\python.exe" (
     echo Error: Virtual environment not found
     echo Please run: python -m venv venv
     exit /b 1
 )
 
+REM Use venv Python directly
+set "VENV_PYTHON=%BACKEND_DIR%\venv\Scripts\python.exe"
+set "VENV_PYINSTALLER=%BACKEND_DIR%\venv\Scripts\pyinstaller.exe"
+
+echo Checking PyInstaller...
+
 REM Install PyInstaller if not present
-pip show pyinstaller >nul 2>&1
+"%VENV_PYTHON%" -m pip show pyinstaller >nul 2>&1
 if !errorlevel! neq 0 (
     echo Installing PyInstaller...
-    pip install pyinstaller
+    "%VENV_PYTHON%" -m pip install pyinstaller
 )
 
 REM Build backend executable
 echo Building backend executable...
-pyinstaller drive-alive.spec --clean --noconfirm
+
+REM Use PyInstaller from venv
+if exist "%VENV_PYINSTALLER%" (
+    "%VENV_PYINSTALLER%" drive-alive.spec --clean --noconfirm
+) else (
+    "%VENV_PYTHON%" -m PyInstaller drive-alive.spec --clean --noconfirm
+)
 
 if !errorlevel! neq 0 (
     echo Error: Backend build failed
