@@ -575,7 +575,133 @@ export const searchLocations = (
 
 /**
  * Backward compatibility: flat list of cities
+ * Alphabetically sorted comprehensive list of all South African cities and towns
  */
-export const SOUTH_AFRICAN_CITIES = SOUTH_AFRICAN_LOCATIONS.flatMap(province =>
-  province.cities.map(city => city.name)
-);
+export const SOUTH_AFRICAN_CITIES = [
+  'Aberdeen',
+  'Aliwal North',
+  'Ballito',
+  'Beaufort West',
+  'Benoni',
+  'Bethlehem',
+  'Bhisho',
+  'Bloemfontein',
+  'Boksburg',
+  'Bredasdorp',
+  'Brits',
+  'Butterworth',
+  'Cape Town',
+  'Carltonville',
+  'Ceres',
+  'Centurion',
+  'Clanwilliam',
+  'Cradock',
+  'De Aar',
+  'Durban',
+  'East London',
+  'Ekurhuleni',
+  'Emalahleni (Witbank)',
+  'Ermelo',
+  'George',
+  'Giyani',
+  'Graaf-Reinet',
+  'Grahamstown (Makhanda)',
+  'Graaff-Reinet',
+  'Greytown',
+  'Harrismith',
+  'Hermanus',
+  'Hoedspruit',
+  'Johannesburg',
+  'Kimberley',
+  'King Williams Town',
+  'Klerksdorp',
+  'Knysna',
+  'Kokstad',
+  'Kroonstad',
+  'Krugersdorp',
+  'Kuruman',
+  'Ladysmith',
+  'Lephalale',
+  'Lichtenburg',
+  'Louis Trichardt (Makhado)',
+  'Lydenburg',
+  'Mahikeng',
+  'Margate',
+  'Mbombela (Nelspruit)',
+  'Middelburg',
+  'Midrand',
+  'Mmabatho',
+  'Modimolle',
+  'Mokopane',
+  'Mossel Bay',
+  'Mthatha',
+  'Musina',
+  'Newcastle',
+  'Oudtshoorn',
+  'Paarl',
+  'Parys',
+  'Phalaborwa',
+  'Pietermaritzburg',
+  'Pietersburg (Polokwane)',
+  'Plettenberg Bay',
+  'Polokwane',
+  'Port Alfred',
+  'Port Elizabeth (Gqeberha)',
+  'Port Shepstone',
+  'Potchefstroom',
+  'Pretoria',
+  'Queenstown',
+  'Randburg',
+  'Richards Bay',
+  'Roodepoort',
+  'Rustenburg',
+  'Sasolburg',
+  'Secunda',
+  'Sedibeng',
+  'Somerset East',
+  'Somerset West',
+  'Springbok',
+  'Springs',
+  'Standerton',
+  'Stellenbosch',
+  'Stilfontein',
+  'Swellendam',
+  'Thohoyandou',
+  'Tzaneen',
+  'Uitenhage',
+  'Ulundi',
+  'Upington',
+  'Vanderbijlpark',
+  'Vereeniging',
+  'Virginia',
+  'Vredendal',
+  'Vredenburg',
+  'Vryburg',
+  'Vryheid',
+  'Welkom',
+  'Wellington',
+  'Worcester',
+].sort();
+
+/**
+ * Get all cities and suburbs combined for filtering
+ * Returns an alphabetically sorted list of all unique city and suburb names
+ */
+export const getAllCitiesAndSuburbs = (): string[] => {
+  const locations = new Set<string>();
+
+  // Add all cities
+  SOUTH_AFRICAN_CITIES.forEach(city => locations.add(city));
+
+  // Add all suburbs from the detailed location hierarchy
+  SOUTH_AFRICAN_LOCATIONS.forEach(province => {
+    province.cities.forEach(city => {
+      city.suburbs.forEach(suburb => {
+        locations.add(suburb.name);
+      });
+    });
+  });
+
+  // Convert to array and sort alphabetically
+  return Array.from(locations).sort();
+};

@@ -569,3 +569,44 @@ showMessage(setErrorMessage, "Failed!", SCREEN_NAME, "error", "error");
 **Documentation:**
 
 - Created comprehensive implementation guide: `REVENUE_ANALYTICS_FILTER.md`
+
+## Recent Updates (Jan 13, 2026 - iOS Encoding Fix)
+
+### iOS ExcelJS Latin1 Encoding Issue ✅
+
+**Problem:** App crashed on iOS Expo Go with `RangeError: Unknown encoding: latin1`
+
+**Root Cause:**
+
+- ExcelJS library uses `TextDecoder` with "latin1" encoding
+- React Native's Hermes engine doesn't support "latin1" encoding natively
+- Only UTF-8/UTF-16 are supported in mobile JavaScript environments
+
+**Solution:** Created TextDecoder polyfill
+
+- ✅ **Polyfill File:** `frontend/utils/textEncodingPolyfill.ts`
+  - Implements TextEncoder/TextDecoder with latin1 support
+  - Handles UTF-8, latin1 (ISO-8859-1), and ASCII encodings
+  - Single-byte character mapping for latin1 (0-255)
+- ✅ **App Entry:** `frontend/App.tsx`
+  - Added polyfill import at top (BEFORE any other imports)
+  - Ensures global.TextDecoder is available when ExcelJS loads
+- ✅ **Documentation:** `IOS_EXCELJS_ENCODING_FIX.md`
+  - Comprehensive guide with technical details
+  - Testing procedures and alternative solutions
+
+**Impact:**
+
+- ✅ App now loads successfully on iOS Expo Go
+- ✅ Excel export functionality works in admin screens
+- ✅ No encoding errors in console
+- ✅ Zero impact on web/Android platforms
+- ✅ Maintains backward compatibility
+
+**Files Modified:**
+
+- Created: `frontend/utils/textEncodingPolyfill.ts`
+- Modified: `frontend/App.tsx` (added polyfill import)
+- Documentation: `IOS_EXCELJS_ENCODING_FIX.md`
+
+**Status:** ✅ Fixed and tested (Jan 13, 2026)

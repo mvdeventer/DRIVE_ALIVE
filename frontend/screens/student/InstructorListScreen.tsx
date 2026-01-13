@@ -10,6 +10,7 @@ import {
   Alert,
   Dimensions,
   FlatList,
+  Modal,
   Platform,
   RefreshControl,
   ScrollView,
@@ -21,7 +22,7 @@ import {
 } from 'react-native';
 import WebNavigationHeader from '../../components/WebNavigationHeader';
 import ApiService from '../../services/api';
-import { SOUTH_AFRICAN_CITIES } from '../../utils/cities';
+import { getAllCitiesAndSuburbs } from '../../utils/cities';
 
 interface Instructor {
   id: number;
@@ -57,7 +58,6 @@ export default function InstructorListScreen({ navigation }: any) {
   const [selectedCity, setSelectedCity] = useState('');
   const [availableOnly, setAvailableOnly] = useState(true);
   const [showCityPicker, setShowCityPicker] = useState(false);
-  const [sortBySuburb, setSortBySuburb] = useState(false);
 
   useEffect(() => {
     loadInstructors();
@@ -74,7 +74,7 @@ export default function InstructorListScreen({ navigation }: any) {
 
   useEffect(() => {
     filterInstructors();
-  }, [searchQuery, availableOnly, selectedCity, instructors, sortBySuburb]);
+  }, [searchQuery, availableOnly, selectedCity, instructors]);
 
   const loadInstructors = async () => {
     try {
@@ -107,9 +107,9 @@ export default function InstructorListScreen({ navigation }: any) {
       filtered = filtered.filter(i => i.is_available);
     }
 
-    // Filter by city
+    // Filter by city or suburb
     if (selectedCity) {
-      filtered = filtered.filter(i => i.city === selectedCity);
+      filtered = filtered.filter(i => i.city === selectedCity || i.suburb === selectedCity);
     }
 
     // Filter by search query (name, vehicle, city, suburb, province)
@@ -125,15 +125,6 @@ export default function InstructorListScreen({ navigation }: any) {
           (i.suburb && i.suburb.toLowerCase().includes(query)) ||
           (i.province && i.province.toLowerCase().includes(query))
       );
-    }
-
-    // Sort alphabetically by suburb if enabled
-    if (sortBySuburb) {
-      filtered = filtered.sort((a, b) => {
-        const suburbA = a.suburb || '';
-        const suburbB = b.suburb || '';
-        return suburbA.localeCompare(suburbB);
-      });
     }
 
     setFilteredInstructors(filtered);
@@ -473,51 +464,40 @@ ${studentName}`;
         onBack={() => navigation.goBack()}
         showBackButton={true}
       />
-      {/* Search Bar */}
-      <View style={styles.searchContainer}>
-        <TextInput
-          style={styles.searchInput}
-          placeholder="Search by name, vehicle, city, suburb, or province..."
-          value={searchQuery}
-          onChangeText={setSearchQuery}
-        />
-      </View>
+      {/* Search Bar and Filter Toggles */}
+      <View style={styles.searchAndFilterRow}>
+        <View style={styles.searchContainer}>
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Search by name, vehicle, city, suburb, or province..."
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+          />
+        </View>
 
-      {/* Filter Toggles */}
-      <View style={styles.filterContainer}>
-        <TouchableOpacity
-          style={[styles.filterButton, availableOnly && styles.filterButtonActive]}
-          onPress={() => setAvailableOnly(!availableOnly)}
-        >
-          <Text style={[styles.filterButtonText, availableOnly && styles.filterButtonTextActive]}>
-            {availableOnly ? '✓ Available Only' : 'Show All'}
-          </Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.filterButton, selectedCity && styles.filterButtonActive]}
-          onPress={() => setShowCityPicker(true)}
-        >
-          <Text style={[styles.filterButtonText, selectedCity && styles.filterButtonTextActive]}>
-            {selectedCity ? `📍 ${selectedCity}` : '📍 All Cities'}
-          </Text>
-        </TouchableOpacity>
-        {selectedCity && (
-          <TouchableOpacity style={styles.clearCityButton} onPress={() => setSelectedCity(null)}>
-            <Text style={styles.clearCityText}>✕</Text>
+        <View style={styles.filterContainer}>
+          <TouchableOpacity
+            style={[styles.filterButton, availableOnly && styles.filterButtonActive]}
+            onPress={() => setAvailableOnly(!availableOnly)}
+          >
+            <Text style={[styles.filterButtonText, availableOnly && styles.filterButtonTextActive]}>
+              {availableOnly ? '✓ Available Only' : 'Show All'}
+            </Text>
           </TouchableOpacity>
-        )}
-      </View>
-
-      {/* Sort Toggle */}
-      <View style={styles.sortContainer}>
-        <TouchableOpacity
-          style={[styles.sortButton, sortBySuburb && styles.sortButtonActive]}
-          onPress={() => setSortBySuburb(!sortBySuburb)}
-        >
-          <Text style={[styles.sortButtonText, sortBySuburb && styles.sortButtonTextActive]}>
-            {sortBySuburb ? '✓ Sorted by Suburb (A-Z)' : '⬇️ Sort by Suburb'}
-          </Text>
-        </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.filterButton, selectedCity && styles.filterButtonActive]}
+            onPress={() => setShowCityPicker(true)}
+          >
+            <Text style={[styles.filterButtonText, selectedCity && styles.filterButtonTextActive]}>
+              {selectedCity ? `📍 ${selectedCity}` : '📍 All Cities'}
+            </Text>
+          </TouchableOpacity>
+          {selectedCity && (
+            <TouchableOpacity style={styles.clearCityButton} onPress={() => setSelectedCity(null)}>
+              <Text style={styles.clearCityText}>✕</Text>
+            </TouchableOpacity>
+          )}
+        </View>
       </View>
 
       <View style={styles.resultCountContainer}>
@@ -525,39 +505,44 @@ ${studentName}`;
       </View>
 
       {/* City Picker Modal */}
-      {Platform.OS === 'web' && showCityPicker && (
+      <Modal
+        visible={showCityPicker}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowCityPicker(false)}
+      >
         <View style={styles.pickerOverlay}>
           <View style={styles.pickerContainer}>
             <View style={styles.pickerHeader}>
-              <Text style={styles.pickerTitle}>Select City</Text>
+              <Text style={styles.pickerTitle}>Select City or Suburb</Text>
               <TouchableOpacity onPress={() => setShowCityPicker(false)}>
                 <Text style={styles.pickerClose}>✕</Text>
               </TouchableOpacity>
             </View>
             <ScrollView style={styles.cityList}>
-              {SOUTH_AFRICAN_CITIES.map(city => (
+              {getAllCitiesAndSuburbs().map(location => (
                 <TouchableOpacity
-                  key={city}
-                  style={[styles.cityItem, selectedCity === city && styles.cityItemSelected]}
+                  key={location}
+                  style={[styles.cityItem, selectedCity === location && styles.cityItemSelected]}
                   onPress={() => {
-                    setSelectedCity(city);
+                    setSelectedCity(location);
                     setShowCityPicker(false);
                   }}
                 >
                   <Text
                     style={[
                       styles.cityItemText,
-                      selectedCity === city && styles.cityItemTextSelected,
+                      selectedCity === location && styles.cityItemTextSelected,
                     ]}
                   >
-                    {city}
+                    {location}
                   </Text>
                 </TouchableOpacity>
               ))}
             </ScrollView>
           </View>
         </View>
-      )}
+      </Modal>
 
       {/* Instructor List */}
       <FlatList
@@ -610,11 +595,19 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#666',
   },
-  searchContainer: {
+  searchAndFilterRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
     padding: 16,
     backgroundColor: '#fff',
     borderBottomWidth: 1,
     borderBottomColor: '#e0e0e0',
+    flexWrap: 'wrap',
+  },
+  searchContainer: {
+    flex: 1,
+    minWidth: 200,
+    marginRight: 12,
   },
   searchInput: {
     backgroundColor: '#f5f5f5',
@@ -625,9 +618,6 @@ const styles = StyleSheet.create({
   filterContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 16,
-    paddingBottom: 8,
-    backgroundColor: '#fff',
   },
   filterButton: {
     paddingHorizontal: 16,
@@ -768,23 +758,23 @@ const styles = StyleSheet.create({
   instructorCard: {
     backgroundColor: '#fff',
     borderRadius: 8,
-    padding: 12,
-    margin: 5,
-    flexBasis: '30%',
-    minWidth: 280,
-    maxWidth: '48%',
+    padding: 18,
+    margin: 6,
+    flexBasis: '45%',
+    minWidth: 340,
+    maxWidth: '100%',
     flexGrow: 1,
     boxShadow: '0px 2px 4px #0000001A',
     elevation: 2,
   },
   instructorHeader: {
-    marginBottom: 6,
+    marginBottom: 10,
   },
   nameRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 3,
+    marginBottom: 6,
   },
   instructorInfo: {
     flex: 1,
