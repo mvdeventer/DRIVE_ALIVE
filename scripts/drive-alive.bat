@@ -96,6 +96,7 @@ if "%DEBUG%"=="1" echo [DEBUG] Command: %COMMAND%
 
 :parse_args
 if "%~1"=="" goto :end_parse
+if "%DEBUG%"=="1" echo [DEBUG] Checking argument: [%~1]
 if /i "%~1"=="--backend-only" (
     set "BACKEND_ONLY=1"
     shift
