@@ -95,50 +95,107 @@ if "%COMMAND%"=="" set "COMMAND=start"
 if "%DEBUG%"=="1" echo [DEBUG] Command: %COMMAND%
 
 :parse_args
-shift
 if "%~1"=="" goto :end_parse
-if /i "%~1"=="--backend-only" set "BACKEND_ONLY=1"
-if /i "%~1"=="-b" set "BACKEND_ONLY=1"
-if /i "%~1"=="--frontend-only" set "FRONTEND_ONLY=1"
-if /i "%~1"=="-f" set "FRONTEND_ONLY=1"
-if /i "%~1"=="--no-browser" set "NO_BROWSER=1"
-if /i "%~1"=="-n" set "NO_BROWSER=1"
-if /i "%~1"=="--debug" set "DEBUG=1"
-if /i "%~1"=="-d" set "DEBUG=1"
-if /i "%~1"=="--clear-db" set "CLEAR_DB=1"
-if /i "%~1"=="-c" set "CLEAR_DB=1"
+if /i "%~1"=="--backend-only" (
+    set "BACKEND_ONLY=1"
+    shift
+    goto :parse_args
+)
+if /i "%~1"=="-b" (
+    set "BACKEND_ONLY=1"
+    shift
+    goto :parse_args
+)
+if /i "%~1"=="--frontend-only" (
+    set "FRONTEND_ONLY=1"
+    shift
+    goto :parse_args
+)
+if /i "%~1"=="-f" (
+    set "FRONTEND_ONLY=1"
+    shift
+    goto :parse_args
+)
+if /i "%~1"=="--no-browser" (
+    set "NO_BROWSER=1"
+    shift
+    goto :parse_args
+)
+if /i "%~1"=="-n" (
+    set "NO_BROWSER=1"
+    shift
+    goto :parse_args
+)
+if /i "%~1"=="--debug" (
+    set "DEBUG=1"
+    shift
+    goto :parse_args
+)
+if /i "%~1"=="-d" (
+    set "DEBUG=1"
+    shift
+    goto :parse_args
+)
+if /i "%~1"=="--clear-db" (
+    set "CLEAR_DB=1"
+    shift
+    goto :parse_args
+)
+if /i "%~1"=="-c" (
+    set "CLEAR_DB=1"
+    shift
+    goto :parse_args
+)
 if /i "%~1"=="--port" (
     shift
     set "BACKEND_PORT=%~1"
     set "BACKEND_URL=http://localhost:!BACKEND_PORT!"
     set "API_DOCS_URL=!BACKEND_URL!/docs"
+    shift
     goto :parse_args
 )
 if /i "%~1"=="--message" (
     shift
     set "COMMIT_MESSAGE=%~1"
+    shift
     goto :parse_args
 )
 if /i "%~1"=="-m" (
     shift
     set "COMMIT_MESSAGE=%~1"
+    shift
     goto :parse_args
 )
 if /i "%~1"=="--version" (
     shift
     set "RELEASE_VERSION=%~1"
+    shift
     goto :parse_args
 )
 if /i "%~1"=="-v" (
-    set "TEMP_NEXT_ARG=%~2"
     shift
     set "RELEASE_VERSION=%~1"
-    if "%DEBUG%"=="1" echo [DEBUG] -v flag: next arg after shift is [%~1], RELEASE_VERSION set to [!RELEASE_VERSION!]
+    if "%DEBUG%"=="1" echo [DEBUG] -v flag: RELEASE_VERSION set to [!RELEASE_VERSION!]
+    shift
     goto :parse_args
 )
-if /i "%~1"=="--major" set "VERSION_INCREMENT=major"
-if /i "%~1"=="--minor" set "VERSION_INCREMENT=minor"
-if /i "%~1"=="--patch" set "VERSION_INCREMENT=patch"
+if /i "%~1"=="--major" (
+    set "VERSION_INCREMENT=major"
+    shift
+    goto :parse_args
+)
+if /i "%~1"=="--minor" (
+    set "VERSION_INCREMENT=minor"
+    shift
+    goto :parse_args
+)
+if /i "%~1"=="--patch" (
+    set "VERSION_INCREMENT=patch"
+    shift
+    goto :parse_args
+)
+:: Unknown argument, skip it
+shift
 goto :parse_args
 
 :end_parse
