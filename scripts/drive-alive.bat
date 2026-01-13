@@ -1106,7 +1106,67 @@ if errorlevel 1 (
 
 :: Get version
 if "%RELEASE_VERSION%"=="" (
-    set /p "RELEASE_VERSION=Enter version tag (e.g., v1.0.0): "
+    echo %COLOR_YELLOW%Fetching latest version from GitHub...%COLOR_RESET%
+
+    :: Get the latest tag from GitHub
+    for /f "delims=" %%i in ('gh release list --limit 1 --json tagName --jq ".[0].tagName" 2^>nul') do (
+        set "LATEST_TAG=%%i"
+    )
+
+    :: If no tags exist, start with v0.0.0
+    if "!LATEST_TAG!"=="" (
+        set "LATEST_TAG=v0.0.0"
+        echo %COLOR_CYAN%No previous releases found. Starting from v0.0.0%COLOR_RESET%
+    ) else (
+        echo %COLOR_CYAN%Latest release: !LATEST_TAG!%COLOR_RESET%
+    )
+
+    :: Strip 'v' prefix and parse version
+    set "VERSION_NUM=!LATEST_TAG!"
+    if "!VERSION_NUM:~0,1!"=="v" set "VERSION_NUM=!VERSION_NUM:~1!"
+
+    :: Parse major.minor.patch
+    for /f "tokens=1,2,3 delims=." %%a in ("!VERSION_NUM!") do (
+        set "MAJOR=%%a"
+        set "MINOR=%%b"
+        set "PATCH=%%c"
+    )
+
+    :: Determine increment type (default to patch)
+    if not "%VERSION_INCREMENT%"=="" (
+        set "INCREMENT_TYPE=%VERSION_INCREMENT%"
+    ) else (
+        set "INCREMENT_TYPE=patch"
+    )
+
+    :: Increment version based on type
+    if /i "!INCREMENT_TYPE!"=="major" (
+        set /a "MAJOR+=1"
+        set "MINOR=0"
+        set "PATCH=0"
+        echo %COLOR_YELLOW%Auto-incrementing MAJOR version%COLOR_RESET%
+    ) else if /i "!INCREMENT_TYPE!"=="minor" (
+        set /a "MINOR+=1"
+        set "PATCH=0"
+        echo %COLOR_YELLOW%Auto-incrementing MINOR version%COLOR_RESET%
+    ) else (
+        set /a "PATCH+=1"
+        echo %COLOR_YELLOW%Auto-incrementing PATCH version%COLOR_RESET%
+    )
+
+    :: Construct new version
+    set "RELEASE_VERSION=v!MAJOR!.!MINOR!.!PATCH!"
+
+    echo.
+    echo %COLOR_GREEN%New version: !RELEASE_VERSION!%COLOR_RESET%
+    echo.
+
+    :: Prompt for confirmation
+    set /p "CONFIRM=Continue with this version? [Y/n]: "
+    if /i not "!CONFIRM!"=="y" if /i not "!CONFIRM!"=="" (
+        echo %COLOR_YELLOW%Release cancelled%COLOR_RESET%
+        exit /b 0
+    )
 )
 
 if "%RELEASE_VERSION%"=="" (
