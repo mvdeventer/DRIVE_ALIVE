@@ -1515,14 +1515,14 @@ goto :eof
 set "NEW_VERSION=%~1"
 
 if "%NEW_VERSION%"=="" (
-    echo %COLOR_RED%Error: Version parameter is required%COLOR_RESET%
+    echo Error: Version parameter is required
     exit /b 1
 )
 
 :: Validate version format (basic check)
 echo %NEW_VERSION% | findstr /r "^[0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*" >nul
 if errorlevel 1 (
-    echo %COLOR_RED%Error: Invalid version format. Use semantic versioning (e.g., 1.0.0)%COLOR_RESET%
+    echo Error: Invalid version format. Use semantic versioning ^(e.g., 1.0.0^)
     exit /b 1
 )
 
