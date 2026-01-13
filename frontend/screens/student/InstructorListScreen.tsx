@@ -58,6 +58,7 @@ export default function InstructorListScreen({ navigation }: any) {
   const [selectedCity, setSelectedCity] = useState('');
   const [availableOnly, setAvailableOnly] = useState(true);
   const [showCityPicker, setShowCityPicker] = useState(false);
+  const [locationSearchQuery, setLocationSearchQuery] = useState('');
 
   useEffect(() => {
     loadInstructors();
@@ -509,36 +510,58 @@ ${studentName}`;
         visible={showCityPicker}
         transparent={true}
         animationType="fade"
-        onRequestClose={() => setShowCityPicker(false)}
+        onRequestClose={() => {
+          setShowCityPicker(false);
+          setLocationSearchQuery('');
+        }}
       >
         <View style={styles.pickerOverlay}>
           <View style={styles.pickerContainer}>
             <View style={styles.pickerHeader}>
               <Text style={styles.pickerTitle}>Select City or Suburb</Text>
-              <TouchableOpacity onPress={() => setShowCityPicker(false)}>
+              <TouchableOpacity
+                onPress={() => {
+                  setShowCityPicker(false);
+                  setLocationSearchQuery('');
+                }}
+              >
                 <Text style={styles.pickerClose}>✕</Text>
               </TouchableOpacity>
             </View>
+            <View style={styles.pickerSearchContainer}>
+              <TextInput
+                style={styles.pickerSearchInput}
+                placeholder="Search locations..."
+                value={locationSearchQuery}
+                onChangeText={setLocationSearchQuery}
+                autoFocus={Platform.OS !== 'android'}
+              />
+            </View>
             <ScrollView style={styles.cityList}>
-              {getAllCitiesAndSuburbs().map(location => (
-                <TouchableOpacity
-                  key={location}
-                  style={[styles.cityItem, selectedCity === location && styles.cityItemSelected]}
-                  onPress={() => {
-                    setSelectedCity(location);
-                    setShowCityPicker(false);
-                  }}
-                >
-                  <Text
-                    style={[
-                      styles.cityItemText,
-                      selectedCity === location && styles.cityItemTextSelected,
-                    ]}
+              {getAllCitiesAndSuburbs()
+                .filter(location =>
+                  location.toLowerCase().includes(locationSearchQuery.toLowerCase())
+                )
+                .map(location => (
+                  <TouchableOpacity
+                    key={location}
+                    style={[styles.cityItem, selectedCity === location && styles.cityItemSelected]}
+                    onPress={() => {
+                      setSelectedCity(location);
+                      setShowCityPicker(false);
+                      setLocationSearchQuery('');
+                    }}
                   >
-                    {location}
-                  </Text>
-                </TouchableOpacity>
-              ))}
+                    <Text
+                      style={[
+                        styles.cityItemText,
+                        selectedCity === location && styles.cityItemTextSelected,
+                      ]}
+                    >
+                      {location}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
             </ScrollView>
           </View>
         </View>
@@ -692,15 +715,10 @@ const styles = StyleSheet.create({
     color: '#666',
   },
   pickerOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
+    flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
     justifyContent: 'center',
     alignItems: 'center',
-    zIndex: 1000,
   },
   pickerContainer: {
     backgroundColor: '#fff',
@@ -717,6 +735,18 @@ const styles = StyleSheet.create({
     padding: 16,
     borderBottomWidth: 1,
     borderBottomColor: '#e0e0e0',
+  },
+  pickerSearchContainer: {
+    padding: 12,
+    paddingTop: 0,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e0e0e0',
+  },
+  pickerSearchInput: {
+    backgroundColor: '#f5f5f5',
+    padding: 10,
+    borderRadius: 8,
+    fontSize: 16,
   },
   pickerTitle: {
     fontSize: 18,
