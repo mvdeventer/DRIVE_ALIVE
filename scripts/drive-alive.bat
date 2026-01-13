@@ -94,6 +94,9 @@ if "%COMMAND%"=="" set "COMMAND=start"
 
 if "%DEBUG%"=="1" echo [DEBUG] Command: %COMMAND%
 
+:: Shift past the command to start parsing options
+shift
+
 :parse_args
 if "%~1"=="" goto :end_parse
 if "%DEBUG%"=="1" echo [DEBUG] Checking argument: [%~1]
