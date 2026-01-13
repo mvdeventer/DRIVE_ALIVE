@@ -152,26 +152,21 @@ if /i "%~1"=="-c" (
 )
 if /i "%~1"=="--port" (
     shift
-    shift
     goto :parse_args_port
 )
 if /i "%~1"=="--message" (
-    shift
     shift
     goto :parse_args_message
 )
 if /i "%~1"=="-m" (
     shift
-    shift
     goto :parse_args_message
 )
 if /i "%~1"=="--version" (
     shift
-    shift
     goto :parse_args_version
 )
 if /i "%~1"=="-v" (
-    shift
     shift
     goto :parse_args_v
 )
