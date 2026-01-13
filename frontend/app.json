@@ -2,7 +2,7 @@
     "expo":  {
                  "name":  "Driving School",
                  "slug":  "driving-school-app",
-                 "version":  "1.0.0",
+                 "version":  "2.0.0",
                  "orientation":  "portrait",
                  "icon":  "./assets/icons/icon.png",
                  "userInterfaceStyle":  "light",
