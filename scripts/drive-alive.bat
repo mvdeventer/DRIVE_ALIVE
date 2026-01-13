@@ -177,9 +177,11 @@ if /i "%~1"=="--version" (
     goto :parse_args
 )
 if /i "%~1"=="-v" (
+    echo [TRACE] Processing -v flag, current arg is [%~1], next arg is [%~2]
     shift
+    echo [TRACE] After shift, current arg is [%~1]
     set "RELEASE_VERSION=%~1"
-    if "%DEBUG%"=="1" echo [DEBUG] -v flag: RELEASE_VERSION set to [!RELEASE_VERSION!]
+    echo [TRACE] RELEASE_VERSION set to [!RELEASE_VERSION!]
     shift
     goto :parse_args
 )
