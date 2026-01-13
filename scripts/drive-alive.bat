@@ -130,8 +130,10 @@ if /i "%~1"=="--version" (
     goto :parse_args
 )
 if /i "%~1"=="-v" (
+    set "TEMP_NEXT_ARG=%~2"
     shift
     set "RELEASE_VERSION=%~1"
+    if "%DEBUG%"=="1" echo [DEBUG] -v flag: next arg after shift is [%~1], RELEASE_VERSION set to [!RELEASE_VERSION!]
     goto :parse_args
 )
 if /i "%~1"=="--major" set "VERSION_INCREMENT=major"
