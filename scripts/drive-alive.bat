@@ -152,38 +152,28 @@ if /i "%~1"=="-c" (
 )
 if /i "%~1"=="--port" (
     shift
-    set "BACKEND_PORT=%~1"
-    set "BACKEND_URL=http://localhost:!BACKEND_PORT!"
-    set "API_DOCS_URL=!BACKEND_URL!/docs"
     shift
-    goto :parse_args
+    goto :parse_args_port
 )
 if /i "%~1"=="--message" (
     shift
-    set "COMMIT_MESSAGE=%~1"
     shift
-    goto :parse_args
+    goto :parse_args_message
 )
 if /i "%~1"=="-m" (
     shift
-    set "COMMIT_MESSAGE=%~1"
     shift
-    goto :parse_args
+    goto :parse_args_message
 )
 if /i "%~1"=="--version" (
     shift
-    set "RELEASE_VERSION=%~1"
     shift
-    goto :parse_args
+    goto :parse_args_version
 )
 if /i "%~1"=="-v" (
-    echo [TRACE] Processing -v flag, current arg is [%~1], next arg is [%~2]
     shift
-    echo [TRACE] After shift, current arg is [%~1]
-    set "RELEASE_VERSION=%~1"
-    echo [TRACE] RELEASE_VERSION set to [!RELEASE_VERSION!]
     shift
-    goto :parse_args
+    goto :parse_args_v
 )
 if /i "%~1"=="--major" (
     set "VERSION_INCREMENT=major"
@@ -201,6 +191,28 @@ if /i "%~1"=="--patch" (
     goto :parse_args
 )
 :: Unknown argument, skip it
+shift
+goto :parse_args
+
+:parse_args_port
+set "BACKEND_PORT=%~1"
+set "BACKEND_URL=http://localhost:!BACKEND_PORT!"
+set "API_DOCS_URL=!BACKEND_URL!/docs"
+shift
+goto :parse_args
+
+:parse_args_message
+set "COMMIT_MESSAGE=%~1"
+shift
+goto :parse_args
+
+:parse_args_version
+set "RELEASE_VERSION=%~1"
+shift
+goto :parse_args
+
+:parse_args_v
+set "RELEASE_VERSION=%~1"
 shift
 goto :parse_args
 
@@ -1123,12 +1135,6 @@ echo   - frontend/package.json
 echo   - frontend/app.json
 echo   - backend/app/__init__.py
 echo.
-
-set /p "CONFIRM=Continue with version update? (y/N): "
-if /i not "%CONFIRM%"=="y" (
-    echo %COLOR_YELLOW%Release cancelled.%COLOR_RESET%
-    goto :eof
-)
 
 :: Update version in all files
 echo.
