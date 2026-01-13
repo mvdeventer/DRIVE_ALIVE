@@ -97,10 +97,6 @@ if "%DEBUG%"=="1" echo [DEBUG] Command: %COMMAND%
 :parse_args
 shift
 if "%~1"=="" goto :end_parse
-:: Enable debug early if flag detected
-if /i "%~1"=="--debug" set "DEBUG=1"
-if /i "%~1"=="-d" set "DEBUG=1"
-if "%DEBUG%"=="1" echo [DEBUG] Parsing arg: %~1
 if /i "%~1"=="--backend-only" set "BACKEND_ONLY=1"
 if /i "%~1"=="-b" set "BACKEND_ONLY=1"
 if /i "%~1"=="--frontend-only" set "FRONTEND_ONLY=1"
@@ -1016,7 +1012,7 @@ if errorlevel 1 (
 
     :: Show generated message
     echo %COLOR_CYAN%Generated commit message:%COLOR_RESET%
-    echo   %AUTO_COMMIT_MESSAGE%
+    echo   !AUTO_COMMIT_MESSAGE!
     echo.
 
     :: Stage all changes
@@ -1025,7 +1021,7 @@ if errorlevel 1 (
 
     :: Commit changes
     echo %COLOR_YELLOW%Committing changes...%COLOR_RESET%
-    git commit -m "%AUTO_COMMIT_MESSAGE%"
+    git commit -m "!AUTO_COMMIT_MESSAGE!"
 
     if errorlevel 1 (
         echo %COLOR_RED%Commit failed%COLOR_RESET%
