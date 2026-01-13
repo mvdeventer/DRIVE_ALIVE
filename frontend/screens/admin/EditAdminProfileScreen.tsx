@@ -16,6 +16,7 @@ import {
 } from 'react-native';
 import FormFieldWithTip from '../../components/FormFieldWithTip';
 import InlineMessage from '../../components/InlineMessage';
+import WebNavigationHeader from '../../components/WebNavigationHeader';
 import ApiService from '../../services/api';
 
 const showAlert = (title: string, message: string) => {
@@ -26,8 +27,8 @@ const showAlert = (title: string, message: string) => {
   }
 };
 
-export default function EditAdminProfileScreen() {
-  const navigation = useNavigation();
+export default function EditAdminProfileScreen({ navigation: navProp }: any) {
+  const navigation = navProp || useNavigation();
   const route = useRoute();
   const params = route.params as { userId?: number } | undefined;
   const [currentUserId, setCurrentUserId] = useState<number | null>(null);
@@ -213,6 +214,11 @@ export default function EditAdminProfileScreen() {
 
   return (
     <View style={styles.container}>
+      <WebNavigationHeader
+        title="Edit Admin Profile"
+        onBack={() => navigation.goBack()}
+        showBackButton={true}
+      />
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
         {successMessage && <InlineMessage message={successMessage} type="success" />}
         {errorMessage && <InlineMessage message={errorMessage} type="error" />}

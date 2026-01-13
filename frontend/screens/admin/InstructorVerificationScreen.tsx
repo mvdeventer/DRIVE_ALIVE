@@ -15,6 +15,7 @@ import {
   View,
 } from 'react-native';
 import InlineMessage from '../../components/InlineMessage';
+import WebNavigationHeader from '../../components/WebNavigationHeader';
 import apiService from '../../services/api';
 
 interface PendingInstructor {
@@ -160,6 +161,22 @@ export default function InstructorVerificationScreen({ navigation }: any) {
 
   return (
     <View style={styles.container}>
+      <WebNavigationHeader
+        title="Instructor Verification"
+        onBack={() => navigation.goBack()}
+        showBackButton={true}
+      />
+      <View style={styles.header}>
+        <TouchableOpacity
+          style={styles.backButton}
+          onPress={() => navigation.navigate('AdminDashboard')}
+        >
+          <Text style={styles.backButtonText}>← Back to Dashboard</Text>
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>Verify Instructors</Text>
+        <View style={{ width: 150 }} />
+      </View>
+
       {error && <InlineMessage message={error} type="error" />}
       {success && <InlineMessage message={success} type="success" />}
 
@@ -185,6 +202,28 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#F5F5F5',
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 16,
+    backgroundColor: '#FFF',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E0E0E0',
+  },
+  backButton: {
+    width: 150,
+  },
+  backButtonText: {
+    fontSize: 16,
+    color: '#007bff',
+    fontWeight: '600',
+  },
+  headerTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#333',
   },
   centerContainer: {
     flex: 1,

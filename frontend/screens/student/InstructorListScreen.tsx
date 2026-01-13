@@ -1,7 +1,8 @@
 /**
  * Instructor List Screen - Browse and select instructors for booking
  */
-import { CommonActions, useNavigation } from '@react-navigation/native';
+import { FontAwesome } from '@expo/vector-icons';
+import { CommonActions } from '@react-navigation/native';
 import * as SecureStore from 'expo-secure-store';
 import React, { useEffect, useState } from 'react';
 import {
@@ -18,6 +19,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import WebNavigationHeader from '../../components/WebNavigationHeader';
 import ApiService from '../../services/api';
 import { SOUTH_AFRICAN_CITIES } from '../../utils/cities';
 
@@ -45,8 +47,7 @@ interface Instructor {
   current_longitude?: number;
 }
 
-export default function InstructorListScreen() {
-  const navigation = useNavigation();
+export default function InstructorListScreen({ navigation }: any) {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [numColumns, setNumColumns] = useState(getNumColumns());
@@ -199,28 +200,146 @@ export default function InstructorListScreen() {
     }
   };
 
-  const handleWhatsAppInstructor = (instructor: Instructor) => {
-    const message = `Hi ${instructor.first_name}, I found your profile on Drive Alive and I'm interested in booking driving lessons. Looking forward to hearing from you!`;
+  const handleWhatsAppInstructor = async (instructor: Instructor) => {
+    try {
+      // Get current student information
+      const currentUser = await ApiService.getCurrentUser();
+      const studentName = `${currentUser.first_name} ${currentUser.last_name}`;
+      const studentPhone = currentUser.phone;
 
-    // Remove any non-numeric characters and ensure number starts with country code
-    let phoneNumber = instructor.phone.replace(/\D/g, '');
+      // Format phone number for WhatsApp
+      // According to WhatsApp docs: Use full phone number in international format
+      // Omit any zeroes, brackets, or dashes. Format: 27XXXXXXXXX (no + sign)
+      let phoneNumber = instructor.phone.replace(/\D/g, ''); // Remove all non-digits (+, spaces, dashes, etc.)
 
-    // If number starts with 0, replace with South African country code (27)
-    if (phoneNumber.startsWith('0')) {
-      phoneNumber = '27' + phoneNumber.substring(1);
-    } else if (!phoneNumber.startsWith('27')) {
-      phoneNumber = '27' + phoneNumber;
-    }
+      // Handle different input formats
+      if (phoneNumber.startsWith('0')) {
+        // Local format (0XXXXXXXXX) -> international (27XXXXXXXXX)
+        phoneNumber = '27' + phoneNumber.substring(1);
+      } else if (phoneNumber.startsWith('27')) {
+        // Already in international format, keep as is
+        phoneNumber = phoneNumber;
+      } else {
+        // Missing country code, add it
+        phoneNumber = '27' + phoneNumber;
+      }
 
-    const whatsappUrl = `https://wa.me/${phoneNumber}?text=${encodeURIComponent(message)}`;
+      // Validate: SA mobile numbers are 11 digits total (27 + 9 digits)
+      if (phoneNumber.length !== 11) {
+        console.error('❌ Invalid phone number length:', {
+          original: instructor.phone,
+          formatted: phoneNumber,
+          length: phoneNumber.length,
+          expected: 11,
+        });
 
-    if (Platform.OS === 'web') {
-      window.open(whatsappUrl, '_blank');
-    } else {
-      const { Linking } = require('react-native');
-      Linking.openURL(whatsappUrl).catch(() => {
-        Alert.alert('WhatsApp Not Found', 'Please make sure WhatsApp is installed on your device.');
+        if (Platform.OS === 'web') {
+          const retry = window.confirm(
+            `Invalid phone number format: ${instructor.phone}\n` +
+              `Formatted: ${phoneNumber} (${phoneNumber.length} digits)\n\n` +
+              `Click OK to try opening WhatsApp anyway, or Cancel to copy the number.`
+          );
+          if (!retry) {
+            navigator.clipboard.writeText(instructor.phone);
+            alert(
+              `Phone number copied: ${instructor.phone}\nYou can manually add this contact in WhatsApp.`
+            );
+            return;
+          }
+        } else {
+          Alert.alert(
+            'Invalid Phone Number',
+            `Cannot open WhatsApp.\nPhone: ${instructor.phone}\nFormatted: ${phoneNumber}`,
+            [
+              { text: 'Cancel', style: 'cancel' },
+              { text: 'Try Anyway', onPress: () => {} },
+            ]
+          );
+          return;
+        }
+      }
+
+      // Validate: Must start with 27
+      if (!phoneNumber.startsWith('27')) {
+        console.error('❌ Phone number does not start with country code 27:', phoneNumber);
+        if (Platform.OS === 'web') {
+          alert(
+            `Invalid phone number: ${phoneNumber}\nMust start with 27 (South African country code)`
+          );
+        } else {
+          Alert.alert('Invalid Phone Number', `Number must start with country code 27`);
+        }
+        return;
+      }
+
+      // Professional message with student details
+      const message = `Good day ${instructor.first_name},
+
+I am ${studentName} and I found your profile on Drive Alive.
+
+I am interested in booking driving lessons with you.
+
+My contact details:
+Name: ${studentName}
+Phone: ${studentPhone}
+
+Looking forward to hearing from you.
+
+Kind regards,
+${studentName}`;
+
+      // Use whatsapp:// protocol to open the app directly instead of web
+      // For mobile: whatsapp://send?phone=XXXXXXXXXXX&text=message
+      // For desktop: whatsapp://send?phone=XXXXXXXXXXX&text=message (opens desktop app if installed)
+      const whatsappUrl = `whatsapp://send?phone=${phoneNumber}&text=${encodeURIComponent(
+        message
+      )}`;
+
+      // Enhanced debug logging
+      console.log('✅ WhatsApp URL Generated:', {
+        instructor: `${instructor.first_name} ${instructor.last_name}`,
+        student: studentName,
+        originalPhone: instructor.phone,
+        formattedPhone: phoneNumber,
+        phoneLength: phoneNumber.length,
+        startsWithCC: phoneNumber.startsWith('27'),
+        protocol: 'whatsapp://',
+        fullUrl: whatsappUrl.substring(0, 100) + '...',
       });
+
+      if (Platform.OS === 'web') {
+        console.log('🌐 Opening WhatsApp Desktop App...');
+        // Try to open WhatsApp desktop app, will fall back to web if app not installed
+        window.location.href = whatsappUrl;
+      } else {
+        console.log('📱 Opening WhatsApp Mobile App...');
+        const { Linking } = require('react-native');
+        Linking.openURL(whatsappUrl).catch(error => {
+          console.error('❌ Error opening WhatsApp:', error);
+          Alert.alert(
+            'WhatsApp Error',
+            `This phone number may not be registered with WhatsApp: ${instructor.phone}\n\nWould you like to call instead?`,
+            [
+              { text: 'Cancel', style: 'cancel' },
+              { text: 'Call', onPress: () => handleCallInstructor(instructor) },
+            ]
+          );
+        });
+      }
+    } catch (error) {
+      console.error('❌ Error in handleWhatsAppInstructor:', error);
+      if (Platform.OS === 'web') {
+        alert(
+          `Failed to open WhatsApp: ${error}\n\n` +
+            `Phone: ${instructor.phone}\n\n` +
+            `Please try calling instead or manually add this number to WhatsApp.`
+        );
+      } else {
+        Alert.alert('Error', 'Failed to open WhatsApp. Please try calling instead.', [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Call Instead', onPress: () => handleCallInstructor(instructor) },
+        ]);
+      }
     }
   };
 
@@ -329,7 +448,8 @@ export default function InstructorListScreen() {
               style={styles.secondaryButton}
               onPress={() => handleWhatsAppInstructor(item)}
             >
-              <Text style={styles.secondaryButtonText}>💬 WhatsApp</Text>
+              <FontAwesome name="whatsapp" size={16} color="#25D366" style={{ marginRight: 6 }} />
+              <Text style={styles.secondaryButtonText}>WhatsApp</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -348,6 +468,11 @@ export default function InstructorListScreen() {
 
   return (
     <View style={styles.container}>
+      <WebNavigationHeader
+        title="Instructor List"
+        onBack={() => navigation.goBack()}
+        showBackButton={true}
+      />
       {/* Search Bar */}
       <View style={styles.searchContainer}>
         <TextInput
@@ -633,23 +758,23 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   listContainer: {
-    padding: 12,
+    padding: 8,
   },
   row: {
-    justifyContent: 'flex-start',
-    gap: 10,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginHorizontal: -5,
   },
   instructorCard: {
     backgroundColor: '#fff',
     borderRadius: 8,
-    padding: 10,
-    marginBottom: 8,
-    flex: 1,
-    maxWidth: Platform.OS === 'web' ? '100%' : undefined,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.08,
-    shadowRadius: 3,
+    padding: 12,
+    margin: 5,
+    flexBasis: '30%',
+    minWidth: 280,
+    maxWidth: '48%',
+    flexGrow: 1,
+    boxShadow: '0px 2px 4px #0000001A',
     elevation: 2,
   },
   instructorHeader: {
@@ -731,7 +856,9 @@ const styles = StyleSheet.create({
     backgroundColor: '#f8f9fa',
     padding: 6,
     borderRadius: 5,
+    flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     borderWidth: 1,
     borderColor: '#dee2e6',
     marginHorizontal: 2,

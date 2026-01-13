@@ -39,6 +39,41 @@ payments handled in-app, GPS pickup/drop-off, WhatsApp reminders, and compliance
 
 ### Global Navigation Requirements ✅
 
+**Back Button:**
+
+- ✅ **USE REACT NAVIGATION'S BUILT-IN BACK BUTTON** - Automatically provided by React Navigation
+- ✅ Configured globally in `App.tsx` with `headerBackVisible: true`
+- ✅ Appears in `headerLeft` position (top-left corner) when navigation stack allows going back
+- ✅ Works consistently across all platforms (mobile, web)
+- ✅ Automatically respects `beforeRemove` navigation listeners for unsaved changes
+- ❌ **NEVER** add custom "← Back" buttons in screen headers (duplicates built-in functionality)
+- ❌ **NEVER** use `navigation.goBack()` in custom header buttons
+- ❌ **NEVER** create `backButton` or `backButtonText` styles in screen stylesheets
+
+**Implementation:**
+
+```typescript
+// In App.tsx navigation config (already configured)
+screenOptions={{
+  headerBackVisible: true,
+  headerBackTitle: 'Back',
+  // ... other options
+}}
+
+// Exception: Error states may show custom back button in content
+// Example: BookingScreen when no instructor selected
+if (!instructor) {
+  return (
+    <View style={styles.errorContainer}>
+      <Text style={styles.errorText}>No instructor selected</Text>
+      <TouchableOpacity onPress={() => navigation.goBack()}>
+        <Text>← Go Back</Text>
+      </TouchableOpacity>
+    </View>
+  );
+}
+```
+
 **Logout Button:**
 
 - ✅ **ALWAYS** include logout button in header for all authenticated screens
@@ -473,7 +508,7 @@ showMessage(setErrorMessage, "Failed!", SCREEN_NAME, "error", "error");
 - `PUT /admin/users/{id}/status` - Update user status
 - `GET /admin/bookings` - All bookings with filters
 - `DELETE /admin/bookings/{id}` - Cancel booking (admin)
-- `GET /admin/revenue/stats` - Revenue statistics
+- `GET /admin/revenue/stats?instructor_id={id}` - Revenue statistics (all or filtered by instructor)
 - `GET /admin/revenue/by-instructor/{id}` - Instructor revenue
 
 **Frontend API Methods:**
@@ -485,6 +520,52 @@ showMessage(setErrorMessage, "Failed!", SCREEN_NAME, "error", "error");
 - `updateUserStatus()` - Change user status
 - `getAllBookingsAdmin()` - Admin booking overview
 - `cancelBookingAdmin()` - Cancel any booking
-- `getRevenueStats()` - Revenue analytics
+- `getRevenueStats(instructorId?)` - Revenue analytics (all instructors or filtered)
 - `getInstructorRevenue()` - Per-instructor revenue
 - `createAdmin()` - Create new admin account
+
+## Recent Updates (Dec 23, 2025 - Revenue Analytics Filter)
+
+### Revenue Analytics Instructor Filtering ✅
+
+**Feature:** Enhanced Revenue Analytics screen with instructor filter dropdown
+
+**Backend Changes** ✅
+
+- Modified `/admin/revenue/stats` endpoint to accept optional `instructor_id` query parameter
+- When `instructor_id` provided: Returns stats filtered to specific instructor
+- When `instructor_id` omitted: Returns aggregate stats for all instructors (default behavior)
+- Backward compatible with existing API calls
+- File: `backend/app/routes/admin.py` (lines 463-540)
+
+**Frontend Changes** ✅
+
+- Added instructor dropdown filter using `@react-native-picker/picker` (already installed)
+- Dropdown shows "All Instructors" (default) plus list of all registered instructors
+- Real-time stats update when filter selection changes
+- Filter positioned between header and revenue summary cards
+- Maintains filter selection across pull-to-refresh
+- File: `frontend/screens/admin/RevenueAnalyticsScreen.tsx` (lines 1-414)
+
+**API Service Update** ✅
+
+- Modified `getRevenueStats()` method to accept optional `instructorId` parameter
+- Conditionally adds `instructor_id` to query params when provided
+- File: `frontend/services/api/index.ts` (lines 290-296)
+
+**User Experience:**
+
+- **Default View**: Shows aggregate revenue across all instructors
+- **Filtered View**: Shows revenue for specific selected instructor
+- **Reset Filter**: Select "All Instructors" to return to aggregate view
+- **Loading States**: Displays loading indicator while fetching filtered data
+
+**Use Cases:**
+
+- Admin wants to see overall business revenue → Default view
+- Admin wants to analyze specific instructor's performance → Select instructor from dropdown
+- Admin wants to compare instructors → Switch between different selections
+
+**Documentation:**
+
+- Created comprehensive implementation guide: `REVENUE_ANALYTICS_FILTER.md`

@@ -18,6 +18,7 @@ import {
 } from 'react-native';
 import CalendarPicker from '../../components/CalendarPicker';
 import InlineMessage from '../../components/InlineMessage';
+import WebNavigationHeader from '../../components/WebNavigationHeader';
 import ApiService from '../../services/api';
 
 interface Instructor {
@@ -66,8 +67,8 @@ interface ExistingBooking {
   created_at: string;
 }
 
-export default function BookingScreen() {
-  const navigation = useNavigation();
+export default function BookingScreen({ navigation: navProp }: any) {
+  const navigation = navProp || useNavigation();
   const route = useRoute();
   const instructor = (route.params as any)?.instructor as Instructor;
 
@@ -792,6 +793,11 @@ export default function BookingScreen() {
       )}
 
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
+        <WebNavigationHeader
+          title="Book Lesson"
+          onBack={() => navigation.goBack()}
+          showBackButton={true}
+        />
         {/* Instructor Info Card */}
         <View style={styles.instructorCard}>
           <Text style={styles.sectionTitle}>Instructor Details</Text>

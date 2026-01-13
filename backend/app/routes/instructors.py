@@ -262,10 +262,26 @@ async def get_earnings_report(
                     if student_user
                     else "Unknown"
                 ),
+                "student_email": student_user.email if student_user else None,
+                "student_phone": student_user.phone if student_user else None,
+                "student_city": student.city if student else None,
+                "student_suburb": student.suburb if student else None,
+                "student_id_number": student.id_number if student else None,
                 "lesson_date": booking.lesson_date.isoformat(),
+                "scheduled_time": booking.lesson_date.isoformat(),
                 "duration_minutes": booking.duration_minutes,
                 "amount": float(booking.amount),
                 "status": booking.status.value,
+                "payment_status": (
+                    booking.payment_status.value
+                    if hasattr(booking, "payment_status")
+                    else None
+                ),
+                "pickup_location": (
+                    booking.pickup_address
+                    if hasattr(booking, "pickup_address")
+                    else None
+                ),
             }
         )
 

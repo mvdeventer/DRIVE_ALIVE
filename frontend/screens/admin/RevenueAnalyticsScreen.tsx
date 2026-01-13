@@ -2,8 +2,9 @@
  * Revenue Analytics Screen
  * View revenue statistics and top performing instructors
  */
+import { Picker } from '@react-native-picker/picker';
 import { useFocusEffect } from '@react-navigation/native';
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -11,9 +12,11 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from 'react-native';
 import InlineMessage from '../../components/InlineMessage';
+import WebNavigationHeader from '../../components/WebNavigationHeader';
 import apiService from '../../services/api';
 
 interface RevenueStats {
@@ -29,16 +32,26 @@ interface RevenueStats {
   }>;
 }
 
-export default function RevenueAnalyticsScreen() {
+interface InstructorOption {
+  instructor_id: number;
+  instructor_name: string;
+  email?: string;
+  phone?: string;
+}
+
+export default function RevenueAnalyticsScreen({ navigation }: any) {
   const [stats, setStats] = useState<RevenueStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState('');
+  const [instructors, setInstructors] = useState<InstructorOption[]>([]);
+  const [selectedInstructorId, setSelectedInstructorId] = useState<number | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
 
-  const loadRevenueStats = async () => {
+  const loadRevenueStats = async (instructorId?: number | null) => {
     try {
       setError('');
-      const data = await apiService.getRevenueStats();
+      const data = await apiService.getRevenueStats(instructorId || undefined);
       setStats(data);
     } catch (err: any) {
       setError(err.response?.data?.detail || 'Failed to load revenue statistics');
@@ -48,15 +61,51 @@ export default function RevenueAnalyticsScreen() {
     }
   };
 
+  const loadInstructors = async () => {
+    try {
+      const response = await apiService.get('/admin/instructors/earnings-summary');
+      const instructorList = response.data.instructors || [];
+      // Sort alphabetically by instructor name
+      const sortedInstructors = instructorList.sort((a: any, b: any) =>
+        a.instructor_name.localeCompare(b.instructor_name)
+      );
+      setInstructors(sortedInstructors);
+    } catch (err: any) {
+      console.error('Failed to load instructors:', err);
+    }
+  };
+
+  // Filter instructors based on search query
+  const filteredInstructors = useMemo(() => {
+    if (!searchQuery.trim()) return instructors;
+
+    const query = searchQuery.toLowerCase();
+    return instructors.filter(
+      instructor =>
+        instructor.instructor_name.toLowerCase().includes(query) ||
+        instructor.instructor_id.toString().includes(query) ||
+        instructor.email?.toLowerCase().includes(query) ||
+        instructor.phone?.includes(query)
+    );
+  }, [instructors, searchQuery]);
+
   useFocusEffect(
     useCallback(() => {
-      loadRevenueStats();
-    }, [])
+      loadInstructors();
+      loadRevenueStats(selectedInstructorId);
+    }, [selectedInstructorId])
   );
 
   const onRefresh = () => {
     setRefreshing(true);
-    loadRevenueStats();
+    loadRevenueStats(selectedInstructorId);
+  };
+
+  const handleInstructorChange = (value: string) => {
+    const instructorId = value === 'all' ? null : parseInt(value, 10);
+    setSelectedInstructorId(instructorId);
+    setLoading(true);
+    loadRevenueStats(instructorId);
   };
 
   const renderTopInstructor = ({ item, index }: { item: any; index: number }) => (
@@ -91,36 +140,75 @@ export default function RevenueAnalyticsScreen() {
       style={styles.container}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
     >
+      <WebNavigationHeader
+        title="Revenue Analytics"
+        onBack={() => navigation.goBack()}
+        showBackButton={true}
+      />
+
+      <View style={styles.header}>
+        <Text style={styles.headerTitle}>Revenue Analytics</Text>
+      </View>
+
+      {/* Instructor Filter */}
+      <View style={styles.filterSection}>
+        <Text style={styles.filterLabel}>Filter by Instructor:</Text>
+
+        {/* Search Input */}
+        <TextInput
+          style={styles.searchInput}
+          placeholder="Search by name, ID, email, or phone..."
+          value={searchQuery}
+          onChangeText={setSearchQuery}
+          placeholderTextColor="#999"
+        />
+
+        {/* Dropdown Picker */}
+        <View style={styles.pickerContainer}>
+          <Picker
+            selectedValue={selectedInstructorId?.toString() || 'all'}
+            onValueChange={handleInstructorChange}
+            style={styles.picker}
+          >
+            <Picker.Item label="All Instructors" value="all" />
+            {filteredInstructors.map(instructor => (
+              <Picker.Item
+                key={instructor.instructor_id}
+                label={`${instructor.instructor_name} (ID: ${instructor.instructor_id})`}
+                value={instructor.instructor_id.toString()}
+              />
+            ))}
+          </Picker>
+        </View>
+      </View>
+
       {error && <InlineMessage message={error} type="error" />}
 
       {stats && (
         <>
-          {/* Main Revenue Stats */}
+          {/* Main Revenue Stats - Responsive Grid */}
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Revenue Summary</Text>
-            <View style={styles.revenueCard}>
-              <View style={styles.revenueItem}>
-                <Text style={styles.revenueLabel}>Total Revenue</Text>
-                <Text style={[styles.revenueValue, styles.revenueSuccess]}>
+            <View style={styles.statsGrid}>
+              <View style={styles.statCard}>
+                <Text style={styles.statCardLabel}>Total Revenue</Text>
+                <Text style={[styles.statCardValue, styles.statCardSuccess]}>
                   R{stats.total_revenue.toFixed(2)}
                 </Text>
               </View>
-              <View style={styles.divider} />
-              <View style={styles.revenueItem}>
-                <Text style={styles.revenueLabel}>Pending Revenue</Text>
-                <Text style={[styles.revenueValue, styles.revenueWarning]}>
+              <View style={styles.statCard}>
+                <Text style={styles.statCardLabel}>Pending Revenue</Text>
+                <Text style={[styles.statCardValue, styles.statCardWarning]}>
                   R{stats.pending_revenue.toFixed(2)}
                 </Text>
               </View>
-              <View style={styles.divider} />
-              <View style={styles.revenueItem}>
-                <Text style={styles.revenueLabel}>Completed Bookings</Text>
-                <Text style={styles.revenueValue}>{stats.completed_bookings}</Text>
+              <View style={styles.statCard}>
+                <Text style={styles.statCardLabel}>Completed Bookings</Text>
+                <Text style={styles.statCardValue}>{stats.completed_bookings}</Text>
               </View>
-              <View style={styles.divider} />
-              <View style={styles.revenueItem}>
-                <Text style={styles.revenueLabel}>Average Booking Value</Text>
-                <Text style={styles.revenueValue}>R{stats.avg_booking_value.toFixed(2)}</Text>
+              <View style={styles.statCard}>
+                <Text style={styles.statCardLabel}>Average Booking Value</Text>
+                <Text style={styles.statCardValue}>R{stats.avg_booking_value.toFixed(2)}</Text>
               </View>
             </View>
           </View>
@@ -177,6 +265,19 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#F5F5F5',
+  },
+  header: {
+    alignItems: 'center',
+    padding: 16,
+    backgroundColor: '#FFF',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E0E0E0',
+    marginBottom: 0,
+  },
+  headerTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#333',
   },
   centerContainer: {
     flex: 1,
@@ -302,5 +403,76 @@ const styles = StyleSheet.create({
   emptyText: {
     fontSize: 14,
     color: '#999',
+  },
+  filterSection: {
+    backgroundColor: '#FFF',
+    padding: 15,
+    marginTop: 0,
+    marginHorizontal: 15,
+    borderRadius: 10,
+    boxShadow: '0px 2px 4px #0000001A',
+  },
+  filterLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 8,
+  },
+  searchInput: {
+    height: 45,
+    borderWidth: 1,
+    borderColor: '#CCC',
+    borderRadius: 6,
+    paddingHorizontal: 12,
+    fontSize: 14,
+    backgroundColor: '#FFF',
+    marginBottom: 10,
+  },
+  pickerContainer: {
+    borderWidth: 1,
+    borderColor: '#CCC',
+    borderRadius: 6,
+    backgroundColor: '#FFF',
+    overflow: 'hidden',
+  },
+  picker: {
+    height: 50,
+    width: '100%',
+  },
+  // Responsive grid for stats cards
+  statsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginHorizontal: -5,
+  },
+  statCard: {
+    backgroundColor: '#F8F9FA',
+    borderRadius: 8,
+    padding: 12,
+    margin: 5,
+    flexBasis: '22%',
+    minWidth: 150,
+    maxWidth: '48%',
+    flexGrow: 1,
+    alignItems: 'center',
+    boxShadow: '0px 1px 3px #00000015',
+  },
+  statCardLabel: {
+    fontSize: 11,
+    color: '#666',
+    marginBottom: 6,
+    textAlign: 'center',
+  },
+  statCardValue: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#333',
+    textAlign: 'center',
+  },
+  statCardSuccess: {
+    color: '#28A745',
+  },
+  statCardWarning: {
+    color: '#FFC107',
   },
 });

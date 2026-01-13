@@ -17,6 +17,7 @@ import {
   View,
 } from 'react-native';
 import InlineMessage from '../../components/InlineMessage';
+import WebNavigationHeader from '../../components/WebNavigationHeader';
 import ApiService from '../../services/api';
 
 // Conditional imports for web and native
@@ -59,8 +60,8 @@ const DAY_LABELS: { [key: string]: string } = {
   sunday: 'Sunday',
 };
 
-export default function ManageAvailabilityScreen() {
-  const navigation = useNavigation();
+export default function ManageAvailabilityScreen({ navigation: navProp }: any) {
+  const navInstance = navProp || useNavigation();
   const scrollViewRef = useRef<ScrollView>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -118,7 +119,7 @@ export default function ManageAvailabilityScreen() {
   }, [newTimeOff.start_date, newTimeOff.end_date, newTimeOff.reason]);
 
   useEffect(() => {
-    const unsubscribe = navigation.addListener('beforeRemove', e => {
+    const unsubscribe = navInstance.addListener('beforeRemove', e => {
       if (!hasUnsavedChanges) {
         return;
       }
@@ -127,7 +128,7 @@ export default function ManageAvailabilityScreen() {
       setShowDiscardModal(true);
     });
     return unsubscribe;
-  }, [navigation, hasUnsavedChanges]);
+  }, [navInstance, hasUnsavedChanges]);
 
   const handleDiscardChanges = () => {
     setShowDiscardModal(false);
@@ -433,24 +434,13 @@ export default function ManageAvailabilityScreen() {
 
   return (
     <ScrollView ref={scrollViewRef} style={styles.container}>
+      <WebNavigationHeader
+        title="Manage Availability"
+        onBack={() => navInstance.goBack()}
+        showBackButton={true}
+      />
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity
-          onPress={() => {
-            if (hasUnsavedChanges) {
-              setMessage({
-                type: 'warning',
-                text: '⚠️ You have unsaved changes! Please save your schedule or your changes will be lost.',
-              });
-              setTimeout(() => setMessage(null), 5000);
-            } else {
-              navigation.goBack();
-            }
-          }}
-          style={styles.backButton}
-        >
-          <Text style={styles.backButtonText}>← Back</Text>
-        </TouchableOpacity>
         <Text style={styles.title}>📅 Manage Availability</Text>
         {hasUnsavedChanges && (
           <View style={styles.unsavedBadge}>
@@ -857,13 +847,6 @@ const styles = StyleSheet.create({
     paddingTop: Platform.OS === 'web' ? 20 : 50,
     borderBottomWidth: 1,
     borderBottomColor: '#e0e0e0',
-  },
-  backButton: {
-    marginBottom: 10,
-  },
-  backButtonText: {
-    fontSize: 16,
-    color: '#007bff',
   },
   title: {
     fontSize: 24,

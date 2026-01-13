@@ -286,8 +286,10 @@ class ApiService {
     return response.data;
   }
 
-  async getRevenueStats() {
-    const response = await this.api.get('/admin/revenue/stats');
+  async getRevenueStats(instructorId?: number) {
+    const params: any = {};
+    if (instructorId) params.instructor_id = instructorId;
+    const response = await this.api.get('/admin/revenue/stats', { params });
     return response.data;
   }
 

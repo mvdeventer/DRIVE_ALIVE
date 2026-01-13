@@ -8,6 +8,7 @@ import jsPDF from 'jspdf';
 import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
+  Modal,
   Platform,
   RefreshControl,
   ScrollView,
@@ -17,6 +18,7 @@ import {
   View,
 } from 'react-native';
 import InlineMessage from '../../components/InlineMessage';
+import WebNavigationHeader from '../../components/WebNavigationHeader';
 import ApiService from '../../services/api';
 import { showMessage } from '../../utils/messageConfig';
 
@@ -63,6 +65,8 @@ export default function EarningsReportScreen({ navigation }: any) {
   const [timeFilter, setTimeFilter] = useState<'all' | 'month' | 'week'>('all');
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [selectedBooking, setSelectedBooking] = useState<any | null>(null);
+  const [showDetailsModal, setShowDetailsModal] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -448,10 +452,12 @@ export default function EarningsReportScreen({ navigation }: any) {
           .slice(1)
           .map(row => [
             row[0],
-            (typeof row[1] === 'number' && row[0].includes('Earnings')) ||
-            row[0].includes('Rate') ||
-            row[0].includes('Avg')
-              ? `R${row[1].toFixed(2)}`
+            (typeof row[1] === 'number' &&
+              typeof row[0] === 'string' &&
+              row[0].includes('Earnings')) ||
+            (typeof row[0] === 'string' && row[0].includes('Rate')) ||
+            (typeof row[0] === 'string' && row[0].includes('Avg'))
+              ? `R${(row[1] as number).toFixed(2)}`
               : row[1],
           ]),
       });
@@ -492,8 +498,6 @@ export default function EarningsReportScreen({ navigation }: any) {
         });
 
         // Format currency columns
-        const table = monthlySheet.getTable('MonthlyTable');
-        const tableRange = table.table.tableRef;
         monthlySheet.getColumn('B').numFmt = 'R#,##0.00';
         monthlySheet.getColumn('D').numFmt = 'R#,##0.00';
 
@@ -663,179 +667,324 @@ export default function EarningsReportScreen({ navigation }: any) {
   }
 
   return (
-    <ScrollView
-      style={styles.container}
-      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-    >
-      {/* Inline Messages */}
-      {successMessage && (
-        <InlineMessage
-          type="success"
-          message={successMessage}
-          onDismiss={() => setSuccessMessage(null)}
-          autoDismissMs={4000}
-        />
-      )}
-      {errorMessage && (
-        <InlineMessage
-          type="error"
-          message={errorMessage}
-          onDismiss={() => setErrorMessage(null)}
-          autoDismissMs={5000}
-        />
-      )}
+    <>
+      <WebNavigationHeader
+        title="Earnings Report"
+        onBack={() => navigation.goBack()}
+        showBackButton={true}
+      />
+      <ScrollView
+        style={styles.container}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+      >
+        {/* Inline Messages */}
+        {successMessage && (
+          <InlineMessage
+            type="success"
+            message={successMessage}
+            onDismiss={() => setSuccessMessage(null)}
+            autoDismissMs={4000}
+          />
+        )}
+        {errorMessage && (
+          <InlineMessage
+            type="error"
+            message={errorMessage}
+            onDismiss={() => setErrorMessage(null)}
+            autoDismissMs={5000}
+          />
+        )}
 
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
-          <Text style={styles.backButtonText}>← Back</Text>
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>📊 Earnings Report</Text>
-        <TouchableOpacity style={styles.exportButton} onPress={exportReport}>
-          <Text style={styles.exportButtonText}>📥 Export</Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* Summary Cards */}
-      <View style={styles.summarySection}>
-        <Text style={styles.sectionTitle}>Overview</Text>
-        <View style={styles.summaryGrid}>
-          <View style={[styles.summaryCard, styles.primaryCard]}>
-            <Text style={styles.summaryLabel}>Total Earnings</Text>
-            <Text style={styles.summaryValue}>
-              {formatCurrency(earningsData?.total_earnings || 0)}
-            </Text>
-            <Text style={styles.summarySubtext}>All time</Text>
-          </View>
-
-          <View style={styles.summaryCard}>
-            <Text style={styles.summaryLabel}>Hourly Rate</Text>
-            <Text style={styles.summaryValue}>{formatCurrency(profile?.hourly_rate || 0)}</Text>
-            <Text style={styles.summarySubtext}>per hour</Text>
-          </View>
-
-          <View style={styles.summaryCard}>
-            <Text style={styles.summaryLabel}>Completed Lessons</Text>
-            <Text style={styles.summaryValue}>{earningsData?.completed_lessons || 0}</Text>
-            <Text style={styles.summarySubtext}>paid lessons</Text>
-          </View>
-
-          <View style={styles.summaryCard}>
-            <Text style={styles.summaryLabel}>Avg. per Lesson</Text>
-            <Text style={styles.summaryValue}>
-              {earningsData?.completed_lessons
-                ? formatCurrency(
-                    (earningsData?.total_earnings || 0) / earningsData.completed_lessons
-                  )
-                : formatCurrency(0)}
-            </Text>
-            <Text style={styles.summarySubtext}>average</Text>
-          </View>
+        {/* Header */}
+        <View style={styles.header}>
+          <Text style={styles.headerTitle}>📊 Earnings Report</Text>
+          <TouchableOpacity style={styles.exportButton} onPress={exportReport}>
+            <Text style={styles.exportButtonText}>📥 Export</Text>
+          </TouchableOpacity>
         </View>
-      </View>
 
-      {/* Statistics */}
-      <View style={styles.statsSection}>
-        <Text style={styles.sectionTitle}>Lesson Statistics</Text>
-        <View style={styles.statsGrid}>
-          <View style={styles.statRow}>
-            <View style={[styles.statDot, { backgroundColor: '#28a745' }]} />
-            <Text style={styles.statLabel}>Completed</Text>
-            <Text style={styles.statValue}>{earningsData?.completed_lessons || 0}</Text>
-          </View>
-          <View style={styles.statRow}>
-            <View style={[styles.statDot, { backgroundColor: '#ffc107' }]} />
-            <Text style={styles.statLabel}>Pending</Text>
-            <Text style={styles.statValue}>{earningsData?.pending_lessons || 0}</Text>
-          </View>
-          <View style={styles.statRow}>
-            <View style={[styles.statDot, { backgroundColor: '#dc3545' }]} />
-            <Text style={styles.statLabel}>Cancelled</Text>
-            <Text style={styles.statValue}>{earningsData?.cancelled_lessons || 0}</Text>
-          </View>
-          <View style={styles.statRow}>
-            <View style={[styles.statDot, { backgroundColor: '#007bff' }]} />
-            <Text style={styles.statLabel}>Total</Text>
-            <Text style={styles.statValue}>{earningsData?.total_lessons || 0}</Text>
-          </View>
-        </View>
-      </View>
-
-      {/* Monthly Breakdown */}
-      {earningsData?.earnings_by_month && earningsData.earnings_by_month.length > 0 && (
-        <View style={styles.monthlySection}>
-          <Text style={styles.sectionTitle}>Monthly Breakdown</Text>
-          {earningsData.earnings_by_month.map((month, index) => (
-            <View key={index} style={styles.monthCard}>
-              <View style={styles.monthHeader}>
-                <Text style={styles.monthName}>📅 {month.month}</Text>
-                <Text style={styles.monthEarnings}>{formatCurrency(month.earnings)}</Text>
-              </View>
-              <View style={styles.monthDetails}>
-                <Text style={styles.monthLessons}>{month.lessons} lessons completed</Text>
-                <Text style={styles.monthAverage}>
-                  Avg:{' '}
-                  {month.lessons > 0
-                    ? formatCurrency(month.earnings / month.lessons)
-                    : formatCurrency(0)}{' '}
-                  per lesson
-                </Text>
-              </View>
+        {/* Summary Cards */}
+        <View style={styles.summarySection}>
+          <Text style={styles.sectionTitle}>Overview</Text>
+          <View style={styles.summaryGrid}>
+            <View style={[styles.summaryCard, styles.primaryCard]}>
+              <Text style={styles.summaryLabel}>Total Earnings</Text>
+              <Text style={styles.summaryValue}>
+                {formatCurrency(earningsData?.total_earnings || 0)}
+              </Text>
+              <Text style={styles.summarySubtext}>All time</Text>
             </View>
-          ))}
-        </View>
-      )}
 
-      {/* Recent Earnings */}
-      {earningsData?.recent_earnings && earningsData.recent_earnings.length > 0 && (
-        <View style={styles.recentSection}>
-          <Text style={styles.sectionTitle}>Recent Earnings</Text>
-          {earningsData.recent_earnings.map((earning, index) => (
-            <View key={earning.id} style={styles.earningCard}>
-              <View style={styles.earningHeader}>
-                <Text style={styles.earningStudent}>👤 {earning.student_name}</Text>
-                <Text style={styles.earningAmount}>{formatCurrency(earning.amount)}</Text>
-              </View>
-              <View style={styles.earningDetails}>
-                <Text style={styles.earningDate}>
-                  📅 {formatDate(earning.lesson_date)} at {formatTime(earning.lesson_date)}
-                </Text>
-                <Text style={styles.earningDuration}>⏱️ {earning.duration_minutes} minutes</Text>
-                <View
-                  style={[
-                    styles.earningStatus,
-                    { backgroundColor: getStatusColor(earning.status) },
-                  ]}
-                >
-                  <Text style={styles.earningStatusText}>{earning.status}</Text>
+            <View style={styles.summaryCard}>
+              <Text style={styles.summaryLabel}>Hourly Rate</Text>
+              <Text style={styles.summaryValue}>{formatCurrency(profile?.hourly_rate || 0)}</Text>
+              <Text style={styles.summarySubtext}>per hour</Text>
+            </View>
+
+            <View style={styles.summaryCard}>
+              <Text style={styles.summaryLabel}>Completed Lessons</Text>
+              <Text style={styles.summaryValue}>{earningsData?.completed_lessons || 0}</Text>
+              <Text style={styles.summarySubtext}>paid lessons</Text>
+            </View>
+
+            <View style={styles.summaryCard}>
+              <Text style={styles.summaryLabel}>Avg. per Lesson</Text>
+              <Text style={styles.summaryValue}>
+                {earningsData?.completed_lessons
+                  ? formatCurrency(
+                      (earningsData?.total_earnings || 0) / earningsData.completed_lessons
+                    )
+                  : formatCurrency(0)}
+              </Text>
+              <Text style={styles.summarySubtext}>average</Text>
+            </View>
+          </View>
+        </View>
+
+        {/* Statistics */}
+        <View style={styles.statsSection}>
+          <Text style={styles.sectionTitle}>Lesson Statistics</Text>
+          <View style={styles.statsGrid}>
+            <View style={styles.statCard}>
+              <View style={[styles.statDot, { backgroundColor: '#28a745' }]} />
+              <Text style={styles.statLabel}>Completed</Text>
+              <Text style={styles.statValue}>{earningsData?.completed_lessons || 0}</Text>
+            </View>
+            <View style={styles.statCard}>
+              <View style={[styles.statDot, { backgroundColor: '#ffc107' }]} />
+              <Text style={styles.statLabel}>Pending</Text>
+              <Text style={styles.statValue}>{earningsData?.pending_lessons || 0}</Text>
+            </View>
+            <View style={styles.statCard}>
+              <View style={[styles.statDot, { backgroundColor: '#dc3545' }]} />
+              <Text style={styles.statLabel}>Cancelled</Text>
+              <Text style={styles.statValue}>{earningsData?.cancelled_lessons || 0}</Text>
+            </View>
+            <View style={styles.statCard}>
+              <View style={[styles.statDot, { backgroundColor: '#007bff' }]} />
+              <Text style={styles.statLabel}>Total</Text>
+              <Text style={styles.statValue}>{earningsData?.total_lessons || 0}</Text>
+            </View>
+          </View>
+        </View>
+
+        {/* Monthly Breakdown */}
+        {earningsData?.earnings_by_month && earningsData.earnings_by_month.length > 0 && (
+          <View style={styles.monthlySection}>
+            <Text style={styles.sectionTitle}>Monthly Breakdown</Text>
+            {earningsData.earnings_by_month.map((month, index) => (
+              <View key={index} style={styles.monthCard}>
+                <View style={styles.monthHeader}>
+                  <Text style={styles.monthName}>📅 {month.month}</Text>
+                  <Text style={styles.monthEarnings}>{formatCurrency(month.earnings)}</Text>
+                </View>
+                <View style={styles.monthDetails}>
+                  <Text style={styles.monthLessons}>{month.lessons} lessons completed</Text>
+                  <Text style={styles.monthAverage}>
+                    Avg:{' '}
+                    {month.lessons > 0
+                      ? formatCurrency(month.earnings / month.lessons)
+                      : formatCurrency(0)}{' '}
+                    per lesson
+                  </Text>
                 </View>
               </View>
-            </View>
-          ))}
-        </View>
-      )}
+            ))}
+          </View>
+        )}
 
-      {/* No Data Message */}
-      {(!earningsData?.recent_earnings || earningsData.recent_earnings.length === 0) && (
-        <View style={styles.emptyState}>
-          <Text style={styles.emptyStateIcon}>💰</Text>
-          <Text style={styles.emptyStateTitle}>No Earnings Yet</Text>
-          <Text style={styles.emptyStateText}>
-            Start completing lessons to see your earnings here!
+        {/* Recent Earnings */}
+        {earningsData?.recent_earnings && earningsData.recent_earnings.length > 0 && (
+          <View style={styles.recentSection}>
+            <Text style={styles.sectionTitle}>Recent Earnings</Text>
+            {earningsData.recent_earnings.map((earning, index) => (
+              <TouchableOpacity
+                key={earning.id}
+                style={styles.earningCard}
+                onPress={() => {
+                  setSelectedBooking(earning);
+                  setShowDetailsModal(true);
+                }}
+                activeOpacity={0.7}
+              >
+                <View style={styles.earningHeader}>
+                  <Text style={styles.earningStudent}>👤 {earning.student_name}</Text>
+                  <Text style={styles.earningAmount}>{formatCurrency(earning.amount)}</Text>
+                </View>
+                <View style={styles.earningDetails}>
+                  <Text style={styles.earningDate}>
+                    📅 {formatDate(earning.lesson_date)} at {formatTime(earning.lesson_date)}
+                  </Text>
+                  <Text style={styles.earningDuration}>⏱️ {earning.duration_minutes} minutes</Text>
+                  <View
+                    style={[
+                      styles.earningStatus,
+                      { backgroundColor: getStatusColor(earning.status) },
+                    ]}
+                  >
+                    <Text style={styles.earningStatusText}>{earning.status}</Text>
+                  </View>
+                </View>
+                <Text style={styles.tapHint}>Tap for details →</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
+
+        {/* No Data Message */}
+        {(!earningsData?.recent_earnings || earningsData.recent_earnings.length === 0) && (
+          <View style={styles.emptyState}>
+            <Text style={styles.emptyStateIcon}>💰</Text>
+            <Text style={styles.emptyStateTitle}>No Earnings Yet</Text>
+            <Text style={styles.emptyStateText}>
+              Start completing lessons to see your earnings here!
+            </Text>
+          </View>
+        )}
+
+        {/* Footer Info */}
+        <View style={styles.footer}>
+          <Text style={styles.footerText}>
+            💡 Tip: Pull down to refresh your latest earnings data
+          </Text>
+          <Text style={styles.footerSubtext}>
+            Last updated: {new Date().toLocaleString('en-ZA')}
           </Text>
         </View>
-      )}
 
-      {/* Footer Info */}
-      <View style={styles.footer}>
-        <Text style={styles.footerText}>
-          💡 Tip: Pull down to refresh your latest earnings data
-        </Text>
-        <Text style={styles.footerSubtext}>Last updated: {new Date().toLocaleString('en-ZA')}</Text>
-      </View>
+        <View style={{ height: 40 }} />
+      </ScrollView>
 
-      <View style={{ height: 40 }} />
-    </ScrollView>
+      {/* Details Modal */}
+      <Modal
+        visible={showDetailsModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowDetailsModal(false)}
+      >
+        <View style={styles.modalContainer}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Lesson Details</Text>
+              <TouchableOpacity onPress={() => setShowDetailsModal(false)}>
+                <Text style={styles.closeButton}>✕</Text>
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={styles.modalBody}>
+              {selectedBooking && (
+                <>
+                  {/* Student Info */}
+                  <View style={styles.detailSection}>
+                    <Text style={styles.detailSectionTitle}>Student Information</Text>
+                    <View style={styles.detailRow}>
+                      <Text style={styles.detailLabel}>Name:</Text>
+                      <Text style={styles.detailValue}>
+                        {selectedBooking.student_name || 'N/A'}
+                      </Text>
+                    </View>
+                    {selectedBooking.student_email && (
+                      <View style={styles.detailRow}>
+                        <Text style={styles.detailLabel}>Email:</Text>
+                        <Text style={styles.detailValue}>{selectedBooking.student_email}</Text>
+                      </View>
+                    )}
+                    {selectedBooking.student_phone && (
+                      <View style={styles.detailRow}>
+                        <Text style={styles.detailLabel}>Phone:</Text>
+                        <Text style={styles.detailValue}>{selectedBooking.student_phone}</Text>
+                      </View>
+                    )}
+                    {selectedBooking.student_id_number && (
+                      <View style={styles.detailRow}>
+                        <Text style={styles.detailLabel}>ID Number:</Text>
+                        <Text style={styles.detailValue}>{selectedBooking.student_id_number}</Text>
+                      </View>
+                    )}
+                    {selectedBooking.student_city && (
+                      <View style={styles.detailRow}>
+                        <Text style={styles.detailLabel}>City:</Text>
+                        <Text style={styles.detailValue}>{selectedBooking.student_city}</Text>
+                      </View>
+                    )}
+                    {selectedBooking.student_suburb && (
+                      <View style={styles.detailRow}>
+                        <Text style={styles.detailLabel}>Suburb:</Text>
+                        <Text style={styles.detailValue}>{selectedBooking.student_suburb}</Text>
+                      </View>
+                    )}
+                  </View>
+
+                  {/* Lesson Info */}
+                  <View style={styles.detailSection}>
+                    <Text style={styles.detailSectionTitle}>Lesson Information</Text>
+                    <View style={styles.detailRow}>
+                      <Text style={styles.detailLabel}>Date:</Text>
+                      <Text style={styles.detailValue}>
+                        {formatDate(selectedBooking.lesson_date)}
+                      </Text>
+                    </View>
+                    <View style={styles.detailRow}>
+                      <Text style={styles.detailLabel}>Time:</Text>
+                      <Text style={styles.detailValue}>
+                        {formatTime(selectedBooking.lesson_date)}
+                      </Text>
+                    </View>
+                    <View style={styles.detailRow}>
+                      <Text style={styles.detailLabel}>Duration:</Text>
+                      <Text style={styles.detailValue}>
+                        {selectedBooking.duration_minutes} minutes
+                      </Text>
+                    </View>
+                    {selectedBooking.pickup_location && (
+                      <View style={styles.detailRow}>
+                        <Text style={styles.detailLabel}>Pickup Location:</Text>
+                        <Text style={styles.detailValue}>{selectedBooking.pickup_location}</Text>
+                      </View>
+                    )}
+                  </View>
+
+                  {/* Payment Info */}
+                  <View style={styles.detailSection}>
+                    <Text style={styles.detailSectionTitle}>Payment Information</Text>
+                    <View style={styles.detailRow}>
+                      <Text style={styles.detailLabel}>Amount:</Text>
+                      <Text style={styles.detailValueHighlight}>
+                        {formatCurrency(selectedBooking.amount)}
+                      </Text>
+                    </View>
+                    <View style={styles.detailRow}>
+                      <Text style={styles.detailLabel}>Status:</Text>
+                      <View
+                        style={[
+                          styles.statusBadge,
+                          { backgroundColor: getStatusColor(selectedBooking.status) },
+                        ]}
+                      >
+                        <Text style={styles.statusBadgeText}>{selectedBooking.status}</Text>
+                      </View>
+                    </View>
+                    {selectedBooking.payment_status && (
+                      <View style={styles.detailRow}>
+                        <Text style={styles.detailLabel}>Payment Status:</Text>
+                        <Text style={styles.detailValue}>{selectedBooking.payment_status}</Text>
+                      </View>
+                    )}
+                  </View>
+                </>
+              )}
+            </ScrollView>
+
+            <TouchableOpacity
+              style={styles.closeModalButton}
+              onPress={() => setShowDetailsModal(false)}
+            >
+              <Text style={styles.closeModalButtonText}>Close</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+    </>
   );
 }
 
@@ -878,14 +1027,6 @@ const styles = StyleSheet.create({
     padding: 20,
     paddingTop: Platform.OS === 'web' ? 20 : 40,
   },
-  backButton: {
-    padding: 8,
-  },
-  backButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
-  },
   headerTitle: {
     fontSize: 20,
     fontWeight: 'bold',
@@ -914,16 +1055,19 @@ const styles = StyleSheet.create({
   summaryGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    justifyContent: 'space-between',
-    gap: 12,
+    marginHorizontal: -5,
   },
   summaryCard: {
     backgroundColor: '#fff',
     borderRadius: 12,
-    padding: 16,
-    width: Platform.OS === 'web' ? 'calc(50% - 6px)' : '48%',
-    minWidth: 160,
-    boxShadow: '0px 2px 4px #0000001A',
+    padding: 12,
+    margin: 5,
+    flexBasis: '22%',
+    minWidth: 150,
+    maxWidth: '48%',
+    flexGrow: 1,
+    alignItems: 'center',
+    boxShadow: '0px 1px 3px #00000015',
     elevation: 2,
   },
   primaryCard: {
@@ -949,32 +1093,37 @@ const styles = StyleSheet.create({
     paddingTop: 0,
   },
   statsGrid: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 16,
-    boxShadow: '0px 2px 4px #0000001A',
-    elevation: 2,
-  },
-  statRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginHorizontal: -5,
+  },
+  statCard: {
+    backgroundColor: '#F8F9FA',
+    borderRadius: 8,
+    padding: 12,
+    margin: 5,
+    flexBasis: '22%',
+    minWidth: 150,
+    maxWidth: '48%',
+    flexGrow: 1,
     alignItems: 'center',
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
+    boxShadow: '0px 1px 3px #00000015',
+    elevation: 1,
   },
   statDot: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    marginRight: 12,
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    marginBottom: 8,
   },
   statLabel: {
-    flex: 1,
-    fontSize: 16,
-    color: '#333',
+    fontSize: 12,
+    color: '#666',
+    marginBottom: 4,
+    textAlign: 'center',
   },
   statValue: {
-    fontSize: 16,
+    fontSize: 24,
     fontWeight: 'bold',
     color: '#333',
   },
@@ -1108,5 +1257,107 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#999',
     textAlign: 'center',
+  },
+  tapHint: {
+    fontSize: 11,
+    color: '#999',
+    marginTop: 8,
+    fontStyle: 'italic',
+    textAlign: 'right',
+  },
+  modalContainer: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    backgroundColor: '#fff',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    maxHeight: '90%',
+    minHeight: '50%',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#333',
+  },
+  closeButton: {
+    fontSize: 24,
+    color: '#999',
+    padding: 8,
+  },
+  modalBody: {
+    padding: 20,
+  },
+  detailSection: {
+    marginBottom: 24,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
+  },
+  detailSectionTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#333',
+    marginBottom: 12,
+  },
+  detailRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 8,
+  },
+  detailLabel: {
+    fontSize: 14,
+    color: '#666',
+    fontWeight: '600',
+    flex: 1,
+  },
+  detailValue: {
+    fontSize: 14,
+    color: '#333',
+    flex: 1,
+    textAlign: 'right',
+  },
+  detailValueHighlight: {
+    fontSize: 16,
+    color: '#28a745',
+    fontWeight: 'bold',
+    flex: 1,
+    textAlign: 'right',
+  },
+  statusBadge: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+    alignSelf: 'flex-end',
+  },
+  statusBadgeText: {
+    fontSize: 12,
+    color: '#fff',
+    fontWeight: '600',
+    textTransform: 'uppercase',
+  },
+  closeModalButton: {
+    backgroundColor: '#007bff',
+    padding: 14,
+    margin: 20,
+    marginBottom: 30,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  closeModalButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
   },
 });

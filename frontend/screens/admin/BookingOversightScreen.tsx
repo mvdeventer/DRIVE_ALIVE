@@ -18,6 +18,7 @@ import {
   View,
 } from 'react-native';
 import InlineMessage from '../../components/InlineMessage';
+import WebNavigationHeader from '../../components/WebNavigationHeader';
 import apiService from '../../services/api';
 import { showMessage } from '../../utils/messageConfig';
 
@@ -41,7 +42,7 @@ interface Booking {
   created_at: string;
 }
 
-export default function BookingOversightScreen() {
+export default function BookingOversightScreen({ navigation }: any) {
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -315,6 +316,16 @@ Lesson Type:    ${booking.lesson_type.toUpperCase()}
 
   return (
     <View style={styles.container}>
+      <View style={styles.header}>
+        <Text style={styles.headerTitle}>View Bookings</Text>
+      </View>
+
+      <WebNavigationHeader
+        title="Booking Oversight"
+        onBack={() => navigation.goBack()}
+        showBackButton={true}
+      />
+
       {error && <InlineMessage message={error} type="error" />}
       {success && <InlineMessage message={success} type="success" />}
 
@@ -552,6 +563,18 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#F5F5F5',
   },
+  header: {
+    alignItems: 'center',
+    padding: 16,
+    backgroundColor: '#FFF',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E0E0E0',
+  },
+  headerTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#333',
+  },
   centerContainer: {
     flex: 1,
     justifyContent: 'center',
@@ -640,13 +663,15 @@ const styles = StyleSheet.create({
   },
   bookingCard: {
     backgroundColor: '#FFF',
-    borderRadius: 6,
-    padding: 10,
-    margin: 4,
-    flex: 1,
-    maxWidth: '32%',
+    borderRadius: 8,
+    padding: 12,
+    margin: 5,
+    flexBasis: '22%',
     minWidth: 280,
+    maxWidth: '48%',
+    flexGrow: 1,
     boxShadow: '0px 2px 4px #0000001A',
+    elevation: 2,
   },
   bookingHeader: {
     flexDirection: 'row',

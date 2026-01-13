@@ -3,7 +3,7 @@
  * Allow admins to view and manage all users (activate/deactivate/suspend)
  */
 import { Picker } from '@react-native-picker/picker';
-import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import { useFocusEffect } from '@react-navigation/native';
 import React, { useCallback, useState } from 'react';
 import {
   ActivityIndicator,
@@ -19,6 +19,7 @@ import {
   View,
 } from 'react-native';
 import InlineMessage from '../../components/InlineMessage';
+import WebNavigationHeader from '../../components/WebNavigationHeader';
 import apiService from '../../services/api';
 import { showMessage } from '../../utils/messageConfig';
 
@@ -40,8 +41,7 @@ interface User {
   last_login: string | null;
 }
 
-export default function UserManagementScreen() {
-  const navigation = useNavigation();
+export default function UserManagementScreen({ navigation }: any) {
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -506,6 +506,23 @@ export default function UserManagementScreen() {
 
   return (
     <View style={styles.container}>
+      <WebNavigationHeader
+        title="User Management"
+        onBack={() => navigation.goBack()}
+        showBackButton={true}
+      />
+
+      <View style={styles.header}>
+        <TouchableOpacity
+          style={styles.backButton}
+          onPress={() => navigation.navigate('AdminDashboard')}
+        >
+          <Text style={styles.backButtonText}>← Back to Dashboard</Text>
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>Manage Users</Text>
+        <View style={{ width: 150 }} />
+      </View>
+
       {error && <InlineMessage message={error} type="error" />}
       {success && <InlineMessage message={success} type="success" />}
 
@@ -955,6 +972,28 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#F5F5F5',
   },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 16,
+    backgroundColor: '#FFF',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E0E0E0',
+  },
+  backButton: {
+    width: 150,
+  },
+  backButtonText: {
+    fontSize: 16,
+    color: '#007bff',
+    fontWeight: '600',
+  },
+  headerTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#333',
+  },
   centerContainer: {
     flex: 1,
     justifyContent: 'center',
@@ -1062,12 +1101,14 @@ const styles = StyleSheet.create({
   gridContainer: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    justifyContent: isLargeScreen ? 'flex-start' : 'center',
-    gap: 8,
+    marginHorizontal: -5,
   },
   cardWrapper: {
-    width: isLargeScreen ? '32%' : '100%',
-    minWidth: isLargeScreen ? 300 : undefined,
+    margin: 5,
+    flexBasis: '22%',
+    minWidth: 280,
+    maxWidth: '48%',
+    flexGrow: 1,
   },
   userCard: {
     backgroundColor: '#FFF',

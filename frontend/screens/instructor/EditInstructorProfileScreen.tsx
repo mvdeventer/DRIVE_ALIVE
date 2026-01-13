@@ -18,6 +18,7 @@ import FormFieldWithTip from '../../components/FormFieldWithTip';
 import InlineMessage from '../../components/InlineMessage';
 import LicenseTypeSelector from '../../components/LicenseTypeSelector';
 import LocationSelector from '../../components/LocationSelector';
+import WebNavigationHeader from '../../components/WebNavigationHeader';
 import ApiService from '../../services/api';
 
 const showAlert = (title: string, message: string) => {
@@ -28,8 +29,8 @@ const showAlert = (title: string, message: string) => {
   }
 };
 
-export default function EditInstructorProfileScreen() {
-  const navigation = useNavigation();
+export default function EditInstructorProfileScreen({ navigation: navProp }: any) {
+  const navigation = navProp || useNavigation();
   const route = useRoute();
   const params = route.params as { userId?: number } | undefined;
   const isAdminEditing = params?.userId !== undefined;
@@ -372,13 +373,14 @@ export default function EditInstructorProfileScreen() {
   }
 
   return (
-    <View style={styles.container}>
+    <ScrollView style={styles.container}>
+      <WebNavigationHeader
+        title="Edit Instructor Profile"
+        onBack={() => navigation.goBack()}
+        showBackButton={true}
+      />
       <View style={styles.header}>
-        <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
-          <Text style={styles.backButtonText}>← Back</Text>
-        </TouchableOpacity>
         <Text style={styles.headerTitle}>Edit Profile</Text>
-        <View style={{ width: 80 }} />
       </View>
 
       {/* Inline Messages */}
@@ -688,7 +690,7 @@ export default function EditInstructorProfileScreen() {
           </View>
         </View>
       </Modal>
-    </View>
+    </ScrollView>
   );
 }
 
@@ -709,22 +711,11 @@ const styles = StyleSheet.create({
     color: '#666',
   },
   header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
     padding: 20,
     backgroundColor: '#fff',
     borderBottomWidth: 1,
     borderBottomColor: '#e0e0e0',
-  },
-  backButton: {
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-  },
-  backButtonText: {
-    fontSize: 16,
-    color: '#007bff',
-    fontWeight: '600',
   },
   headerTitle: {
     fontSize: 20,

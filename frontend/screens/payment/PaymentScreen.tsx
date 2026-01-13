@@ -1,19 +1,21 @@
 // Placeholder - To be implemented in Phase 2
 import { useNavigation } from '@react-navigation/native';
 import React from 'react';
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
+import WebNavigationHeader from '../../components/WebNavigationHeader';
 
-export default function PaymentScreen() {
-  const navigation = useNavigation();
+export default function PaymentScreen({ navigation: navProp }: any) {
+  const navigation = navProp || useNavigation();
 
   return (
     <View style={styles.container}>
+      <WebNavigationHeader
+        title="Payment"
+        onBack={() => navigation.goBack()}
+        showBackButton={true}
+      />
       <View style={styles.header}>
-        <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
-          <Text style={styles.backButtonText}>← Back</Text>
-        </TouchableOpacity>
         <Text style={styles.headerTitle}>Payment</Text>
-        <View style={{ width: 80 }} />
       </View>
       <View style={styles.content}>
         <Text style={styles.text}>Payment Screen - Coming Soon</Text>
@@ -28,22 +30,11 @@ const styles = StyleSheet.create({
     backgroundColor: '#f5f5f5',
   },
   header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
     padding: 20,
     backgroundColor: '#fff',
     borderBottomWidth: 1,
     borderBottomColor: '#e0e0e0',
-  },
-  backButton: {
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-  },
-  backButtonText: {
-    fontSize: 16,
-    color: '#007bff',
-    fontWeight: '600',
   },
   headerTitle: {
     fontSize: 20,

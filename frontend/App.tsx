@@ -160,6 +160,12 @@ export default function App() {
     </TouchableOpacity>
   );
 
+  const WebBackButton = ({ navigation }: any) => (
+    <TouchableOpacity onPress={() => navigation.goBack()} style={styles.webBackButton}>
+      <Text style={styles.webBackButtonText}>← Back</Text>
+    </TouchableOpacity>
+  );
+
   return (
     <>
       <StatusBar style="auto" />
@@ -183,18 +189,28 @@ export default function App() {
           screenOptions={({ navigation, route }) => ({
             headerStyle: {
               backgroundColor: '#007AFF',
+              height: 60,
             },
             headerTintColor: '#fff',
             headerTitleStyle: {
               fontWeight: 'bold',
             },
-            headerBackVisible: true,
-            headerBackTitle: 'Back',
+            // Show back button on web for all authenticated screens except dashboard
             headerLeft:
-              isAuthenticated && userName && !navigation.canGoBack()
+              Platform.OS === 'web' &&
+              isAuthenticated &&
+              route.name !== 'AdminDashboard' &&
+              route.name !== 'InstructorHome' &&
+              route.name !== 'StudentHome'
+                ? () => <WebBackButton navigation={navigation} />
+                : isAuthenticated && userName && !navigation.canGoBack() && Platform.OS !== 'web'
                 ? () => <UserNameDisplay />
                 : undefined,
-            headerRight: isAuthenticated ? () => <LogoutButton /> : undefined,
+            // Show logout button on mobile only (web has GlobalTopBar)
+            headerRight:
+              isAuthenticated && Platform.OS !== 'web' ? () => <LogoutButton /> : undefined,
+            // Ensure header is visible on all authenticated screens
+            headerShown: true,
           })}
         >
           {/* Auth Stack - Always available */}
@@ -322,6 +338,18 @@ const styles = StyleSheet.create({
     borderRadius: 5,
   },
   logoutText: {
+    color: '#fff',
+    fontWeight: '600',
+    fontSize: 14,
+  },
+  webBackButton: {
+    marginLeft: 15,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    borderRadius: 5,
+  },
+  webBackButtonText: {
     color: '#fff',
     fontWeight: '600',
     fontSize: 14,
