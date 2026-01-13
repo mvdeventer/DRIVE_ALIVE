@@ -1545,7 +1545,7 @@ exit /b 0
 set "NEW_VERSION=%~1"
 powershell -Command "$json = Get-Content '%FRONTEND_DIR%\package.json' -Raw | ConvertFrom-Json; $json.version = '%~1'; $json | ConvertTo-Json -Depth 10 | Set-Content '%FRONTEND_DIR%\package.json'"
 if errorlevel 1 (
-    echo %COLOR_RED%Failed to update package.json%COLOR_RESET%
+    echo Failed to update package.json
     exit /b 1
 )
 exit /b 0
@@ -1555,7 +1555,7 @@ exit /b 0
 set "NEW_VERSION=%~1"
 powershell -Command "$json = Get-Content '%FRONTEND_DIR%\app.json' -Raw | ConvertFrom-Json; $json.expo.version = '%~1'; $json | ConvertTo-Json -Depth 10 | Set-Content '%FRONTEND_DIR%\app.json'"
 if errorlevel 1 (
-    echo %COLOR_RED%Failed to update app.json%COLOR_RESET%
+    echo Failed to update app.json
     exit /b 1
 )
 exit /b 0
@@ -1568,7 +1568,7 @@ set "INIT_FILE=%BACKEND_DIR%\app\__init__.py"
 :: Create temporary file with updated version
 powershell -Command "(Get-Content '%INIT_FILE%') -replace '__version__ = \".*\"', '__version__ = \"%~1\"' | Set-Content '%INIT_FILE%'"
 if errorlevel 1 (
-    echo %COLOR_RED%Failed to update __init__.py%COLOR_RESET%
+    echo Failed to update __init__.py
     exit /b 1
 )
 exit /b 0
