@@ -66,6 +66,7 @@ setlocal enabledelayedexpansion
 set "PROJECT_ROOT=%~dp0.."
 set "BACKEND_DIR=%PROJECT_ROOT%\backend"
 set "FRONTEND_DIR=%PROJECT_ROOT%\frontend"
+set "SCRIPTS_DIR=%PROJECT_ROOT%\scripts"
 set "VENV_DIR=%BACKEND_DIR%\venv"
 set "BACKEND_PORT="
 set "FRONTEND_PORT="
@@ -91,9 +92,15 @@ set "VERSION_INCREMENT="
 
 if "%COMMAND%"=="" set "COMMAND=start"
 
+if "%DEBUG%"=="1" echo [DEBUG] Command: %COMMAND%
+
 :parse_args
 shift
 if "%~1"=="" goto :end_parse
+:: Enable debug early if flag detected
+if /i "%~1"=="--debug" set "DEBUG=1"
+if /i "%~1"=="-d" set "DEBUG=1"
+if "%DEBUG%"=="1" echo [DEBUG] Parsing arg: %~1
 if /i "%~1"=="--backend-only" set "BACKEND_ONLY=1"
 if /i "%~1"=="-b" set "BACKEND_ONLY=1"
 if /i "%~1"=="--frontend-only" set "FRONTEND_ONLY=1"
@@ -109,22 +116,27 @@ if /i "%~1"=="--port" (
     set "BACKEND_PORT=%~1"
     set "BACKEND_URL=http://localhost:!BACKEND_PORT!"
     set "API_DOCS_URL=!BACKEND_URL!/docs"
+    goto :parse_args
 )
 if /i "%~1"=="--message" (
     shift
     set "COMMIT_MESSAGE=%~1"
+    goto :parse_args
 )
 if /i "%~1"=="-m" (
     shift
     set "COMMIT_MESSAGE=%~1"
+    goto :parse_args
 )
 if /i "%~1"=="--version" (
     shift
     set "RELEASE_VERSION=%~1"
+    goto :parse_args
 )
 if /i "%~1"=="-v" (
     shift
     set "RELEASE_VERSION=%~1"
+    goto :parse_args
 )
 if /i "%~1"=="--major" set "VERSION_INCREMENT=major"
 if /i "%~1"=="--minor" set "VERSION_INCREMENT=minor"
@@ -132,6 +144,14 @@ if /i "%~1"=="--patch" set "VERSION_INCREMENT=patch"
 goto :parse_args
 
 :end_parse
+
+if "%DEBUG%"=="1" (
+    echo [DEBUG] Final values after parsing:
+    echo [DEBUG]   COMMAND=%COMMAND%
+    echo [DEBUG]   COMMIT_MESSAGE=%COMMIT_MESSAGE%
+    echo [DEBUG]   RELEASE_VERSION=%RELEASE_VERSION%
+    echo [DEBUG]   VERSION_INCREMENT=%VERSION_INCREMENT%
+)
 
 :: Show header
 echo.
@@ -757,13 +777,18 @@ goto :eof
 :: COMMAND: COMMIT
 :: ==============================================================================
 :cmd_commit
+if "%DEBUG%"=="1" (
+    echo [DEBUG] Entering cmd_commit
+    echo [DEBUG]   COMMIT_MESSAGE=%COMMIT_MESSAGE%
+    echo [DEBUG]   VERSION_INCREMENT=%VERSION_INCREMENT%
+)
 echo %COLOR_BLUE%Committing changes with version management...%COLOR_RESET%
 echo.
 
-:: Check if GitHub CLI is installed
+::Check if GitHub CLI is installed
 gh --version >nul 2>&1
 if errorlevel 1 (
-    echo %COLOR_RED%GitHub CLI (gh) is not installed.%COLOR_RESET%
+    echo %COLOR_RED%GitHub CLI ^(gh^) is not installed.%COLOR_RESET%
     echo Install from: https://cli.github.com/
     exit /b 1
 )
@@ -792,7 +817,9 @@ if "%COMMIT_MESSAGE%"=="" (
 )
 
 :: Handle version increment if specified
+if "%DEBUG%"=="1" echo [DEBUG] Checking VERSION_INCREMENT: [%VERSION_INCREMENT%]
 if not "%VERSION_INCREMENT%"=="" (
+    if "%DEBUG%"=="1" echo [DEBUG] Version increment requested: %VERSION_INCREMENT%
     echo.
     echo %COLOR_YELLOW%Incrementing %VERSION_INCREMENT% version...%COLOR_RESET%
     call "%SCRIPTS_DIR%\version-manager.bat" %VERSION_INCREMENT%
@@ -1454,7 +1481,7 @@ exit /b 0
 :update_package_json
 :: Update version in package.json using PowerShell
 set "NEW_VERSION=%~1"
-powershell -Command "$json = Get-Content '%FRONTEND_DIR%\package.json' -Raw | ConvertFrom-Json; $json.version = '%NEW_VERSION%'; $json | ConvertTo-Json -Depth 10 | Set-Content '%FRONTEND_DIR%\package.json'"
+powershell -Command "$json = Get-Content '%FRONTEND_DIR%\package.json' -Raw | ConvertFrom-Json; $json.version = '%~1'; $json | ConvertTo-Json -Depth 10 | Set-Content '%FRONTEND_DIR%\package.json'"
 if errorlevel 1 (
     echo %COLOR_RED%Failed to update package.json%COLOR_RESET%
     exit /b 1
@@ -1464,7 +1491,7 @@ exit /b 0
 :update_app_json
 :: Update version in app.json using PowerShell
 set "NEW_VERSION=%~1"
-powershell -Command "$json = Get-Content '%FRONTEND_DIR%\app.json' -Raw | ConvertFrom-Json; $json.expo.version = '%NEW_VERSION%'; $json | ConvertTo-Json -Depth 10 | Set-Content '%FRONTEND_DIR%\app.json'"
+powershell -Command "$json = Get-Content '%FRONTEND_DIR%\app.json' -Raw | ConvertFrom-Json; $json.expo.version = '%~1'; $json | ConvertTo-Json -Depth 10 | Set-Content '%FRONTEND_DIR%\app.json'"
 if errorlevel 1 (
     echo %COLOR_RED%Failed to update app.json%COLOR_RESET%
     exit /b 1
@@ -1477,7 +1504,7 @@ set "NEW_VERSION=%~1"
 set "INIT_FILE=%BACKEND_DIR%\app\__init__.py"
 
 :: Create temporary file with updated version
-powershell -Command "(Get-Content '%INIT_FILE%') -replace '__version__ = \".*\"', '__version__ = \"%NEW_VERSION%\"' | Set-Content '%INIT_FILE%'"
+powershell -Command "(Get-Content '%INIT_FILE%') -replace '__version__ = \".*\"', '__version__ = \"%~1\"' | Set-Content '%INIT_FILE%'"
 if errorlevel 1 (
     echo %COLOR_RED%Failed to update __init__.py%COLOR_RESET%
     exit /b 1
