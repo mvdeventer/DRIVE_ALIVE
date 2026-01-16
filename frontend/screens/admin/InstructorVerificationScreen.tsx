@@ -166,16 +166,6 @@ export default function InstructorVerificationScreen({ navigation }: any) {
         onBack={() => navigation.goBack()}
         showBackButton={true}
       />
-      <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => navigation.navigate('AdminDashboard')}
-        >
-          <Text style={styles.backButtonText}>← Back to Dashboard</Text>
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Verify Instructors</Text>
-        <View style={{ width: 150 }} />
-      </View>
 
       {error && <InlineMessage message={error} type="error" />}
       {success && <InlineMessage message={success} type="success" />}

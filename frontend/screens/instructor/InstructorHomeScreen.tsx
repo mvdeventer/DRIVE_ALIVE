@@ -20,6 +20,7 @@ import {
 } from 'react-native';
 import CalendarPicker from '../../components/CalendarPicker';
 import InlineMessage from '../../components/InlineMessage';
+import WebNavigationHeader from '../../components/WebNavigationHeader';
 import ApiService from '../../services/api';
 import { showMessage } from '../../utils/messageConfig';
 
@@ -617,684 +618,695 @@ export default function InstructorHomeScreen() {
   }
 
   return (
-    <ScrollView
-      ref={scrollViewRef}
-      style={styles.container}
-      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-    >
-      {/* Inline Messages */}
-      {successMessage && <InlineMessage message={successMessage} type="success" />}
-      {errorMessage && <InlineMessage message={errorMessage} type="error" />}
+    <View style={styles.container}>
+      <WebNavigationHeader
+        title="Instructor Dashboard"
+        onBack={() => navigation.goBack()}
+        showBackButton={false}
+      />
+      <ScrollView
+        ref={scrollViewRef}
+        style={styles.scrollView}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+      >
+        {/* Inline Messages */}
+        {successMessage && <InlineMessage message={successMessage} type="success" />}
+        {errorMessage && <InlineMessage message={errorMessage} type="error" />}
 
-      {/* Header */}
-      <View style={styles.header}>
-        <View style={{ flex: 1 }}>
-          <Text style={styles.greeting}>Instructor Dashboard</Text>
-          <Text style={styles.name}>
-            {profile?.first_name} {profile?.last_name}
-          </Text>
+        {/* Header */}
+        <View style={styles.header}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.greeting}>Instructor Dashboard</Text>
+            <Text style={styles.name}>
+              {profile?.first_name} {profile?.last_name}
+            </Text>
+          </View>
+          <View style={styles.headerRate}>
+            <Text style={styles.headerRateLabel}>Hourly Rate</Text>
+            <Text style={styles.headerRateAmount}>R{profile?.hourly_rate || 0}/hour</Text>
+          </View>
         </View>
-        <View style={styles.headerRate}>
-          <Text style={styles.headerRateLabel}>Hourly Rate</Text>
-          <Text style={styles.headerRateAmount}>R{profile?.hourly_rate || 0}/hour</Text>
+
+        {/* Tab Navigation */}
+        <View style={styles.tabContainer}>
+          <TouchableOpacity
+            style={[styles.tab, activeTab === 'pending' && styles.activeTab]}
+            onPress={() => setActiveTab('pending')}
+          >
+            <Text style={[styles.tabText, activeTab === 'pending' && styles.activeTabText]}>
+              ⏳ Pending
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.tab, activeTab === 'completed' && styles.activeTab]}
+            onPress={() => setActiveTab('completed')}
+          >
+            <Text style={[styles.tabText, activeTab === 'completed' && styles.activeTabText]}>
+              ✅ Completed
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.tab, activeTab === 'cancelled' && styles.activeTab]}
+            onPress={() => setActiveTab('cancelled')}
+          >
+            <Text style={[styles.tabText, activeTab === 'cancelled' && styles.activeTabText]}>
+              ❌ Cancelled
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.tab, activeTab === 'all' && styles.activeTab]}
+            onPress={() => setActiveTab('all')}
+          >
+            <Text style={[styles.tabText, activeTab === 'all' && styles.activeTabText]}>
+              📋 All
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.tab, activeTab === 'profile' && styles.activeTab]}
+            onPress={() => setActiveTab('profile')}
+          >
+            <Text style={[styles.tabText, activeTab === 'profile' && styles.activeTabText]}>
+              👤 Profile
+            </Text>
+          </TouchableOpacity>
         </View>
-      </View>
 
-      {/* Tab Navigation */}
-      <View style={styles.tabContainer}>
-        <TouchableOpacity
-          style={[styles.tab, activeTab === 'pending' && styles.activeTab]}
-          onPress={() => setActiveTab('pending')}
-        >
-          <Text style={[styles.tabText, activeTab === 'pending' && styles.activeTabText]}>
-            ⏳ Pending
-          </Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.tab, activeTab === 'completed' && styles.activeTab]}
-          onPress={() => setActiveTab('completed')}
-        >
-          <Text style={[styles.tabText, activeTab === 'completed' && styles.activeTabText]}>
-            ✅ Completed
-          </Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.tab, activeTab === 'cancelled' && styles.activeTab]}
-          onPress={() => setActiveTab('cancelled')}
-        >
-          <Text style={[styles.tabText, activeTab === 'cancelled' && styles.activeTabText]}>
-            ❌ Cancelled
-          </Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.tab, activeTab === 'all' && styles.activeTab]}
-          onPress={() => setActiveTab('all')}
-        >
-          <Text style={[styles.tabText, activeTab === 'all' && styles.activeTabText]}>📋 All</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.tab, activeTab === 'profile' && styles.activeTab]}
-          onPress={() => setActiveTab('profile')}
-        >
-          <Text style={[styles.tabText, activeTab === 'profile' && styles.activeTabText]}>
-            👤 Profile
-          </Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* Tab Content */}
-      {activeTab !== 'profile' ? (
-        <>
-          {/* Bookings by Status Tabs */}
-          {/* Search Bar */}
-          <View style={styles.searchContainer}>
-            <TextInput
-              style={styles.searchInput}
-              placeholder="🔍 Search by student name..."
-              value={searchQuery}
-              onChangeText={text => {
-                setSearchQuery(text);
-                setSelectedStudent(null); // Clear selected student when typing
-                setShowAllBookings(false); // Reset to normal view when searching
-                if (text.length > 0) {
-                  setShowSearchDropdown(true);
-                }
-              }}
-              onFocus={() => setShowSearchDropdown(true)}
-            />
-            {searchQuery.length > 0 && (
-              <TouchableOpacity
-                onPress={() => {
-                  setSearchQuery('');
-                  setShowSearchDropdown(false);
-                  setSelectedStudent(null); // Clear selected student
-                  setShowAllBookings(false); // Reset to normal view
+        {/* Tab Content */}
+        {activeTab !== 'profile' ? (
+          <>
+            {/* Bookings by Status Tabs */}
+            {/* Search Bar */}
+            <View style={styles.searchContainer}>
+              <TextInput
+                style={styles.searchInput}
+                placeholder="🔍 Search by student name..."
+                value={searchQuery}
+                onChangeText={text => {
+                  setSearchQuery(text);
+                  setSelectedStudent(null); // Clear selected student when typing
+                  setShowAllBookings(false); // Reset to normal view when searching
+                  if (text.length > 0) {
+                    setShowSearchDropdown(true);
+                  }
                 }}
-                style={styles.clearButton}
-              >
-                <Text style={styles.clearButtonText}>✕</Text>
-              </TouchableOpacity>
-            )}
+                onFocus={() => setShowSearchDropdown(true)}
+              />
+              {searchQuery.length > 0 && (
+                <TouchableOpacity
+                  onPress={() => {
+                    setSearchQuery('');
+                    setShowSearchDropdown(false);
+                    setSelectedStudent(null); // Clear selected student
+                    setShowAllBookings(false); // Reset to normal view
+                  }}
+                  style={styles.clearButton}
+                >
+                  <Text style={styles.clearButtonText}>✕</Text>
+                </TouchableOpacity>
+              )}
 
-            {/* Student Dropdown */}
-            {showSearchDropdown && uniqueStudents.length > 0 && (
-              <View style={styles.searchDropdown}>
-                <View style={styles.dropdownHeader}>
-                  <Text style={styles.dropdownTitle}>Students ({uniqueStudents.length})</Text>
-                  <TouchableOpacity onPress={() => setShowSearchDropdown(false)}>
-                    <Text style={styles.dropdownClose}>✕</Text>
-                  </TouchableOpacity>
-                </View>
-                <ScrollView style={styles.dropdownList} nestedScrollEnabled={true}>
-                  {uniqueStudents
-                    .filter(
+              {/* Student Dropdown */}
+              {showSearchDropdown && uniqueStudents.length > 0 && (
+                <View style={styles.searchDropdown}>
+                  <View style={styles.dropdownHeader}>
+                    <Text style={styles.dropdownTitle}>Students ({uniqueStudents.length})</Text>
+                    <TouchableOpacity onPress={() => setShowSearchDropdown(false)}>
+                      <Text style={styles.dropdownClose}>✕</Text>
+                    </TouchableOpacity>
+                  </View>
+                  <ScrollView style={styles.dropdownList} nestedScrollEnabled={true}>
+                    {uniqueStudents
+                      .filter(
+                        student =>
+                          !searchQuery ||
+                          student.student_name.toLowerCase().includes(searchQuery.toLowerCase())
+                      )
+                      .map((student, index) => {
+                        const bookingCount = [...todayLessons, ...upcomingLessons].filter(
+                          b => b.student_id === student.student_id
+                        ).length;
+                        return (
+                          <TouchableOpacity
+                            key={student.student_id || index}
+                            style={styles.dropdownItem}
+                            onPress={() => {
+                              // Set the selected student and update search query with full details
+                              setSelectedStudent(student);
+                              const displayText = student.student_id_number
+                                ? `${student.student_name} (ID: ${student.student_id_number})`
+                                : student.student_name;
+                              setSearchQuery(displayText);
+                              setShowSearchDropdown(false);
+                            }}
+                          >
+                            <View style={styles.dropdownItemLeft}>
+                              <Text style={styles.dropdownItemText}>👤 {student.student_name}</Text>
+                              <View style={styles.dropdownItemDetails}>
+                                {student.student_id_number && (
+                                  <Text style={styles.dropdownItemSubtext}>
+                                    🆔 ID: {student.student_id_number}
+                                  </Text>
+                                )}
+                                {student.student_phone && (
+                                  <Text style={styles.dropdownItemSubtext}>
+                                    📞 {student.student_phone}
+                                  </Text>
+                                )}
+                              </View>
+                            </View>
+                            <Text style={styles.dropdownItemCount}>
+                              {bookingCount} booking{bookingCount !== 1 ? 's' : ''}
+                            </Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    {uniqueStudents.filter(
                       student =>
                         !searchQuery ||
                         student.student_name.toLowerCase().includes(searchQuery.toLowerCase())
-                    )
-                    .map((student, index) => {
-                      const bookingCount = [...todayLessons, ...upcomingLessons].filter(
-                        b => b.student_id === student.student_id
-                      ).length;
-                      return (
-                        <TouchableOpacity
-                          key={student.student_id || index}
-                          style={styles.dropdownItem}
-                          onPress={() => {
-                            // Set the selected student and update search query with full details
-                            setSelectedStudent(student);
-                            const displayText = student.student_id_number
-                              ? `${student.student_name} (ID: ${student.student_id_number})`
-                              : student.student_name;
-                            setSearchQuery(displayText);
-                            setShowSearchDropdown(false);
-                          }}
+                    ).length === 0 && <Text style={styles.noResultsText}>No students found</Text>}
+                  </ScrollView>
+                </View>
+              )}
+            </View>
+
+            {/* Bookings by Status */}
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>
+                {activeTab === 'pending' && 'Pending Bookings'}
+                {activeTab === 'completed' && 'Completed Bookings'}
+                {activeTab === 'cancelled' && 'Cancelled Bookings'}
+                {activeTab === 'all' && 'All Bookings'} (
+                {
+                  filterBookings(
+                    activeTab === 'pending'
+                      ? allBookings.filter(b => b.status.toLowerCase() === 'pending')
+                      : activeTab === 'completed'
+                      ? allBookings.filter(b => b.status.toLowerCase() === 'completed')
+                      : activeTab === 'cancelled'
+                      ? allBookings.filter(b => b.status.toLowerCase() === 'cancelled')
+                      : allBookings
+                  ).length
+                }
+                )
+              </Text>
+              {filterBookings(
+                activeTab === 'pending'
+                  ? allBookings.filter(b => b.status.toLowerCase() === 'pending')
+                  : activeTab === 'completed'
+                  ? allBookings.filter(b => b.status.toLowerCase() === 'completed')
+                  : activeTab === 'cancelled'
+                  ? allBookings.filter(b => b.status.toLowerCase() === 'cancelled')
+                  : allBookings
+              ).length === 0 ? (
+                <View style={styles.emptyState}>
+                  <Text style={styles.emptyStateText}>
+                    {activeTab === 'pending' && 'No pending bookings'}
+                    {activeTab === 'completed' && 'No completed bookings'}
+                    {activeTab === 'cancelled' && 'No cancelled bookings'}
+                    {activeTab === 'all' && 'No bookings'}
+                  </Text>
+                </View>
+              ) : (
+                <View style={styles.lessonsGrid}>
+                  {filterBookings(
+                    activeTab === 'pending'
+                      ? allBookings.filter(b => b.status.toLowerCase() === 'pending')
+                      : activeTab === 'completed'
+                      ? allBookings.filter(b => b.status.toLowerCase() === 'completed')
+                      : activeTab === 'cancelled'
+                      ? allBookings.filter(b => b.status.toLowerCase() === 'cancelled')
+                      : allBookings
+                  ).map(lesson => (
+                    <View key={lesson.id} style={styles.lessonCard}>
+                      <View style={styles.lessonHeader}>
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.studentName}>👤 {lesson.student_name}</Text>
+                          {lesson.booking_reference && (
+                            <Text style={styles.bookingReference}>
+                              🎫 {lesson.booking_reference}
+                            </Text>
+                          )}
+                          {lesson.student_id_number && (
+                            <Text style={styles.studentId}>
+                              🆔 ID Number: {lesson.student_id_number}
+                            </Text>
+                          )}
+                          <Text style={styles.lessonDate}>
+                            📅 {formatDate(lesson.scheduled_time)}
+                          </Text>
+                          <Text style={styles.lessonTime}>
+                            🕒 {formatTime(lesson.scheduled_time)}
+                          </Text>
+                          <Text style={styles.lessonDuration}>
+                            ⏱️ {lesson.duration_minutes} minutes
+                          </Text>
+                          {lesson.rebooking_count > 0 && (
+                            <Text style={styles.rebookingBadge}>
+                              🔄 Rescheduled {lesson.rebooking_count}x
+                            </Text>
+                          )}
+                          {lesson.cancellation_fee > 0 && (
+                            <Text style={styles.cancellationFee}>
+                              ⚠️ Fee: R{lesson.cancellation_fee.toFixed(2)}
+                            </Text>
+                          )}
+                        </View>
+                        <View
+                          style={[
+                            styles.statusBadge,
+                            { backgroundColor: getStatusColor(lesson.status) },
+                          ]}
                         >
-                          <View style={styles.dropdownItemLeft}>
-                            <Text style={styles.dropdownItemText}>👤 {student.student_name}</Text>
-                            <View style={styles.dropdownItemDetails}>
-                              {student.student_id_number && (
-                                <Text style={styles.dropdownItemSubtext}>
-                                  🆔 ID: {student.student_id_number}
-                                </Text>
-                              )}
-                              {student.student_phone && (
-                                <Text style={styles.dropdownItemSubtext}>
-                                  📞 {student.student_phone}
-                                </Text>
-                              )}
-                            </View>
-                          </View>
-                          <Text style={styles.dropdownItemCount}>
-                            {bookingCount} booking{bookingCount !== 1 ? 's' : ''}
-                          </Text>
-                        </TouchableOpacity>
-                      );
-                    })}
-                  {uniqueStudents.filter(
-                    student =>
-                      !searchQuery ||
-                      student.student_name.toLowerCase().includes(searchQuery.toLowerCase())
-                  ).length === 0 && <Text style={styles.noResultsText}>No students found</Text>}
-                </ScrollView>
-              </View>
-            )}
-          </View>
-
-          {/* Bookings by Status */}
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>
-              {activeTab === 'pending' && 'Pending Bookings'}
-              {activeTab === 'completed' && 'Completed Bookings'}
-              {activeTab === 'cancelled' && 'Cancelled Bookings'}
-              {activeTab === 'all' && 'All Bookings'} (
-              {
-                filterBookings(
-                  activeTab === 'pending'
-                    ? allBookings.filter(b => b.status.toLowerCase() === 'pending')
-                    : activeTab === 'completed'
-                    ? allBookings.filter(b => b.status.toLowerCase() === 'completed')
-                    : activeTab === 'cancelled'
-                    ? allBookings.filter(b => b.status.toLowerCase() === 'cancelled')
-                    : allBookings
-                ).length
-              }
-              )
-            </Text>
-            {filterBookings(
-              activeTab === 'pending'
-                ? allBookings.filter(b => b.status.toLowerCase() === 'pending')
-                : activeTab === 'completed'
-                ? allBookings.filter(b => b.status.toLowerCase() === 'completed')
-                : activeTab === 'cancelled'
-                ? allBookings.filter(b => b.status.toLowerCase() === 'cancelled')
-                : allBookings
-            ).length === 0 ? (
-              <View style={styles.emptyState}>
-                <Text style={styles.emptyStateText}>
-                  {activeTab === 'pending' && 'No pending bookings'}
-                  {activeTab === 'completed' && 'No completed bookings'}
-                  {activeTab === 'cancelled' && 'No cancelled bookings'}
-                  {activeTab === 'all' && 'No bookings'}
-                </Text>
-              </View>
-            ) : (
-              <View style={styles.lessonsGrid}>
-                {filterBookings(
-                  activeTab === 'pending'
-                    ? allBookings.filter(b => b.status.toLowerCase() === 'pending')
-                    : activeTab === 'completed'
-                    ? allBookings.filter(b => b.status.toLowerCase() === 'completed')
-                    : activeTab === 'cancelled'
-                    ? allBookings.filter(b => b.status.toLowerCase() === 'cancelled')
-                    : allBookings
-                ).map(lesson => (
-                  <View key={lesson.id} style={styles.lessonCard}>
-                    <View style={styles.lessonHeader}>
-                      <View style={{ flex: 1 }}>
-                        <Text style={styles.studentName}>👤 {lesson.student_name}</Text>
-                        {lesson.booking_reference && (
-                          <Text style={styles.bookingReference}>🎫 {lesson.booking_reference}</Text>
-                        )}
-                        {lesson.student_id_number && (
-                          <Text style={styles.studentId}>
-                            🆔 ID Number: {lesson.student_id_number}
-                          </Text>
-                        )}
-                        <Text style={styles.lessonDate}>
-                          📅 {formatDate(lesson.scheduled_time)}
-                        </Text>
-                        <Text style={styles.lessonTime}>
-                          🕒 {formatTime(lesson.scheduled_time)}
-                        </Text>
-                        <Text style={styles.lessonDuration}>
-                          ⏱️ {lesson.duration_minutes} minutes
-                        </Text>
-                        {lesson.rebooking_count > 0 && (
-                          <Text style={styles.rebookingBadge}>
-                            🔄 Rescheduled {lesson.rebooking_count}x
-                          </Text>
-                        )}
-                        {lesson.cancellation_fee > 0 && (
-                          <Text style={styles.cancellationFee}>
-                            ⚠️ Fee: R{lesson.cancellation_fee.toFixed(2)}
-                          </Text>
-                        )}
+                          <Text style={styles.statusText}>{lesson.status}</Text>
+                        </View>
                       </View>
-                      <View
-                        style={[
-                          styles.statusBadge,
-                          { backgroundColor: getStatusColor(lesson.status) },
-                        ]}
-                      >
-                        <Text style={styles.statusText}>{lesson.status}</Text>
+
+                      {/* Student Contact Info */}
+                      {lesson.student_phone && (
+                        <Text style={styles.lessonDetail}>📞 {lesson.student_phone}</Text>
+                      )}
+                      {lesson.student_email && (
+                        <Text style={styles.lessonDetail}>✉️ {lesson.student_email}</Text>
+                      )}
+
+                      {/* Student Location */}
+                      {(lesson.student_city || lesson.student_suburb) && (
+                        <Text style={styles.lessonDetail}>
+                          🗺️ {lesson.student_suburb ? `${lesson.student_suburb}, ` : ''}
+                          {lesson.student_city || ''}
+                        </Text>
+                      )}
+
+                      {/* Pickup Location */}
+                      {lesson.pickup_location && (
+                        <Text style={styles.lessonDetail}>📌 Pickup: {lesson.pickup_location}</Text>
+                      )}
+
+                      {/* Student Comments */}
+                      <View style={styles.notesContainer}>
+                        <Text style={styles.notesLabel}>💬 Student Comments:</Text>
+                        <Text style={styles.notesText}>
+                          {lesson.student_notes || 'No special requests'}
+                        </Text>
                       </View>
-                    </View>
 
-                    {/* Student Contact Info */}
-                    {lesson.student_phone && (
-                      <Text style={styles.lessonDetail}>📞 {lesson.student_phone}</Text>
-                    )}
-                    {lesson.student_email && (
-                      <Text style={styles.lessonDetail}>✉️ {lesson.student_email}</Text>
-                    )}
-
-                    {/* Student Location */}
-                    {(lesson.student_city || lesson.student_suburb) && (
-                      <Text style={styles.lessonDetail}>
-                        🗺️ {lesson.student_suburb ? `${lesson.student_suburb}, ` : ''}
-                        {lesson.student_city || ''}
-                      </Text>
-                    )}
-
-                    {/* Pickup Location */}
-                    {lesson.pickup_location && (
-                      <Text style={styles.lessonDetail}>📌 Pickup: {lesson.pickup_location}</Text>
-                    )}
-
-                    {/* Student Comments */}
-                    <View style={styles.notesContainer}>
-                      <Text style={styles.notesLabel}>💬 Student Comments:</Text>
-                      <Text style={styles.notesText}>
-                        {lesson.student_notes || 'No special requests'}
-                      </Text>
-                    </View>
-
-                    <View style={styles.lessonFooter}>
-                      <Text style={styles.lessonPrice}>R{lesson.total_price.toFixed(2)}</Text>
-                      <View style={styles.lessonActions}>
-                        {lesson.status.toLowerCase() === 'pending' && (
+                      <View style={styles.lessonFooter}>
+                        <Text style={styles.lessonPrice}>R{lesson.total_price.toFixed(2)}</Text>
+                        <View style={styles.lessonActions}>
+                          {lesson.status.toLowerCase() === 'pending' && (
+                            <TouchableOpacity
+                              style={styles.rescheduleButton}
+                              onPress={() => openRescheduleModal(lesson)}
+                            >
+                              <Text style={styles.rescheduleButtonText}>🔄 Reschedule</Text>
+                            </TouchableOpacity>
+                          )}
                           <TouchableOpacity
-                            style={styles.rescheduleButton}
-                            onPress={() => openRescheduleModal(lesson)}
+                            style={styles.deleteButton}
+                            onPress={() => handleDeleteLesson(lesson)}
                           >
-                            <Text style={styles.rescheduleButtonText}>🔄 Reschedule</Text>
+                            <Text style={styles.deleteButtonText}>🗑️ Delete</Text>
                           </TouchableOpacity>
-                        )}
-                        <TouchableOpacity
-                          style={styles.deleteButton}
-                          onPress={() => handleDeleteLesson(lesson)}
-                        >
-                          <Text style={styles.deleteButtonText}>🗑️ Delete</Text>
-                        </TouchableOpacity>
+                        </View>
                       </View>
                     </View>
-                  </View>
-                ))}
-              </View>
-            )}
-          </View>
-        </>
-      ) : (
-        <>
-          {/* My Profile Tab Content */}
-          {/* Availability Toggle */}
-          <View style={styles.availabilityCard}>
-            <Text style={styles.availabilityLabel}>Availability Status</Text>
-            <Switch
-              value={profile?.is_available || false}
-              onValueChange={toggleAvailability}
-              trackColor={{ false: '#ccc', true: '#28a745' }}
-              thumbColor={Platform.OS === 'android' ? '#fff' : undefined}
-            />
-          </View>
-
-          {/* Quick Actions */}
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Quick Actions</Text>
-            <TouchableOpacity
-              style={styles.actionButton}
-              onPress={() => (navigation as any).navigate('ManageAvailability')}
-            >
-              <Text style={styles.actionButtonText}>📅 Schedule</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.actionButton, styles.secondaryButton]}
-              onPress={handleEditProfile}
-            >
-              <Text style={styles.actionButtonText}>👤 Edit Profile</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.actionButton, styles.earningsButton]}
-              onPress={handleViewEarnings}
-            >
-              <View style={styles.earningsButtonContent}>
-                <Text style={styles.earningsButtonText}>💰 View Earnings Report</Text>
-                <Text style={styles.earningsAmount}>
-                  R{profile?.total_earnings?.toFixed(2) || '0.00'}
-                </Text>
-              </View>
-            </TouchableOpacity>
-          </View>
-        </>
-      )}
-
-      <View style={{ height: 40 }} />
-
-      {/* Edit Profile Modal */}
-      <Modal
-        visible={showEditProfileModal}
-        animationType="slide"
-        transparent={true}
-        onRequestClose={() => setShowEditProfileModal(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>👤 Edit Profile</Text>
-              <TouchableOpacity onPress={() => setShowEditProfileModal(false)}>
-                <Text style={styles.modalClose}>✕</Text>
-              </TouchableOpacity>
+                  ))}
+                </View>
+              )}
             </View>
-
-            <View style={styles.profileInfoCard}>
-              <Text style={styles.profileInfoLabel}>Name:</Text>
-              <Text style={styles.profileInfoValue}>
-                {profile?.first_name} {profile?.last_name}
-              </Text>
-            </View>
-
-            <View style={styles.profileInfoCard}>
-              <Text style={styles.profileInfoLabel}>Email:</Text>
-              <Text style={styles.profileInfoValue}>{profile?.email}</Text>
-            </View>
-
-            <View style={styles.profileInfoCard}>
-              <Text style={styles.profileInfoLabel}>Phone:</Text>
-              <Text style={styles.profileInfoValue}>{profile?.phone}</Text>
-            </View>
-
-            <View style={styles.profileInfoCard}>
-              <Text style={styles.profileInfoLabel}>License:</Text>
-              <Text style={styles.profileInfoValue}>{profile?.license_type}</Text>
-            </View>
-
-            <View style={styles.modalFormGroup}>
-              <Text style={styles.modalLabel}>
-                Hourly Rate (ZAR) <Text style={styles.requiredStar}>*</Text>
-              </Text>
-              <TextInput
-                style={styles.modalInput}
-                value={editFormData.hourly_rate}
-                onChangeText={value => setEditFormData(prev => ({ ...prev, hourly_rate: value }))}
-                keyboardType="decimal-pad"
-                placeholder="e.g., 350"
+          </>
+        ) : (
+          <>
+            {/* My Profile Tab Content */}
+            {/* Availability Toggle */}
+            <View style={styles.availabilityCard}>
+              <Text style={styles.availabilityLabel}>Availability Status</Text>
+              <Switch
+                value={profile?.is_available || false}
+                onValueChange={toggleAvailability}
+                trackColor={{ false: '#ccc', true: '#28a745' }}
+                thumbColor={Platform.OS === 'android' ? '#fff' : undefined}
               />
             </View>
 
-            <View style={styles.modalFormGroup}>
-              <View style={styles.switchRow}>
-                <Text style={styles.modalLabel}>Available for Bookings</Text>
-                <Switch
-                  value={editFormData.is_available}
-                  onValueChange={value =>
-                    setEditFormData(prev => ({ ...prev, is_available: value }))
-                  }
-                  trackColor={{ false: '#ccc', true: '#28a745' }}
-                  thumbColor={Platform.OS === 'android' ? '#fff' : undefined}
-                />
-              </View>
-            </View>
-
-            <View style={styles.modalButtons}>
+            {/* Quick Actions */}
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Quick Actions</Text>
               <TouchableOpacity
-                style={[styles.modalButton, styles.modalCancelButton]}
-                onPress={() => setShowEditProfileModal(false)}
+                style={styles.actionButton}
+                onPress={() => (navigation as any).navigate('ManageAvailability')}
               >
-                <Text style={styles.modalCancelButtonText}>Cancel</Text>
+                <Text style={styles.actionButtonText}>📅 Schedule</Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={[styles.modalButton, styles.modalSaveButton]}
-                onPress={handleSaveProfile}
+                style={[styles.actionButton, styles.secondaryButton]}
+                onPress={handleEditProfile}
               >
-                <Text style={styles.modalSaveButtonText}>Save Changes</Text>
+                <Text style={styles.actionButtonText}>👤 Edit Profile</Text>
               </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
-
-      {/* Manage Availability Modal */}
-      <Modal
-        visible={showAvailabilityModal}
-        animationType="slide"
-        transparent={true}
-        onRequestClose={() => setShowAvailabilityModal(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>📅 Manage Availability</Text>
-              <TouchableOpacity onPress={() => setShowAvailabilityModal(false)}>
-                <Text style={styles.modalClose}>✕</Text>
-              </TouchableOpacity>
-            </View>
-
-            <View style={styles.availabilityStatusCard}>
-              <Text style={styles.availabilityCurrentLabel}>Current Status</Text>
-              <Text
-                style={[
-                  styles.availabilityCurrentStatus,
-                  { color: profile?.is_available ? '#28a745' : '#dc3545' },
-                ]}
+              <TouchableOpacity
+                style={[styles.actionButton, styles.earningsButton]}
+                onPress={handleViewEarnings}
               >
-                {profile?.is_available ? '🟢 Available' : '🔴 Unavailable'}
-              </Text>
-            </View>
-
-            <View style={styles.modalFormGroup}>
-              <View style={styles.switchRow}>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.modalLabel}>Available for New Bookings</Text>
-                  <Text style={styles.modalHint}>
-                    Toggle this to control whether students can book lessons with you
+                <View style={styles.earningsButtonContent}>
+                  <Text style={styles.earningsButtonText}>💰 View Earnings Report</Text>
+                  <Text style={styles.earningsAmount}>
+                    R{profile?.total_earnings?.toFixed(2) || '0.00'}
                   </Text>
                 </View>
-                <Switch
-                  value={editFormData.is_available}
-                  onValueChange={value =>
-                    setEditFormData(prev => ({ ...prev, is_available: value }))
-                  }
-                  trackColor={{ false: '#ccc', true: '#28a745' }}
-                  thumbColor={Platform.OS === 'android' ? '#fff' : undefined}
+              </TouchableOpacity>
+            </View>
+          </>
+        )}
+
+        <View style={{ height: 40 }} />
+
+        {/* Edit Profile Modal */}
+        <Modal
+          visible={showEditProfileModal}
+          animationType="slide"
+          transparent={true}
+          onRequestClose={() => setShowEditProfileModal(false)}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalContent}>
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>👤 Edit Profile</Text>
+                <TouchableOpacity onPress={() => setShowEditProfileModal(false)}>
+                  <Text style={styles.modalClose}>✕</Text>
+                </TouchableOpacity>
+              </View>
+
+              <View style={styles.profileInfoCard}>
+                <Text style={styles.profileInfoLabel}>Name:</Text>
+                <Text style={styles.profileInfoValue}>
+                  {profile?.first_name} {profile?.last_name}
+                </Text>
+              </View>
+
+              <View style={styles.profileInfoCard}>
+                <Text style={styles.profileInfoLabel}>Email:</Text>
+                <Text style={styles.profileInfoValue}>{profile?.email}</Text>
+              </View>
+
+              <View style={styles.profileInfoCard}>
+                <Text style={styles.profileInfoLabel}>Phone:</Text>
+                <Text style={styles.profileInfoValue}>{profile?.phone}</Text>
+              </View>
+
+              <View style={styles.profileInfoCard}>
+                <Text style={styles.profileInfoLabel}>License:</Text>
+                <Text style={styles.profileInfoValue}>{profile?.license_type}</Text>
+              </View>
+
+              <View style={styles.modalFormGroup}>
+                <Text style={styles.modalLabel}>
+                  Hourly Rate (ZAR) <Text style={styles.requiredStar}>*</Text>
+                </Text>
+                <TextInput
+                  style={styles.modalInput}
+                  value={editFormData.hourly_rate}
+                  onChangeText={value => setEditFormData(prev => ({ ...prev, hourly_rate: value }))}
+                  keyboardType="decimal-pad"
+                  placeholder="e.g., 350"
                 />
               </View>
-            </View>
 
-            <View style={styles.modalInfoBox}>
-              <Text style={styles.modalInfoText}>
-                💡 Tip: You can quickly toggle your availability using the switch on the main
-                dashboard
-              </Text>
-            </View>
+              <View style={styles.modalFormGroup}>
+                <View style={styles.switchRow}>
+                  <Text style={styles.modalLabel}>Available for Bookings</Text>
+                  <Switch
+                    value={editFormData.is_available}
+                    onValueChange={value =>
+                      setEditFormData(prev => ({ ...prev, is_available: value }))
+                    }
+                    trackColor={{ false: '#ccc', true: '#28a745' }}
+                    thumbColor={Platform.OS === 'android' ? '#fff' : undefined}
+                  />
+                </View>
+              </View>
 
-            <View style={styles.modalButtons}>
-              <TouchableOpacity
-                style={[styles.modalButton, styles.modalCancelButton]}
-                onPress={() => setShowAvailabilityModal(false)}
-              >
-                <Text style={styles.modalCancelButtonText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.modalButton, styles.modalSaveButton]}
-                onPress={async () => {
-                  await toggleAvailability(editFormData.is_available);
-                  setShowAvailabilityModal(false);
-                }}
-              >
-                <Text style={styles.modalSaveButtonText}>Update Status</Text>
-              </TouchableOpacity>
+              <View style={styles.modalButtons}>
+                <TouchableOpacity
+                  style={[styles.modalButton, styles.modalCancelButton]}
+                  onPress={() => setShowEditProfileModal(false)}
+                >
+                  <Text style={styles.modalCancelButtonText}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.modalButton, styles.modalSaveButton]}
+                  onPress={handleSaveProfile}
+                >
+                  <Text style={styles.modalSaveButtonText}>Save Changes</Text>
+                </TouchableOpacity>
+              </View>
             </View>
           </View>
-        </View>
-      </Modal>
+        </Modal>
 
-      {/* Reschedule Modal */}
-      <Modal
-        visible={showRescheduleModal}
-        transparent={true}
-        animationType="slide"
-        onRequestClose={() => setShowRescheduleModal(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Reschedule Lesson</Text>
-              <TouchableOpacity onPress={() => setShowRescheduleModal(false)}>
-                <Text style={styles.modalClose}>✕</Text>
-              </TouchableOpacity>
-            </View>
-
-            {selectedBooking && (
-              <View style={styles.bookingInfoCard}>
-                <Text style={styles.bookingInfoText}>
-                  👤 Student: {selectedBooking.student_name}
-                </Text>
-                <Text style={styles.bookingInfoText}>
-                  📅 Current Time: {formatDate(selectedBooking.scheduled_time)} at{' '}
-                  {formatTime(selectedBooking.scheduled_time)}
-                </Text>
-                <Text style={styles.bookingInfoText}>
-                  ⏱️ Duration: {selectedBooking.duration_minutes} minutes
-                </Text>
+        {/* Manage Availability Modal */}
+        <Modal
+          visible={showAvailabilityModal}
+          animationType="slide"
+          transparent={true}
+          onRequestClose={() => setShowAvailabilityModal(false)}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalContent}>
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>📅 Manage Availability</Text>
+                <TouchableOpacity onPress={() => setShowAvailabilityModal(false)}>
+                  <Text style={styles.modalClose}>✕</Text>
+                </TouchableOpacity>
               </View>
-            )}
 
-            <View style={styles.modalFormGroup}>
-              <Text style={styles.modalLabel}>Select New Date</Text>
-
-              {/* Calendar Button */}
-              <TouchableOpacity
-                style={styles.datePickerButton}
-                onPress={() => setShowCalendarModal(true)}
-              >
-                <Text style={styles.datePickerIcon}>📅</Text>
-                <Text style={styles.datePickerText}>
-                  {rescheduleDate
-                    ? new Date(rescheduleDate + 'T00:00:00').toLocaleDateString('en-ZA', {
-                        weekday: 'short',
-                        year: 'numeric',
-                        month: 'short',
-                        day: 'numeric',
-                      })
-                    : 'Click to Select Date'}
-                </Text>
-              </TouchableOpacity>
-            </View>
-
-            <View style={styles.modalFormGroup}>
-              <Text style={styles.modalLabel}>Available Time Slots</Text>
-              <ScrollView style={styles.timeSlotsContainer}>
-                {availableSlots.length === 0 ? (
-                  <Text style={styles.noSlotsText}>
-                    {rescheduleDate
-                      ? 'No available slots for this date'
-                      : 'Select a date to see available slots'}
-                  </Text>
-                ) : (
-                  availableSlots.map((slot, index) => (
-                    <TouchableOpacity
-                      key={index}
-                      style={[
-                        styles.timeSlotButton,
-                        rescheduleTime === slot && styles.timeSlotButtonSelected,
-                      ]}
-                      onPress={() => setRescheduleTime(slot)}
-                    >
-                      <Text
-                        style={[
-                          styles.timeSlotText,
-                          rescheduleTime === slot && styles.timeSlotTextSelected,
-                        ]}
-                      >
-                        {slot}
-                      </Text>
-                    </TouchableOpacity>
-                  ))
-                )}
-              </ScrollView>
-            </View>
-
-            {rescheduleMessage && (
-              <View
-                style={[
-                  styles.messageBox,
-                  rescheduleMessage.type === 'success' ? styles.successBox : styles.errorBox,
-                ]}
-              >
+              <View style={styles.availabilityStatusCard}>
+                <Text style={styles.availabilityCurrentLabel}>Current Status</Text>
                 <Text
                   style={[
-                    styles.messageText,
-                    rescheduleMessage.type === 'success' ? styles.successText : styles.errorText,
+                    styles.availabilityCurrentStatus,
+                    { color: profile?.is_available ? '#28a745' : '#dc3545' },
                   ]}
                 >
-                  {rescheduleMessage.text}
+                  {profile?.is_available ? '🟢 Available' : '🔴 Unavailable'}
                 </Text>
               </View>
-            )}
 
-            <View style={styles.modalButtons}>
-              <TouchableOpacity
-                style={[styles.modalButton, styles.modalCancelButton]}
-                onPress={() => {
-                  setShowRescheduleModal(false);
-                  setSelectedBooking(null);
-                  setRescheduleDate('');
-                  setRescheduleTime('');
+              <View style={styles.modalFormGroup}>
+                <View style={styles.switchRow}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.modalLabel}>Available for New Bookings</Text>
+                    <Text style={styles.modalHint}>
+                      Toggle this to control whether students can book lessons with you
+                    </Text>
+                  </View>
+                  <Switch
+                    value={editFormData.is_available}
+                    onValueChange={value =>
+                      setEditFormData(prev => ({ ...prev, is_available: value }))
+                    }
+                    trackColor={{ false: '#ccc', true: '#28a745' }}
+                    thumbColor={Platform.OS === 'android' ? '#fff' : undefined}
+                  />
+                </View>
+              </View>
+
+              <View style={styles.modalInfoBox}>
+                <Text style={styles.modalInfoText}>
+                  💡 Tip: You can quickly toggle your availability using the switch on the main
+                  dashboard
+                </Text>
+              </View>
+
+              <View style={styles.modalButtons}>
+                <TouchableOpacity
+                  style={[styles.modalButton, styles.modalCancelButton]}
+                  onPress={() => setShowAvailabilityModal(false)}
+                >
+                  <Text style={styles.modalCancelButtonText}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.modalButton, styles.modalSaveButton]}
+                  onPress={async () => {
+                    await toggleAvailability(editFormData.is_available);
+                    setShowAvailabilityModal(false);
+                  }}
+                >
+                  <Text style={styles.modalSaveButtonText}>Update Status</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
+
+        {/* Reschedule Modal */}
+        <Modal
+          visible={showRescheduleModal}
+          transparent={true}
+          animationType="slide"
+          onRequestClose={() => setShowRescheduleModal(false)}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalContent}>
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>Reschedule Lesson</Text>
+                <TouchableOpacity onPress={() => setShowRescheduleModal(false)}>
+                  <Text style={styles.modalClose}>✕</Text>
+                </TouchableOpacity>
+              </View>
+
+              {selectedBooking && (
+                <View style={styles.bookingInfoCard}>
+                  <Text style={styles.bookingInfoText}>
+                    👤 Student: {selectedBooking.student_name}
+                  </Text>
+                  <Text style={styles.bookingInfoText}>
+                    📅 Current Time: {formatDate(selectedBooking.scheduled_time)} at{' '}
+                    {formatTime(selectedBooking.scheduled_time)}
+                  </Text>
+                  <Text style={styles.bookingInfoText}>
+                    ⏱️ Duration: {selectedBooking.duration_minutes} minutes
+                  </Text>
+                </View>
+              )}
+
+              <View style={styles.modalFormGroup}>
+                <Text style={styles.modalLabel}>Select New Date</Text>
+
+                {/* Calendar Button */}
+                <TouchableOpacity
+                  style={styles.datePickerButton}
+                  onPress={() => setShowCalendarModal(true)}
+                >
+                  <Text style={styles.datePickerIcon}>📅</Text>
+                  <Text style={styles.datePickerText}>
+                    {rescheduleDate
+                      ? new Date(rescheduleDate + 'T00:00:00').toLocaleDateString('en-ZA', {
+                          weekday: 'short',
+                          year: 'numeric',
+                          month: 'short',
+                          day: 'numeric',
+                        })
+                      : 'Click to Select Date'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+
+              <View style={styles.modalFormGroup}>
+                <Text style={styles.modalLabel}>Available Time Slots</Text>
+                <ScrollView style={styles.timeSlotsContainer}>
+                  {availableSlots.length === 0 ? (
+                    <Text style={styles.noSlotsText}>
+                      {rescheduleDate
+                        ? 'No available slots for this date'
+                        : 'Select a date to see available slots'}
+                    </Text>
+                  ) : (
+                    availableSlots.map((slot, index) => (
+                      <TouchableOpacity
+                        key={index}
+                        style={[
+                          styles.timeSlotButton,
+                          rescheduleTime === slot && styles.timeSlotButtonSelected,
+                        ]}
+                        onPress={() => setRescheduleTime(slot)}
+                      >
+                        <Text
+                          style={[
+                            styles.timeSlotText,
+                            rescheduleTime === slot && styles.timeSlotTextSelected,
+                          ]}
+                        >
+                          {slot}
+                        </Text>
+                      </TouchableOpacity>
+                    ))
+                  )}
+                </ScrollView>
+              </View>
+
+              {rescheduleMessage && (
+                <View
+                  style={[
+                    styles.messageBox,
+                    rescheduleMessage.type === 'success' ? styles.successBox : styles.errorBox,
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.messageText,
+                      rescheduleMessage.type === 'success' ? styles.successText : styles.errorText,
+                    ]}
+                  >
+                    {rescheduleMessage.text}
+                  </Text>
+                </View>
+              )}
+
+              <View style={styles.modalButtons}>
+                <TouchableOpacity
+                  style={[styles.modalButton, styles.modalCancelButton]}
+                  onPress={() => {
+                    setShowRescheduleModal(false);
+                    setSelectedBooking(null);
+                    setRescheduleDate('');
+                    setRescheduleTime('');
+                  }}
+                >
+                  <Text style={styles.modalCancelButtonText}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.modalButton, styles.modalSaveButton]}
+                  onPress={handleReschedule}
+                >
+                  <Text style={styles.modalSaveButtonText}>Confirm Reschedule</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
+
+        {/* Calendar Modal for Reschedule */}
+        <Modal
+          visible={showCalendarModal}
+          transparent={true}
+          animationType="slide"
+          onRequestClose={() => setShowCalendarModal(false)}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={styles.calendarModalContent}>
+              <View style={styles.calendarModalHeader}>
+                <Text style={styles.calendarModalTitle}>📅 Select Date</Text>
+                <TouchableOpacity
+                  onPress={() => setShowCalendarModal(false)}
+                  style={styles.calendarModalClose}
+                >
+                  <Text style={styles.calendarModalCloseText}>✕</Text>
+                </TouchableOpacity>
+              </View>
+              <CalendarPicker
+                value={rescheduleDate ? new Date(rescheduleDate + 'T00:00:00') : new Date()}
+                onChange={date => {
+                  // Use local date to avoid timezone shifts
+                  const year = date.getFullYear();
+                  const month = String(date.getMonth() + 1).padStart(2, '0');
+                  const day = String(date.getDate()).padStart(2, '0');
+                  const dateStr = `${year}-${month}-${day}`;
+                  setRescheduleDate(dateStr);
+                  loadAvailableSlots(dateStr);
+                  setShowCalendarModal(false);
                 }}
-              >
-                <Text style={styles.modalCancelButtonText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.modalButton, styles.modalSaveButton]}
-                onPress={handleReschedule}
-              >
-                <Text style={styles.modalSaveButtonText}>Confirm Reschedule</Text>
-              </TouchableOpacity>
+                minDate={new Date()}
+                maxDate={new Date(Date.now() + 90 * 24 * 60 * 60 * 1000)}
+                disabledDates={instructorTimeOff}
+              />
+              <Text style={styles.timeOffLegend}>🟧 Orange dates = Instructor unavailable</Text>
             </View>
           </View>
-        </View>
-      </Modal>
-
-      {/* Calendar Modal for Reschedule */}
-      <Modal
-        visible={showCalendarModal}
-        transparent={true}
-        animationType="slide"
-        onRequestClose={() => setShowCalendarModal(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.calendarModalContent}>
-            <View style={styles.calendarModalHeader}>
-              <Text style={styles.calendarModalTitle}>📅 Select Date</Text>
-              <TouchableOpacity
-                onPress={() => setShowCalendarModal(false)}
-                style={styles.calendarModalClose}
-              >
-                <Text style={styles.calendarModalCloseText}>✕</Text>
-              </TouchableOpacity>
-            </View>
-            <CalendarPicker
-              value={rescheduleDate ? new Date(rescheduleDate + 'T00:00:00') : new Date()}
-              onChange={date => {
-                // Use local date to avoid timezone shifts
-                const year = date.getFullYear();
-                const month = String(date.getMonth() + 1).padStart(2, '0');
-                const day = String(date.getDate()).padStart(2, '0');
-                const dateStr = `${year}-${month}-${day}`;
-                setRescheduleDate(dateStr);
-                loadAvailableSlots(dateStr);
-                setShowCalendarModal(false);
-              }}
-              minDate={new Date()}
-              maxDate={new Date(Date.now() + 90 * 24 * 60 * 60 * 1000)}
-              disabledDates={instructorTimeOff}
-            />
-            <Text style={styles.timeOffLegend}>🟧 Orange dates = Instructor unavailable</Text>
-          </View>
-        </View>
-      </Modal>
-    </ScrollView>
+        </Modal>
+      </ScrollView>
+    </View>
   );
 }
 
@@ -1302,6 +1314,9 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#f5f5f5',
+  },
+  scrollView: {
+    flex: 1,
   },
   loadingContainer: {
     flex: 1,

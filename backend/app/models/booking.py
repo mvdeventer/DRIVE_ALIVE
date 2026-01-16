@@ -48,7 +48,9 @@ class Booking(Base):
     # Lesson details
     lesson_date = Column(DateTime(timezone=True), nullable=False)
     duration_minutes = Column(Integer, nullable=False, default=60)
-    lesson_type = Column(String, nullable=False)  # "beginner", "intermediate", "advanced", "test_preparation"
+    lesson_type = Column(
+        String, nullable=False
+    )  # "beginner", "intermediate", "advanced", "test_preparation"
 
     # Location
     pickup_latitude = Column(Float, nullable=False)
@@ -77,11 +79,31 @@ class Booking(Base):
     cancelled_by = Column(String, nullable=True)  # "student" or "instructor"
     cancellation_reason = Column(Text, nullable=True)
     refund_amount = Column(Float, nullable=True)
-    cancellation_fee = Column(Float, nullable=True, default=0.0)  # 50% fee if cancelled/rescheduled within 6 hours
+    cancellation_fee = Column(
+        Float, nullable=True, default=0.0
+    )  # 50% fee if cancelled/rescheduled within 6 hours
 
     # Reschedule tracking
-    rebooking_count = Column(Integer, nullable=False, default=0)  # Number of times rescheduled
-    original_lesson_date = Column(DateTime(timezone=True), nullable=True)  # Original booking date
+    rebooking_count = Column(
+        Integer, nullable=False, default=0
+    )  # Number of times rescheduled
+    original_lesson_date = Column(
+        DateTime(timezone=True), nullable=True
+    )  # Original booking date
+
+    # WhatsApp reminders
+    reminder_sent = Column(
+        Boolean, nullable=False, default=False
+    )  # Student 24hr reminder sent
+    instructor_reminder_sent = Column(
+        Boolean, nullable=False, default=False
+    )  # Instructor 15min reminder sent
+    daily_summary_sent = Column(
+        Boolean, nullable=False, default=False
+    )  # Included in daily summary
+
+    # Booking fee (R10 per booking)
+    booking_fee = Column(Float, nullable=False, default=10.0)
 
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())

@@ -33,7 +33,9 @@ import InstructorHomeScreen from './screens/instructor/InstructorHomeScreen';
 import ManageAvailabilityScreen from './screens/instructor/ManageAvailabilityScreen';
 
 // Payment Screens
+import PaymentCancelScreen from './screens/payment/PaymentCancelScreen';
 import PaymentScreen from './screens/payment/PaymentScreen';
+import PaymentSuccessScreen from './screens/payment/PaymentSuccessScreen';
 
 // API Service
 import ApiService from './services/api';
@@ -282,6 +284,16 @@ export default function App() {
 
           {/* Payment */}
           <Stack.Screen name="Payment" component={PaymentScreen} options={{ title: 'Payment' }} />
+          <Stack.Screen
+            name="PaymentSuccess"
+            component={PaymentSuccessScreen}
+            options={{ title: 'Payment Successful', headerShown: false }}
+          />
+          <Stack.Screen
+            name="PaymentCancel"
+            component={PaymentCancelScreen}
+            options={{ title: 'Payment Cancelled', headerShown: false }}
+          />
 
           {/* Admin Stack */}
           <Stack.Screen

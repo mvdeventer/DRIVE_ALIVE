@@ -41,7 +41,10 @@ class Settings(BaseSettings):
     ENVIRONMENT: str = "development"
     DEBUG: bool = True
     ALLOWED_ORIGINS: str = "http://localhost:3000"
-    AUTO_VERIFY_INSTRUCTORS: bool = False  # Only True in debug mode (controlled by DEBUG)
+    AUTO_VERIFY_INSTRUCTORS: bool = (
+        False  # Only True in debug mode (controlled by DEBUG)
+    )
+    BOOKING_FEE: float = 10.0  # Booking fee in ZAR
 
     # South Africa
     DEFAULT_TIMEZONE: str = "Africa/Johannesburg"

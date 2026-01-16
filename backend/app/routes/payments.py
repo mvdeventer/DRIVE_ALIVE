@@ -1,9 +1,10 @@
 """
-Payment routes for Stripe and PayFast integration
+Payment routes for Stripe integration with payment-first workflow
+Students pay R10 booking fee BEFORE lessons are created
 """
 
-import hashlib
-import urllib.parse
+import json
+import uuid
 from datetime import datetime, timezone
 from typing import Annotated
 
@@ -13,193 +14,348 @@ from sqlalchemy.orm import Session
 
 from ..config import settings
 from ..database import get_db
-from ..models.booking import Booking, PaymentStatus
-from ..models.payment import Transaction, TransactionStatus, TransactionType
-from ..models.user import User
+from ..models.booking import Booking, BookingStatus, PaymentStatus
+from ..models.payment_session import PaymentSession, PaymentSessionStatus
+from ..models.user import Instructor, Student, User, UserRole
 from ..routes.auth import get_current_user
+from ..schemas.payment import PaymentInitiateRequest, PaymentInitiateResponse
+from ..services.whatsapp_service import whatsapp_service
 
 router = APIRouter(prefix="/payments", tags=["Payments"])
 
-# Initialize Stripe
-stripe.api_key = settings.STRIPE_SECRET_KEY
+# Configure Stripe (use mock mode if no key provided)
+MOCK_PAYMENT_MODE = not settings.STRIPE_SECRET_KEY
+if not MOCK_PAYMENT_MODE:
+    stripe.api_key = settings.STRIPE_SECRET_KEY
 
 
-@router.post("/stripe/create-payment-intent")
-async def create_stripe_payment_intent(booking_id: int, current_user: Annotated[User, Depends(get_current_user)], db: Session = Depends(get_db)):
+@router.post("/initiate", response_model=PaymentInitiateResponse)
+async def initiate_payment(
+    request: PaymentInitiateRequest,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Session = Depends(get_db),
+):
     """
-    Create a Stripe payment intent for a booking
+    Initiate payment session BEFORE creating bookings
+    Returns Stripe Checkout URL
     """
-    booking = db.query(Booking).filter(Booking.id == booking_id).first()
-
-    if not booking:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Booking not found")
-
-    # Verify booking belongs to current user
-    if current_user.student_profile and booking.student_id != current_user.student_profile.id:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to pay for this booking")
-
-    # Check if already paid
-    if booking.payment_status == PaymentStatus.PAID:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Booking already paid")
-
-    try:
-        # Create payment intent
-        amount_cents = int(booking.amount * 100)  # Convert to cents
-
-        payment_intent = stripe.PaymentIntent.create(
-            amount=amount_cents, currency="zar", metadata={"booking_id": booking.id, "user_id": current_user.id}
+    if current_user.role != UserRole.STUDENT:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only students can create bookings",
         )
 
-        # Create transaction record
-        transaction = Transaction(
-            transaction_reference=f"TXN{payment_intent.id}",
-            booking_id=booking.id,
-            user_id=current_user.id,
-            transaction_type=TransactionType.PAYMENT,
-            amount=booking.amount,
-            currency="ZAR",
-            payment_gateway="stripe",
-            gateway_transaction_id=payment_intent.id,
-            status=TransactionStatus.PENDING,
+    student = db.query(Student).filter(Student.user_id == current_user.id).first()
+    if not student:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Student profile not found"
         )
 
-        db.add(transaction)
-        booking.payment_method = "stripe"
-        booking.payment_id = payment_intent.id
+    instructor = (
+        db.query(Instructor).filter(Instructor.id == request.instructor_id).first()
+    )
+    if not instructor:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Instructor not found"
+        )
 
+    if not instructor.is_available:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Instructor is not available",
+        )
+
+    # Calculate amounts
+    bookings_count = len(request.bookings)
+    total_lesson_amount = 0.0
+
+    for booking_data in request.bookings:
+        duration_minutes = booking_data.get("duration_minutes", 60)
+        lesson_amount = instructor.hourly_rate * (duration_minutes / 60)
+        total_lesson_amount += lesson_amount
+
+    booking_fee = settings.BOOKING_FEE * bookings_count
+    total_amount = total_lesson_amount + booking_fee
+
+    # Create payment session
+    payment_session_id = f"PS{uuid.uuid4().hex[:12].upper()}"
+    payment_session = PaymentSession(
+        payment_session_id=payment_session_id,
+        user_id=current_user.id,
+        instructor_id=instructor.id,
+        bookings_data=json.dumps(request.bookings),
+        amount=total_lesson_amount,
+        booking_fee=booking_fee,
+        total_amount=total_amount,
+        payment_gateway="stripe",
+        status=PaymentSessionStatus.PENDING,
+    )
+
+    db.add(payment_session)
+    db.commit()
+    db.refresh(payment_session)
+
+    # Simplify description
+    item_name = f"{bookings_count} Driving Lesson"
+    if bookings_count > 1:
+        item_name += "s"
+
+    # Create item description
+    item_description = (
+        f"Booking fee (R{booking_fee:.2f}) + Lessons (R{total_lesson_amount:.2f})"
+    )
+
+    # Print to console for debugging
+    print("\n" + "=" * 80)
+    print("💳 PAYMENT INITIATION" + (" (MOCK MODE)" if MOCK_PAYMENT_MODE else " (STRIPE)"))
+    print("=" * 80)
+    print(f"Payment Session ID: {payment_session_id}")
+    print(f"Student: {current_user.first_name} {current_user.last_name}")
+    print(f"Instructor ID: {instructor.id}")
+    print(f"Bookings Count: {bookings_count}")
+    print(f"Total Amount: R{total_amount:.2f}")
+    print("=" * 80)
+
+    # MOCK PAYMENT MODE (for development without Stripe keys)
+    if MOCK_PAYMENT_MODE:
+        base_url = settings.ALLOWED_ORIGINS.split(',')[0]
+        mock_payment_url = f"{base_url}/payment/mock?session_id={payment_session_id}"
+        
+        payment_session.gateway_transaction_id = f"mock_{uuid.uuid4().hex[:8]}"
         db.commit()
 
-        return {"client_secret": payment_intent.client_secret, "payment_intent_id": payment_intent.id}
+        print(f"⚠️  MOCK MODE: Payment will auto-complete")
+        print(f"✅ Mock Payment URL: {mock_payment_url}")
+        print("=" * 80)
+
+        return PaymentInitiateResponse(
+            payment_url=mock_payment_url,
+            payment_session_id=payment_session_id,
+            amount=total_lesson_amount,
+            booking_fee=booking_fee,
+            total_amount=total_amount,
+            bookings_count=bookings_count,
+        )
+
+    # REAL STRIPE MODE
+    # Generate Stripe Checkout Session
+    try:
+        # Create Stripe Checkout Session
+        checkout_session = stripe.checkout.Session.create(
+            payment_method_types=["card"],
+            line_items=[
+                {
+                    "price_data": {
+                        "currency": "zar",
+                        "unit_amount": int(total_amount * 100),  # Convert to cents
+                        "product_data": {
+                            "name": item_name,
+                            "description": item_description,
+                        },
+                    },
+                    "quantity": 1,
+                },
+            ],
+            mode="payment",
+            success_url=f"{settings.ALLOWED_ORIGINS.split(',')[0]}/payment/success?session_id={{CHECKOUT_SESSION_ID}}",
+            cancel_url=f"{settings.ALLOWED_ORIGINS.split(',')[0]}/payment/cancel",
+            metadata={
+                "payment_session_id": payment_session_id,
+                "user_id": str(current_user.id),
+                "instructor_id": str(instructor.id),
+            },
+            customer_email=current_user.email,
+        )
+
+        # Update payment session with Stripe session ID
+        payment_session.gateway_transaction_id = checkout_session.id
+        db.commit()
+
+        print(f"✅ Stripe Checkout URL: {checkout_session.url}")
+        print("=" * 80)
+
+        return PaymentInitiateResponse(
+            payment_url=checkout_session.url,
+            payment_session_id=payment_session_id,
+            amount=total_lesson_amount,
+            booking_fee=booking_fee,
+            total_amount=total_amount,
+            bookings_count=bookings_count,
+        )
 
     except stripe.error.StripeError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Stripe error: {str(e)}",
+        )
 
 
-@router.post("/stripe/webhook")
+@router.post("/webhook")
 async def stripe_webhook(request: Request, db: Session = Depends(get_db)):
     """
-    Handle Stripe webhook events
+    Stripe webhook - Creates bookings after payment
     """
+    import logging
+
+    logger = logging.getLogger(__name__)
+
+    # Get the raw body for signature verification
     payload = await request.body()
     sig_header = request.headers.get("stripe-signature")
 
     try:
-        event = stripe.Webhook.construct_event(payload, sig_header, settings.STRIPE_WEBHOOK_SECRET)
-    except ValueError:
+        # Verify webhook signature (skip in development if no webhook secret)
+        if settings.STRIPE_WEBHOOK_SECRET:
+            event = stripe.Webhook.construct_event(
+                payload, sig_header, settings.STRIPE_WEBHOOK_SECRET
+            )
+        else:
+            # Development mode - parse without verification
+            event = stripe.Event.construct_from(json.loads(payload), stripe.api_key)
+
+        logger.info(f"📧 Stripe webhook received: {event['type']}")
+
+    except ValueError as e:
+        logger.error(f"❌ Invalid payload: {e}")
         raise HTTPException(status_code=400, detail="Invalid payload")
-    except stripe.error.SignatureVerificationError:
+    except stripe.error.SignatureVerificationError as e:
+        logger.error(f"❌ Invalid signature: {e}")
         raise HTTPException(status_code=400, detail="Invalid signature")
 
-    # Handle payment_intent.succeeded event
-    if event["type"] == "payment_intent.succeeded":
-        payment_intent = event["data"]["object"]
+    # Handle checkout.session.completed event
+    if event["type"] == "checkout.session.completed":
+        session = event["data"]["object"]
 
-        # Find booking
-        booking = db.query(Booking).filter(Booking.payment_id == payment_intent.id).first()
+        payment_session_id = session["metadata"].get("payment_session_id")
+        if not payment_session_id:
+            logger.error("❌ No payment_session_id in webhook")
+            return {"status": "error", "message": "Missing payment_session_id"}
 
-        if booking:
-            booking.payment_status = PaymentStatus.PAID
+        payment_session = (
+            db.query(PaymentSession)
+            .filter(PaymentSession.payment_session_id == payment_session_id)
+            .first()
+        )
 
-            # Update transaction
-            transaction = db.query(Transaction).filter(Transaction.gateway_transaction_id == payment_intent.id).first()
+        if not payment_session:
+            logger.error(f"❌ Payment session not found: {payment_session_id}")
+            return {"status": "error", "message": "Payment session not found"}
 
-            if transaction:
-                transaction.status = TransactionStatus.SUCCESS
-                transaction.completed_at = datetime.now(timezone.utc)
+        if payment_session.status == PaymentSessionStatus.COMPLETED:
+            logger.info(f"✅ Payment already processed: {payment_session_id}")
+            return {"status": "already_processed"}
 
-            db.commit()
+        # Update payment session
+        payment_session.status = PaymentSessionStatus.COMPLETED
+        payment_session.gateway_transaction_id = session.get("payment_intent")
+        payment_session.gateway_response = json.dumps(dict(session))
+        payment_session.completed_at = datetime.now(timezone.utc)
 
+        # Get user and instructor
+        user = db.query(User).filter(User.id == payment_session.user_id).first()
+        student = db.query(Student).filter(Student.user_id == user.id).first()
+        instructor = (
+            db.query(Instructor)
+            .filter(Instructor.id == payment_session.instructor_id)
+            .first()
+        )
+
+        if not user or not student or not instructor:
+            logger.error("❌ User or instructor not found")
+            return {"status": "error", "message": "User or instructor not found"}
+
+        # Create bookings from payment session
+        bookings_data = json.loads(payment_session.bookings_data)
+        created_bookings = []
+
+        for booking_data in bookings_data:
+            lesson_date_str = booking_data.get("lesson_date")
+            duration_minutes = booking_data.get("duration_minutes", 60)
+            pickup_address = booking_data.get("pickup_address", "")
+            student_notes = booking_data.get("student_notes")
+
+            lesson_datetime = datetime.fromisoformat(
+                lesson_date_str.replace("Z", "+00:00")
+            )
+            lesson_amount = instructor.hourly_rate * (duration_minutes / 60)
+
+            booking = Booking(
+                booking_reference=f"BK{uuid.uuid4().hex[:8].upper()}",
+                student_id=student.id,
+                instructor_id=instructor.id,
+                lesson_date=lesson_datetime,
+                duration_minutes=duration_minutes,
+                lesson_type="standard",
+                pickup_latitude=0.0,
+                pickup_longitude=0.0,
+                pickup_address=pickup_address,
+                amount=lesson_amount,
+                booking_fee=settings.BOOKING_FEE,
+                status=BookingStatus.CONFIRMED,
+                payment_status=PaymentStatus.PAID,
+                payment_method="stripe",
+                payment_id=payment_session.gateway_transaction_id,
+                student_notes=student_notes,
+            )
+
+            db.add(booking)
+            created_bookings.append(booking)
+
+        db.commit()
+
+        # Send WhatsApp confirmations
+        for booking in created_bookings:
+            try:
+                db.refresh(booking)
+                whatsapp_service.send_booking_confirmation(
+                    student_name=f"{user.first_name} {user.last_name}",
+                    student_phone=user.phone,
+                    instructor_name=f"{instructor.user.first_name} {instructor.user.last_name}",
+                    lesson_date=booking.lesson_date,
+                    pickup_address=booking.pickup_address,
+                    amount=booking.amount + booking.booking_fee,
+                    booking_reference=booking.booking_reference,
+                )
+                logger.info(f"✅ WhatsApp sent for {booking.booking_reference}")
+            except Exception as e:
+                logger.error(f"❌ WhatsApp failed for {booking.booking_reference}: {e}")
+
+        logger.info(
+            f"✅ Created {len(created_bookings)} bookings for {payment_session_id}"
+        )
+
+        return {"status": "success", "bookings_created": len(created_bookings)}
+
+    # Return success for other event types
     return {"status": "success"}
 
 
-@router.post("/payfast/create-payment")
-async def create_payfast_payment(booking_id: int, current_user: Annotated[User, Depends(get_current_user)], db: Session = Depends(get_db)):
-    """
-    Create a PayFast payment for a booking
-    """
-    booking = db.query(Booking).filter(Booking.id == booking_id).first()
-
-    if not booking:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Booking not found")
-
-    # Verify booking belongs to current user
-    if current_user.student_profile and booking.student_id != current_user.student_profile.id:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to pay for this booking")
-
-    # Check if already paid
-    if booking.payment_status == PaymentStatus.PAID:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Booking already paid")
-
-    # Create PayFast payment data
-    payment_data = {
-        "merchant_id": settings.PAYFAST_MERCHANT_ID,
-        "merchant_key": settings.PAYFAST_MERCHANT_KEY,
-        "return_url": f"{settings.ALLOWED_ORIGINS.split(',')[0]}/payment/success",
-        "cancel_url": f"{settings.ALLOWED_ORIGINS.split(',')[0]}/payment/cancel",
-        "notify_url": f"{settings.ALLOWED_ORIGINS.split(',')[0]}/api/payments/payfast/webhook",
-        "amount": f"{booking.amount:.2f}",
-        "item_name": f"Driving Lesson - {booking.booking_reference}",
-        "custom_str1": str(booking.id),
-        "custom_str2": str(current_user.id),
-    }
-
-    # Generate signature
-    signature_string = "&".join([f"{k}={urllib.parse.quote_plus(str(v))}" for k, v in sorted(payment_data.items())])
-    if settings.PAYFAST_PASSPHRASE:
-        signature_string += f"&passphrase={urllib.parse.quote_plus(settings.PAYFAST_PASSPHRASE)}"
-
-    signature = hashlib.md5(signature_string.encode()).hexdigest()
-    payment_data["signature"] = signature
-
-    # Create transaction record
-    transaction = Transaction(
-        transaction_reference=f"TXN{booking.booking_reference}",
-        booking_id=booking.id,
-        user_id=current_user.id,
-        transaction_type=TransactionType.PAYMENT,
-        amount=booking.amount,
-        currency="ZAR",
-        payment_gateway="payfast",
-        status=TransactionStatus.PENDING,
+@router.get("/session/{payment_session_id}")
+async def get_payment_session(
+    payment_session_id: str,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Session = Depends(get_db),
+):
+    """Get payment session status"""
+    payment_session = (
+        db.query(PaymentSession)
+        .filter(PaymentSession.payment_session_id == payment_session_id)
+        .first()
     )
 
-    db.add(transaction)
-    booking.payment_method = "payfast"
+    if not payment_session:
+        raise HTTPException(status_code=404, detail="Payment session not found")
 
-    db.commit()
+    if payment_session.user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Not authorized")
 
-    # Determine PayFast URL based on mode
-    payfast_url = "https://www.payfast.co.za/eng/process" if settings.PAYFAST_MODE == "live" else "https://sandbox.payfast.co.za/eng/process"
-
-    return {"payment_url": payfast_url, "payment_data": payment_data}
-
-
-@router.post("/payfast/webhook")
-async def payfast_webhook(request: Request, db: Session = Depends(get_db)):
-    """
-    Handle PayFast webhook (ITN - Instant Transaction Notification)
-    """
-    form_data = await request.form()
-    data = dict(form_data)
-
-    # Verify payment status
-    if data.get("payment_status") == "COMPLETE":
-        booking_id = data.get("custom_str1")
-
-        if booking_id:
-            booking = db.query(Booking).filter(Booking.id == int(booking_id)).first()
-
-            if booking:
-                booking.payment_status = PaymentStatus.PAID
-
-                # Update transaction
-                transaction = db.query(Transaction).filter(Transaction.booking_id == booking.id, Transaction.payment_gateway == "payfast").first()
-
-                if transaction:
-                    transaction.status = TransactionStatus.SUCCESS
-                    transaction.gateway_transaction_id = data.get("pf_payment_id")
-                    transaction.completed_at = datetime.now(timezone.utc)
-
-                db.commit()
-
-    return {"status": "success"}
+    return {
+        "payment_session_id": payment_session.payment_session_id,
+        "status": payment_session.status,
+        "amount": payment_session.amount,
+        "booking_fee": payment_session.booking_fee,
+        "total_amount": payment_session.total_amount,
+        "payment_gateway": payment_session.payment_gateway,
+        "created_at": payment_session.created_at,
+        "completed_at": payment_session.completed_at,
+    }

@@ -1,64 +1,241 @@
-// Placeholder - To be implemented in Phase 2
-import { useNavigation } from '@react-navigation/native';
-import React from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+/**
+ * Payment Screen - Displays payment summary and redirects to PayFast
+ */
+import { useNavigation, useRoute } from '@react-navigation/native';
+import React, { useState } from 'react';
+import {
+  ActivityIndicator,
+  Linking,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from 'react-native';
+import InlineMessage from '../../components/InlineMessage';
 import WebNavigationHeader from '../../components/WebNavigationHeader';
+import ApiService from '../../services/api';
 
-export default function PaymentScreen({ navigation: navProp }: any) {
-  const navigation = navProp || useNavigation();
+interface RouteParams {
+  instructor: any;
+  bookings: any[];
+  total_amount: number;
+  booking_fee: number;
+  lesson_amount: number;
+}
+
+export default function PaymentScreen() {
+  const navigation = useNavigation();
+  const route = useRoute();
+  const params = route.params as RouteParams;
+
+  const { instructor, bookings, total_amount, booking_fee, lesson_amount } = params;
+
+  const [loading, setLoading] = useState(false);
+  const [message, setMessage] = useState<{
+    type: 'success' | 'error' | 'warning' | 'info';
+    text: string;
+  } | null>(null);
+
+  const handlePayment = async () => {
+    try {
+      setLoading(true);
+
+      const bookingsData = bookings.map(booking => ({
+        lesson_date: `${booking.date}T${booking.time}:00`,
+        duration_minutes: 60,
+        pickup_address: booking.pickup_address || '',
+        student_notes: booking.notes || null,
+      }));
+
+      const response = await ApiService.initiatePayment({
+        instructor_id: instructor.instructor_id,
+        bookings: bookingsData,
+        payment_gateway: 'stripe', // Using Stripe instead of PayFast
+      });
+
+      if (Platform.OS === 'web') {
+        localStorage.setItem('payment_session_id', response.payment_session_id);
+        window.location.href = response.payment_url;
+      } else {
+        await Linking.openURL(response.payment_url);
+        navigation.navigate(
+          'PaymentStatus' as never,
+          {
+            payment_session_id: response.payment_session_id,
+          } as never
+        );
+      }
+    } catch (error: any) {
+      console.error('Payment error:', error);
+      setMessage({
+        type: 'error',
+        text: error.response?.data?.detail || 'Failed to initiate payment',
+      });
+      setTimeout(() => setMessage(null), 5000);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <View style={styles.container}>
+      {message && (
+        <View style={{ marginHorizontal: 16, marginTop: 8 }}>
+          <InlineMessage
+            type={message.type}
+            message={message.text}
+            onDismiss={() => setMessage(null)}
+            autoDismissMs={0}
+          />
+        </View>
+      )}
+
       <WebNavigationHeader
-        title="Payment"
+        title="Confirm Payment"
         onBack={() => navigation.goBack()}
         showBackButton={true}
       />
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Payment</Text>
-      </View>
-      <View style={styles.content}>
-        <Text style={styles.text}>Payment Screen - Coming Soon</Text>
-      </View>
+
+      <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
+        <View style={styles.card}>
+          <Text style={styles.sectionTitle}>Instructor</Text>
+          <Text style={styles.instructorName}>
+            {instructor.first_name} {instructor.last_name}
+            {instructor.is_verified && ' ✅'}
+          </Text>
+          <Text style={styles.instructorDetail}>
+            🚗 {instructor.vehicle_make} {instructor.vehicle_model}
+          </Text>
+          <Text style={styles.instructorDetail}>
+            📍 {instructor.city}
+            {instructor.suburb && `, ${instructor.suburb}`}
+          </Text>
+        </View>
+
+        <View style={styles.card}>
+          <Text style={styles.sectionTitle}>Booking Summary</Text>
+          {bookings.map((booking, index) => (
+            <View key={index} style={styles.bookingItem}>
+              <Text style={styles.bookingDate}>
+                📅 {booking.date} at {booking.time}
+              </Text>
+              <Text style={styles.bookingDuration}>⏱ 60 minutes</Text>
+              <Text style={styles.bookingAddress}>📍 {booking.pickup_address}</Text>
+            </View>
+          ))}
+        </View>
+
+        <View style={styles.card}>
+          <Text style={styles.sectionTitle}>Payment Summary</Text>
+          <View style={styles.priceRow}>
+            <Text style={styles.priceLabel}>
+              {bookings.length} Lesson{bookings.length > 1 ? 's' : ''}
+            </Text>
+            <Text style={styles.priceValue}>R{lesson_amount.toFixed(2)}</Text>
+          </View>
+          <View style={styles.priceRow}>
+            <Text style={styles.priceLabel}>
+              Booking Fee ({bookings.length} × R{(booking_fee / bookings.length).toFixed(2)})
+            </Text>
+            <Text style={styles.priceValue}>R{booking_fee.toFixed(2)}</Text>
+          </View>
+          <View style={styles.divider} />
+          <View style={styles.totalRow}>
+            <Text style={styles.totalLabel}>Total</Text>
+            <Text style={styles.totalValue}>R{total_amount.toFixed(2)}</Text>
+          </View>
+        </View>
+
+        <View style={styles.card}>
+          <Text style={styles.sectionTitle}>Payment Method</Text>
+          <Text style={styles.paymentMethod}>💳 PayFast</Text>
+          <Text style={styles.paymentInfo}>Secure payment via:</Text>
+          <Text style={styles.paymentOption}>• Instant EFT</Text>
+          <Text style={styles.paymentOption}>• Credit/Debit Cards</Text>
+          <Text style={styles.secureText}>🔒 Powered by PayFast</Text>
+        </View>
+
+        <TouchableOpacity
+          style={[styles.payButton, loading && styles.payButtonDisabled]}
+          onPress={handlePayment}
+          disabled={loading}
+        >
+          {loading ? (
+            <ActivityIndicator color="#fff" />
+          ) : (
+            <Text style={styles.payButtonText}>Pay R{total_amount.toFixed(2)}</Text>
+          )}
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.cancelButton}
+          onPress={() => navigation.goBack()}
+          disabled={loading}
+        >
+          <Text style={styles.cancelButtonText}>Cancel</Text>
+        </TouchableOpacity>
+      </ScrollView>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#f5f5f5',
-  },
-  header: {
-    alignItems: 'center',
-    padding: 20,
+  container: { flex: 1, backgroundColor: '#f5f5f5' },
+  scrollView: { flex: 1 },
+  scrollContent: { padding: 16, paddingBottom: 32 },
+  card: {
     backgroundColor: '#fff',
-    borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
+    borderRadius: 8,
+    padding: 16,
+    marginBottom: 16,
+    ...Platform.select({
+      web: { boxShadow: '0 2px 4px rgba(0,0,0,0.1)' },
+      default: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+        elevation: 3,
+      },
+    }),
   },
-  headerTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#333',
-  },
-  logoutButton: {
-    backgroundColor: '#dc3545',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 6,
-  },
-  logoutButtonText: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  content: {
-    flex: 1,
-    justifyContent: 'center',
+  sectionTitle: { fontSize: 18, fontWeight: 'bold', color: '#333', marginBottom: 12 },
+  instructorName: { fontSize: 16, fontWeight: '600', color: '#007AFF', marginBottom: 8 },
+  instructorDetail: { fontSize: 14, color: '#666', marginBottom: 4 },
+  bookingItem: { paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#eee' },
+  bookingDate: { fontSize: 16, fontWeight: '600', color: '#333', marginBottom: 4 },
+  bookingDuration: { fontSize: 14, color: '#666', marginBottom: 4 },
+  bookingAddress: { fontSize: 14, color: '#666' },
+  priceRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 8 },
+  priceLabel: { fontSize: 14, color: '#666' },
+  priceValue: { fontSize: 14, fontWeight: '600', color: '#333' },
+  divider: { height: 1, backgroundColor: '#ddd', marginVertical: 12 },
+  totalRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 8 },
+  totalLabel: { fontSize: 18, fontWeight: 'bold', color: '#333' },
+  totalValue: { fontSize: 18, fontWeight: 'bold', color: '#007AFF' },
+  paymentMethod: { fontSize: 16, fontWeight: '600', color: '#333', marginBottom: 12 },
+  paymentInfo: { fontSize: 14, color: '#666', marginBottom: 8 },
+  paymentOption: { fontSize: 14, color: '#666', marginLeft: 8, marginBottom: 4 },
+  secureText: { fontSize: 12, color: '#28a745', marginTop: 8, fontStyle: 'italic' },
+  payButton: {
+    backgroundColor: '#007AFF',
+    borderRadius: 8,
+    paddingVertical: 16,
     alignItems: 'center',
+    marginTop: 8,
   },
-  text: {
-    fontSize: 18,
-    color: '#666',
+  payButtonDisabled: { backgroundColor: '#ccc' },
+  payButtonText: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
+  cancelButton: {
+    backgroundColor: '#fff',
+    borderRadius: 8,
+    paddingVertical: 16,
+    alignItems: 'center',
+    marginTop: 12,
+    borderWidth: 1,
+    borderColor: '#ddd',
   },
+  cancelButtonText: { color: '#666', fontSize: 16, fontWeight: '600' },
 });

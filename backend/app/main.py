@@ -2,7 +2,9 @@
 Main FastAPI application
 """
 
+import asyncio
 import sys
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request, status
 from fastapi.exceptions import RequestValidationError
@@ -12,12 +14,57 @@ from fastapi.responses import JSONResponse
 from .config import settings
 from .database import Base, engine
 from .routes import admin, auth, availability, bookings, instructors, payments, students
+from .services.reminder_scheduler import reminder_scheduler
 
 # Create database tables
 Base.metadata.create_all(bind=engine)
 
-# Create FastAPI app
-app = FastAPI(title="Driving School Booking API", description="API for South African driving school booking system", version="1.0.0")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """
+    Lifespan context manager for startup and shutdown events
+    Handles background task lifecycle
+    """
+    # Startup
+    print("=" * 80)
+    print("Drive Alive Backend API - Starting Up")
+    print("=" * 80)
+    print(f"Python Path: {sys.executable}")
+    venv_status = "Active" if "venv" in sys.executable else "Not Active"
+    print(f"Virtual Environment: {venv_status}")
+    print(f"API Version: 1.0.0")
+    print(
+        f"WhatsApp Reminders: {'Enabled' if settings.TWILIO_ACCOUNT_SID else 'Disabled'}"
+    )
+    print("=" * 80)
+
+    # Start background reminder scheduler
+    if settings.TWILIO_ACCOUNT_SID:
+        print("🚀 Starting WhatsApp reminder scheduler...")
+        task = asyncio.create_task(reminder_scheduler.start())
+
+    yield
+
+    # Shutdown
+    if settings.TWILIO_ACCOUNT_SID:
+        print("🛑 Stopping WhatsApp reminder scheduler...")
+        await reminder_scheduler.stop()
+        if task:
+            task.cancel()
+            try:
+                await task
+            except asyncio.CancelledError:
+                pass
+
+
+# Create FastAPI app with lifespan
+app = FastAPI(
+    title="Driving School Booking API",
+    description="API for South African driving school booking system",
+    version="1.0.0",
+    lifespan=lifespan,
+)
 
 # Configure CORS - Allow specific origins with credentials
 origins = [
@@ -68,12 +115,16 @@ async def validation_exception_handler(_request: Request, exc: RequestValidation
         else:
             error_detail = f"{field}: {msg}"
 
-        return JSONResponse(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, content={"detail": error_detail})
+        return JSONResponse(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            content={"detail": error_detail},
+        )
 
-    return JSONResponse(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, content={"detail": "Validation error occurred"})
+    return JSONResponse(
+        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        content={"detail": "Validation error occurred"},
+    )
 
-
-# Force reload
 
 # Include routers
 app.include_router(admin.router)
@@ -85,23 +136,14 @@ app.include_router(payments.router)
 app.include_router(students.router)
 
 
-@app.on_event("startup")
-async def startup_event():
-    """Log startup information including Python path to verify venv usage"""
-    print("=" * 80)
-    print("Drive Alive Backend API - Starting Up")
-    print("=" * 80)
-    print(f"Python Path: {sys.executable}")
-    venv_status = "Active" if "venv" in sys.executable else "Not Active"
-    print(f"Virtual Environment: {venv_status}")
-    print(f"API Version: 1.0.0")
-    print("=" * 80)
-
-
 @app.get("/")
 async def root():
     """Root endpoint"""
-    return {"message": "Welcome to Driving School Booking API", "version": "1.0.0", "docs": "/docs"}
+    return {
+        "message": "Welcome to Driving School Booking API",
+        "version": "1.0.0",
+        "docs": "/docs",
+    }
 
 
 @app.get("/health")

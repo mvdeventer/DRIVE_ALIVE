@@ -373,39 +373,34 @@ export default function EditInstructorProfileScreen({ navigation: navProp }: any
   }
 
   return (
-    <ScrollView style={styles.container}>
+    <View style={styles.container}>
       <WebNavigationHeader
         title="Edit Instructor Profile"
         onBack={() => navigation.goBack()}
         showBackButton={true}
       />
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Edit Profile</Text>
-      </View>
-
-      {/* Inline Messages */}
-      {successMessage && (
-        <View style={{ marginHorizontal: 16, marginTop: 16 }}>
-          <InlineMessage
-            type="success"
-            message={successMessage}
-            onDismiss={() => setSuccessMessage('')}
-            autoDismissMs={0}
-          />
-        </View>
-      )}
-      {errorMessage && (
-        <View style={{ marginHorizontal: 16, marginTop: 16 }}>
-          <InlineMessage
-            type="error"
-            message={errorMessage}
-            onDismiss={() => setErrorMessage('')}
-            autoDismissMs={0}
-          />
-        </View>
-      )}
-
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
+        {/* Inline Messages */}
+        {successMessage && (
+          <View style={{ marginHorizontal: 16, marginTop: 16 }}>
+            <InlineMessage
+              type="success"
+              message={successMessage}
+              onDismiss={() => setSuccessMessage('')}
+              autoDismissMs={0}
+            />
+          </View>
+        )}
+        {errorMessage && (
+          <View style={{ marginHorizontal: 16, marginTop: 16 }}>
+            <InlineMessage
+              type="error"
+              message={errorMessage}
+              onDismiss={() => setErrorMessage('')}
+              autoDismissMs={0}
+            />
+          </View>
+        )}
         {/* Personal Information */}
         <Text style={styles.sectionTitle}>Personal Information</Text>
 
@@ -690,7 +685,7 @@ export default function EditInstructorProfileScreen({ navigation: navProp }: any
           </View>
         </View>
       </Modal>
-    </ScrollView>
+    </View>
   );
 }
 

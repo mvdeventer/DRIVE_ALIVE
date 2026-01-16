@@ -679,62 +679,36 @@ export default function BookingScreen({ navigation: navProp }: any) {
       return;
     }
 
-    console.log('✅ Validation passed, proceeding with booking...');
-    setLoading(true);
-    try {
-      // Prepare all bookings data
-      const bookingsData = selectedBookings.map(booking => {
-        const lessonDateTime = `${booking.date}T${booking.time}:00`;
+    console.log('✅ Validation passed, proceeding to payment...');
 
-        return {
-          instructor_id: instructor.instructor_id,
-          lesson_date: lessonDateTime,
-          duration_minutes: parseInt(formData.duration_minutes),
-          lesson_type: 'standard',
-          pickup_latitude: 0, // TODO: Get from geocoding
-          pickup_longitude: 0, // TODO: Get from geocoding
-          pickup_address: formData.pickup_address,
-          dropoff_latitude: null,
-          dropoff_longitude: null,
-          dropoff_address: null,
-          student_notes: formData.notes || null,
-        };
-      });
+    // Calculate pricing
+    const hours = parseInt(formData.duration_minutes) / 60;
+    const lessonAmount = instructor.hourly_rate * hours * selectedBookings.length;
+    const bookingFee = 10 * selectedBookings.length; // R10 per booking
+    const totalAmount = lessonAmount + bookingFee;
 
-      console.log('📤 Sending bookings data:', JSON.stringify(bookingsData, null, 2));
+    // Prepare bookings with pickup addresses
+    const bookingsWithPickup = selectedBookings.map(booking => ({
+      date: booking.date,
+      time: booking.time,
+      pickup_address: formData.pickup_address,
+      notes: formData.notes || '',
+    }));
 
-      // Use bulk booking endpoint for atomic creation
-      const response = await ApiService.post('/bookings/bulk', bookingsData);
+    // Navigate to payment screen
+    navigation.navigate(
+      'Payment' as never,
+      {
+        instructor,
+        bookings: bookingsWithPickup,
+        total_amount: totalAmount,
+        booking_fee: bookingFee,
+        lesson_amount: lessonAmount,
+      } as never
+    );
 
-      setMessage({
-        type: 'success',
-        text: `✅ ${response.data.length} Booking${
-          response.data.length > 1 ? 's' : ''
-        } confirmed! Redirecting to dashboard...`,
-      });
-
-      // Clear unsaved changes
-      setHasUnsavedChanges(false);
-
-      // Wait a moment to show the success message, then navigate back
-      setTimeout(() => {
-        navigation.dispatch(
-          CommonActions.reset({
-            index: 0,
-            routes: [{ name: 'StudentHome' }],
-          })
-        );
-      }, 1500);
-    } catch (error: any) {
-      console.error('Booking error:', error);
-      console.error('Error response:', error.response);
-      console.error('Error data:', error.response?.data);
-      const errorMsg = error.response?.data?.detail || 'Failed to create bookings';
-      setMessage({ type: 'error', text: errorMsg });
-      setTimeout(() => setMessage(null), 3000);
-    } finally {
-      setLoading(false);
-    }
+    // Clear unsaved changes since we're proceeding to payment
+    setHasUnsavedChanges(false);
   };
 
   if (!instructor) {
@@ -792,12 +766,12 @@ export default function BookingScreen({ navigation: navProp }: any) {
         </View>
       )}
 
+      <WebNavigationHeader
+        title="Book Lesson"
+        onBack={() => navigation.goBack()}
+        showBackButton={true}
+      />
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
-        <WebNavigationHeader
-          title="Book Lesson"
-          onBack={() => navigation.goBack()}
-          showBackButton={true}
-        />
         {/* Instructor Info Card */}
         <View style={styles.instructorCard}>
           <Text style={styles.sectionTitle}>Instructor Details</Text>
@@ -1166,7 +1140,7 @@ export default function BookingScreen({ navigation: navProp }: any) {
           disabled={loading}
         >
           <Text style={styles.submitButtonText}>
-            {loading ? 'Processing...' : '📅 Confirm Booking'}
+            {loading ? 'Processing...' : '� Proceed to Payment'}
           </Text>
         </TouchableOpacity>
       </ScrollView>

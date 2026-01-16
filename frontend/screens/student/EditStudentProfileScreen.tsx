@@ -316,9 +316,6 @@ export default function EditStudentProfileScreen({ navigation: navProp }: any) {
         onBack={() => navigation.goBack()}
         showBackButton={true}
       />
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Edit Profile</Text>
-      </View>
 
       {/* Inline Messages */}
       {successMessage && (

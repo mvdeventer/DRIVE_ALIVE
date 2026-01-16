@@ -219,6 +219,16 @@ class ApiService {
   }
 
   // Payment methods
+  async initiatePayment(data: { instructor_id: number; bookings: any[]; payment_gateway: string }) {
+    const response = await this.api.post('/payments/initiate', data);
+    return response.data;
+  }
+
+  async getPaymentSession(paymentSessionId: string) {
+    const response = await this.api.get(`/payments/session/${paymentSessionId}`);
+    return response.data;
+  }
+
   async createStripePaymentIntent(bookingId: number) {
     const response = await this.api.post(API_CONFIG.ENDPOINTS.STRIPE_PAYMENT_INTENT, {
       booking_id: bookingId,

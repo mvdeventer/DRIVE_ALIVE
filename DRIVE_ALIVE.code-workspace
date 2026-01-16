@@ -135,7 +135,11 @@
 
     // === Expo Settings ===
     "expo.enable": true,
-    "powershell.cwd": "🚗 Drive Alive"
+    "powershell.cwd": "🚗 Drive Alive",
+    "liveServer.settings.multiRootWorkspaceName": "🚗 Drive Alive",
+    "chat.tools.terminal.autoApprove": {
+      ".\\venv\\Scripts\\python.exe": true
+    }
   },
   "extensions": {
     "recommendations": [

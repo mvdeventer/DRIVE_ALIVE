@@ -102,6 +102,7 @@ class BookingOverview(BaseModel):
     """Schema for booking overview in admin dashboard"""
 
     id: int
+    booking_reference: str
     student_id: int
     student_name: str
     student_id_number: str

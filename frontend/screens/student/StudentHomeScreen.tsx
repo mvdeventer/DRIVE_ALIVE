@@ -20,6 +20,7 @@ import ApiService from '../../services/api';
 
 interface Booking {
   id: number;
+  booking_reference?: string;
   instructor_name: string;
   instructor_phone?: string;
   vehicle_make?: string;
@@ -421,6 +422,9 @@ export default function StudentHomeScreen() {
                     <Text style={styles.statusText}>{booking.status}</Text>
                   </View>
                 </View>
+                {booking.booking_reference && (
+                  <Text style={styles.bookingReference}>🎫 {booking.booking_reference}</Text>
+                )}
                 <Text style={styles.bookingDetail}>👤 Instructor: {booking.instructor_name}</Text>
                 <Text style={styles.bookingTime}>🕒 {formatDate(booking.scheduled_time)}</Text>
                 <Text style={styles.bookingDuration}>⏱️ {booking.duration_minutes} minutes</Text>
@@ -466,6 +470,9 @@ export default function StudentHomeScreen() {
                     <Text style={styles.statusText}>Completed</Text>
                   </View>
                 </View>
+                {booking.booking_reference && (
+                  <Text style={styles.bookingReference}>🎫 {booking.booking_reference}</Text>
+                )}
                 <Text style={styles.bookingDetail}>👤 Instructor: {booking.instructor_name}</Text>
                 <Text style={styles.bookingTime}>🕒 {formatDate(booking.scheduled_time)}</Text>
                 <Text style={styles.bookingDuration}>⏱️ {booking.duration_minutes} minutes</Text>
@@ -662,8 +669,8 @@ const styles = StyleSheet.create({
     padding: 16,
     borderRadius: 8,
     margin: 6,
-    flexBasis: '45%',
-    minWidth: 320,
+    flexBasis: '30%',
+    minWidth: 280,
     maxWidth: '100%',
     flexGrow: 1,
     boxShadow: '0px 2px 4px #0000001A',
@@ -709,6 +716,12 @@ const styles = StyleSheet.create({
     fontSize: 10,
     color: '#555',
     marginBottom: 2,
+  },
+  bookingReference: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#007bff',
+    marginBottom: 6,
   },
   bookingFooter: {
     flexDirection: 'row',

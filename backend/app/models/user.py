@@ -37,7 +37,7 @@ class User(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     email = Column(String, unique=True, index=True, nullable=False)
-    phone = Column(String, unique=True, index=True, nullable=False)
+    phone = Column(String, index=True, nullable=False)
     password_hash = Column(String, nullable=False)
     first_name = Column(String, nullable=False)
     last_name = Column(String, nullable=False)
@@ -51,7 +51,9 @@ class User(Base):
     last_login = Column(DateTime(timezone=True), nullable=True)
 
     # Relationships
-    instructor_profile = relationship("Instructor", back_populates="user", uselist=False)
+    instructor_profile = relationship(
+        "Instructor", back_populates="user", uselist=False
+    )
     student_profile = relationship("Student", back_populates="user", uselist=False)
 
     @property
@@ -69,7 +71,9 @@ class Instructor(Base):
 
     # Instructor details
     license_number = Column(String, unique=True, nullable=False)
-    license_types = Column(String, nullable=False)  # Comma-separated license codes (e.g., "CODE8,CODE10")
+    license_types = Column(
+        String, nullable=False
+    )  # Comma-separated license codes (e.g., "CODE8,CODE10")
     id_number = Column(String, unique=True, nullable=False)  # South African ID
     vehicle_registration = Column(String, nullable=False)
     vehicle_make = Column(String, nullable=False)
@@ -83,8 +87,12 @@ class Instructor(Base):
     city = Column(String, nullable=False)  # Operating city
     suburb = Column(String, nullable=True)  # Operating suburb
     service_radius_km = Column(Float, default=20.0)
-    max_travel_distance_km = Column(Float, default=50.0)  # Maximum distance willing to travel
-    rate_per_km_beyond_radius = Column(Float, default=5.0)  # Extra charge per km outside service radius
+    max_travel_distance_km = Column(
+        Float, default=50.0
+    )  # Maximum distance willing to travel
+    rate_per_km_beyond_radius = Column(
+        Float, default=5.0
+    )  # Extra charge per km outside service radius
 
     # Availability
     is_available = Column(Boolean, default=True)
@@ -108,9 +116,15 @@ class Instructor(Base):
     # Relationships
     user = relationship("User", back_populates="instructor_profile")
     bookings = relationship("Booking", back_populates="instructor")
-    schedules = relationship("InstructorSchedule", back_populates="instructor", cascade="all, delete-orphan")
-    time_off_exceptions = relationship("TimeOffException", back_populates="instructor", cascade="all, delete-orphan")
-    custom_availability = relationship("CustomAvailability", back_populates="instructor", cascade="all, delete-orphan")
+    schedules = relationship(
+        "InstructorSchedule", back_populates="instructor", cascade="all, delete-orphan"
+    )
+    time_off_exceptions = relationship(
+        "TimeOffException", back_populates="instructor", cascade="all, delete-orphan"
+    )
+    custom_availability = relationship(
+        "CustomAvailability", back_populates="instructor", cascade="all, delete-orphan"
+    )
 
 
 class Student(Base):

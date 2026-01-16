@@ -26,6 +26,7 @@ const SCREEN_NAME = 'BookingOversightScreen';
 
 interface Booking {
   id: number;
+  booking_reference: string;
   student_id: number;
   student_name: string;
   student_id_number: string;
@@ -136,8 +137,9 @@ export default function BookingOversightScreen({ navigation }: any) {
       }); // e.g., "December 26, 2025"
       const dateStrISO = booking.lesson_date.split('T')[0]; // e.g., "2025-12-26"
 
-      // Search by booking ID, student/instructor name, ID numbers, or date
+      // Search by booking reference, booking ID, student/instructor name, ID numbers, or date
       return (
+        (booking.booking_reference || '').toLowerCase().includes(query) ||
         booking.id.toString().includes(query) ||
         (booking.student_name || '').toLowerCase().includes(query) ||
         (booking.instructor_name || '').toLowerCase().includes(query) ||
@@ -159,6 +161,7 @@ export default function BookingOversightScreen({ navigation }: any) {
            BOOKING DETAILS
 ════════════════════════════════════════
 
+Booking Ref:    ${booking.booking_reference}
 Booking ID:     #${booking.id}
 Status:         ${booking.status.toUpperCase()}
 Lesson Type:    ${booking.lesson_type.toUpperCase()}
@@ -235,7 +238,9 @@ Lesson Type:    ${booking.lesson_type.toUpperCase()}
     >
       <View style={styles.bookingHeader}>
         <View style={styles.bookingInfo}>
-          <Text style={styles.bookingId}>ID: #{item.id}</Text>
+          <Text style={styles.bookingId}>
+            ID: #{item.id} • {item.booking_reference}
+          </Text>
           <Text style={styles.studentName}>👤 {item.student_name}</Text>
           <Text style={styles.idNumber}>ID: {item.student_id_number}</Text>
           <Text style={styles.instructorName}>🚗 {item.instructor_name}</Text>
@@ -316,10 +321,6 @@ Lesson Type:    ${booking.lesson_type.toUpperCase()}
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>View Bookings</Text>
-      </View>
-
       <WebNavigationHeader
         title="Booking Oversight"
         onBack={() => navigation.goBack()}
@@ -368,7 +369,7 @@ Lesson Type:    ${booking.lesson_type.toUpperCase()}
       <View style={styles.searchContainer}>
         <TextInput
           style={styles.searchInput}
-          placeholder="Search by name, booking ID, student/instructor ID, or date (e.g., 2025-12-26)..."
+          placeholder="Search by name, booking reference, student/instructor ID, or date (e.g., BK4251308E, 2025-12-26)..."
           value={searchQuery}
           onChangeText={setSearchQuery}
           placeholderTextColor="#999"
@@ -403,6 +404,11 @@ Lesson Type:    ${booking.lesson_type.toUpperCase()}
 
             {selectedBooking && (
               <ScrollView style={styles.modalContent}>
+                <View style={styles.modalSection}>
+                  <Text style={styles.modalLabel}>Booking Reference:</Text>
+                  <Text style={styles.modalValue}>{selectedBooking.booking_reference}</Text>
+                </View>
+
                 <View style={styles.modalSection}>
                   <Text style={styles.modalLabel}>Booking ID:</Text>
                   <Text style={styles.modalValue}>#{selectedBooking.id}</Text>
@@ -666,8 +672,8 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     padding: 16,
     margin: 6,
-    flexBasis: '45%',
-    minWidth: 340,
+    flexBasis: '30%',
+    minWidth: 280,
     maxWidth: '100%',
     flexGrow: 1,
     boxShadow: '0px 2px 4px #0000001A',
@@ -686,24 +692,24 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   bookingId: {
-    fontSize: 9,
+    fontSize: 11,
     fontWeight: '600',
     color: '#0066CC',
     marginBottom: 2,
   },
   studentName: {
-    fontSize: 12,
+    fontSize: 14,
     fontWeight: 'bold',
     color: '#333',
     marginBottom: 2,
   },
   instructorName: {
-    fontSize: 11,
+    fontSize: 13,
     color: '#666',
     marginBottom: 2,
   },
   idNumber: {
-    fontSize: 8,
+    fontSize: 10,
     color: '#999',
     fontStyle: 'italic',
     marginBottom: 2,
@@ -714,7 +720,7 @@ const styles = StyleSheet.create({
     borderRadius: 4,
   },
   statusText: {
-    fontSize: 8,
+    fontSize: 10,
     fontWeight: 'bold',
     color: '#FFF',
   },
@@ -742,16 +748,16 @@ const styles = StyleSheet.create({
     marginBottom: 5,
   },
   detailLabel: {
-    fontSize: 10,
+    fontSize: 12,
     color: '#666',
   },
   detailValue: {
-    fontSize: 10,
+    fontSize: 12,
     color: '#333',
     fontWeight: '500',
   },
   amountText: {
-    fontSize: 10,
+    fontSize: 12,
     color: '#28A745',
     fontWeight: 'bold',
   },
@@ -769,7 +775,7 @@ const styles = StyleSheet.create({
   },
   copyButtonText: {
     color: '#FFF',
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: '600',
   },
   cancelButton: {
@@ -781,7 +787,7 @@ const styles = StyleSheet.create({
   },
   cancelButtonText: {
     color: '#FFF',
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: '600',
   },
   // Modal styles

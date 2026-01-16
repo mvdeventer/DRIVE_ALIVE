@@ -46,14 +46,20 @@ class UserBase(BaseModel):
 
         # Check if it starts with +27
         if not v.startswith("+27"):
-            raise ValueError("Phone number must start with +27 (South African country code)")
+            raise ValueError(
+                "Phone number must start with +27 (South African country code)"
+            )
 
         # Check total length (should be +27 + 9 digits = 12 characters)
         if len(v) != 12:
             if len(v) < 12:
-                raise ValueError(f"Phone number is too short (must be +27 followed by 9 digits, got {len(v)} characters)")
+                raise ValueError(
+                    f"Phone number is too short (must be +27 followed by 9 digits, got {len(v)} characters)"
+                )
             else:
-                raise ValueError(f"Phone number is too long (must be +27 followed by 9 digits, got {len(v)} characters)")
+                raise ValueError(
+                    f"Phone number is too long (must be +27 followed by 9 digits, got {len(v)} characters)"
+                )
 
         # Check if the part after +27 is all digits
         phone_digits = v[3:]  # Skip '+27'
@@ -96,14 +102,20 @@ class UserUpdate(BaseModel):
 
         # Check if it starts with +27
         if not v.startswith("+27"):
-            raise ValueError("Phone number must start with +27 (South African country code)")
+            raise ValueError(
+                "Phone number must start with +27 (South African country code)"
+            )
 
         # Check total length (should be +27 + 9 digits = 12 characters)
         if len(v) != 12:
             if len(v) < 12:
-                raise ValueError(f"Phone number is too short (must be +27 followed by 9 digits, got {len(v)} characters)")
+                raise ValueError(
+                    f"Phone number is too short (must be +27 followed by 9 digits, got {len(v)} characters)"
+                )
             else:
-                raise ValueError(f"Phone number is too long (must be +27 followed by 9 digits, got {len(v)} characters)")
+                raise ValueError(
+                    f"Phone number is too long (must be +27 followed by 9 digits, got {len(v)} characters)"
+                )
 
         # Check if the part after +27 is all digits
         phone_digits = v[3:]  # Skip '+27'
@@ -120,10 +132,14 @@ class ChangePasswordRequest(BaseModel):
     new_password: str = Field(..., min_length=6)
 
 
-class UserResponse(UserBase):
-    """User response schema"""
+class UserResponse(BaseModel):
+    """User response schema - no validation on output"""
 
     id: int
+    email: str
+    phone: str
+    first_name: str
+    last_name: str
     role: UserRole
     status: UserStatus
     created_at: datetime
@@ -167,7 +183,9 @@ class InstructorBase(BaseModel):
 
         # Check length
         if len(v) < 13:
-            raise ValueError(f"ID number is too short (must be 13 digits, got {len(v)})")
+            raise ValueError(
+                f"ID number is too short (must be 13 digits, got {len(v)})"
+            )
         elif len(v) > 13:
             raise ValueError(f"ID number is too long (must be 13 digits, got {len(v)})")
 
@@ -268,7 +286,9 @@ class StudentBase(BaseModel):
 
         # Check length
         if len(v) < 13:
-            raise ValueError(f"ID number is too short (must be 13 digits, got {len(v)})")
+            raise ValueError(
+                f"ID number is too short (must be 13 digits, got {len(v)})"
+            )
         elif len(v) > 13:
             raise ValueError(f"ID number is too long (must be 13 digits, got {len(v)})")
 
@@ -283,19 +303,27 @@ class StudentBase(BaseModel):
 
         # Check if it starts with +27
         if not v.startswith("+27"):
-            raise ValueError("Emergency contact phone must start with +27 (South African country code)")
+            raise ValueError(
+                "Emergency contact phone must start with +27 (South African country code)"
+            )
 
         # Check total length (should be +27 + 9 digits = 12 characters)
         if len(v) != 12:
             if len(v) < 12:
-                raise ValueError(f"Emergency contact phone is too short (must be +27 followed by 9 digits, got {len(v)} characters)")
+                raise ValueError(
+                    f"Emergency contact phone is too short (must be +27 followed by 9 digits, got {len(v)} characters)"
+                )
             else:
-                raise ValueError(f"Emergency contact phone is too long (must be +27 followed by 9 digits, got {len(v)} characters)")
+                raise ValueError(
+                    f"Emergency contact phone is too long (must be +27 followed by 9 digits, got {len(v)} characters)"
+                )
 
         # Check if the part after +27 is all digits
         phone_digits = v[3:]  # Skip '+27'
         if not phone_digits.isdigit():
-            raise ValueError("Emergency contact phone must contain only digits after +27")
+            raise ValueError(
+                "Emergency contact phone must contain only digits after +27"
+            )
 
         return v
 

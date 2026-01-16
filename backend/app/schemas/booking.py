@@ -57,6 +57,7 @@ class BookingResponse(BookingBase):
     instructor_id: int
     status: BookingStatus
     amount: float
+    booking_fee: float
     payment_status: PaymentStatus
     created_at: datetime
 
@@ -88,4 +89,6 @@ class ReviewResponse(BaseModel):
 class BookingReschedule(BaseModel):
     """Reschedule booking schema"""
 
-    new_datetime: str = Field(..., description="New date and time in ISO format (YYYY-MM-DDTHH:MM:SS)")
+    new_datetime: str = Field(
+        ..., description="New date and time in ISO format (YYYY-MM-DDTHH:MM:SS)"
+    )

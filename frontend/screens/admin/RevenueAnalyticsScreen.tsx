@@ -146,10 +146,6 @@ export default function RevenueAnalyticsScreen({ navigation }: any) {
         showBackButton={true}
       />
 
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Revenue Analytics</Text>
-      </View>
-
       {/* Instructor Filter */}
       <View style={styles.filterSection}>
         <Text style={styles.filterLabel}>Filter by Instructor:</Text>

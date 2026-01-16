@@ -512,17 +512,6 @@ export default function UserManagementScreen({ navigation }: any) {
         showBackButton={true}
       />
 
-      <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => navigation.navigate('AdminDashboard')}
-        >
-          <Text style={styles.backButtonText}>← Back to Dashboard</Text>
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Manage Users</Text>
-        <View style={{ width: 150 }} />
-      </View>
-
       {error && <InlineMessage message={error} type="error" />}
       {success && <InlineMessage message={success} type="success" />}
 
@@ -1105,7 +1094,7 @@ const styles = StyleSheet.create({
   },
   cardWrapper: {
     margin: 5,
-    flexBasis: '22%',
+    flexBasis: '30%',
     minWidth: 280,
     maxWidth: '48%',
     flexGrow: 1,
@@ -1113,7 +1102,7 @@ const styles = StyleSheet.create({
   userCard: {
     backgroundColor: '#FFF',
     borderRadius: 8,
-    padding: 10,
+    padding: 12,
     boxShadow: '0px 1px 3px rgba(0,0,0,0.1)',
     width: '100%',
   },
@@ -1126,22 +1115,22 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   userName: {
-    fontSize: 15,
+    fontSize: 16,
     fontWeight: 'bold',
     color: '#333',
     marginBottom: 3,
   },
   userEmail: {
-    fontSize: 12,
+    fontSize: 13,
     color: '#666',
     marginBottom: 2,
   },
   userPhone: {
-    fontSize: 12,
+    fontSize: 13,
     color: '#666',
   },
   userIdNumber: {
-    fontSize: 11,
+    fontSize: 12,
     color: '#0066CC',
     fontWeight: '600',
     marginTop: 3,
@@ -1156,7 +1145,7 @@ const styles = StyleSheet.create({
     marginBottom: 3,
   },
   badgeText: {
-    fontSize: 9,
+    fontSize: 10,
     fontWeight: 'bold',
     color: '#FFF',
   },
@@ -1191,7 +1180,7 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   userDetailText: {
-    fontSize: 10,
+    fontSize: 11,
     color: '#666',
     marginBottom: 2,
   },
@@ -1244,7 +1233,7 @@ const styles = StyleSheet.create({
   },
   actionButtonText: {
     color: '#FFF',
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: 'bold',
   },
   modalOverlay: {

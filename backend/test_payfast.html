@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>PayFast Test</title>
+  </head>
+  <body>
+    <h1>Testing PayFast Sandbox Payment</h1>
+    <p>Click the button below to test the payment:</p>
+    <form action="https://sandbox.payfast.co.za/eng/process" method="GET">
+      <input type="hidden" name="merchant_id" value="10000100" />
+      <input type="hidden" name="merchant_key" value="46f0cd694581a" />
+      <input type="hidden" name="amount" value="261.00" />
+      <input type="hidden" name="item_name" value="1 Driving Lesson" />
+      <input
+        type="hidden"
+        name="item_description"
+        value="Booking fee (R10.00) + Lessons (R251.00)"
+      />
+      <input
+        type="hidden"
+        name="return_url"
+        value="http://localhost:3000/payment/success"
+      />
+      <input
+        type="hidden"
+        name="cancel_url"
+        value="http://localhost:3000/payment/cancel"
+      />
+      <input
+        type="hidden"
+        name="notify_url"
+        value="https://localhost:3000/api/payments/notify"
+      />
+      <input type="hidden" name="email_address" value="test@student.com" />
+      <input type="hidden" name="name_first" value="Test" />
+      <input type="hidden" name="name_last" value="Student" />
+      <input type="hidden" name="custom_str1" value="PSC2AC5EDF1BF1" />
+      <input type="hidden" name="custom_int1" value="17" />
+      <input
+        type="hidden"
+        name="signature"
+        value="ffaa76032ee41b3d1423c50ac8ef6df6"
+      />
+      <button type="submit">Test Payment</button>
+    </form>
+
+    <hr />
+    <h2>Debug Info:</h2>
+    <p>Signature: ffaa76032ee41b3d1423c50ac8ef6df6</p>
+    <p>Amount: R261.00</p>
+    <p>Session ID: PSC2AC5EDF1BF1</p>
+  </body>
+</html>

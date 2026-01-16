@@ -10,7 +10,14 @@ from sqlalchemy.orm import Session
 
 from ..database import get_db
 from ..models.user import Instructor, Student, User, UserRole
-from ..schemas.user import ChangePasswordRequest, InstructorCreate, StudentCreate, Token, UserResponse, UserUpdate
+from ..schemas.user import (
+    ChangePasswordRequest,
+    InstructorCreate,
+    StudentCreate,
+    Token,
+    UserResponse,
+    UserUpdate,
+)
 from ..services.auth import AuthService
 from ..utils.auth import decode_access_token, get_password_hash, verify_password
 
@@ -18,7 +25,9 @@ router = APIRouter(prefix="/auth", tags=["Authentication"])
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/login")
 
 
-async def get_current_user(token: Annotated[str, Depends(oauth2_scheme)], db: Session = Depends(get_db)) -> User:
+async def get_current_user(
+    token: Annotated[str, Depends(oauth2_scheme)], db: Session = Depends(get_db)
+) -> User:
     """
     Get current authenticated user
     """
@@ -43,7 +52,9 @@ async def get_current_user(token: Annotated[str, Depends(oauth2_scheme)], db: Se
     return user
 
 
-@router.post("/register/student", response_model=dict, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/register/student", response_model=dict, status_code=status.HTTP_201_CREATED
+)
 async def register_student(student_data: StudentCreate, db: Session = Depends(get_db)):
     """
     Register a new student
@@ -59,8 +70,12 @@ async def register_student(student_data: StudentCreate, db: Session = Depends(ge
     }
 
 
-@router.post("/register/instructor", response_model=dict, status_code=status.HTTP_201_CREATED)
-async def register_instructor(instructor_data: InstructorCreate, db: Session = Depends(get_db)):
+@router.post(
+    "/register/instructor", response_model=dict, status_code=status.HTTP_201_CREATED
+)
+async def register_instructor(
+    instructor_data: InstructorCreate, db: Session = Depends(get_db)
+):
     """
     Register a new instructor
     """
@@ -119,7 +134,9 @@ async def get_current_user_info(
 
     # Add role-specific details
     if current_user.role == UserRole.INSTRUCTOR:
-        instructor = db.query(Instructor).filter(Instructor.user_id == current_user.id).first()
+        instructor = (
+            db.query(Instructor).filter(Instructor.user_id == current_user.id).first()
+        )
         if instructor:
             user_data.update(
                 {

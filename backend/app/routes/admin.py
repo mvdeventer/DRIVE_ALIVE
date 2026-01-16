@@ -403,6 +403,7 @@ async def get_all_bookings(
         result.append(
             BookingOverview(
                 id=booking.id,
+                booking_reference=booking.booking_reference,
                 student_id=booking.student_id,
                 student_name=student_user.full_name if student_user else "Unknown",
                 student_id_number=student.id_number if student else "Unknown",
