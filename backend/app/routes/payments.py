@@ -107,7 +107,9 @@ async def initiate_payment(
 
     # Print to console for debugging
     print("\n" + "=" * 80)
-    print("💳 PAYMENT INITIATION" + (" (MOCK MODE)" if MOCK_PAYMENT_MODE else " (STRIPE)"))
+    print(
+        "💳 PAYMENT INITIATION" + (" (MOCK MODE)" if MOCK_PAYMENT_MODE else " (STRIPE)")
+    )
     print("=" * 80)
     print(f"Payment Session ID: {payment_session_id}")
     print(f"Student: {current_user.first_name} {current_user.last_name}")
@@ -118,9 +120,9 @@ async def initiate_payment(
 
     # MOCK PAYMENT MODE (for development without Stripe keys)
     if MOCK_PAYMENT_MODE:
-        base_url = settings.ALLOWED_ORIGINS.split(',')[0]
+        base_url = settings.ALLOWED_ORIGINS.split(",")[0]
         mock_payment_url = f"{base_url}/payment/mock?session_id={payment_session_id}"
-        
+
         payment_session.gateway_transaction_id = f"mock_{uuid.uuid4().hex[:8]}"
         db.commit()
 

@@ -38,9 +38,9 @@ export default function MockPaymentScreen() {
       if (success) {
         // Trigger webhook manually for mock payment
         await ApiService.completeMockPayment(sessionId);
-        
+
         setMessage('✅ Payment successful! Redirecting...');
-        
+
         setTimeout(() => {
           if (Platform.OS === 'web') {
             window.location.href = `/payment/success?session_id=${sessionId}`;
@@ -69,13 +69,11 @@ export default function MockPaymentScreen() {
   return (
     <View style={styles.container}>
       {Platform.OS === 'web' && <WebNavigationHeader />}
-      
+
       <ScrollView contentContainerStyle={styles.content}>
         <View style={styles.card}>
           <Text style={styles.title}>⚠️ Mock Payment Mode</Text>
-          <Text style={styles.subtitle}>
-            Development mode - No real payment will be processed
-          </Text>
+          <Text style={styles.subtitle}>Development mode - No real payment will be processed</Text>
 
           {message ? (
             <View style={styles.messageBox}>
@@ -87,7 +85,8 @@ export default function MockPaymentScreen() {
             <>
               <Text style={styles.infoText}>
                 This is a simulated payment screen for development.{'\n\n'}
-                Click "Pay Now" to simulate a successful payment, or "Cancel" to simulate a failed payment.
+                Click "Pay Now" to simulate a successful payment, or "Cancel" to simulate a failed
+                payment.
               </Text>
 
               <View style={styles.buttonContainer}>
