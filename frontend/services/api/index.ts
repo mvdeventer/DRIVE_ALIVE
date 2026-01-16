@@ -348,6 +348,15 @@ class ApiService {
     const response = await this.api.get(`/admin/instructors/${instructorId}/time-off`);
     return response.data;
   }
+
+  // Mock Payment Methods
+  async completeMockPayment(sessionId: string, success: boolean = true) {
+    const response = await this.api.post('/payments/mock-complete', {
+      payment_session_id: sessionId,
+      success,
+    });
+    return response.data;
+  }
 }
 
 export default new ApiService();

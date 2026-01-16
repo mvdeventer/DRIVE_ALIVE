@@ -69,8 +69,8 @@ All settings are in `backend/.env`:
 
 ```env
 # Your Twilio Credentials (✅ Already configured)
-TWILIO_ACCOUNT_SID=ACac21b4d50c53b7260346adce7f99d73d
-TWILIO_AUTH_TOKEN=1f9f21cc43eba4acadeb61d1671fc165
+TWILIO_ACCOUNT_SID=your_twilio_account_sid_here
+TWILIO_AUTH_TOKEN=your_twilio_auth_token_here
 TWILIO_WHATSAPP_NUMBER=+14155238886
 
 # Booking Fee (✅ Set to R10)

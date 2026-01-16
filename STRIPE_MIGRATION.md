@@ -11,7 +11,7 @@ Switched from PayFast to Stripe for payment processing due to invalid PayFast sa
 - **`app/routes/payments.py`**: Complete rewrite using Stripe Checkout API
   - Uses `stripe.checkout.Session.create()` for payment initiation
   - Webhook endpoint changed from `/payments/notify` (PayFast ITN) to `/payments/webhook` (Stripe)
-  - Test mode uses Stripe's test API key: `sk_test_4eC39HqLyjWDarjtT1zdp7dc`
+  - Test mode uses Stripe's test API key: `your_stripe_test_key_here`
   - Payments processed in South African Rands (ZAR)
 
 ### Frontend
@@ -85,8 +85,8 @@ Add to `backend/.env`:
 
 ```env
 # Stripe (Test Mode)
-STRIPE_SECRET_KEY=sk_test_4eC39HqLyjWDarjtT1zdp7dc
-STRIPE_PUBLISHABLE_KEY=pk_test_51HqLyjWDarjtT1zdp7dc
+STRIPE_SECRET_KEY=your_stripe_secret_key_here
+STRIPE_PUBLISHABLE_KEY=your_stripe_publishable_key_here
 STRIPE_WEBHOOK_SECRET=  # Leave empty for development without CLI
 
 # PayFast (Legacy - no longer used)

@@ -33,6 +33,7 @@ import InstructorHomeScreen from './screens/instructor/InstructorHomeScreen';
 import ManageAvailabilityScreen from './screens/instructor/ManageAvailabilityScreen';
 
 // Payment Screens
+import MockPaymentScreen from './screens/payment/MockPaymentScreen';
 import PaymentCancelScreen from './screens/payment/PaymentCancelScreen';
 import PaymentScreen from './screens/payment/PaymentScreen';
 import PaymentSuccessScreen from './screens/payment/PaymentSuccessScreen';
@@ -284,6 +285,11 @@ export default function App() {
 
           {/* Payment */}
           <Stack.Screen name="Payment" component={PaymentScreen} options={{ title: 'Payment' }} />
+          <Stack.Screen
+            name="PaymentMock"
+            component={MockPaymentScreen}
+            options={{ title: 'Mock Payment (Dev)', headerShown: false }}
+          />
           <Stack.Screen
             name="PaymentSuccess"
             component={PaymentSuccessScreen}

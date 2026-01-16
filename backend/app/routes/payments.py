@@ -361,3 +361,116 @@ async def get_payment_session(
         "created_at": payment_session.created_at,
         "completed_at": payment_session.completed_at,
     }
+
+
+@router.post("/mock-complete")
+async def complete_mock_payment(
+    request: Request,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Session = Depends(get_db),
+):
+    """
+    Complete a mock payment (development only)
+    Manually triggers webhook logic to create bookings
+    """
+    if not MOCK_PAYMENT_MODE:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Mock payment mode is disabled. Set STRIPE_SECRET_KEY to empty to enable.",
+        )
+
+    body = await request.json()
+    payment_session_id = body.get("payment_session_id")
+    success = body.get("success", True)
+
+    payment_session = (
+        db.query(PaymentSession)
+        .filter(PaymentSession.payment_session_id == payment_session_id)
+        .first()
+    )
+
+    if not payment_session:
+        raise HTTPException(status_code=404, detail="Payment session not found")
+
+    if payment_session.user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Not authorized")
+
+    if not success:
+        # Mark as cancelled
+        payment_session.status = PaymentSessionStatus.CANCELLED
+        db.commit()
+        return {"status": "cancelled", "message": "Mock payment cancelled"}
+
+    # Simulate successful payment - manually trigger webhook logic
+    if payment_session.status == PaymentSessionStatus.COMPLETED:
+        return {
+            "status": "already_completed",
+            "message": "Payment already processed",
+        }
+
+    # Update payment session
+    payment_session.status = PaymentSessionStatus.COMPLETED
+    payment_session.completed_at = datetime.now(timezone.utc)
+    payment_session.transaction_id = f"mock_{uuid.uuid4().hex[:16]}"
+
+    # Create bookings from payment session metadata
+    metadata = payment_session.metadata
+    student = db.query(Student).filter(Student.user_id == current_user.id).first()
+
+    if not student:
+        raise HTTPException(status_code=404, detail="Student profile not found")
+
+    created_bookings = []
+    for booking_data in metadata.get("bookings", []):
+        booking = Booking(
+            student_id=student.id,
+            instructor_id=booking_data["instructor_id"],
+            scheduled_time=datetime.fromisoformat(booking_data["scheduled_time"]),
+            duration=booking_data["duration"],
+            pickup_location=booking_data["pickup_location"],
+            dropoff_location=booking_data["dropoff_location"],
+            lesson_type=booking_data["lesson_type"],
+            hourly_rate=booking_data["hourly_rate"],
+            total_amount=booking_data["total_amount"],
+            booking_fee=payment_session.booking_fee,
+            status=BookingStatus.CONFIRMED,
+            payment_status=PaymentStatus.PAID,
+            payment_session_id=payment_session.payment_session_id,
+            notes=booking_data.get("notes"),
+        )
+        db.add(booking)
+        created_bookings.append(booking_data)
+
+    db.commit()
+
+    # Send WhatsApp confirmation (if enabled)
+    try:
+        instructor = (
+            db.query(Instructor)
+            .filter(Instructor.id == created_bookings[0]["instructor_id"])
+            .first()
+        )
+        student_user = db.query(User).filter(User.id == student.user_id).first()
+
+        if instructor and student_user:
+            instructor_user = (
+                db.query(User).filter(User.id == instructor.user_id).first()
+            )
+            booking_details = {
+                "student_name": f"{student_user.first_name} {student_user.last_name}",
+                "instructor_name": f"{instructor_user.first_name} {instructor_user.last_name}",
+                "date": created_bookings[0]["scheduled_time"][:10],
+                "time": created_bookings[0]["scheduled_time"][11:16],
+                "pickup": created_bookings[0]["pickup_location"],
+            }
+            whatsapp_service.send_booking_confirmation(
+                student_user.phone, booking_details
+            )
+    except Exception as e:
+        print(f"WhatsApp notification failed: {e}")
+
+    return {
+        "status": "success",
+        "message": f"Mock payment completed. {len(created_bookings)} booking(s) created.",
+        "bookings_created": len(created_bookings),
+    }
