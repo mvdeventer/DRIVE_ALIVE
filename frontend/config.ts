@@ -17,8 +17,8 @@ const API_BASE_URL = isWeb
     ? 'http://localhost:8000'
     : 'http://10.0.0.121:8000'
   : __DEV__
-  ? 'http://10.0.0.121:8000'
-  : 'https://your-production-api.com';
+    ? 'http://10.0.0.121:8000'
+    : 'https://your-production-api.com';
 
 // Debug configuration
 // Set ENABLED to true to pre-fill registration forms for faster testing

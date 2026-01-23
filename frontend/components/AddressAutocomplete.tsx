@@ -130,7 +130,8 @@ export default function AddressAutocomplete({
             const components = prediction.components || {};
             const houseNumber = components.house_number || '';
             const road = components.road || components.street || '';
-            const suburb = components.suburb || components.neighbourhood || components.village || '';
+            const suburb =
+              components.suburb || components.neighbourhood || components.village || '';
             const city = components.city || components.town || '';
 
             // Main line: house number + road, or suburb if no road
@@ -162,7 +163,8 @@ export default function AddressAutocomplete({
             const components = prediction.components || {};
             const houseNumber = components.house_number || '';
             const road = components.road || components.street || '';
-            const suburb = components.suburb || components.neighbourhood || components.village || '';
+            const suburb =
+              components.suburb || components.neighbourhood || components.village || '';
             const city = components.city || components.town || '';
 
             // Main line: house number + road, or suburb if no road
