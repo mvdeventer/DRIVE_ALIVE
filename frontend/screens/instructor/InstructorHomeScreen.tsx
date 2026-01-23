@@ -61,6 +61,7 @@ interface InstructorProfile {
   phone: string;
   license_type: string;
   hourly_rate: number;
+  booking_fee?: number; // Per-instructor booking fee
   is_available: boolean;
   total_earnings: number;
 }
@@ -802,10 +803,10 @@ export default function InstructorHomeScreen() {
                     activeTab === 'pending'
                       ? allBookings.filter(b => b.status.toLowerCase() === 'pending')
                       : activeTab === 'completed'
-                      ? allBookings.filter(b => b.status.toLowerCase() === 'completed')
-                      : activeTab === 'cancelled'
-                      ? allBookings.filter(b => b.status.toLowerCase() === 'cancelled')
-                      : allBookings
+                        ? allBookings.filter(b => b.status.toLowerCase() === 'completed')
+                        : activeTab === 'cancelled'
+                          ? allBookings.filter(b => b.status.toLowerCase() === 'cancelled')
+                          : allBookings
                   ).length
                 }
                 )
@@ -814,10 +815,10 @@ export default function InstructorHomeScreen() {
                 activeTab === 'pending'
                   ? allBookings.filter(b => b.status.toLowerCase() === 'pending')
                   : activeTab === 'completed'
-                  ? allBookings.filter(b => b.status.toLowerCase() === 'completed')
-                  : activeTab === 'cancelled'
-                  ? allBookings.filter(b => b.status.toLowerCase() === 'cancelled')
-                  : allBookings
+                    ? allBookings.filter(b => b.status.toLowerCase() === 'completed')
+                    : activeTab === 'cancelled'
+                      ? allBookings.filter(b => b.status.toLowerCase() === 'cancelled')
+                      : allBookings
               ).length === 0 ? (
                 <View style={styles.emptyState}>
                   <Text style={styles.emptyStateText}>
@@ -833,10 +834,10 @@ export default function InstructorHomeScreen() {
                     activeTab === 'pending'
                       ? allBookings.filter(b => b.status.toLowerCase() === 'pending')
                       : activeTab === 'completed'
-                      ? allBookings.filter(b => b.status.toLowerCase() === 'completed')
-                      : activeTab === 'cancelled'
-                      ? allBookings.filter(b => b.status.toLowerCase() === 'cancelled')
-                      : allBookings
+                        ? allBookings.filter(b => b.status.toLowerCase() === 'completed')
+                        : activeTab === 'cancelled'
+                          ? allBookings.filter(b => b.status.toLowerCase() === 'cancelled')
+                          : allBookings
                   ).map(lesson => (
                     <View key={lesson.id} style={styles.lessonCard}>
                       <View style={styles.lessonHeader}>
@@ -949,6 +950,22 @@ export default function InstructorHomeScreen() {
                 thumbColor={Platform.OS === 'android' ? '#fff' : undefined}
               />
             </View>
+
+            {/* Booking Fee Display */}
+            {profile?.booking_fee !== undefined && (
+              <View style={styles.bookingFeeCard}>
+                <Text style={styles.bookingFeeLabel}>💰 Your Booking Fee</Text>
+                <Text style={styles.bookingFeeValue}>R{profile.booking_fee.toFixed(2)}</Text>
+                <Text style={styles.bookingFeeNote}>
+                  This fee is added to your hourly rate when students book lessons.
+                </Text>
+                <Text style={styles.bookingFeeExample}>
+                  Students pay: R{profile.hourly_rate.toFixed(2)} + R
+                  {profile.booking_fee.toFixed(2)} = R
+                  {(profile.hourly_rate + profile.booking_fee).toFixed(2)}/hr
+                </Text>
+              </View>
+            )}
 
             {/* Quick Actions */}
             <View style={styles.section}>
@@ -2145,5 +2162,45 @@ const styles = StyleSheet.create({
     color: '#dc3545',
     fontWeight: '600',
     marginTop: 2,
+  },
+  bookingFeeCard: {
+    backgroundColor: '#fff3cd',
+    padding: 16,
+    marginHorizontal: 16,
+    marginTop: 16,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#ffc107',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  bookingFeeLabel: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#856404',
+    marginBottom: 8,
+  },
+  bookingFeeValue: {
+    fontSize: 32,
+    fontWeight: 'bold',
+    color: '#856404',
+    marginBottom: 8,
+  },
+  bookingFeeNote: {
+    fontSize: 13,
+    color: '#856404',
+    marginBottom: 8,
+    fontStyle: 'italic',
+  },
+  bookingFeeExample: {
+    fontSize: 14,
+    color: '#856404',
+    fontWeight: '600',
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#ffc107',
   },
 });

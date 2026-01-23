@@ -65,6 +65,7 @@ class WhatsAppService:
         pickup_address: str,
         amount: float,
         booking_reference: str,
+        student_notes: str = None,
     ) -> bool:
         """
         Send booking confirmation message to student
@@ -76,6 +77,10 @@ class WhatsAppService:
             return False
 
         try:
+            notes_section = (
+                f"\n\n📝 *Your Notes:*\n{student_notes}" if student_notes else ""
+            )
+
             message_body = f"""✅ *Booking Confirmed!*
 
 Hello {student_name},
@@ -88,9 +93,7 @@ Your driving lesson has been booked successfully.
 • Date: {lesson_date.strftime('%A, %d %B %Y')}
 • Time: {lesson_date.strftime('%I:%M %p')}
 • Pickup: {pickup_address}
-• Amount: R{amount:.2f}
-
-You will receive a reminder 24 hours before your lesson.
+• Amount: R{amount:.2f}{notes_section}
 
 Drive Safe! 🚗
 - Drive Alive Team"""
@@ -117,33 +120,38 @@ Drive Safe! 🚗
         lesson_date: datetime,
         pickup_address: str,
         booking_reference: str,
+        student_notes: str = None,
     ) -> bool:
         """
-        Send 24-hour reminder to student before lesson
+        Send 1-hour reminder to student before lesson
         """
         if not self.client:
             logger.warning("Twilio client not initialized. Skipping student reminder.")
             return False
 
         try:
+            notes_section = (
+                f"\n\n📝 *Your Notes:*\n{student_notes}" if student_notes else ""
+            )
+
             message_body = f"""⏰ *Lesson Reminder*
 
 Hello {student_name},
 
-Your driving lesson is scheduled for tomorrow!
+Your driving lesson is coming up.
 
 📋 *Lesson Details:*
 • Reference: {booking_reference}
 • Instructor: {instructor_name}
 • Date: {lesson_date.strftime('%A, %d %B %Y')}
 • Time: {lesson_date.strftime('%I:%M %p')}
-• Pickup: {pickup_address}
+• Pickup: {pickup_address}{notes_section}
 
 📞 Instructor Contact: {instructor_phone}
 
-Please confirm your attendance or contact your instructor if you need to reschedule.
+Please be ready for your lesson.
 
-See you tomorrow! 🚗
+Drive Safe! 🚗
 - Drive Alive Team"""
 
             to_number = self._format_phone_number(student_phone)
@@ -152,7 +160,7 @@ See you tomorrow! 🚗
                 body=message_body, from_=self.whatsapp_number, to=to_number
             )
 
-            logger.info(f"Student 24hr reminder sent to {student_name}: {message.sid}")
+            logger.info(f"Student 1hr reminder sent to {student_name}: {message.sid}")
             return True
 
         except Exception as e:
@@ -168,6 +176,7 @@ See you tomorrow! 🚗
         lesson_date: datetime,
         pickup_address: str,
         booking_reference: str,
+        student_notes: str = None,
     ) -> bool:
         """
         Send 15-minute reminder to instructor before lesson
@@ -179,21 +188,26 @@ See you tomorrow! 🚗
             return False
 
         try:
-            message_body = f"""⏰ *Next Lesson in 15 Minutes*
+            notes_section = (
+                f"\n\n📝 *Student Notes:*\n{student_notes}" if student_notes else ""
+            )
+
+            message_body = f"""⏰ *Lesson Reminder*
 
 Hello {instructor_name},
 
-Your next lesson starts soon!
+Your next lesson is coming up.
 
 📋 *Lesson Details:*
 • Reference: {booking_reference}
 • Student: {student_name}
+• Date: {lesson_date.strftime('%A, %d %B %Y')}
 • Time: {lesson_date.strftime('%I:%M %p')}
-• Pickup: {pickup_address}
+• Pickup: {pickup_address}{notes_section}
 
 📞 Student Contact: {student_phone}
 
-See you soon! 🚗
+Drive Safe! 🚗
 - Drive Alive Team"""
 
             to_number = self._format_phone_number(instructor_phone)
@@ -209,6 +223,66 @@ See you soon! 🚗
             logger.error(f"Failed to send instructor reminder: {str(e)}")
             return False
 
+    def send_same_day_booking_notification(
+        self,
+        instructor_name: str,
+        instructor_phone: str,
+        student_name: str,
+        student_phone: str,
+        lesson_date: datetime,
+        pickup_address: str,
+        booking_reference: str,
+        amount: float,
+        student_notes: str = None,
+    ) -> bool:
+        """
+        Send immediate notification to instructor for same-day bookings that are paid/confirmed
+        """
+        if not self.client:
+            logger.warning(
+                "Twilio client not initialized. Skipping same-day notification."
+            )
+            return False
+
+        try:
+            notes_section = (
+                f"\n\n📝 *Student Notes:*\n{student_notes}" if student_notes else ""
+            )
+
+            message_body = f"""🔔 *New Lesson Booked!*
+
+Hello {instructor_name},
+
+You have a new confirmed booking.
+
+📋 *Lesson Details:*
+• Reference: {booking_reference}
+• Student: {student_name}
+• Date: {lesson_date.strftime('%A, %d %B %Y')}
+• Time: {lesson_date.strftime('%I:%M %p')}
+• Pickup: {pickup_address}
+• Amount: R{amount:.2f}{notes_section}
+
+📞 Student Contact: {student_phone}
+
+Drive Safe! 🚗
+- Drive Alive Team"""
+
+            to_number = self._format_phone_number(instructor_phone)
+
+            message = self.client.messages.create(
+                body=message_body, from_=self.whatsapp_number, to=to_number
+            )
+
+            logger.info(
+                f"Same-day booking notification sent to {instructor_name}: {message.sid}"
+            )
+            return True
+
+        except Exception as e:
+            logger.error(f"Failed to send same-day booking notification: {str(e)}")
+            return False
+
     def send_daily_summary(
         self, instructor_name: str, instructor_phone: str, bookings_summary: str
     ) -> bool:
@@ -220,15 +294,15 @@ See you soon! 🚗
             return False
 
         try:
-            message_body = f"""📅 *Today's Schedule*
+            message_body = f"""📅 *Daily Schedule*
 
 Hello {instructor_name},
 
-Here are your lessons for today:
+Here are your upcoming lessons:
 
 {bookings_summary}
 
-Have a great day! 🚗
+Drive Safe! 🚗
 - Drive Alive Team"""
 
             to_number = self._format_phone_number(instructor_phone)

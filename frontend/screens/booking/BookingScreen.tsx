@@ -2,9 +2,9 @@
  * Booking Screen - Book a driving lesson with selected instructor
  * Redesigned with step-by-step date and time selection
  */
-import { CommonActions, useNavigation, useRoute } from '@react-navigation/native';
+import { CommonActions, useFocusEffect, useNavigation, useRoute } from '@react-navigation/native';
 import * as SecureStore from 'expo-secure-store';
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Modal,
@@ -16,6 +16,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import AddressAutocomplete from '../../components/AddressAutocomplete';
 import CalendarPicker from '../../components/CalendarPicker';
 import InlineMessage from '../../components/InlineMessage';
 import WebNavigationHeader from '../../components/WebNavigationHeader';
@@ -38,6 +39,7 @@ interface Instructor {
   suburb?: string;
   is_available: boolean;
   hourly_rate: number;
+  booking_fee?: number; // Per-instructor booking fee in ZAR
   rating: number;
   total_reviews: number;
   is_verified: boolean;
@@ -77,7 +79,6 @@ export default function BookingScreen({ navigation: navProp }: any) {
     pickup_address: '',
     notes: '',
   });
-  const [useSamePickupAddress, setUseSamePickupAddress] = useState(true);
 
   // Step-by-step booking flow
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
@@ -111,6 +112,22 @@ export default function BookingScreen({ navigation: navProp }: any) {
     loadFullyBookedDates();
     loadInstructorSchedule();
   }, [instructor.instructor_id]);
+
+  // Reload fully booked dates when duration changes
+  useEffect(() => {
+    loadFullyBookedDates();
+  }, [formData.duration_minutes]);
+
+  // Refresh instructor availability when screen comes into focus
+  // This ensures changes made by instructor (deleting time-off) are reflected
+  useFocusEffect(
+    useCallback(() => {
+      console.log('📱 BookingScreen focused - refreshing instructor availability');
+      loadInstructorTimeOff();
+      loadFullyBookedDates();
+      loadInstructorSchedule();
+    }, [instructor.instructor_id])
+  );
 
   // Track unsaved changes (selected bookings or form data)
   useEffect(() => {
@@ -265,9 +282,16 @@ export default function BookingScreen({ navigation: navProp }: any) {
           if (dayData.slots && dayData.slots.length > 0) {
             const allSlotsBooked = dayData.slots.every((slot: TimeSlot) => slot.is_booked);
             if (allSlotsBooked) {
-              const bookedDate = new Date(dayData.date + 'T00:00:00');
+              // Parse date and normalize to UTC midnight for consistent comparison
+              const [year, month, day] = dayData.date.split('-').map(Number);
+              const bookedDate = new Date(Date.UTC(year, month - 1, day));
               fullyBooked.push(bookedDate);
-              console.log('🔴 Fully booked date found:', dayData.date);
+              console.log(
+                '🔴 Fully booked date found:',
+                dayData.date,
+                '→',
+                bookedDate.toISOString()
+              );
             }
           }
         });
@@ -479,11 +503,10 @@ export default function BookingScreen({ navigation: navProp }: any) {
       return;
     }
 
-    // Add to bookings with pickup address if available
-    const pickupAddr = useSamePickupAddress ? formData.pickup_address : '';
+    // Add to bookings with pickup address
     setSelectedBookings(prev => [
       ...prev,
-      { date: dateStr, slot, time: timeStr, pickup_address: pickupAddr },
+      { date: dateStr, slot, time: timeStr, pickup_address: formData.pickup_address },
     ]);
 
     setMessage({ type: 'success', text: '✓ Time slot added' });
@@ -658,7 +681,10 @@ export default function BookingScreen({ navigation: navProp }: any) {
   const calculatePrice = () => {
     const hours = parseInt(formData.duration_minutes) / 60;
     const pricePerBooking = (instructor?.hourly_rate || 0) * hours;
-    return pricePerBooking * selectedBookings.length;
+    const instructorBookingFee = instructor?.booking_fee || 20.0; // Default to R20 if not set
+    const lessonTotal = pricePerBooking * selectedBookings.length;
+    const totalBookingFees = instructorBookingFee * selectedBookings.length;
+    return lessonTotal + totalBookingFees;
   };
 
   const handleSubmitBooking = async () => {
@@ -684,7 +710,8 @@ export default function BookingScreen({ navigation: navProp }: any) {
     // Calculate pricing
     const hours = parseInt(formData.duration_minutes) / 60;
     const lessonAmount = instructor.hourly_rate * hours * selectedBookings.length;
-    const bookingFee = 10 * selectedBookings.length; // R10 per booking
+    const instructorBookingFee = instructor.booking_fee || 20.0; // Use instructor's configured fee or default to R20
+    const bookingFee = instructorBookingFee * selectedBookings.length;
     const totalAmount = lessonAmount + bookingFee;
 
     // Prepare bookings with pickup addresses
@@ -790,13 +817,41 @@ export default function BookingScreen({ navigation: navProp }: any) {
             <Text style={styles.instructorDetail}>
               ⭐ {instructor.rating.toFixed(1)} ({instructor.total_reviews} reviews)
             </Text>
-            <Text style={styles.instructorDetail}>💰 R{instructor.hourly_rate}/hr</Text>
+            <Text style={styles.instructorDetail}>
+              💰 R{((instructor.hourly_rate || 0) + (instructor.booking_fee || 20.0)).toFixed(2)}/hr
+            </Text>
+          </View>
+        </View>
+
+        {/* Pickup Address - MOVED TO TOP */}
+        <View style={[styles.formCard, styles.pickupFormCard]}>
+          <Text style={styles.sectionTitle}>Step 1: Pickup Details</Text>
+          <View style={styles.formGroup}>
+            <Text style={styles.label}>
+              Pickup Address <Text style={styles.required}>*</Text>
+            </Text>
+            <AddressAutocomplete
+              value={formData.pickup_address}
+              onChangeText={value => updateField('pickup_address', value)}
+              placeholder="Start typing your street address... (e.g., 123 Main Road, Sandton)"
+              style={styles.textArea}
+            />
           </View>
         </View>
 
         {/* Booking Form */}
-        <View style={styles.formCard}>
-          <Text style={styles.sectionTitle}>Lesson Details</Text>
+        <View style={[styles.formCard, styles.lessonFormCard]}>
+          <Text style={styles.sectionTitle}>Step 2: Lesson Details</Text>
+
+          {/* Show warning if pickup address not filled */}
+          {!formData.pickup_address.trim() && (
+            <View style={styles.pickupWarningContainer}>
+              <Text style={styles.pickupWarningIcon}>📍</Text>
+              <Text style={styles.pickupWarningText}>
+                Please enter your pickup address above before selecting lesson dates and times.
+              </Text>
+            </View>
+          )}
 
           {/* Duration Selection - Fixed at 60 minutes */}
           <View style={styles.formGroup}>
@@ -813,16 +868,29 @@ export default function BookingScreen({ navigation: navProp }: any) {
             </View>
           </View>
 
-          {/* Date Selection - Above Title */}
+          {/* Date Selection - Above Title - DISABLED if no pickup address */}
           {!showSlotSelection && (
             <View style={styles.formGroup}>
-              <Text style={styles.instructionText}>Step 1: Select a date</Text>
+              <Text style={styles.instructionText}>Select a date</Text>
               <TouchableOpacity
-                style={styles.datePickerButton}
-                onPress={() => setShowCalendarModal(true)}
+                style={[
+                  styles.datePickerButton,
+                  !formData.pickup_address.trim() && styles.datePickerButtonDisabled,
+                ]}
+                onPress={() => {
+                  if (formData.pickup_address.trim()) {
+                    setShowCalendarModal(true);
+                  }
+                }}
+                disabled={!formData.pickup_address.trim()}
               >
                 <Text style={styles.datePickerIcon}>📅</Text>
-                <Text style={styles.datePickerText}>
+                <Text
+                  style={[
+                    styles.datePickerText,
+                    !formData.pickup_address.trim() && styles.datePickerTextDisabled,
+                  ]}
+                >
                   {selectedDate
                     ? selectedDate.toLocaleDateString('en-ZA', {
                         weekday: 'short',
@@ -830,7 +898,9 @@ export default function BookingScreen({ navigation: navProp }: any) {
                         month: 'short',
                         day: 'numeric',
                       })
-                    : 'Click to Select Date'}
+                    : formData.pickup_address.trim()
+                      ? 'Click to Select Date'
+                      : 'Enter pickup address first'}
                 </Text>
               </TouchableOpacity>
             </View>
@@ -892,7 +962,7 @@ export default function BookingScreen({ navigation: navProp }: any) {
                   </View>
                 ) : (
                   <View>
-                    <Text style={styles.instructionText}>Step 2: Select a time slot</Text>
+                    <Text style={styles.instructionText}>Select a time slot</Text>
                     <Text style={styles.slotCountText}>
                       {availableSlotsForDate.filter(s => !s.is_booked).length} available,{' '}
                       {availableSlotsForDate.filter(s => s.is_booked).length} booked (Total:{' '}
@@ -1040,7 +1110,10 @@ export default function BookingScreen({ navigation: navProp }: any) {
                       </Text>
                       <Text style={styles.selectedBookingDetails}>
                         💰 R
-                        {((instructor.hourly_rate * booking.slot.duration_minutes) / 60).toFixed(2)}
+                        {(
+                          (instructor.hourly_rate * booking.slot.duration_minutes) / 60 +
+                          (instructor.booking_fee || 20.0)
+                        ).toFixed(2)}
                       </Text>
                       {booking.pickup_address && (
                         <Text style={styles.selectedBookingAddress}>
@@ -1068,31 +1141,6 @@ export default function BookingScreen({ navigation: navProp }: any) {
           </View>
 
           <View style={styles.formGroup}>
-            <Text style={styles.label}>
-              Pickup Address <Text style={styles.required}>*</Text>
-            </Text>
-            {selectedBookings.length > 0 && (
-              <TouchableOpacity
-                style={styles.checkboxContainer}
-                onPress={() => setUseSamePickupAddress(!useSamePickupAddress)}
-              >
-                <View style={[styles.checkbox, useSamePickupAddress && styles.checkboxChecked]}>
-                  {useSamePickupAddress && <Text style={styles.checkboxCheckmark}>✓</Text>}
-                </View>
-                <Text style={styles.checkboxLabel}>Use same pickup address for all lessons</Text>
-              </TouchableOpacity>
-            )}
-            <TextInput
-              style={[styles.input, styles.textArea]}
-              placeholder="Enter your pickup location"
-              value={formData.pickup_address}
-              onChangeText={value => updateField('pickup_address', value)}
-              multiline
-              numberOfLines={3}
-            />
-          </View>
-
-          <View style={styles.formGroup}>
             <Text style={styles.label}>Additional Notes (Optional)</Text>
             <TextInput
               style={[styles.input, styles.textArea]}
@@ -1115,15 +1163,15 @@ export default function BookingScreen({ navigation: navProp }: any) {
             <Text style={styles.priceLabel}>Duration per Lesson:</Text>
             <Text style={styles.priceValue}>{formData.duration_minutes} minutes</Text>
           </View>
-          <View style={styles.priceRow}>
-            <Text style={styles.priceLabel}>Hourly Rate:</Text>
-            <Text style={styles.priceValue}>R{instructor.hourly_rate}/hr</Text>
-          </View>
           {selectedBookings.length > 0 && (
             <View style={styles.priceRow}>
               <Text style={styles.priceLabel}>Price per Lesson:</Text>
               <Text style={styles.priceValue}>
-                R{((instructor.hourly_rate * parseInt(formData.duration_minutes)) / 60).toFixed(2)}
+                R
+                {(
+                  (instructor.hourly_rate * parseInt(formData.duration_minutes)) / 60 +
+                  (instructor.booking_fee || 20.0)
+                ).toFixed(2)}
               </Text>
             </View>
           )}
@@ -1169,7 +1217,7 @@ export default function BookingScreen({ navigation: navProp }: any) {
                 handleDateSelect(date);
                 setShowCalendarModal(false);
               }}
-              minDate={new Date()}
+              minDate={new Date(new Date().setHours(0, 0, 0, 0))}
               maxDate={new Date(Date.now() + 90 * 24 * 60 * 60 * 1000)}
               timeOffDates={instructorTimeOff}
               noScheduleDates={unavailableDays}
@@ -1236,9 +1284,18 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 3,
+    overflow: 'visible', // Allow dropdown to show above other cards
+  },
+  pickupFormCard: {
+    zIndex: 100, // Higher z-index for Step 1 (pickup address with dropdown)
+  },
+  lessonFormCard: {
+    zIndex: 1, // Lower z-index for Step 2 (so dropdown appears above it)
   },
   formGroup: {
     marginBottom: 16,
+    overflow: 'visible', // Allow dropdown to overflow
+    zIndex: 1,
   },
   label: {
     fontSize: 16,
@@ -1322,6 +1379,34 @@ const styles = StyleSheet.create({
     color: '#666',
     marginBottom: 12,
     fontStyle: 'italic',
+  },
+  pickupWarningContainer: {
+    flexDirection: 'row',
+    backgroundColor: '#fff3cd',
+    padding: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#ffc107',
+    marginBottom: 16,
+    alignItems: 'center',
+  },
+  pickupWarningIcon: {
+    fontSize: 20,
+    marginRight: 10,
+  },
+  pickupWarningText: {
+    flex: 1,
+    fontSize: 14,
+    color: '#856404',
+    lineHeight: 20,
+  },
+  datePickerButtonDisabled: {
+    backgroundColor: '#e9ecef',
+    borderColor: '#ced4da',
+    opacity: 0.6,
+  },
+  datePickerTextDisabled: {
+    color: '#6c757d',
   },
   bigCalendarButton: {
     flexDirection: 'row',

@@ -241,10 +241,9 @@ async def create_booking(
             detail="This time slot is already booked. Please select a different time.",
         )
 
-    # Calculate amount (lesson fee + booking fee)
+    # Calculate amount (lesson fee only, booking fee stored separately)
     lesson_amount = instructor.hourly_rate * (booking_data.duration_minutes / 60)
-    booking_fee = settings.BOOKING_FEE
-    total_amount = lesson_amount + booking_fee
+    instructor_booking_fee = instructor.booking_fee or 20.0  # Default to R20 if not set
 
     # Create booking
     booking = Booking(
@@ -260,8 +259,8 @@ async def create_booking(
         dropoff_latitude=booking_data.dropoff_latitude,
         dropoff_longitude=booking_data.dropoff_longitude,
         dropoff_address=booking_data.dropoff_address,
-        amount=total_amount,
-        booking_fee=booking_fee,
+        amount=lesson_amount,  # Lesson price only (booking fee stored separately)
+        booking_fee=instructor_booking_fee,
         student_notes=booking_data.student_notes,
         status=BookingStatus.PENDING,
         payment_status=PaymentStatus.PENDING,
@@ -286,14 +285,17 @@ async def create_booking(
             f"Instructor: {instructor.user.first_name} {instructor.user.last_name}"
         )
 
+        # Send total amount (lesson + booking fee) for WhatsApp confirmation
+        total_amount = booking.amount + booking.booking_fee
         result = whatsapp_service.send_booking_confirmation(
             student_name=f"{current_user.first_name} {current_user.last_name}",
             student_phone=current_user.phone,
             instructor_name=f"{instructor.user.first_name} {instructor.user.last_name}",
             lesson_date=booking.lesson_date,
             pickup_address=booking.pickup_address,
-            amount=booking.amount,
+            amount=total_amount,
             booking_reference=booking.booking_reference,
+            student_notes=booking.student_notes,
         )
 
         if result:
@@ -304,6 +306,46 @@ async def create_booking(
             logger.warning(
                 f"⚠️ WhatsApp confirmation returned False for {booking.booking_reference}"
             )
+
+        # Check if booking is for TODAY and send immediate notification to instructor
+        now = datetime.now(timezone.utc)
+        # Convert lesson_date to UTC for comparison
+        lesson_date_utc = (
+            booking.lesson_date.replace(tzinfo=timezone.utc)
+            if booking.lesson_date.tzinfo is None
+            else booking.lesson_date
+        )
+
+        # Check if lesson is today (same date in SAST timezone UTC+2)
+        from datetime import timedelta as td
+
+        sast_now = now + td(hours=2)  # Convert UTC to SAST
+        lesson_date_sast = lesson_date_utc + td(hours=2)  # Convert lesson time to SAST
+
+        if sast_now.date() == lesson_date_sast.date():
+            logger.info(
+                f"📅 Same-day booking detected! Sending immediate notification to instructor."
+            )
+            instructor_result = whatsapp_service.send_same_day_booking_notification(
+                instructor_name=f"{instructor.user.first_name} {instructor.user.last_name}",
+                instructor_phone=instructor.user.phone,
+                student_name=f"{current_user.first_name} {current_user.last_name}",
+                student_phone=current_user.phone,
+                lesson_date=booking.lesson_date,
+                pickup_address=booking.pickup_address,
+                booking_reference=booking.booking_reference,
+                amount=total_amount,
+                student_notes=booking.student_notes,
+            )
+
+            if instructor_result:
+                logger.info(
+                    f"✅ Same-day notification sent to instructor for {booking.booking_reference}"
+                )
+            else:
+                logger.warning(
+                    f"⚠️ Failed to send same-day notification to instructor for {booking.booking_reference}"
+                )
 
     except Exception as e:
         # Log error but don't fail the booking
@@ -554,8 +596,11 @@ async def create_bulk_bookings(
                         detail=f"You cannot book multiple lessons at the same time ({lesson_datetime}). Please choose different times.",
                     )
 
-        # Calculate amount
-        amount = instructor.hourly_rate * (booking_data.duration_minutes / 60)
+        # Calculate amount (lesson fee only, booking fee stored separately)
+        lesson_amount = instructor.hourly_rate * (booking_data.duration_minutes / 60)
+        instructor_booking_fee = (
+            instructor.booking_fee or 10.0
+        )  # Default to R10 if not set
 
         # Prepare booking data
         new_bookings.append(
@@ -572,7 +617,8 @@ async def create_bulk_bookings(
                 "dropoff_latitude": booking_data.dropoff_latitude,
                 "dropoff_longitude": booking_data.dropoff_longitude,
                 "dropoff_address": booking_data.dropoff_address,
-                "amount": amount,
+                "amount": lesson_amount,  # Lesson price only
+                "booking_fee": instructor_booking_fee,  # Booking fee stored separately
                 "student_notes": booking_data.student_notes,
                 "status": BookingStatus.PENDING,
                 "payment_status": PaymentStatus.PENDING,
@@ -617,13 +663,15 @@ async def create_bulk_bookings(
                         f"[BULK] Instructor: {instructor.user.first_name} {instructor.user.last_name}"
                     )
 
+                    # Send total amount (lesson + booking fee) for WhatsApp confirmation
+                    total_amount = booking.amount + booking.booking_fee
                     result = whatsapp_service.send_booking_confirmation(
                         student_name=f"{current_user.first_name} {current_user.last_name}",
                         student_phone=current_user.phone,
                         instructor_name=f"{instructor.user.first_name} {instructor.user.last_name}",
                         lesson_date=booking.lesson_date,
                         pickup_address=booking.pickup_address or "To be confirmed",
-                        amount=booking.amount,
+                        amount=total_amount,
                         booking_reference=booking.booking_reference,
                     )
                     if result:
@@ -753,7 +801,9 @@ async def get_my_bookings(
                 "duration_minutes": booking.duration_minutes,
                 "status": booking.status.value,
                 "payment_status": booking.payment_status.value,
-                "total_price": float(booking.amount),
+                "total_price": float(
+                    booking.amount + (booking.booking_fee or 0.0)
+                ),  # Total price = lesson price + booking fee
                 "pickup_location": booking.pickup_address,
                 "review_rating": review.rating if review else None,
             }

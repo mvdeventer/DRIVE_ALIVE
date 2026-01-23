@@ -102,8 +102,8 @@ class Booking(Base):
         Boolean, nullable=False, default=False
     )  # Included in daily summary
 
-    # Booking fee (R10 per booking)
-    booking_fee = Column(Float, nullable=False, default=10.0)
+    # Booking fee (admin configurable per instructor, default R20)
+    booking_fee = Column(Float, nullable=False, default=20.0)
 
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())

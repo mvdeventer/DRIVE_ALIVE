@@ -1,0 +1,46 @@
+<!doctype html>
+<html>
+  <head>
+    <title>CORS Test for Drive Alive</title>
+  </head>
+  <body>
+    <h1>CORS Test for Mock Payment</h1>
+    <button onclick="testCORS()">Test CORS Request</button>
+    <pre id="output"></pre>
+
+    <script>
+      async function testCORS() {
+        const output = document.getElementById("output");
+        output.textContent = "Testing CORS...\\n";
+
+        try {
+          // Simulate the exact request from your frontend
+          const response = await fetch(
+            "http://localhost:8000/payments/mock-complete",
+            {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: "Bearer YOUR_TOKEN_HERE", // Replace with actual token
+              },
+              credentials: "include", // This matches withCredentials: true
+              body: JSON.stringify({
+                payment_session_id: "TEST123",
+                success: true,
+              }),
+            },
+          );
+
+          output.textContent += `Status: ${response.status}\\n`;
+          const data = await response.json();
+          output.textContent += `Response: ${JSON.stringify(data, null, 2)}\\n`;
+          output.textContent += "✅ CORS is working!";
+        } catch (error) {
+          output.textContent += `❌ Error: ${error.message}\\n`;
+          output.textContent += `This is the CORS error you're experiencing.\\n`;
+          console.error("Full error:", error);
+        }
+      }
+    </script>
+  </body>
+</html>

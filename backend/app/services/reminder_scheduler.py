@@ -63,9 +63,15 @@ class ReminderScheduler:
             # Convert to naive datetime for SQLite comparison (SQLite doesn't store timezone)
             sast_now_naive = sast_now.replace(tzinfo=None)
 
-            # Student reminders (anytime within next 24 hours that hasn't been sent)
-            # Check continuously every 5 minutes within the 24-hour window
-            student_reminder_end = sast_now_naive + timedelta(hours=24)
+            # Student reminders (1 hour before lesson)
+            # Send reminder when lesson is 55-65 minutes away (10-minute window to catch it)
+            student_reminder_target = sast_now_naive + timedelta(hours=1)
+            student_reminder_start = student_reminder_target - timedelta(
+                minutes=5
+            )  # 55 minutes away
+            student_reminder_end = student_reminder_target + timedelta(
+                minutes=5
+            )  # 65 minutes away
 
             # Instructor reminders (15 minutes before)
             instructor_reminder_time = sast_now_naive + timedelta(minutes=15)
@@ -74,16 +80,20 @@ class ReminderScheduler:
             )
             instructor_reminder_end = instructor_reminder_time + timedelta(minutes=2.5)
 
+            logger.info(f"📅 Reminder check: SAST now = {sast_now_naive}")
             logger.info(
-                f"📅 Reminder check: SAST now = {sast_now_naive}, checking until {student_reminder_end}"
+                f"   Student reminders: looking for lessons in 1 hour (between {student_reminder_start} and {student_reminder_end})"
+            )
+            logger.info(
+                f"   Instructor reminders: looking for lessons in 15 minutes (between {instructor_reminder_start} and {instructor_reminder_end})"
             )
 
-            # Find bookings needing student reminders
-            # Checks all lessons in next 24 hours that haven't had reminder sent
+            # Find bookings needing student reminders (1 hour before)
+            # Only send if lesson is approximately 1 hour away (55-65 minute window)
             student_bookings = (
                 db.query(Booking)
                 .filter(
-                    Booking.lesson_date >= sast_now_naive,
+                    Booking.lesson_date >= student_reminder_start,
                     Booking.lesson_date <= student_reminder_end,
                     Booking.status.in_(
                         [BookingStatus.CONFIRMED, BookingStatus.PENDING]
@@ -94,7 +104,7 @@ class ReminderScheduler:
             )
 
             logger.info(
-                f"📱 Found {len(student_bookings)} bookings needing student reminders in next 24h"
+                f"📱 Found {len(student_bookings)} bookings needing student reminders (1h before)"
             )
             for b in student_bookings:
                 logger.info(
@@ -104,7 +114,7 @@ class ReminderScheduler:
             for booking in student_bookings:
                 await self._send_student_reminder(booking, db)
 
-            # Find bookings needing instructor reminders
+            # Find bookings needing instructor reminders (15 minutes before)
             instructor_bookings = (
                 db.query(Booking)
                 .filter(
@@ -118,13 +128,17 @@ class ReminderScheduler:
                 .all()
             )
 
+            logger.info(
+                f"👨‍🏫 Found {len(instructor_bookings)} bookings needing instructor reminders (15min before)"
+            )
+
             for booking in instructor_bookings:
                 await self._send_instructor_reminder(booking, db)
 
             if len(student_bookings) > 0 or len(instructor_bookings) > 0:
                 logger.info(
-                    f"✅ Reminder check complete: {len(student_bookings)} student reminders (≤24h), "
-                    f"{len(instructor_bookings)} instructor reminders (15min) sent"
+                    f"✅ Reminder check complete: {len(student_bookings)} student reminders (1h before), "
+                    f"{len(instructor_bookings)} instructor reminders (15min before) sent"
                 )
             else:
                 logger.info(
@@ -151,6 +165,7 @@ class ReminderScheduler:
                 lesson_date=booking.lesson_date,
                 pickup_address=booking.pickup_address,
                 booking_reference=booking.booking_reference,
+                student_notes=booking.student_notes,
             )
 
             if success:
@@ -181,6 +196,7 @@ class ReminderScheduler:
                 lesson_date=booking.lesson_date,
                 pickup_address=booking.pickup_address,
                 booking_reference=booking.booking_reference,
+                student_notes=booking.student_notes,
             )
 
             if success:
@@ -197,14 +213,14 @@ class ReminderScheduler:
             db.rollback()
 
     async def _check_daily_summaries(self):
-        """Check for instructors needing daily summaries"""
+        """Check for instructors needing daily summaries at 5:00 AM SAST"""
         db: Session = SessionLocal()
         try:
             now = datetime.now(timezone.utc)
             sast_now = now + timedelta(hours=2)
 
-            # Check if it's between 6:00 AM and 6:10 AM SAST
-            if not (sast_now.hour == 6 and sast_now.minute < 10):
+            # Check if it's between 5:00 AM and 5:10 AM SAST
+            if not (sast_now.hour == 5 and sast_now.minute < 10):
                 return
 
             # Get today's date in SAST

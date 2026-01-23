@@ -57,7 +57,18 @@ export default function PaymentScreen() {
 
       if (Platform.OS === 'web') {
         localStorage.setItem('payment_session_id', response.payment_session_id);
-        window.location.href = response.payment_url;
+
+        // Check if it's a mock payment URL (development mode)
+        if (response.payment_url.includes('/payment/mock')) {
+          // Navigate to mock payment screen using React Navigation
+          navigation.navigate(
+            'PaymentMock' as never,
+            { session_id: response.payment_session_id } as never
+          );
+        } else {
+          // For real payment gateways, use full redirect
+          window.location.href = response.payment_url;
+        }
       } else {
         await Linking.openURL(response.payment_url);
         navigation.navigate(
@@ -129,19 +140,6 @@ export default function PaymentScreen() {
 
         <View style={styles.card}>
           <Text style={styles.sectionTitle}>Payment Summary</Text>
-          <View style={styles.priceRow}>
-            <Text style={styles.priceLabel}>
-              {bookings.length} Lesson{bookings.length > 1 ? 's' : ''}
-            </Text>
-            <Text style={styles.priceValue}>R{lesson_amount.toFixed(2)}</Text>
-          </View>
-          <View style={styles.priceRow}>
-            <Text style={styles.priceLabel}>
-              Booking Fee ({bookings.length} × R{(booking_fee / bookings.length).toFixed(2)})
-            </Text>
-            <Text style={styles.priceValue}>R{booking_fee.toFixed(2)}</Text>
-          </View>
-          <View style={styles.divider} />
           <View style={styles.totalRow}>
             <Text style={styles.totalLabel}>Total</Text>
             <Text style={styles.totalValue}>R{total_amount.toFixed(2)}</Text>

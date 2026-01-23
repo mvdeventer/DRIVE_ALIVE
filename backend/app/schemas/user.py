@@ -132,6 +132,19 @@ class ChangePasswordRequest(BaseModel):
     new_password: str = Field(..., min_length=6)
 
 
+class ForgotPasswordRequest(BaseModel):
+    """Forgot password request schema"""
+
+    email: str
+
+
+class ResetPasswordRequest(BaseModel):
+    """Reset password request schema"""
+
+    token: str
+    new_password: str = Field(..., min_length=6)
+
+
 class UserResponse(BaseModel):
     """User response schema - no validation on output"""
 
@@ -212,6 +225,9 @@ class InstructorUpdate(BaseModel):
     city: Optional[str] = None
     suburb: Optional[str] = None
     hourly_rate: Optional[float] = None
+    booking_fee: Optional[float] = (
+        None  # Allow updating booking fee (admin-only in practice)
+    )
     service_radius_km: Optional[float] = None
     max_travel_distance_km: Optional[float] = None
     rate_per_km_beyond_radius: Optional[float] = None
@@ -242,6 +258,7 @@ class InstructorResponse(UserResponse):
     suburb: Optional[str] = None
     is_available: bool
     hourly_rate: float
+    booking_fee: Optional[float] = 20.0  # Per-instructor booking fee in ZAR
     service_radius_km: Optional[float] = 20.0
     max_travel_distance_km: Optional[float] = 50.0
     rate_per_km_beyond_radius: Optional[float] = 5.0

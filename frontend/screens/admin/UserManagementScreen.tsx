@@ -37,6 +37,7 @@ interface User {
   role: string;
   status: string;
   id_number?: string;
+  booking_fee?: number; // Only for instructors
   created_at: string;
   last_login: string | null;
 }
@@ -68,6 +69,8 @@ export default function UserManagementScreen({ navigation }: any) {
   const [scheduleModalVisible, setScheduleModalVisible] = useState(false);
   const [instructorSchedule, setInstructorSchedule] = useState<any>(null);
   const [loadingSchedule, setLoadingSchedule] = useState(false);
+  const [editBookingFeeModalVisible, setEditBookingFeeModalVisible] = useState(false);
+  const [bookingFeeValue, setBookingFeeValue] = useState('20.00');
 
   const loadUsers = async () => {
     try {
@@ -408,6 +411,50 @@ export default function UserManagementScreen({ navigation }: any) {
     setInstructorSchedule(null);
   };
 
+  const handleOpenEditBookingFee = (user: User) => {
+    setSelectedUser(user);
+    setBookingFeeValue((user.booking_fee || 20).toFixed(2));
+    setEditBookingFeeModalVisible(true);
+  };
+
+  const handleSaveBookingFee = async () => {
+    if (!selectedUser) return;
+
+    const fee = parseFloat(bookingFeeValue);
+    if (isNaN(fee) || fee < 0) {
+      showMessage(
+        setError,
+        'Please enter a valid booking fee (minimum R0)',
+        SCREEN_NAME,
+        'bookingFee',
+        'error'
+      );
+      return;
+    }
+
+    try {
+      const instructorId = selectedUser.id; // In context, this is the instructor profile ID
+      await apiService.updateInstructorBookingFee(instructorId, fee);
+      showMessage(
+        setSuccess,
+        `Booking fee updated to R${fee.toFixed(2)} for ${selectedUser.full_name}`,
+        SCREEN_NAME,
+        'bookingFee',
+        'success'
+      );
+      setEditBookingFeeModalVisible(false);
+      loadUsers();
+    } catch (err: any) {
+      showMessage(
+        setError,
+        err.response?.data?.detail || 'Failed to update booking fee',
+        SCREEN_NAME,
+        'bookingFee',
+        'error'
+      );
+    }
+  };
+
   const renderUser = ({ item }: { item: User }) => (
     <View style={styles.userCard}>
       <View style={styles.userHeader}>
@@ -436,6 +483,9 @@ export default function UserManagementScreen({ navigation }: any) {
             Last Login: {new Date(item.last_login).toLocaleDateString()}
           </Text>
         )}
+        {item.role === 'instructor' && item.booking_fee !== undefined && (
+          <Text style={styles.userDetailText}>Booking Fee: R{item.booking_fee.toFixed(2)}</Text>
+        )}
       </View>
 
       <View style={styles.actionButtons}>
@@ -452,13 +502,21 @@ export default function UserManagementScreen({ navigation }: any) {
           <Text style={styles.actionButtonText}>🔑 Reset PW</Text>
         </TouchableOpacity>
         {item.role === 'instructor' && (
-          <TouchableOpacity
-            style={[styles.actionButton, styles.scheduleButton]}
-            onPress={() => handleViewSchedule(item)}
-          >
-            <Text style={styles.scheduleButtonLabel}>Schedule</Text>
-            <Text style={styles.scheduleButtonText}>📅</Text>
-          </TouchableOpacity>
+          <>
+            <TouchableOpacity
+              style={[styles.actionButton, styles.scheduleButton]}
+              onPress={() => handleViewSchedule(item)}
+            >
+              <Text style={styles.scheduleButtonLabel}>Schedule</Text>
+              <Text style={styles.scheduleButtonText}>📅</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.actionButton, styles.feeButton]}
+              onPress={() => handleOpenEditBookingFee(item)}
+            >
+              <Text style={styles.actionButtonText}>💰 Manage Fee</Text>
+            </TouchableOpacity>
+          </>
         )}
         {item.status === 'suspended' ? (
           <TouchableOpacity
@@ -738,8 +796,8 @@ export default function UserManagementScreen({ navigation }: any) {
                 {confirmAction?.newStatus.toUpperCase() === 'ACTIVE'
                   ? '✅ Confirm Activation'
                   : confirmAction?.newStatus.toUpperCase() === 'INACTIVE'
-                  ? '⚠️ Confirm Deactivation'
-                  : '⚠️ Confirm Suspension'}
+                    ? '⚠️ Confirm Deactivation'
+                    : '⚠️ Confirm Suspension'}
               </Text>
             </View>
 
@@ -947,6 +1005,61 @@ export default function UserManagementScreen({ navigation }: any) {
             <View style={styles.modalFooter}>
               <TouchableOpacity style={styles.cancelModalButton} onPress={closeScheduleModal}>
                 <Text style={styles.cancelModalButtonText}>Close</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Edit Booking Fee Modal */}
+      <Modal
+        visible={editBookingFeeModalVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setEditBookingFeeModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContainer}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>💰 Manage Booking Fee</Text>
+              <TouchableOpacity
+                onPress={() => setEditBookingFeeModalVisible(false)}
+                style={styles.closeButton}
+              >
+                <Text style={styles.closeButtonText}>✕</Text>
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.modalContent}>
+              <Text style={styles.infoText}>Instructor: {selectedUser?.full_name}</Text>
+              <Text style={styles.infoText} style={{ marginBottom: 20 }}>
+                This fee is added to the instructor's rate when students book lessons.
+              </Text>
+
+              <View style={styles.formGroup}>
+                <Text style={styles.label}>Booking Fee (ZAR) *</Text>
+                <TextInput
+                  style={styles.input}
+                  value={bookingFeeValue}
+                  onChangeText={setBookingFeeValue}
+                  placeholder="20.00"
+                  keyboardType="decimal-pad"
+                />
+                <Text style={styles.helperText}>
+                  Students will pay: Instructor Rate + R{bookingFeeValue || '0.00'}
+                </Text>
+              </View>
+            </View>
+
+            <View style={styles.modalFooter}>
+              <TouchableOpacity
+                style={styles.cancelModalButton}
+                onPress={() => setEditBookingFeeModalVisible(false)}
+              >
+                <Text style={styles.cancelModalButtonText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.saveModalButton} onPress={handleSaveBookingFee}>
+                <Text style={styles.saveModalButtonText}>Save Fee</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -1222,6 +1335,9 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: 'bold',
   },
+  feeButton: {
+    backgroundColor: '#FFC107',
+  },
   activateButton: {
     backgroundColor: '#28A745',
   },
@@ -1310,6 +1426,12 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#666',
     marginBottom: 5,
+  },
+  helperText: {
+    fontSize: 12,
+    color: '#999',
+    marginTop: 6,
+    fontStyle: 'italic',
   },
   modalFooter: {
     flexDirection: 'row',

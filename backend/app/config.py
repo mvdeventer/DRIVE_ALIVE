@@ -37,6 +37,16 @@ class Settings(BaseSettings):
     TWILIO_AUTH_TOKEN: str = ""
     TWILIO_WHATSAPP_NUMBER: str = ""
 
+    # SMTP Email Configuration
+    SMTP_SERVER: str = "smtp.gmail.com"
+    SMTP_PORT: int = 587
+    SMTP_USERNAME: str = ""
+    SMTP_PASSWORD: str = ""
+    FROM_EMAIL: str = "noreply@drivealive.com"
+
+    # Frontend URL (for password reset links)
+    FRONTEND_URL: str = "http://localhost:8081"
+
     # App
     ENVIRONMENT: str = "development"
     DEBUG: bool = True
@@ -44,7 +54,6 @@ class Settings(BaseSettings):
     AUTO_VERIFY_INSTRUCTORS: bool = (
         False  # Only True in debug mode (controlled by DEBUG)
     )
-    BOOKING_FEE: float = 10.0  # Booking fee in ZAR
 
     # South Africa
     DEFAULT_TIMEZONE: str = "Africa/Johannesburg"

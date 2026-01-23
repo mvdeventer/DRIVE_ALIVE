@@ -88,6 +88,7 @@ class UserManagementResponse(BaseModel):
     role: UserRole
     status: UserStatus
     id_number: Optional[str] = None
+    booking_fee: Optional[float] = None  # Only for instructors
     created_at: datetime
     last_login: Optional[datetime] = None
 

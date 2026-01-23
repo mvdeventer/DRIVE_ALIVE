@@ -55,6 +55,9 @@ class User(Base):
         "Instructor", back_populates="user", uselist=False
     )
     student_profile = relationship("Student", back_populates="user", uselist=False)
+    password_reset_tokens = relationship(
+        "PasswordResetToken", back_populates="user", cascade="all, delete-orphan"
+    )
 
     @property
     def full_name(self):
@@ -97,6 +100,9 @@ class Instructor(Base):
     # Availability
     is_available = Column(Boolean, default=True)
     hourly_rate = Column(Float, nullable=False)  # In ZAR
+    booking_fee = Column(
+        Float, default=20.0
+    )  # Per-instructor booking fee in ZAR (admin configurable)
 
     # Rating
     rating = Column(Float, default=0.0)

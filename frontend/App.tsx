@@ -15,10 +15,12 @@ import { Platform, StyleSheet, Text, TouchableOpacity } from 'react-native';
 import GlobalTopBar from './components/GlobalTopBar';
 
 // Auth Screens
+import ForgotPasswordScreen from './screens/auth/ForgotPasswordScreen';
 import LoginScreen from './screens/auth/LoginScreen';
 import RegisterChoiceScreen from './screens/auth/RegisterChoiceScreen';
 import RegisterInstructorScreen from './screens/auth/RegisterInstructorScreen';
 import RegisterStudentScreen from './screens/auth/RegisterStudentScreen';
+import ResetPasswordScreen from './screens/auth/ResetPasswordScreen';
 
 // Student Screens
 import BookingScreen from './screens/booking/BookingScreen';
@@ -51,6 +53,19 @@ import RevenueAnalyticsScreen from './screens/admin/RevenueAnalyticsScreen';
 import UserManagementScreen from './screens/admin/UserManagementScreen';
 
 const Stack = createNativeStackNavigator();
+
+// Deep linking configuration
+const linking = {
+  prefixes: ['http://localhost:3000', 'http://localhost:8081', 'https://drivealive.co.za'],
+  config: {
+    screens: {
+      ResetPassword: 'reset-password',
+      PaymentMock: 'payment/mock',
+      PaymentSuccess: 'payment/success',
+      PaymentCancel: 'payment/cancel',
+    },
+  },
+};
 
 // Storage wrapper for web compatibility
 const storage = {
@@ -180,6 +195,7 @@ export default function App() {
       )}
       <NavigationContainer
         ref={navigationRef}
+        linking={linking}
         style={isAuthenticated && Platform.OS === 'web' ? styles.navigationWithTopBar : {}}
       >
         <Stack.Navigator
@@ -187,10 +203,10 @@ export default function App() {
             !isAuthenticated
               ? 'Login'
               : userRole === 'admin'
-              ? 'AdminDashboard'
-              : userRole === 'instructor'
-              ? 'InstructorHome'
-              : 'StudentHome'
+                ? 'AdminDashboard'
+                : userRole === 'instructor'
+                  ? 'InstructorHome'
+                  : 'StudentHome'
           }
           screenOptions={({ navigation, route }) => ({
             headerStyle: {
@@ -210,8 +226,8 @@ export default function App() {
               route.name !== 'StudentHome'
                 ? () => <WebBackButton navigation={navigation} />
                 : isAuthenticated && userName && !navigation.canGoBack() && Platform.OS !== 'web'
-                ? () => <UserNameDisplay />
-                : undefined,
+                  ? () => <UserNameDisplay />
+                  : undefined,
             // Show logout button on mobile only (web has GlobalTopBar)
             headerRight:
               isAuthenticated && Platform.OS !== 'web' ? () => <LogoutButton /> : undefined,
@@ -223,6 +239,16 @@ export default function App() {
           <Stack.Screen name="Login" options={{ title: 'Login', headerShown: !isAuthenticated }}>
             {props => <LoginScreen {...props} onAuthChange={handleAuthChange} />}
           </Stack.Screen>
+          <Stack.Screen
+            name="ForgotPassword"
+            component={ForgotPasswordScreen}
+            options={{ title: 'Forgot Password', headerShown: !isAuthenticated }}
+          />
+          <Stack.Screen
+            name="ResetPassword"
+            component={ResetPasswordScreen}
+            options={{ title: 'Reset Password', headerShown: !isAuthenticated }}
+          />
           <Stack.Screen
             name="RegisterChoice"
             component={RegisterChoiceScreen}

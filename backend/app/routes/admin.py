@@ -274,14 +274,16 @@ async def get_all_users(
 
     result = []
     for user in users:
-        # Get id_number from instructor or student profile
+        # Get id_number and booking_fee from instructor or student profile
         id_number = None
+        booking_fee = None
         if user.role == UserRole.INSTRUCTOR:
             instructor = (
                 db.query(Instructor).filter(Instructor.user_id == user.id).first()
             )
             if instructor:
                 id_number = instructor.id_number
+                booking_fee = instructor.booking_fee
         elif user.role == UserRole.STUDENT:
             student = db.query(Student).filter(Student.user_id == user.id).first()
             if student:
@@ -296,6 +298,7 @@ async def get_all_users(
                 role=user.role,
                 status=user.status,
                 id_number=id_number,
+                booking_fee=booking_fee,
                 created_at=user.created_at,
                 last_login=user.last_login,
             )
@@ -337,6 +340,36 @@ async def update_user_status(
         "message": f"User status updated from {old_status.value} to {new_status.value}",
         "user_id": user_id,
         "new_status": new_status.value,
+    }
+
+
+@router.put("/instructors/{instructor_id}/booking-fee")
+async def update_instructor_booking_fee(
+    instructor_id: int,
+    current_admin: Annotated[User, Depends(require_admin)],
+    db: Session = Depends(get_db),
+    booking_fee: float = Query(..., ge=0, description="Booking fee in ZAR"),
+):
+    """
+    Update the booking fee for a specific instructor
+    """
+    instructor = db.query(Instructor).filter(Instructor.id == instructor_id).first()
+    if not instructor:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Instructor not found",
+        )
+
+    old_fee = instructor.booking_fee
+    instructor.booking_fee = booking_fee
+    db.commit()
+    db.refresh(instructor)
+
+    return {
+        "message": f"Booking fee updated from R{old_fee:.2f} to R{booking_fee:.2f}",
+        "instructor_id": instructor_id,
+        "old_fee": old_fee,
+        "new_fee": booking_fee,
     }
 
 

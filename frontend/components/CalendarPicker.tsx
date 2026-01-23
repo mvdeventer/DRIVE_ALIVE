@@ -29,6 +29,7 @@ export default function CalendarPicker({
   const [currentMonth, setCurrentMonth] = useState(
     new Date(value.getFullYear(), value.getMonth(), 1)
   );
+  const [tempSelectedDate, setTempSelectedDate] = useState<Date>(value);
 
   const getDaysInMonth = (date: Date) => {
     return new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
@@ -69,7 +70,16 @@ export default function CalendarPicker({
     // Prevent selection if date doesn't pass validation
     if (isDateDisabled(day)) return;
 
-    onChange(selectedDate);
+    // Just update temp selection, don't trigger onChange yet
+    setTempSelectedDate(selectedDate);
+  };
+
+  const handleConfirm = () => {
+    onChange(tempSelectedDate);
+  };
+
+  const handleCancel = () => {
+    setTempSelectedDate(value);
   };
 
   const isDateDisabled = (day: number) => {
@@ -113,17 +123,8 @@ export default function CalendarPicker({
       if (isNoSchedule) return true;
     }
 
-    // Check if date is fully booked (no available slots)
-    if (fullyBookedDates && fullyBookedDates.length > 0) {
-      const isFullyBooked = fullyBookedDates.some(bookedDate => {
-        return (
-          date.getDate() === bookedDate.getDate() &&
-          date.getMonth() === bookedDate.getMonth() &&
-          date.getFullYear() === bookedDate.getFullYear()
-        );
-      });
-      if (isFullyBooked) return true;
-    }
+    // NOTE: Fully booked dates are NOT disabled - user can still click to see time slots
+    // (might show purple conflicts if they have existing bookings)
 
     return false;
   };
@@ -139,9 +140,9 @@ export default function CalendarPicker({
 
   const isSelected = (day: number) => {
     return (
-      day === value.getDate() &&
-      currentMonth.getMonth() === value.getMonth() &&
-      currentMonth.getFullYear() === value.getFullYear()
+      day === tempSelectedDate.getDate() &&
+      currentMonth.getMonth() === tempSelectedDate.getMonth() &&
+      currentMonth.getFullYear() === tempSelectedDate.getFullYear()
     );
   };
 
@@ -173,20 +174,35 @@ export default function CalendarPicker({
 
   const isFullyBooked = (day: number) => {
     if (!fullyBookedDates) return false;
-    const date = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), day);
-    return fullyBookedDates.some(fullyBookedDate => {
+    // Create date in UTC for consistent comparison
+    const date = new Date(Date.UTC(currentMonth.getFullYear(), currentMonth.getMonth(), day));
+    const result = fullyBookedDates.some(fullyBookedDate => {
       return (
-        date.getDate() === fullyBookedDate.getDate() &&
-        date.getMonth() === fullyBookedDate.getMonth() &&
-        date.getFullYear() === fullyBookedDate.getFullYear()
+        date.getUTCDate() === fullyBookedDate.getUTCDate() &&
+        date.getUTCMonth() === fullyBookedDate.getUTCMonth() &&
+        date.getUTCFullYear() === fullyBookedDate.getUTCFullYear()
       );
     });
+    if (result) {
+      console.log(`🔴 Day ${day} is FULLY BOOKED`, {
+        checkingDate: date.toISOString(),
+        fullyBookedDatesCount: fullyBookedDates.length,
+        fullyBookedDates: fullyBookedDates.map(d => d.toISOString()),
+      });
+    }
+    return result;
   };
 
   const renderCalendar = () => {
     const daysInMonth = getDaysInMonth(currentMonth);
     const firstDay = getFirstDayOfMonth(currentMonth);
     const days = [];
+
+    console.log('📅 CalendarPicker rendering:', {
+      currentMonth: currentMonth.toISOString(),
+      fullyBookedDatesCount: fullyBookedDates?.length || 0,
+      fullyBookedDates: fullyBookedDates?.map(d => d.toISOString()) || [],
+    });
 
     // Empty cells for days before the first day of the month
     for (let i = 0; i < firstDay; i++) {
@@ -202,34 +218,49 @@ export default function CalendarPicker({
       const noSchedule = isNoSchedule(day);
       const fullyBooked = isFullyBooked(day);
 
+      // Determine cell styles based on priority
+      // Apply base styles first, then override with higher priority styles
+      const cellStyles = [styles.dayCell];
+      const textStyles = [styles.dayText];
+
+      // Lower priority styles first
+      if (disabled) {
+        cellStyles.push(styles.disabledCell);
+        textStyles.push(styles.disabledText);
+      }
+      if (today && !fullyBooked) {
+        cellStyles.push(styles.todayCell);
+        textStyles.push(styles.todayText);
+      }
+      // Only apply selected style if NOT fully booked
+      if (selected && !fullyBooked) {
+        cellStyles.push(styles.selectedCell);
+        textStyles.push(styles.selectedText);
+      }
+
+      // Higher priority styles last (will override previous)
+      if (noSchedule) {
+        cellStyles.push(styles.noScheduleCell);
+        textStyles.push(styles.noScheduleText);
+      }
+      if (inTimeOff) {
+        cellStyles.push(styles.timeOffCell);
+        textStyles.push(styles.timeOffText);
+      }
+      // Fully booked ALWAYS overrides everything (highest priority)
+      if (fullyBooked) {
+        cellStyles.push(styles.fullyBookedCell);
+        textStyles.push(styles.fullyBookedText);
+      }
+
       days.push(
         <TouchableOpacity
           key={day}
-          style={[
-            styles.dayCell,
-            today && styles.todayCell,
-            selected && styles.selectedCell,
-            disabled && styles.disabledCell,
-            inTimeOff && styles.timeOffCell,
-            noSchedule && !inTimeOff && styles.noScheduleCell,
-            fullyBooked && !inTimeOff && !noSchedule && styles.fullyBookedCell,
-          ]}
+          style={cellStyles}
           onPress={() => !disabled && selectDate(day)}
           disabled={disabled}
         >
-          <Text
-            style={[
-              styles.dayText,
-              today && styles.todayText,
-              selected && styles.selectedText,
-              disabled && styles.disabledText,
-              inTimeOff && styles.timeOffText,
-              noSchedule && !inTimeOff && styles.noScheduleText,
-              fullyBooked && !inTimeOff && !noSchedule && styles.fullyBookedText,
-            ]}
-          >
-            {day}
-          </Text>
+          <Text style={textStyles}>{day}</Text>
         </TouchableOpacity>
       );
     }
@@ -263,6 +294,19 @@ export default function CalendarPicker({
 
       {/* Calendar Grid */}
       <View style={styles.calendarGrid}>{renderCalendar()}</View>
+
+      {/* Action Buttons */}
+      <View style={styles.actionButtons}>
+        <TouchableOpacity onPress={handleCancel} style={[styles.actionButton, styles.cancelButton]}>
+          <Text style={styles.cancelButtonText}>Cancel</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          onPress={handleConfirm}
+          style={[styles.actionButton, styles.confirmButton]}
+        >
+          <Text style={styles.confirmButtonText}>OK</Text>
+        </TouchableOpacity>
+      </View>
     </View>
   );
 }
@@ -345,10 +389,10 @@ const styles = StyleSheet.create({
     opacity: 1,
   },
   fullyBookedCell: {
-    backgroundColor: '#ffebee',
+    backgroundColor: '#f44336',
     borderRadius: 8,
     borderWidth: 2,
-    borderColor: '#f44336',
+    borderColor: '#d32f2f',
     opacity: 1,
   },
   dayText: {
@@ -376,7 +420,39 @@ const styles = StyleSheet.create({
     textDecorationLine: 'line-through',
   },
   fullyBookedText: {
-    color: '#f44336',
+    color: '#fff',
     fontWeight: 'bold',
+  },
+  actionButtons: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 12,
+    marginTop: 16,
+    paddingHorizontal: 8,
+  },
+  actionButton: {
+    flex: 1,
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  cancelButton: {
+    backgroundColor: '#f5f5f5',
+    borderWidth: 1,
+    borderColor: '#ddd',
+  },
+  confirmButton: {
+    backgroundColor: '#007bff',
+  },
+  cancelButtonText: {
+    color: '#333',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  confirmButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
   },
 });

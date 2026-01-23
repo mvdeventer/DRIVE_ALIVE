@@ -74,7 +74,8 @@ async def initiate_payment(
         lesson_amount = instructor.hourly_rate * (duration_minutes / 60)
         total_lesson_amount += lesson_amount
 
-    booking_fee = settings.BOOKING_FEE * bookings_count
+    instructor_booking_fee = instructor.booking_fee or 20.0
+    booking_fee = instructor_booking_fee * bookings_count
     total_amount = total_lesson_amount + booking_fee
 
     # Create payment session
@@ -280,6 +281,8 @@ async def stripe_webhook(request: Request, db: Session = Depends(get_db)):
                 lesson_date_str.replace("Z", "+00:00")
             )
             lesson_amount = instructor.hourly_rate * (duration_minutes / 60)
+            instructor_booking_fee = instructor.booking_fee or 20.0
+            total_booking_amount = lesson_amount + instructor_booking_fee
 
             booking = Booking(
                 booking_reference=f"BK{uuid.uuid4().hex[:8].upper()}",
@@ -291,8 +294,8 @@ async def stripe_webhook(request: Request, db: Session = Depends(get_db)):
                 pickup_latitude=0.0,
                 pickup_longitude=0.0,
                 pickup_address=pickup_address,
-                amount=lesson_amount,
-                booking_fee=settings.BOOKING_FEE,
+                amount=total_booking_amount,
+                booking_fee=instructor_booking_fee,
                 status=BookingStatus.CONFIRMED,
                 payment_status=PaymentStatus.PAID,
                 payment_method="stripe",
@@ -306,9 +309,12 @@ async def stripe_webhook(request: Request, db: Session = Depends(get_db)):
         db.commit()
 
         # Send WhatsApp confirmations
+        from datetime import timedelta as td
+
         for booking in created_bookings:
             try:
                 db.refresh(booking)
+                # Send student confirmation
                 whatsapp_service.send_booking_confirmation(
                     student_name=f"{user.first_name} {user.last_name}",
                     student_phone=user.phone,
@@ -317,8 +323,43 @@ async def stripe_webhook(request: Request, db: Session = Depends(get_db)):
                     pickup_address=booking.pickup_address,
                     amount=booking.amount + booking.booking_fee,
                     booking_reference=booking.booking_reference,
+                    student_notes=booking.student_notes,
                 )
-                logger.info(f"✅ WhatsApp sent for {booking.booking_reference}")
+                logger.info(f"✅ Student WhatsApp sent for {booking.booking_reference}")
+
+                # Check if booking is for TODAY and send immediate notification to instructor
+                now = datetime.now(timezone.utc)
+                lesson_date_utc = (
+                    booking.lesson_date.replace(tzinfo=timezone.utc)
+                    if booking.lesson_date.tzinfo is None
+                    else booking.lesson_date
+                )
+                sast_now = now + td(hours=2)
+                lesson_date_sast = lesson_date_utc + td(hours=2)
+
+                logger.info(
+                    f"🔍 STRIPE WEBHOOK - Date comparison: SAST now={sast_now.date()}, lesson date={lesson_date_sast.date()}, match={sast_now.date() == lesson_date_sast.date()}"
+                )
+
+                if sast_now.date() == lesson_date_sast.date():
+                    logger.info(
+                        f"📅 STRIPE WEBHOOK - Same-day booking detected! Sending notification to {instructor.user.phone}"
+                    )
+                    whatsapp_service.send_same_day_booking_notification(
+                        instructor_name=f"{instructor.user.first_name} {instructor.user.last_name}",
+                        instructor_phone=instructor.user.phone,
+                        student_name=f"{user.first_name} {user.last_name}",
+                        student_phone=user.phone,
+                        lesson_date=booking.lesson_date,
+                        pickup_address=booking.pickup_address,
+                        booking_reference=booking.booking_reference,
+                        amount=booking.amount + booking.booking_fee,
+                        student_notes=booking.student_notes,
+                    )
+                    logger.info(
+                        f"✅ Same-day instructor WhatsApp sent for {booking.booking_reference}"
+                    )
+
             except Exception as e:
                 logger.error(f"❌ WhatsApp failed for {booking.booking_reference}: {e}")
 
@@ -373,6 +414,12 @@ async def complete_mock_payment(
     Complete a mock payment (development only)
     Manually triggers webhook logic to create bookings
     """
+    import logging
+    from datetime import timedelta as td
+
+    logger = logging.getLogger(__name__)
+    logger.info("🔵 MOCK PAYMENT ENDPOINT CALLED - Starting payment processing")
+
     if not MOCK_PAYMENT_MODE:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -413,61 +460,145 @@ async def complete_mock_payment(
     payment_session.completed_at = datetime.now(timezone.utc)
     payment_session.transaction_id = f"mock_{uuid.uuid4().hex[:16]}"
 
-    # Create bookings from payment session metadata
-    metadata = payment_session.metadata
+    # Create bookings from payment session bookings_data
     student = db.query(Student).filter(Student.user_id == current_user.id).first()
 
     if not student:
         raise HTTPException(status_code=404, detail="Student profile not found")
 
+    # Parse the bookings_data JSON
+    bookings_data = payment_session.bookings_list
+
     created_bookings = []
-    for booking_data in metadata.get("bookings", []):
+    for booking_data in bookings_data:
+        # Generate unique booking reference
+        booking_ref = f"BK{uuid.uuid4().hex[:8].upper()}"
+
         booking = Booking(
+            booking_reference=booking_ref,
             student_id=student.id,
-            instructor_id=booking_data["instructor_id"],
-            scheduled_time=datetime.fromisoformat(booking_data["scheduled_time"]),
-            duration=booking_data["duration"],
-            pickup_location=booking_data["pickup_location"],
-            dropoff_location=booking_data["dropoff_location"],
-            lesson_type=booking_data["lesson_type"],
-            hourly_rate=booking_data["hourly_rate"],
-            total_amount=booking_data["total_amount"],
-            booking_fee=payment_session.booking_fee,
-            status=BookingStatus.CONFIRMED,
+            instructor_id=payment_session.instructor_id,
+            lesson_date=datetime.fromisoformat(booking_data["lesson_date"]),
+            duration_minutes=booking_data["duration_minutes"],
+            lesson_type="standard",
+            pickup_address=booking_data.get("pickup_address", ""),
+            pickup_latitude=0.0,  # Default coordinates
+            pickup_longitude=0.0,
+            dropoff_address=booking_data.get("dropoff_address"),
+            dropoff_latitude=None,
+            dropoff_longitude=None,
+            amount=payment_session.amount / len(bookings_data),
+            booking_fee=payment_session.booking_fee / len(bookings_data),
+            status=BookingStatus.PENDING,  # Changed from CONFIRMED to PENDING
             payment_status=PaymentStatus.PAID,
-            payment_session_id=payment_session.payment_session_id,
-            notes=booking_data.get("notes"),
+            payment_method="mock",
+            payment_id=payment_session.gateway_transaction_id,
+            student_notes=booking_data.get("student_notes"),
         )
         db.add(booking)
         created_bookings.append(booking_data)
 
     db.commit()
 
-    # Send WhatsApp confirmation (if enabled)
+    # Send WhatsApp confirmations
     try:
         instructor = (
             db.query(Instructor)
-            .filter(Instructor.id == created_bookings[0]["instructor_id"])
+            .filter(Instructor.id == payment_session.instructor_id)
             .first()
         )
         student_user = db.query(User).filter(User.id == student.user_id).first()
+        instructor_user = (
+            db.query(User).filter(User.id == instructor.user_id).first()
+            if instructor
+            else None
+        )
 
-        if instructor and student_user:
-            instructor_user = (
-                db.query(User).filter(User.id == instructor.user_id).first()
-            )
-            booking_details = {
-                "student_name": f"{student_user.first_name} {student_user.last_name}",
-                "instructor_name": f"{instructor_user.first_name} {instructor_user.last_name}",
-                "date": created_bookings[0]["scheduled_time"][:10],
-                "time": created_bookings[0]["scheduled_time"][11:16],
-                "pickup": created_bookings[0]["pickup_location"],
-            }
-            whatsapp_service.send_booking_confirmation(
-                student_user.phone, booking_details
-            )
+        if not instructor or not student_user or not instructor_user:
+            logger.error("❌ Missing user data for WhatsApp notifications")
+            raise Exception("Missing instructor or student user data")
+
+        # Get actual booking objects (not just data dicts)
+        created_booking_objs = (
+            db.query(Booking)
+            .filter(Booking.student_id == student.id)
+            .filter(Booking.instructor_id == payment_session.instructor_id)
+            .filter(Booking.payment_id == payment_session.gateway_transaction_id)
+            .all()
+        )
+
+        for booking in created_booking_objs:
+            try:
+                # Send student confirmation
+                whatsapp_service.send_booking_confirmation(
+                    student_name=f"{student_user.first_name} {student_user.last_name}",
+                    student_phone=student_user.phone,
+                    instructor_name=f"{instructor_user.first_name} {instructor_user.last_name}",
+                    lesson_date=booking.lesson_date,
+                    pickup_address=booking.pickup_address or "Not specified",
+                    amount=booking.amount + booking.booking_fee,
+                    booking_reference=booking.booking_reference,
+                    student_notes=booking.student_notes,
+                )
+                logger.info(f"✅ Student WhatsApp sent for {booking.booking_reference}")
+
+                # Check if booking is for TODAY and send immediate notification to instructor
+                now = datetime.now(timezone.utc)
+                lesson_date_utc = (
+                    booking.lesson_date.replace(tzinfo=timezone.utc)
+                    if booking.lesson_date.tzinfo is None
+                    else booking.lesson_date
+                )
+                sast_now = now + td(hours=2)
+                lesson_date_sast = lesson_date_utc + td(hours=2)
+
+                logger.info(
+                    f"� MOCK PAYMENT - Date comparison: SAST now={sast_now.date()}, lesson={lesson_date_sast.date()}, match={sast_now.date() == lesson_date_sast.date()}"
+                )
+
+                if sast_now.date() == lesson_date_sast.date():
+                    logger.info(
+                        f"📅 MOCK PAYMENT - Same-day booking detected! Sending notification to {instructor_user.phone}"
+                    )
+                    result = whatsapp_service.send_same_day_booking_notification(
+                        instructor_name=f"{instructor_user.first_name} {instructor_user.last_name}",
+                        instructor_phone=instructor_user.phone,
+                        student_name=f"{student_user.first_name} {student_user.last_name}",
+                        student_phone=student_user.phone,
+                        lesson_date=booking.lesson_date,
+                        pickup_address=booking.pickup_address or "Not specified",
+                        booking_reference=booking.booking_reference,
+                        amount=booking.amount + booking.booking_fee,
+                        student_notes=booking.student_notes,
+                    )
+                    if result:
+                        logger.info(
+                            f"✅ Same-day instructor WhatsApp sent for {booking.booking_reference}"
+                        )
+                    else:
+                        logger.error(
+                            f"❌ Failed to send same-day instructor WhatsApp for {booking.booking_reference}"
+                        )
+                else:
+                    logger.info(
+                        f"ℹ️ Not same-day booking (lesson on {lesson_date_sast.date()})"
+                    )
+
+            except Exception as inner_e:
+                logger.error(
+                    f"❌ WhatsApp failed for booking {booking.booking_reference}: {inner_e}"
+                )
+                import traceback
+
+                logger.error(traceback.format_exc())
+
     except Exception as e:
+        logger.error(f"❌ WhatsApp notification process failed: {e}")
+        import traceback
+
+        logger.error(traceback.format_exc())
         print(f"WhatsApp notification failed: {e}")
+        print(traceback.format_exc())
 
     return {
         "status": "success",

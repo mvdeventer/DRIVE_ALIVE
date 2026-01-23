@@ -93,6 +93,8 @@ async def get_instructors(
                     suburb=instructor.suburb,
                     is_available=instructor.is_available,
                     hourly_rate=instructor.hourly_rate,
+                    booking_fee=instructor.booking_fee
+                    or 20.0,  # Include per-instructor booking fee (default R20)
                     service_radius_km=instructor.service_radius_km,
                     max_travel_distance_km=instructor.max_travel_distance_km,
                     rate_per_km_beyond_radius=instructor.rate_per_km_beyond_radius,
@@ -161,6 +163,8 @@ async def get_instructor_profile(
         suburb=instructor.suburb,
         is_available=instructor.is_available,
         hourly_rate=instructor.hourly_rate,
+        booking_fee=instructor.booking_fee
+        or 20.0,  # Include booking fee for instructor dashboard
         service_radius_km=instructor.service_radius_km,
         max_travel_distance_km=instructor.max_travel_distance_km,
         rate_per_km_beyond_radius=instructor.rate_per_km_beyond_radius,

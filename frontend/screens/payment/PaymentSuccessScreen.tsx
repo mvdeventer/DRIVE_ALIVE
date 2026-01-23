@@ -105,8 +105,9 @@ export default function PaymentSuccessScreen() {
             <Text style={styles.successIcon}>✅</Text>
             <Text style={styles.successTitle}>Payment Successful!</Text>
             <Text style={styles.successText}>
-              Your {bookingsCount} lesson{bookingsCount > 1 ? 's have' : ' has'} been booked
-              successfully.
+              {bookingsCount > 0
+                ? `Your ${bookingsCount} lesson${bookingsCount > 1 ? 's have' : ' has'} been booked successfully.`
+                : 'Your lesson has been booked successfully.'}
             </Text>
             <Text style={styles.infoText}>
               WhatsApp confirmations have been sent to you and your instructor.

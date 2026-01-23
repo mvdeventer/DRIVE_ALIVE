@@ -26,6 +26,8 @@ export default function MockPaymentScreen() {
   const [message, setMessage] = useState('');
 
   useEffect(() => {
+    console.log('MockPaymentScreen - Session ID:', sessionId);
+    console.log('MockPaymentScreen - Route params:', params);
     if (!sessionId) {
       setMessage('Error: No payment session ID provided');
     }
@@ -33,33 +35,33 @@ export default function MockPaymentScreen() {
 
   const handleMockPayment = async (success: boolean) => {
     try {
+      console.log('Mock payment clicked, success:', success, 'sessionId:', sessionId);
       setProcessing(true);
+      setMessage(''); // Clear any previous error
 
       if (success) {
+        console.log('Calling completeMockPayment with sessionId:', sessionId);
         // Trigger webhook manually for mock payment
         await ApiService.completeMockPayment(sessionId);
 
         setMessage('✅ Payment successful! Redirecting...');
 
         setTimeout(() => {
-          if (Platform.OS === 'web') {
-            window.location.href = `/payment/success?session_id=${sessionId}`;
-          } else {
-            navigation.navigate('PaymentSuccess' as never, { session_id: sessionId } as never);
-          }
+          navigation.navigate('PaymentSuccess' as never, { session_id: sessionId } as never);
         }, 1500);
       } else {
         setMessage('❌ Payment cancelled');
         setTimeout(() => {
-          if (Platform.OS === 'web') {
-            window.location.href = '/payment/cancel';
-          } else {
-            navigation.navigate('PaymentCancel' as never);
-          }
+          navigation.navigate('PaymentCancel' as never);
         }, 1500);
       }
     } catch (error: any) {
       console.error('Mock payment error:', error);
+      console.error('Error details:', {
+        message: error.message,
+        response: error.response?.data,
+        status: error.response?.status,
+      });
       setMessage('Error: ' + (error.response?.data?.detail || error.message));
     } finally {
       setProcessing(false);

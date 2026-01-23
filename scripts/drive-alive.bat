@@ -71,6 +71,10 @@ set "VENV_DIR=%BACKEND_DIR%\venv"
 set "BACKEND_PORT="
 set "FRONTEND_PORT="
 
+:: PID tracking files
+set "BACKEND_PID_FILE=%BACKEND_DIR%\.backend.pid"
+set "FRONTEND_PID_FILE=%FRONTEND_DIR%\.frontend.pid"
+
 :: Colors for output (Windows 10+)
 set "COLOR_RESET=[0m"
 set "COLOR_GREEN=[92m"
@@ -295,9 +299,45 @@ echo.
 :: Always stop any existing servers first with graceful shutdown
 echo %COLOR_YELLOW%Stopping any existing servers...%COLOR_RESET%
 
-:: First: List and kill all Python processes from this project
-echo %COLOR_CYAN%Checking for existing Python processes from this project...%COLOR_RESET%
-powershell -Command "$processes = Get-Process python -ErrorAction SilentlyContinue | Where-Object {$_.Path -like '*DRIVE_ALIVE*'}; if ($processes) { Write-Host '  Found Python processes:' -ForegroundColor Yellow; $processes | Select-Object Id, @{Name='Path';Expression={$_.Path.Substring($_.Path.LastIndexOf('\')+1)}} | Format-Table -AutoSize; Write-Host '  Stopping project Python processes...' -ForegroundColor Yellow; $processes | Stop-Process -Force; Write-Host '  All project Python processes stopped.' -ForegroundColor Green } else { Write-Host '  No project Python processes found.' -ForegroundColor Green }"
+:: Stop backend using PID file
+echo %COLOR_CYAN%Checking for existing Drive Alive backend processes...%COLOR_RESET%
+if exist "%BACKEND_PID_FILE%" (
+    set /p BACKEND_PID=<"%BACKEND_PID_FILE%"
+    echo   Found backend PID: !BACKEND_PID!
+    tasklist /FI "PID eq !BACKEND_PID!" 2>nul | findstr /I "!BACKEND_PID!" >nul
+    if !errorlevel! equ 0 (
+        echo   Stopping backend process...
+        taskkill /PID !BACKEND_PID! >nul 2>&1
+        timeout /t 2 /nobreak >nul
+        taskkill /F /PID !BACKEND_PID! >nul 2>&1
+        echo %COLOR_GREEN%  Backend process stopped.%COLOR_RESET%
+    ) else (
+        echo   Backend PID no longer running.
+    )
+    del "%BACKEND_PID_FILE%" >nul 2>&1
+) else (
+    echo   No backend PID file found.
+)
+
+:: Stop frontend using PID file
+echo %COLOR_CYAN%Checking for existing Drive Alive frontend processes...%COLOR_RESET%
+if exist "%FRONTEND_PID_FILE%" (
+    set /p FRONTEND_PID=<"%FRONTEND_PID_FILE%"
+    echo   Found frontend PID: !FRONTEND_PID!
+    tasklist /FI "PID eq !FRONTEND_PID!" 2>nul | findstr /I "!FRONTEND_PID!" >nul
+    if !errorlevel! equ 0 (
+        echo   Stopping frontend process...
+        taskkill /PID !FRONTEND_PID! >nul 2>&1
+        timeout /t 2 /nobreak >nul
+        taskkill /F /PID !FRONTEND_PID! >nul 2>&1
+        echo %COLOR_GREEN%  Frontend process stopped.%COLOR_RESET%
+    ) else (
+        echo   Frontend PID no longer running.
+    )
+    del "%FRONTEND_PID_FILE%" >nul 2>&1
+) else (
+    echo   No frontend PID file found.
+)
 echo.
 
 :: Kill CMD windows by process ID using WMIC
@@ -355,9 +395,13 @@ taskkill /FI "ImageName eq uvicorn.exe" /F >nul 2>&1
 if "%CLEAR_DB%"=="1" (
     echo %COLOR_CYAN%Waiting for database connections to close...%COLOR_RESET%
 
-    :: Kill ALL Python processes (including VSCode Pylance) to release database locks
-    echo %COLOR_YELLOW%Stopping Python language servers and other processes...%COLOR_RESET%
-    taskkill /FI "ImageName eq python.exe" /F >nul 2>&1
+    :: Kill only Drive Alive backend Python processes to release database locks
+    echo %COLOR_YELLOW%Stopping Drive Alive backend processes holding database...%COLOR_RESET%
+    powershell -Command "$processes = Get-Process python -ErrorAction SilentlyContinue | Where-Object {$_.Path -like '*DRIVE_ALIVE*' -and $_.CommandLine -like '*uvicorn*'}; if ($processes) { $processes | Stop-Process -Force }"
+
+    :: Also clean up PID files since we're force-stopping
+    if exist "%BACKEND_PID_FILE%" del "%BACKEND_PID_FILE%" >nul 2>&1
+    if exist "%FRONTEND_PID_FILE%" del "%FRONTEND_PID_FILE%" >nul 2>&1
 
     timeout /t 3 /nobreak >nul
 )
@@ -384,8 +428,8 @@ if "%CLEAR_DB%"=="1" (
             echo.
             echo %COLOR_RED%^[ACTION^] Deleting database file...%COLOR_RESET%
 
-            :: Use PowerShell to force kill Python and delete database
-            powershell -Command "taskkill /F /IM python.exe 2>$null; Start-Sleep -Seconds 2; Remove-Item '%BACKEND_DIR%\drive_alive.db' -Force -ErrorAction SilentlyContinue"
+            :: Use PowerShell to force kill only Drive Alive backend processes and delete database
+            powershell -Command "$processes = Get-Process python -ErrorAction SilentlyContinue | Where-Object {$_.Path -like '*DRIVE_ALIVE*' -and $_.CommandLine -like '*uvicorn*'}; if ($processes) { $processes | Stop-Process -Force }; Start-Sleep -Seconds 2; Remove-Item '%BACKEND_DIR%\drive_alive.db' -Force -ErrorAction SilentlyContinue"
 
             if exist "%BACKEND_DIR%\drive_alive.db" (
                 echo %COLOR_RED%  X Failed to delete database file ^(file may be locked^)%COLOR_RESET%
@@ -425,7 +469,7 @@ if "%BACKEND_ONLY%"=="1" goto :start_backend_only
 
 :: Start both servers
 echo %COLOR_YELLOW%Starting Backend Server on port %BACKEND_PORT%...%COLOR_RESET%
-start "Drive Alive - Backend" cmd /k "cd /d "%BACKEND_DIR%" && call venv\Scripts\activate.bat && python -m uvicorn app.main:app --reload --host 0.0.0.0 --port %BACKEND_PORT%"
+powershell -Command "$process = Start-Process cmd -ArgumentList '/k', 'cd /d \"%BACKEND_DIR%\" && call venv\Scripts\activate.bat && python -m uvicorn app.main:app --reload --host 0.0.0.0 --port %BACKEND_PORT%' -WindowStyle Normal -PassThru; $process.Id | Out-File -FilePath '%BACKEND_PID_FILE%' -Encoding ASCII -NoNewline; Write-Host \"Backend started with PID: $($process.Id)\" -ForegroundColor Green"
 
 echo %COLOR_YELLOW%Waiting for backend to initialize...%COLOR_RESET%
 timeout /t 5 /nobreak >nul
@@ -455,7 +499,7 @@ if "%CLEAR_DB%"=="1" (
 )
 
 echo %COLOR_YELLOW%Starting Frontend Server...%COLOR_RESET%
-start "Drive Alive - Frontend" cmd /k "cd /d "%FRONTEND_DIR%" && npm start"
+powershell -Command "$process = Start-Process cmd -ArgumentList '/k', 'cd /d \"%FRONTEND_DIR%\" && npm start' -WindowStyle Normal -PassThru; $process.Id | Out-File -FilePath '%FRONTEND_PID_FILE%' -Encoding ASCII -NoNewline; Write-Host \"Frontend started with PID: $($process.Id)\" -ForegroundColor Green"
 
 echo.
 echo %COLOR_GREEN%Servers are starting...%COLOR_RESET%
@@ -507,7 +551,7 @@ taskkill /FI "ImageName eq uvicorn.exe" >nul 2>&1
 timeout /t 1 /nobreak >nul
 taskkill /FI "ImageName eq uvicorn.exe" /F >nul 2>&1
 echo %COLOR_YELLOW%Starting Backend Server only...%COLOR_RESET%
-start "Drive Alive - Backend" cmd /k "cd /d "%BACKEND_DIR%" && call venv\Scripts\activate.bat && python -m uvicorn app.main:app --reload --host 0.0.0.0 --port %BACKEND_PORT%"
+powershell -Command "$process = Start-Process cmd -ArgumentList '/k', 'cd /d \"%BACKEND_DIR%\" && call venv\Scripts\activate.bat && python -m uvicorn app.main:app --reload --host 0.0.0.0 --port %BACKEND_PORT%' -WindowStyle Normal -PassThru; $process.Id | Out-File -FilePath '%BACKEND_PID_FILE%' -Encoding ASCII -NoNewline; Write-Host \"Backend started with PID: $($process.Id)\" -ForegroundColor Green"
 echo.
 echo %COLOR_GREEN%Backend server started: %BACKEND_URL%%COLOR_RESET%
 if "%NO_BROWSER%"=="0" (
@@ -543,7 +587,7 @@ taskkill /FI "WINDOWTITLE eq Drive Alive - Frontend*" /T >nul 2>&1
 timeout /t 1 /nobreak >nul
 taskkill /FI "WINDOWTITLE eq Drive Alive - Frontend*" /T /F >nul 2>&1
 echo %COLOR_YELLOW%Starting Frontend Server only...%COLOR_RESET%
-start "Drive Alive - Frontend" cmd /k "cd /d "%FRONTEND_DIR%" && set PORT=%FRONTEND_PORT% && npm start"
+powershell -Command "$process = Start-Process cmd -ArgumentList '/k', 'cd /d \"%FRONTEND_DIR%\" && set PORT=%FRONTEND_PORT% && npm start' -WindowStyle Normal -PassThru; $process.Id | Out-File -FilePath '%FRONTEND_PID_FILE%' -Encoding ASCII -NoNewline; Write-Host \"Frontend started with PID: $($process.Id)\" -ForegroundColor Green"
 echo.
 echo %COLOR_GREEN%Frontend server started: %FRONTEND_URL%%COLOR_RESET%
 goto :eof
@@ -555,14 +599,37 @@ goto :eof
 echo %COLOR_YELLOW%Stopping all servers...%COLOR_RESET%
 echo.
 
-:: Kill backend processes
-taskkill /FI "WINDOWTITLE eq Drive Alive - Backend*" /T /F >nul 2>&1
-taskkill /FI "ImageName eq uvicorn.exe" /F >nul 2>&1
-taskkill /FI "ImageName eq python.exe" /FI "CommandLine eq *uvicorn*" /F >nul 2>&1
+:: Stop backend using PID file
+if exist "%BACKEND_PID_FILE%" (
+    set /p BACKEND_PID=<"%BACKEND_PID_FILE%"
+    echo %COLOR_CYAN%Stopping backend (PID: !BACKEND_PID!)...%COLOR_RESET%
+    tasklist /FI "PID eq !BACKEND_PID!" 2>nul | findstr /I "!BACKEND_PID!" >nul
+    if !errorlevel! equ 0 (
+        taskkill /PID !BACKEND_PID! >nul 2>&1
+        timeout /t 2 /nobreak >nul
+        taskkill /F /PID !BACKEND_PID! >nul 2>&1
+        echo %COLOR_GREEN%  Backend stopped.%COLOR_RESET%
+    )
+    del "%BACKEND_PID_FILE%" >nul 2>&1
+)
 
-:: Kill frontend processes
+:: Stop frontend using PID file
+if exist "%FRONTEND_PID_FILE%" (
+    set /p FRONTEND_PID=<"%FRONTEND_PID_FILE%"
+    echo %COLOR_CYAN%Stopping frontend (PID: !FRONTEND_PID!)...%COLOR_RESET%
+    tasklist /FI "PID eq !FRONTEND_PID!" 2>nul | findstr /I "!FRONTEND_PID!" >nul
+    if !errorlevel! equ 0 (
+        taskkill /PID !FRONTEND_PID! >nul 2>&1
+        timeout /t 2 /nobreak >nul
+        taskkill /F /PID !FRONTEND_PID! >nul 2>&1
+        echo %COLOR_GREEN%  Frontend stopped.%COLOR_RESET%
+    )
+    del "%FRONTEND_PID_FILE%" >nul 2>&1
+)
+
+:: Fallback: Kill any remaining processes by window title
+taskkill /FI "WINDOWTITLE eq Drive Alive - Backend*" /T /F >nul 2>&1
 taskkill /FI "WINDOWTITLE eq Drive Alive - Frontend*" /T /F >nul 2>&1
-taskkill /FI "CommandLine eq *expo start*" /F >nul 2>&1
 
 echo %COLOR_GREEN%All servers stopped.%COLOR_RESET%
 goto :eof

@@ -7,6 +7,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Modal,
   Platform,
   RefreshControl,
   ScrollView,
@@ -51,12 +52,20 @@ export default function StudentHomeScreen() {
   const [profile, setProfile] = useState<StudentProfile | null>(null);
   const [upcomingBookings, setUpcomingBookings] = useState<Booking[]>([]);
   const [pastBookings, setPastBookings] = useState<Booking[]>([]);
+  const [hiddenBookingIds, setHiddenBookingIds] = useState<Set<number>>(new Set());
+  const [showUnhideModal, setShowUnhideModal] = useState(false);
+  const [selectedUnhideIds, setSelectedUnhideIds] = useState<Set<number>>(new Set());
   const [selectedRatings, setSelectedRatings] = useState<{ [key: number]: number }>({});
   const [showThankYou, setShowThankYou] = useState<{ [key: number]: boolean }>({});
   const [message, setMessage] = useState<{
     type: 'success' | 'error' | 'warning' | 'info';
     text: string;
   } | null>(null);
+
+  // Load hidden bookings from storage on mount
+  useEffect(() => {
+    loadHiddenBookings();
+  }, []);
 
   useEffect(() => {
     loadDashboardData();
@@ -68,6 +77,41 @@ export default function StudentHomeScreen() {
       loadDashboardData();
     }, [])
   );
+
+  const loadHiddenBookings = async () => {
+    try {
+      const storage = Platform.OS === 'web' ? localStorage : SecureStore;
+      const stored =
+        Platform.OS === 'web'
+          ? storage.getItem('hidden_bookings')
+          : await storage.getItemAsync('hidden_bookings');
+
+      if (stored) {
+        const ids = JSON.parse(stored);
+        setHiddenBookingIds(new Set(ids));
+        console.log(`📦 Loaded ${ids.length} hidden bookings from storage`);
+      }
+    } catch (error) {
+      console.error('Error loading hidden bookings:', error);
+    }
+  };
+
+  const saveHiddenBookings = async (ids: Set<number>) => {
+    try {
+      const storage = Platform.OS === 'web' ? localStorage : SecureStore;
+      const idsArray = Array.from(ids);
+      const jsonString = JSON.stringify(idsArray);
+
+      if (Platform.OS === 'web') {
+        storage.setItem('hidden_bookings', jsonString);
+      } else {
+        await storage.setItemAsync('hidden_bookings', jsonString);
+      }
+      console.log(`💾 Saved ${idsArray.length} hidden bookings to storage`);
+    } catch (error) {
+      console.error('Error saving hidden bookings:', error);
+    }
+  };
 
   const loadDashboardData = async () => {
     try {
@@ -303,6 +347,73 @@ export default function StudentHomeScreen() {
     return '😊'; // Happy for 4-5 stars
   };
 
+  const handleHideCompletedLesson = (booking: Booking) => {
+    // Check if lesson has a rating - MUST rate before hiding
+    if (!booking.review_rating && !selectedRatings[booking.id]) {
+      setMessage({
+        type: 'error',
+        text: '⚠️ Please rate this lesson before hiding it. Select 1-5 stars above.',
+      });
+      setTimeout(() => setMessage(null), 5000);
+      return;
+    }
+
+    // Lesson has been rated, allow hiding
+    const newHiddenIds = new Set([...hiddenBookingIds, booking.id]);
+    setHiddenBookingIds(newHiddenIds);
+    saveHiddenBookings(newHiddenIds);
+    setMessage({
+      type: 'success',
+      text: '✅ Lesson hidden from view (not deleted from system)',
+    });
+    setTimeout(() => setMessage(null), 4000);
+  };
+
+  const handleToggleUnhideSelection = (bookingId: number) => {
+    setSelectedUnhideIds(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(bookingId)) {
+        newSet.delete(bookingId);
+      } else {
+        newSet.add(bookingId);
+      }
+      return newSet;
+    });
+  };
+
+  const handleSelectAllUnhide = () => {
+    if (selectedUnhideIds.size === hiddenBookingIds.size) {
+      setSelectedUnhideIds(new Set());
+    } else {
+      setSelectedUnhideIds(new Set(hiddenBookingIds));
+    }
+  };
+
+  const handleUnhideLessons = () => {
+    if (selectedUnhideIds.size === 0) {
+      setMessage({
+        type: 'error',
+        text: '⚠️ Please select at least one lesson to unhide',
+      });
+      setTimeout(() => setMessage(null), 3000);
+      return;
+    }
+
+    const newHiddenIds = new Set(hiddenBookingIds);
+    selectedUnhideIds.forEach(id => newHiddenIds.delete(id));
+    setHiddenBookingIds(newHiddenIds);
+    saveHiddenBookings(newHiddenIds);
+
+    const count = selectedUnhideIds.size;
+    setSelectedUnhideIds(new Set());
+    setShowUnhideModal(false);
+    setMessage({
+      type: 'success',
+      text: `✅ ${count} lesson${count > 1 ? 's' : ''} unhidden successfully`,
+    });
+    setTimeout(() => setMessage(null), 4000);
+  };
+
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
     return date.toLocaleDateString('en-ZA', {
@@ -460,82 +571,229 @@ export default function StudentHomeScreen() {
       {/* Recent Lessons */}
       {pastBookings.length > 0 && (
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Recent Lessons</Text>
-          <View style={styles.bookingsGrid}>
-            {pastBookings.map(booking => (
-              <View key={booking.id} style={styles.bookingCard}>
-                <View style={styles.bookingHeader}>
-                  <Text style={styles.instructorName}>{booking.instructor_name}</Text>
-                  <View style={[styles.statusBadge, { backgroundColor: '#28a745' }]}>
-                    <Text style={styles.statusText}>Completed</Text>
-                  </View>
-                </View>
-                {booking.booking_reference && (
-                  <Text style={styles.bookingReference}>🎫 {booking.booking_reference}</Text>
-                )}
-                <Text style={styles.bookingDetail}>👤 Instructor: {booking.instructor_name}</Text>
-                <Text style={styles.bookingTime}>🕒 {formatDate(booking.scheduled_time)}</Text>
-                <Text style={styles.bookingDuration}>⏱️ {booking.duration_minutes} minutes</Text>
-                {booking.vehicle_make && (
-                  <Text style={styles.bookingDetail}>
-                    🚗 {booking.vehicle_make} {booking.vehicle_model} (
-                    {booking.vehicle_registration})
-                  </Text>
-                )}
-                {booking.instructor_city && (
-                  <Text style={styles.bookingDetail}>
-                    📍 {booking.instructor_suburb ? `${booking.instructor_suburb}, ` : ''}
-                    {booking.instructor_city}
-                  </Text>
-                )}
-                {booking.pickup_location && (
-                  <Text style={styles.bookingDetail}>📌 Pickup: {booking.pickup_location}</Text>
-                )}
-                <View style={styles.bookingFooter}>
-                  <Text style={styles.bookingPrice}>R{booking.total_price.toFixed(2)}</Text>
-                </View>
-                <View style={styles.ratingSection}>
-                  <View style={styles.ratingRow}>
-                    <View style={styles.starRating}>
-                      {[1, 2, 3, 4, 5].map(star => (
-                        <TouchableOpacity
-                          key={star}
-                          onPress={() => handleSelectRating(booking.id, star)}
-                          style={styles.starButton}
-                        >
-                          <Text
-                            style={[
-                              styles.starText,
-                              {
-                                opacity:
-                                  selectedRatings[booking.id] && selectedRatings[booking.id] >= star
-                                    ? 1
-                                    : 0.3,
-                              },
-                            ]}
-                          >
-                            ⭐
-                          </Text>
-                        </TouchableOpacity>
-                      ))}
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Recent Lessons</Text>
+            <TouchableOpacity
+              style={[
+                styles.unhideButton,
+                hiddenBookingIds.size === 0 && styles.unhideButtonDisabled,
+              ]}
+              onPress={() => hiddenBookingIds.size > 0 && setShowUnhideModal(true)}
+              disabled={hiddenBookingIds.size === 0}
+            >
+              <Text
+                style={[
+                  styles.unhideButtonText,
+                  hiddenBookingIds.size === 0 && styles.unhideButtonTextDisabled,
+                ]}
+              >
+                👁️ Unhide Lessons ({hiddenBookingIds.size})
+              </Text>
+            </TouchableOpacity>
+          </View>
+          {pastBookings.filter(b => !hiddenBookingIds.has(b.id)).length > 0 ? (
+            <View style={styles.bookingsGrid}>
+              {pastBookings
+                .filter(b => !hiddenBookingIds.has(b.id))
+                .map(booking => (
+                  <View key={booking.id} style={styles.bookingCard}>
+                    <View style={styles.bookingHeader}>
+                      <Text style={styles.instructorName}>{booking.instructor_name}</Text>
+                      <View style={[styles.statusBadge, { backgroundColor: '#28a745' }]}>
+                        <Text style={styles.statusText}>Completed</Text>
+                      </View>
                     </View>
-                    {selectedRatings[booking.id] && (
-                      <Text style={styles.ratingEmoji}>
-                        {getRatingEmoji(selectedRatings[booking.id])}
+                    {booking.booking_reference && (
+                      <Text style={styles.bookingReference}>🎫 {booking.booking_reference}</Text>
+                    )}
+                    <Text style={styles.bookingDetail}>
+                      👤 Instructor: {booking.instructor_name}
+                    </Text>
+                    <Text style={styles.bookingTime}>🕒 {formatDate(booking.scheduled_time)}</Text>
+                    <Text style={styles.bookingDuration}>
+                      ⏱️ {booking.duration_minutes} minutes
+                    </Text>
+                    {booking.vehicle_make && (
+                      <Text style={styles.bookingDetail}>
+                        🚗 {booking.vehicle_make} {booking.vehicle_model} (
+                        {booking.vehicle_registration})
                       </Text>
                     )}
+                    {booking.instructor_city && (
+                      <Text style={styles.bookingDetail}>
+                        📍 {booking.instructor_suburb ? `${booking.instructor_suburb}, ` : ''}
+                        {booking.instructor_city}
+                      </Text>
+                    )}
+                    {booking.pickup_location && (
+                      <Text style={styles.bookingDetail}>📌 Pickup: {booking.pickup_location}</Text>
+                    )}
+                    <View style={styles.bookingFooter}>
+                      <Text style={styles.bookingPrice}>R{booking.total_price.toFixed(2)}</Text>
+                      <TouchableOpacity
+                        style={styles.hideButton}
+                        onPress={() => handleHideCompletedLesson(booking)}
+                      >
+                        <Text style={styles.hideButtonText}>👁️ Hide</Text>
+                      </TouchableOpacity>
+                    </View>
+                    <View style={styles.ratingSection}>
+                      <View style={styles.ratingRow}>
+                        <View style={styles.starRating}>
+                          {[1, 2, 3, 4, 5].map(star => (
+                            <TouchableOpacity
+                              key={star}
+                              onPress={() => handleSelectRating(booking.id, star)}
+                              style={styles.starButton}
+                            >
+                              <Text
+                                style={[
+                                  styles.starText,
+                                  {
+                                    opacity:
+                                      selectedRatings[booking.id] &&
+                                      selectedRatings[booking.id] >= star
+                                        ? 1
+                                        : 0.3,
+                                  },
+                                ]}
+                              >
+                                ⭐
+                              </Text>
+                            </TouchableOpacity>
+                          ))}
+                        </View>
+                        {selectedRatings[booking.id] && (
+                          <Text style={styles.ratingEmoji}>
+                            {getRatingEmoji(selectedRatings[booking.id])}
+                          </Text>
+                        )}
+                      </View>
+                      {showThankYou[booking.id] && (
+                        <Text style={styles.thankYouText}>✓ Thanks for rating!</Text>
+                      )}
+                    </View>
                   </View>
-                  {showThankYou[booking.id] && (
-                    <Text style={styles.thankYouText}>✓ Thanks for rating!</Text>
-                  )}
-                </View>
-              </View>
-            ))}
-          </View>
+                ))}
+            </View>
+          ) : (
+            <View style={styles.emptyState}>
+              <Text style={styles.emptyStateText}>All recent lessons are hidden</Text>
+              <Text style={styles.emptyStateSubtext}>
+                Use the "Unhide Lessons" button above to restore them
+              </Text>
+            </View>
+          )}
         </View>
       )}
 
       <View style={{ height: 40 }} />
+
+      {/* Unhide Modal */}
+      <Modal
+        visible={showUnhideModal}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowUnhideModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Unhide Completed Lessons</Text>
+              <TouchableOpacity
+                style={styles.modalCloseButton}
+                onPress={() => {
+                  setShowUnhideModal(false);
+                  setSelectedUnhideIds(new Set());
+                }}
+              >
+                <Text style={styles.modalCloseButtonText}>✕</Text>
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={styles.modalScrollView}>
+              {/* Select All Checkbox */}
+              <TouchableOpacity style={styles.checkboxContainer} onPress={handleSelectAllUnhide}>
+                <View
+                  style={[
+                    styles.checkbox,
+                    selectedUnhideIds.size === hiddenBookingIds.size && hiddenBookingIds.size > 0
+                      ? styles.checkboxChecked
+                      : {},
+                  ]}
+                >
+                  {selectedUnhideIds.size === hiddenBookingIds.size &&
+                    hiddenBookingIds.size > 0 && <Text style={styles.checkboxCheck}>✓</Text>}
+                </View>
+                <Text style={styles.checkboxLabel}>Select All</Text>
+              </TouchableOpacity>
+
+              <View style={styles.divider} />
+
+              {/* Hidden Lessons List */}
+              {pastBookings
+                .filter(b => hiddenBookingIds.has(b.id))
+                .map(booking => (
+                  <TouchableOpacity
+                    key={booking.id}
+                    style={styles.checkboxContainer}
+                    onPress={() => handleToggleUnhideSelection(booking.id)}
+                  >
+                    <View
+                      style={[
+                        styles.checkbox,
+                        selectedUnhideIds.has(booking.id) ? styles.checkboxChecked : {},
+                      ]}
+                    >
+                      {selectedUnhideIds.has(booking.id) && (
+                        <Text style={styles.checkboxCheck}>✓</Text>
+                      )}
+                    </View>
+                    <View style={styles.checkboxLessonInfo}>
+                      <Text style={styles.checkboxLessonTitle}>{booking.instructor_name}</Text>
+                      <Text style={styles.checkboxLessonDetail}>
+                        {formatDate(booking.scheduled_time)} • {booking.duration_minutes} min
+                      </Text>
+                      <Text style={styles.checkboxLessonPrice}>
+                        R{booking.total_price.toFixed(2)}
+                      </Text>
+                    </View>
+                  </TouchableOpacity>
+                ))}
+            </ScrollView>
+
+            <View style={styles.modalFooter}>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.modalCancelButton]}
+                onPress={() => {
+                  setShowUnhideModal(false);
+                  setSelectedUnhideIds(new Set());
+                }}
+              >
+                <Text style={styles.modalCancelButtonText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.modalButton,
+                  styles.modalConfirmButton,
+                  selectedUnhideIds.size === 0 ? styles.modalButtonDisabled : {},
+                ]}
+                onPress={handleUnhideLessons}
+                disabled={selectedUnhideIds.size === 0}
+              >
+                <Text
+                  style={[
+                    styles.modalConfirmButtonText,
+                    selectedUnhideIds.size === 0 ? styles.modalButtonTextDisabled : {},
+                  ]}
+                >
+                  Unhide Selected ({selectedUnhideIds.size})
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </ScrollView>
   );
 }
@@ -752,6 +1010,17 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
   },
+  hideButton: {
+    backgroundColor: '#6c757d',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 5,
+  },
+  hideButtonText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '600',
+  },
   starRating: {
     flexDirection: 'row',
     gap: 3,
@@ -794,5 +1063,163 @@ const styles = StyleSheet.create({
     color: '#000',
     fontSize: 12,
     fontWeight: '600',
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  unhideButton: {
+    backgroundColor: '#007bff',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 6,
+  },
+  unhideButtonDisabled: {
+    backgroundColor: '#e0e0e0',
+    opacity: 0.6,
+  },
+  unhideButtonText: {
+    color: '#fff',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  unhideButtonTextDisabled: {
+    color: '#999',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContent: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    width: '90%',
+    maxWidth: 500,
+    maxHeight: '80%',
+    boxShadow: '0px 4px 12px rgba(0, 0, 0, 0.15)',
+    elevation: 5,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#eee',
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#333',
+  },
+  modalCloseButton: {
+    padding: 4,
+  },
+  modalCloseButtonText: {
+    fontSize: 24,
+    color: '#666',
+    fontWeight: '400',
+  },
+  modalScrollView: {
+    maxHeight: 400,
+  },
+  checkboxContainer: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    padding: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
+  },
+  checkbox: {
+    width: 24,
+    height: 24,
+    borderRadius: 4,
+    borderWidth: 2,
+    borderColor: '#007bff',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+    marginTop: 2,
+  },
+  checkboxChecked: {
+    backgroundColor: '#007bff',
+  },
+  checkboxCheck: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  checkboxLabel: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+  },
+  checkboxLessonInfo: {
+    flex: 1,
+  },
+  checkboxLessonTitle: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 4,
+  },
+  checkboxLessonDetail: {
+    fontSize: 13,
+    color: '#666',
+    marginBottom: 2,
+  },
+  checkboxLessonPrice: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#28a745',
+    marginTop: 2,
+  },
+  divider: {
+    height: 1,
+    backgroundColor: '#ddd',
+    marginVertical: 4,
+  },
+  modalFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    padding: 16,
+    borderTopWidth: 1,
+    borderTopColor: '#eee',
+    gap: 12,
+  },
+  modalButton: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 6,
+    alignItems: 'center',
+  },
+  modalCancelButton: {
+    backgroundColor: '#f5f5f5',
+    borderWidth: 1,
+    borderColor: '#ddd',
+  },
+  modalCancelButtonText: {
+    color: '#333',
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  modalConfirmButton: {
+    backgroundColor: '#28a745',
+  },
+  modalConfirmButtonText: {
+    color: '#fff',
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  modalButtonDisabled: {
+    backgroundColor: '#e0e0e0',
+    opacity: 0.6,
+  },
+  modalButtonTextDisabled: {
+    color: '#999',
   },
 });

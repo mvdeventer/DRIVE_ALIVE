@@ -1,7 +1,6 @@
 /**
  * Instructor List Screen - Browse and select instructors for booking
  */
-import { FontAwesome } from '@expo/vector-icons';
 import { CommonActions } from '@react-navigation/native';
 import * as SecureStore from 'expo-secure-store';
 import React, { useEffect, useState } from 'react';
@@ -41,6 +40,7 @@ interface Instructor {
   suburb?: string;
   is_available: boolean;
   hourly_rate: number;
+  booking_fee?: number;
   rating: number;
   total_reviews: number;
   is_verified: boolean;
@@ -349,11 +349,11 @@ ${studentName}`;
       instructor.is_verified ? '✅ Verified Instructor' : '⚠️ Not Verified'
     }\n\n📍 Location\n${location}\n\n🪪 License Types\n${licenseTypes}\n\n🚗 Vehicle\n${
       instructor.vehicle_make
-    } ${instructor.vehicle_model} (${instructor.vehicle_year})\n\n💰 Pricing\nR${
-      instructor.hourly_rate
-    }/hr\n\n⭐ Rating\n${instructor.rating.toFixed(1)} stars (${
+    } ${instructor.vehicle_model} (${instructor.vehicle_year})\n\n💰 Pricing\nR${(
+      (instructor.hourly_rate || 0) + (instructor.booking_fee || 20.0)
+    ).toFixed(2)}/hr\n\n⭐ Rating\n${instructor.rating.toFixed(1)} stars (${
       instructor.total_reviews
-    } reviews)\n\n📱 Contact\nPhone: ${instructor.phone}\nEmail: ${instructor.email}\n\n${
+    } reviews)\n\n${
       instructor.is_available ? '✅ Currently Available' : '❌ Currently Unavailable'
     }`;
 
@@ -410,11 +410,12 @@ ${studentName}`;
             </Text>
           </View>
           <View style={styles.infoRow}>
-            <Text style={styles.detailLabel}>💰 R{item.hourly_rate}/hr</Text>
+            <Text style={styles.detailLabel}>
+              💰 R{((item.hourly_rate || 0) + (item.booking_fee || 20.0)).toFixed(2)}/hr
+            </Text>
             <Text style={styles.detailLabel}>
               ⭐ {item.rating.toFixed(1)} ({item.total_reviews})
             </Text>
-            <Text style={styles.detailLabel}>📱 {item.phone}</Text>
           </View>
         </View>
 
@@ -427,23 +428,6 @@ ${studentName}`;
           >
             <Text style={styles.primaryButtonText}>📅 Book Lesson</Text>
           </TouchableOpacity>
-
-          <View style={styles.secondaryButtonsRow}>
-            <TouchableOpacity
-              style={styles.secondaryButton}
-              onPress={() => handleCallInstructor(item)}
-            >
-              <Text style={styles.secondaryButtonText}>📞 Call</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.secondaryButton}
-              onPress={() => handleWhatsAppInstructor(item)}
-            >
-              <FontAwesome name="whatsapp" size={16} color="#25D366" style={{ marginRight: 6 }} />
-              <Text style={styles.secondaryButtonText}>WhatsApp</Text>
-            </TouchableOpacity>
-          </View>
         </View>
       </TouchableOpacity>
     );

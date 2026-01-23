@@ -245,7 +245,7 @@ export default function RegisterStudentScreen({ navigation }: any) {
         placeholder="Street address"
         value={formData.address_line1}
         onChangeText={value => updateField('address_line1', value)}
-        tip="Your residential address"
+        tip="Your residential address - we'll use this for pickups"
         returnKeyType="next"
         onSubmitEditing={() => addressLine2Ref.current?.focus()}
         blurOnSubmit={false}
@@ -353,14 +353,6 @@ const styles = StyleSheet.create({
     marginTop: 15,
     marginBottom: 10,
     color: '#007AFF',
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 8,
-    padding: 12,
-    marginBottom: 12,
-    fontSize: 16,
   },
   button: {
     backgroundColor: '#007AFF',

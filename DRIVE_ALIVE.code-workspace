@@ -2,16 +2,16 @@
   "folders": [
     {
       "name": "🚗 Drive Alive",
-      "path": "."
+      "path": ".",
     },
     {
       "name": "📱 Frontend",
-      "path": "frontend"
+      "path": "frontend",
     },
     {
       "name": "⚙️ Backend",
-      "path": "backend"
-    }
+      "path": "backend",
+    },
   ],
   "settings": {
     // === Editor Settings ===
@@ -19,7 +19,7 @@
     "editor.defaultFormatter": "esbenp.prettier-vscode",
     "editor.codeActionsOnSave": {
       "source.fixAll.eslint": "explicit",
-      "source.organizeImports": "explicit"
+      "source.organizeImports": "explicit",
     },
     "editor.tabSize": 2,
     "editor.insertSpaces": true,
@@ -46,7 +46,7 @@
       "**/.mypy_cache": true,
       "**/.coverage": true,
       "**/dist": true,
-      "**/build": true
+      "**/build": true,
     },
     "search.exclude": {
       "**/node_modules": true,
@@ -55,7 +55,7 @@
       "**/dist": true,
       "**/build": true,
       "**/.expo": true,
-      "**/__pycache__": true
+      "**/__pycache__": true,
     },
     // === Python Settings ===
     "python.defaultInterpreterPath": "${workspaceFolder}/backend/venv/Scripts/python.exe",
@@ -69,7 +69,7 @@
     "python.linting.flake8Enabled": true,
     "python.linting.flake8Args": [
       "--max-line-length=120",
-      "--extend-ignore=E203,W503"
+      "--extend-ignore=E203,W503",
     ],
     "python.formatting.provider": "none",
     "python.testing.pytestEnabled": true,
@@ -80,39 +80,39 @@
       "editor.tabSize": 4,
       "editor.formatOnSave": true,
       "editor.codeActionsOnSave": {
-        "source.organizeImports": "explicit"
-      }
+        "source.organizeImports": "explicit",
+      },
     },
 
     // === JavaScript/TypeScript Settings ===
     "[javascript]": {
       "editor.defaultFormatter": "esbenp.prettier-vscode",
-      "editor.tabSize": 2
+      "editor.tabSize": 2,
     },
     "[javascriptreact]": {
       "editor.defaultFormatter": "esbenp.prettier-vscode",
-      "editor.tabSize": 2
+      "editor.tabSize": 2,
     },
     "[typescript]": {
       "editor.defaultFormatter": "esbenp.prettier-vscode",
-      "editor.tabSize": 2
+      "editor.tabSize": 2,
     },
     "[typescriptreact]": {
       "editor.defaultFormatter": "esbenp.prettier-vscode",
-      "editor.tabSize": 2
+      "editor.tabSize": 2,
     },
     "[json]": {
-      "editor.defaultFormatter": "esbenp.prettier-vscode"
+      "editor.defaultFormatter": "esbenp.prettier-vscode",
     },
     "[jsonc]": {
-      "editor.defaultFormatter": "esbenp.prettier-vscode"
+      "editor.defaultFormatter": "esbenp.prettier-vscode",
     },
     "eslint.enable": true,
     "eslint.validate": [
       "javascript",
       "javascriptreact",
       "typescript",
-      "typescriptreact"
+      "typescriptreact",
     ],
     "eslint.workingDirectories": ["${workspaceFolder}/frontend"],
     "typescript.updateImportsOnFileMove.enabled": "always",
@@ -124,7 +124,7 @@
     "terminal.integrated.defaultProfile.windows": "PowerShell",
     "terminal.integrated.cwd": "${workspaceFolder}",
     "terminal.integrated.env.windows": {
-      "PYTHONPATH": "${workspaceFolder}\\backend"
+      "PYTHONPATH": "${workspaceFolder}\\backend",
     },
 
     // === Git Settings ===
@@ -138,8 +138,12 @@
     "powershell.cwd": "🚗 Drive Alive",
     "liveServer.settings.multiRootWorkspaceName": "🚗 Drive Alive",
     "chat.tools.terminal.autoApprove": {
-      ".\\venv\\Scripts\\python.exe": true
-    }
+      ".\\venv\\Scripts\\python.exe": true,
+      "/^C:\\\\Projects\\\\DRIVE_ALIVE\\\\backend\\\\venv\\\\Scripts\\\\python\\.exe check_bookings\\.py$/": {
+        "approve": true,
+        "matchCommandLine": true,
+      },
+    },
   },
   "extensions": {
     "recommendations": [
@@ -156,8 +160,8 @@
       "eamodio.gitlens",
       "streetsidesoftware.code-spell-checker",
       "gruntfuggly.todo-tree",
-      "usernamehw.errorlens"
-    ]
+      "usernamehw.errorlens",
+    ],
   },
   "launch": {
     "version": "0.2.0",
@@ -173,14 +177,14 @@
           "--host",
           "0.0.0.0",
           "--port",
-          "8000"
+          "8000",
         ],
         "cwd": "${workspaceFolder}/backend",
         "console": "integratedTerminal",
         "justMyCode": true,
         "env": {
-          "PYTHONPATH": "${workspaceFolder}/backend"
-        }
+          "PYTHONPATH": "${workspaceFolder}/backend",
+        },
       },
       {
         "name": "Python: Current File",
@@ -188,7 +192,7 @@
         "request": "launch",
         "program": "${file}",
         "console": "integratedTerminal",
-        "justMyCode": true
+        "justMyCode": true,
       },
       {
         "name": "Python: pytest",
@@ -197,7 +201,7 @@
         "module": "pytest",
         "args": ["-v", "${file}"],
         "cwd": "${workspaceFolder}/backend",
-        "console": "integratedTerminal"
+        "console": "integratedTerminal",
       },
       {
         "name": "Python: FastAPI",
@@ -206,7 +210,7 @@
         "module": "uvicorn",
         "args": ["app.main:app", "--reload"],
         "cwd": "${workspaceFolder:⚙️ Backend (FastAPI)}",
-        "python": "${workspaceFolder:⚙️ Backend (FastAPI)}/venv/Scripts/python.exe"
+        "python": "${workspaceFolder:⚙️ Backend (FastAPI)}/venv/Scripts/python.exe",
       },
       {
         "name": "Expo: Start",
@@ -214,14 +218,14 @@
         "request": "launch",
         "runtimeExecutable": "npx",
         "runtimeArgs": ["expo", "start"],
-        "cwd": "${workspaceFolder:📱 Frontend (React Native)}"
-      }
+        "cwd": "${workspaceFolder:📱 Frontend (React Native)}",
+      },
     ],
     "compounds": [
       {
         "name": "Full Stack",
-        "configurations": ["Python: FastAPI", "Expo: Start"]
-      }
-    ]
-  }
+        "configurations": ["Python: FastAPI", "Expo: Start"],
+      },
+    ],
+  },
 }

@@ -61,6 +61,11 @@ export const API_CONFIG = {
 // Stripe Configuration
 export const STRIPE_PUBLISHABLE_KEY = 'pk_test_your_stripe_publishable_key';
 
+// OpenCage Geocoding API Configuration
+// Free tier: 2,500 requests/day (no credit card required)
+// Sign up at: https://opencagedata.com/users/sign_up
+export const OPENCAGE_API_KEY = 'YOUR_OPENCAGE_API_KEY'; // Replace with your API key
+
 // Firebase Configuration
 export const FIREBASE_CONFIG = {
   apiKey: 'your-api-key',

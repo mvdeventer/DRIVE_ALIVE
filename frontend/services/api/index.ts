@@ -284,6 +284,13 @@ class ApiService {
     return response.data;
   }
 
+  async updateInstructorBookingFee(instructorId: number, bookingFee: number) {
+    const response = await this.api.put(`/admin/instructors/${instructorId}/booking-fee`, null, {
+      params: { booking_fee: bookingFee },
+    });
+    return response.data;
+  }
+
   async getAllBookingsAdmin(statusFilter?: string, skip = 0, limit = 50) {
     const params: any = { skip, limit };
     if (statusFilter) params.status_filter = statusFilter;

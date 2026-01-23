@@ -212,6 +212,13 @@ export default function LoginScreen({ navigation, onAuthChange }: any) {
       </TouchableOpacity>
 
       <TouchableOpacity
+        onPress={() => navigation.navigate('ForgotPassword' as never)}
+        style={styles.forgotPasswordButton}
+      >
+        <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
+      </TouchableOpacity>
+
+      <TouchableOpacity
         onPress={() => navigation.navigate('RegisterChoice')}
         style={styles.linkButton}
       >
@@ -260,6 +267,16 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 18,
     fontWeight: 'bold',
+  },
+  forgotPasswordButton: {
+    marginTop: 12,
+    alignItems: 'center',
+    padding: 8,
+  },
+  forgotPasswordText: {
+    color: '#666',
+    fontSize: 14,
+    textDecorationLine: 'underline',
   },
   linkButton: {
     marginTop: 20,
