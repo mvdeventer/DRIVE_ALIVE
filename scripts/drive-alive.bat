@@ -306,10 +306,10 @@ if exist "%BACKEND_PID_FILE%" (
     echo   Found backend PID: !BACKEND_PID!
     tasklist /FI "PID eq !BACKEND_PID!" 2>nul | findstr /I "!BACKEND_PID!" >nul
     if !errorlevel! equ 0 (
-        echo   Stopping backend process...
-        taskkill /PID !BACKEND_PID! >nul 2>&1
+        echo   Stopping backend process tree...
+        taskkill /T /PID !BACKEND_PID! >nul 2>&1
         timeout /t 2 /nobreak >nul
-        taskkill /F /PID !BACKEND_PID! >nul 2>&1
+        taskkill /F /T /PID !BACKEND_PID! >nul 2>&1
         echo %COLOR_GREEN%  Backend process stopped.%COLOR_RESET%
     ) else (
         echo   Backend PID no longer running.
@@ -326,10 +326,10 @@ if exist "%FRONTEND_PID_FILE%" (
     echo   Found frontend PID: !FRONTEND_PID!
     tasklist /FI "PID eq !FRONTEND_PID!" 2>nul | findstr /I "!FRONTEND_PID!" >nul
     if !errorlevel! equ 0 (
-        echo   Stopping frontend process...
-        taskkill /PID !FRONTEND_PID! >nul 2>&1
+        echo   Stopping frontend process tree...
+        taskkill /T /PID !FRONTEND_PID! >nul 2>&1
         timeout /t 2 /nobreak >nul
-        taskkill /F /PID !FRONTEND_PID! >nul 2>&1
+        taskkill /F /T /PID !FRONTEND_PID! >nul 2>&1
         echo %COLOR_GREEN%  Frontend process stopped.%COLOR_RESET%
     ) else (
         echo   Frontend PID no longer running.
@@ -1552,6 +1552,7 @@ exit /b 0
 :check_and_setup_dependencies
 :: Check and auto-setup dependencies with virtual environment activation
 echo %COLOR_CYAN%Checking environment setup...%COLOR_RESET%
+echo [DEBUG] Step 1: Checking Python...
 
 :: Check Python
 python --version >nul 2>&1
@@ -1559,6 +1560,7 @@ if errorlevel 1 (
     echo %COLOR_RED%Error: Python not found. Please install Python 3.9+%COLOR_RESET%
     exit /b 1
 )
+echo [DEBUG] Step 2: Python OK
 
 :: Check Node.js
 node --version >nul 2>&1
@@ -1566,8 +1568,10 @@ if errorlevel 1 (
     echo %COLOR_RED%Error: Node.js not found. Please install Node.js 18+%COLOR_RESET%
     exit /b 1
 )
+echo [DEBUG] Step 3: Node.js OK
 
 :: Setup Python Virtual Environment
+echo [DEBUG] Step 4: Checking venv at: %VENV_DIR%\Scripts\python.exe
 if not exist "%VENV_DIR%\Scripts\python.exe" (
     echo %COLOR_YELLOW%Virtual environment not found. Creating...%COLOR_RESET%
     cd /d "%BACKEND_DIR%"
@@ -1578,13 +1582,19 @@ if not exist "%VENV_DIR%\Scripts\python.exe" (
     )
     echo %COLOR_GREEN%✓ Virtual environment created%COLOR_RESET%
 )
+echo [DEBUG] Step 5: After venv check
+
+if exist "%VENV_DIR%\Scripts\python.exe" echo %COLOR_GREEN%✓ Virtual environment ready (using venv)%COLOR_RESET%
+echo [DEBUG] Step 6: After venv message
 
 :: Check if backend dependencies are installed
+echo [DEBUG] Step 7: Checking backend dependencies...
 "%VENV_DIR%\Scripts\python.exe" -c "import fastapi" >nul 2>&1
 if errorlevel 1 (
     echo %COLOR_YELLOW%Backend dependencies not installed. Installing...%COLOR_RESET%
     cd /d "%BACKEND_DIR%"
     call "%VENV_DIR%\Scripts\activate.bat"
+    echo [DEBUG] Step 8: Installing backend dependencies
     python -m pip install --upgrade pip --quiet
     pip install -r requirements.txt
     if errorlevel 1 (
@@ -1592,9 +1602,11 @@ if errorlevel 1 (
         exit /b 1
     )
     echo %COLOR_GREEN%✓ Backend dependencies installed%COLOR_RESET%
-) else (
-    echo %COLOR_GREEN%✓ Backend dependencies OK%COLOR_RESET%
 )
+
+"%VENV_DIR%\Scripts\python.exe" -c "import fastapi" >nul 2>&1
+if not errorlevel 1 echo %COLOR_GREEN%✓ Backend dependencies OK (using venv)%COLOR_RESET%
+echo [DEBUG] Step 9: After backend dependencies check
 
 :: Check frontend dependencies
 if not exist "%FRONTEND_DIR%\node_modules" (
