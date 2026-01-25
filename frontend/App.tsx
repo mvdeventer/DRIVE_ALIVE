@@ -148,7 +148,7 @@ export default function App() {
   };
 
   const handleLogout = async () => {
-    // IMMEDIATE LOGOUT: Clear auth tokens and reload (per AGENTS.md)
+    // IMMEDIATE LOGOUT: Clear auth tokens and redirect to login (per AGENTS.md)
     try {
       await storage.removeItem('access_token');
       await storage.removeItem('user_role');
@@ -156,9 +156,9 @@ export default function App() {
       setUserRole(null);
       setUserName('');
 
-      // Web: Reload page to clear all state
+      // Web: Redirect to root (login page) to clear all state
       if (Platform.OS === 'web') {
-        window.location.reload();
+        window.location.href = '/';
       } else {
         // Mobile: Reset navigation to Login screen
         navigationRef.current?.dispatch(
