@@ -83,6 +83,7 @@ origins = [
     "http://10.0.0.121:19000",
     "http://10.0.0.121:19001",
     "http://10.0.0.121:19006",
+    "https://drive-alive-2.onrender.com",  # Production frontend
 ]
 
 app.add_middleware(
