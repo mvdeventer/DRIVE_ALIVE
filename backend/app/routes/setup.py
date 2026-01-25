@@ -13,7 +13,7 @@ from ..utils.auth import get_password_hash
 router = APIRouter(prefix="/setup", tags=["setup"])
 
 
-@router.post("/create-admin")
+@router.get("/create-admin")
 def create_initial_admin(db: Session = Depends(get_db)):
     """
     Create the initial admin user
@@ -23,8 +23,7 @@ def create_initial_admin(db: Session = Depends(get_db)):
     existing_admin = db.query(User).filter(User.role == UserRole.ADMIN).first()
     if existing_admin:
         raise HTTPException(
-            status_code=400,
-            detail=f"Admin user already exists: {existing_admin.email}"
+            status_code=400, detail=f"Admin user already exists: {existing_admin.email}"
         )
 
     # Create admin user
@@ -47,5 +46,5 @@ def create_initial_admin(db: Session = Depends(get_db)):
         "email": admin_user.email,
         "password": "admin123",
         "warning": "Change password immediately after first login!",
-        "next_step": "Remove this /setup endpoint from the codebase"
+        "next_step": "Remove this /setup endpoint from the codebase",
     }
