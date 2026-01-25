@@ -36,12 +36,12 @@ services:
     healthCheckPath: /health
 
   # Frontend (React Native Web) - Static Site
-  - type: web
+  - type: static
     name: drive-alive-web
     plan: free
     rootDir: frontend
     buildCommand: npm install && npx expo export:web
-    staticPublishPath: dist
+    publishPath: dist
     routes:
       - type: rewrite
         source: /*
