@@ -1,5 +1,6 @@
 # Render Blueprint - Infrastructure as Code
-# This file defines all services for Drive Alive app
+# This file defines backend and database services for Drive Alive app
+# Note: Frontend (static site) must be deployed manually via Render Dashboard
 
 services:
   # Backend API (FastAPI)
@@ -34,18 +35,6 @@ services:
       - key: TWILIO_WHATSAPP_FROM
         sync: false
     healthCheckPath: /health
-
-  # Frontend (React Native Web) - Static Site
-  - type: static
-    name: drive-alive-web
-    plan: free
-    rootDir: frontend
-    buildCommand: npm install && npx expo export:web
-    publishPath: dist
-    routes:
-      - type: rewrite
-        source: /*
-        destination: /index.html
 
 databases:
   # PostgreSQL Database
