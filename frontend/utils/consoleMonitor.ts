@@ -91,7 +91,7 @@ class ConsoleMonitor {
   private async sendToBackend(log: ConsoleLog) {
     // Optional: Send errors to backend for logging
     try {
-      await fetch('http://localhost:8000/api/client-logs', {
+      await fetch('http://10.0.0.121:8000/api/client-logs', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(log),

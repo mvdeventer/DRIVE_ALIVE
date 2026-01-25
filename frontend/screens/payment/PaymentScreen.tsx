@@ -46,6 +46,8 @@ export default function PaymentScreen() {
         lesson_date: `${booking.date}T${booking.time}:00`,
         duration_minutes: 60,
         pickup_address: booking.pickup_address || '',
+        pickup_latitude: booking.pickup_latitude || -33.9249,
+        pickup_longitude: booking.pickup_longitude || 18.4241,
         student_notes: booking.notes || null,
       }));
 

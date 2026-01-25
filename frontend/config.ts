@@ -5,20 +5,18 @@
 // Detect if running on web or mobile
 const isWeb = typeof window !== 'undefined' && window.document;
 
-// Detect if we're accessing from localhost or network IP
-const isLocalhost =
-  isWeb && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+// API Base URL - Use environment variable in production, local IP in development
+const getApiUrl = () => {
+  // Production: Use environment variable
+  if (!__DEV__ && process.env.EXPO_PUBLIC_API_URL) {
+    return process.env.EXPO_PUBLIC_API_URL;
+  }
 
-// Change this to your backend URL
-// Use local IP address (10.0.0.121) for mobile devices on same network
-// Use localhost only when accessing from localhost, otherwise use IP
-const API_BASE_URL = isWeb
-  ? isLocalhost
-    ? 'http://localhost:8000'
-    : 'http://10.0.0.121:8000'
-  : __DEV__
-    ? 'http://10.0.0.121:8000'
-    : 'https://your-production-api.com';
+  // Development: Use local network IP
+  return 'http://10.0.0.121:8000';
+};
+
+const API_BASE_URL = getApiUrl();
 
 // Debug configuration
 // Set ENABLED to true to pre-fill registration forms for faster testing

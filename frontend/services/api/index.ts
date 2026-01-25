@@ -52,11 +52,11 @@ class ApiService {
       headers: {
         'Content-Type': 'application/json',
       },
-      // Only use withCredentials for same-origin requests (localhost to localhost)
+      // Only use withCredentials for same-origin requests
       // For cross-origin (IP-based), we rely on Authorization header instead
       withCredentials:
         Platform.OS === 'web' && typeof window !== 'undefined'
-          ? window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+          ? window.location.hostname === '10.0.0.121' || window.location.hostname === '127.0.0.1'
           : false,
     });
 

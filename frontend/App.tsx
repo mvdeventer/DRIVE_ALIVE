@@ -56,7 +56,7 @@ const Stack = createNativeStackNavigator();
 
 // Deep linking configuration
 const linking = {
-  prefixes: ['http://localhost:3000', 'http://localhost:8081', 'https://drivealive.co.za'],
+  prefixes: ['http://10.0.0.121:3000', 'http://10.0.0.121:8081', 'https://drivealive.co.za'],
   config: {
     screens: {
       ResetPassword: 'reset-password',

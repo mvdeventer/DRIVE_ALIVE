@@ -1,0 +1,54 @@
+# Render Blueprint - Infrastructure as Code
+# This file defines all services for Drive Alive app
+
+services:
+  # Backend API (FastAPI)
+  - type: web
+    name: drive-alive-api
+    runtime: python
+    plan: free
+    buildCommand: pip install -r backend/requirements.txt
+    startCommand: cd backend && uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: drive-alive-db
+          property: connectionString
+      - key: SECRET_KEY
+        generateValue: true
+      - key: FRONTEND_URL
+        value: https://drive-alive-web.onrender.com
+      - key: ALLOWED_ORIGINS
+        value: https://drive-alive-web.onrender.com
+      - key: STRIPE_SECRET_KEY
+        sync: false # Add manually in dashboard
+      - key: PAYFAST_MERCHANT_ID
+        sync: false
+      - key: PAYFAST_MERCHANT_KEY
+        sync: false
+      - key: TWILIO_ACCOUNT_SID
+        sync: false
+      - key: TWILIO_AUTH_TOKEN
+        sync: false
+      - key: TWILIO_WHATSAPP_FROM
+        sync: false
+    healthCheckPath: /health
+
+  # Frontend (React Native Web)
+  - type: web
+    name: drive-alive-web
+    runtime: node
+    plan: free
+    buildCommand: cd frontend && npm install && npx expo export:web
+    staticPublishPath: ./frontend/dist
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+
+databases:
+  # PostgreSQL Database
+  - name: drive-alive-db
+    databaseName: drive_alive
+    plan: free
+    user: drive_alive_user

@@ -121,7 +121,7 @@ async def initiate_payment(
 
     # MOCK PAYMENT MODE (for development without Stripe keys)
     if MOCK_PAYMENT_MODE:
-        base_url = settings.ALLOWED_ORIGINS.split(",")[0]
+        base_url = settings.FRONTEND_URL
         mock_payment_url = f"{base_url}/payment/mock?session_id={payment_session_id}"
 
         payment_session.gateway_transaction_id = f"mock_{uuid.uuid4().hex[:8]}"
@@ -160,8 +160,8 @@ async def initiate_payment(
                 },
             ],
             mode="payment",
-            success_url=f"{settings.ALLOWED_ORIGINS.split(',')[0]}/payment/success?session_id={{CHECKOUT_SESSION_ID}}",
-            cancel_url=f"{settings.ALLOWED_ORIGINS.split(',')[0]}/payment/cancel",
+            success_url=f"{settings.FRONTEND_URL}/payment/success?session_id={{CHECKOUT_SESSION_ID}}",
+            cancel_url=f"{settings.FRONTEND_URL}/payment/cancel",
             metadata={
                 "payment_session_id": payment_session_id,
                 "user_id": str(current_user.id),
@@ -275,6 +275,10 @@ async def stripe_webhook(request: Request, db: Session = Depends(get_db)):
             lesson_date_str = booking_data.get("lesson_date")
             duration_minutes = booking_data.get("duration_minutes", 60)
             pickup_address = booking_data.get("pickup_address", "")
+            pickup_latitude = booking_data.get(
+                "pickup_latitude", -33.9249
+            )  # Default to Cape Town
+            pickup_longitude = booking_data.get("pickup_longitude", 18.4241)
             student_notes = booking_data.get("student_notes")
 
             lesson_datetime = datetime.fromisoformat(
@@ -291,8 +295,8 @@ async def stripe_webhook(request: Request, db: Session = Depends(get_db)):
                 lesson_date=lesson_datetime,
                 duration_minutes=duration_minutes,
                 lesson_type="standard",
-                pickup_latitude=0.0,
-                pickup_longitude=0.0,
+                pickup_latitude=pickup_latitude,
+                pickup_longitude=pickup_longitude,
                 pickup_address=pickup_address,
                 amount=total_booking_amount,
                 booking_fee=instructor_booking_fee,
@@ -482,8 +486,10 @@ async def complete_mock_payment(
             duration_minutes=booking_data["duration_minutes"],
             lesson_type="standard",
             pickup_address=booking_data.get("pickup_address", ""),
-            pickup_latitude=0.0,  # Default coordinates
-            pickup_longitude=0.0,
+            pickup_latitude=booking_data.get(
+                "pickup_latitude", -33.9249
+            ),  # Default to Cape Town
+            pickup_longitude=booking_data.get("pickup_longitude", 18.4241),
             dropoff_address=booking_data.get("dropoff_address"),
             dropoff_latitude=None,
             dropoff_longitude=None,

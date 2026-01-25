@@ -44,13 +44,15 @@ class Settings(BaseSettings):
     SMTP_PASSWORD: str = ""
     FROM_EMAIL: str = "noreply@drivealive.com"
 
-    # Frontend URL (for password reset links)
-    FRONTEND_URL: str = "http://localhost:8081"
+    # Frontend URL (for password reset links and payment redirects)
+    FRONTEND_URL: str = "http://10.0.0.121:8081"
 
     # App
     ENVIRONMENT: str = "development"
     DEBUG: bool = True
-    ALLOWED_ORIGINS: str = "http://localhost:3000"
+    ALLOWED_ORIGINS: str = (
+        "http://10.0.0.121:3000,http://10.0.0.121:8081,http://10.0.0.121:19000"
+    )
     AUTO_VERIFY_INSTRUCTORS: bool = (
         False  # Only True in debug mode (controlled by DEBUG)
     )

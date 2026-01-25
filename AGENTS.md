@@ -172,7 +172,7 @@ showMessage(
   "Operation successful!", // Message text
   SCREEN_NAME, // Screen identifier
   "actionName", // Action identifier (matches config)
-  "success" // Message type: 'success' | 'error'
+  "success", // Message type: 'success' | 'error'
 );
 
 // Show error message
@@ -181,7 +181,7 @@ showMessage(
   "Something went wrong",
   SCREEN_NAME,
   "error",
-  "error"
+  "error",
 );
 ```
 
@@ -255,6 +255,15 @@ Critical messages (conflicts, security warnings) use 5000ms duration.
 - [x] Form field tooltips and UX enhancements
 - [x] Tab navigation in forms
 - [x] Phone number normalization (supports local 0-prefix format)
+- [x] **GPS Location Capture** ✅
+  - [x] Web Geolocation API integration (works on mobile browsers)
+  - [x] High-accuracy GPS coordinate capture
+  - [x] Reverse geocoding with OpenStreetMap Nominatim
+  - [x] Auto-fill address from GPS coordinates
+  - [x] Permission handling and error messages
+  - [x] Manual address entry fallback
+  - [x] Coordinates stored in database (pickup_latitude, pickup_longitude)
+  - [x] Works on Android/iOS mobile web browsers
 - [x] **Student Dashboard** ✅
   - [x] View upcoming bookings
   - [x] Browse available instructors
@@ -382,7 +391,6 @@ Critical messages (conflicts, security warnings) use 5000ms duration.
 ### Admin Dashboard Implementation
 
 - ✅ **Backend Infrastructure** ✅
-
   - Created admin middleware with role-based access control
   - Implemented comprehensive admin routes with 15+ endpoints
   - Added admin statistics aggregation
@@ -393,7 +401,6 @@ Critical messages (conflicts, security warnings) use 5000ms duration.
   - Added admin creation endpoint (admin-only)
 
 - ✅ **Frontend Admin Screens** ✅
-
   - AdminDashboardScreen with system overview and quick actions
   - InstructorVerificationScreen for approving/rejecting instructors
   - UserManagementScreen with filtering and status management
@@ -415,7 +422,6 @@ Critical messages (conflicts, security warnings) use 5000ms duration.
 ### Compliance Documentation
 
 - ✅ **POPIA Compliance** ✅
-
   - Comprehensive compliance guide created
   - 8 core principles documented with implementation status
   - Data collection and processing documented
@@ -611,3 +617,83 @@ showMessage(setErrorMessage, "Failed!", SCREEN_NAME, "error", "error");
 - Documentation: `IOS_EXCELJS_ENCODING_FIX.md`
 
 **Status:** ✅ Fixed and tested (Jan 13, 2026)
+
+## Recent Updates (Jan 25, 2026 - GPS Location Capture)
+
+### GPS Location Capture Feature ✅
+
+**Feature:** Students can capture GPS coordinates when booking lessons via web browsers (mobile & desktop)
+
+**Frontend Changes** ✅
+
+- Enhanced `AddressAutocomplete` component with GPS capture button
+- HTML5 Geolocation API integration (works on mobile browsers)
+- Automatic reverse geocoding using OpenStreetMap Nominatim
+- High-accuracy GPS mode (`enableHighAccuracy: true`)
+- Permission handling with user-friendly error messages
+- Auto-fill address fields from GPS coordinates
+- Manual address entry fallback
+- Loading states and visual feedback
+- File: `frontend/components/AddressAutocomplete.tsx`
+
+**BookingScreen Integration** ✅
+
+- Added `pickupCoordinates` state to store GPS data
+- Updated `AddressAutocomplete` to capture coordinates via callback
+- Modified booking submission to include coordinates in payment data
+- Default coordinates: Cape Town (-33.9249, 18.4241) if GPS not used
+- File: `frontend/screens/booking/BookingScreen.tsx`
+
+**PaymentScreen Updates** ✅
+
+- Updated booking data structure to include `pickup_latitude` and `pickup_longitude`
+- Coordinates passed to backend during payment initiation
+- File: `frontend/screens/payment/PaymentScreen.tsx`
+
+**Backend Changes** ✅
+
+- Updated Stripe webhook to extract GPS coordinates from booking data
+- Updated mock payment handler to use GPS coordinates
+- Default coordinates: Cape Town (-33.9249, 18.4241) when GPS not used
+- File: `backend/app/routes/payments.py` (lines 275-310, 485-510)
+
+**Database Schema:**
+
+- Already supported via existing model fields:
+  - `pickup_latitude` (Float, required)
+  - `pickup_longitude` (Float, required)
+  - `pickup_address` (String, required)
+
+**User Experience:**
+
+1. Student clicks "📍 Use Current Location (GPS)" button
+2. Browser prompts for location permission (one-time)
+3. GPS captures coordinates with high accuracy (15s timeout)
+4. Reverse geocoding auto-fills address fields
+5. Success message shows captured coordinates
+6. Coordinates stored in database with booking
+7. Fallback to manual entry if GPS fails
+
+**Browser Support:**
+
+- ✅ Mobile web browsers (Chrome, Safari on Android/iOS)
+- ✅ Desktop browsers (Chrome, Firefox, Edge, Safari)
+- ✅ Progressive Web Apps (PWAs)
+- ⚠️ HTTPS required (enforced by browser)
+- ⚠️ User permission required (browser prompt)
+
+**Privacy & Security:**
+
+- GPS captured only when user clicks button (no continuous tracking)
+- Explicit user consent via browser permission prompt
+- Coordinates used only for lesson pickup location
+- Reverse geocoding via OpenStreetMap (free, no API key)
+- POPIA compliant (user-initiated, no third-party sharing)
+
+**Documentation:**
+
+- Created comprehensive implementation guide: `GPS_LOCATION_CAPTURE.md`
+- Updated AGENTS.md with feature details
+- Troubleshooting guide included
+
+**Status:** ✅ Implemented and tested (Jan 25, 2026)

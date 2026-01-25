@@ -68,20 +68,20 @@ app = FastAPI(
 
 # Configure CORS - Allow specific origins with credentials
 origins = [
-    "http://localhost:8081",
+    "http://localhost:8081",  # Web version on localhost
     "http://localhost:8082",
     "http://localhost:8080",
     "http://localhost:3000",
+    "http://10.0.0.121:8081",
+    "http://10.0.0.121:8082",
+    "http://10.0.0.121:8080",
+    "http://10.0.0.121:3000",
     "http://127.0.0.1:8081",
     "http://127.0.0.1:8082",
     "http://127.0.0.1:8080",
     "http://127.0.0.1:3000",
-    "http://localhost:19000",
-    "http://localhost:19001",
-    "http://localhost:19006",
-    "http://10.0.0.121:8081",  # Allow connections from local network (for mobile testing)
-    "http://10.0.0.121:8082",
     "http://10.0.0.121:19000",
+    "http://10.0.0.121:19001",
     "http://10.0.0.121:19006",
 ]
 

@@ -79,6 +79,10 @@ export default function BookingScreen({ navigation: navProp }: any) {
     pickup_address: '',
     notes: '',
   });
+  const [pickupCoordinates, setPickupCoordinates] = useState<{
+    latitude: number;
+    longitude: number;
+  } | null>(null);
 
   // Step-by-step booking flow
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
@@ -714,11 +718,13 @@ export default function BookingScreen({ navigation: navProp }: any) {
     const bookingFee = instructorBookingFee * selectedBookings.length;
     const totalAmount = lessonAmount + bookingFee;
 
-    // Prepare bookings with pickup addresses
+    // Prepare bookings with pickup addresses and coordinates
     const bookingsWithPickup = selectedBookings.map(booking => ({
       date: booking.date,
       time: booking.time,
       pickup_address: formData.pickup_address,
+      pickup_latitude: pickupCoordinates?.latitude || -33.9249, // Default to Cape Town if GPS not used
+      pickup_longitude: pickupCoordinates?.longitude || 18.4241,
       notes: formData.notes || '',
     }));
 
@@ -833,6 +839,10 @@ export default function BookingScreen({ navigation: navProp }: any) {
             <AddressAutocomplete
               value={formData.pickup_address}
               onChangeText={value => updateField('pickup_address', value)}
+              onLocationCapture={coords => {
+                setPickupCoordinates(coords);
+                console.log('📍 Pickup location captured:', coords);
+              }}
               placeholder="Start typing your street address... (e.g., 123 Main Road, Sandton)"
               style={styles.textArea}
             />
