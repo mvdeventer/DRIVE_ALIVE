@@ -98,6 +98,9 @@ export default function BookingScreen({ navigation: navProp }: any) {
   const [existingBookings, setExistingBookings] = useState<ExistingBooking[]>([]);
   const [loadingExisting, setLoadingExisting] = useState(false);
   const [showSlotSelection, setShowSlotSelection] = useState(false);
+  const [showUnsavedChangesModal, setShowUnsavedChangesModal] = useState(false);
+  const [pendingNavigation, setPendingNavigation] = useState<any>(null);
+  const [unsavedChangesMessage, setUnsavedChangesMessage] = useState('');
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<{
@@ -156,32 +159,20 @@ export default function BookingScreen({ navigation: navProp }: any) {
             } selected but not yet booked.`
           : 'You have entered booking information that has not been saved.';
 
-      if (Platform.OS === 'web') {
-        if (
-          window.confirm(
-            `⚠️ Unsaved Changes\n\n${message}\n\nAre you sure you want to leave? Your selections will be lost.`
-          )
-        ) {
-          navigation.dispatch(e.data.action);
-        }
-      } else {
-        const Alert = require('react-native').Alert;
-        Alert.alert(
-          '⚠️ Unsaved Changes',
-          `${message}\n\nAre you sure you want to leave? Your selections will be lost.`,
-          [
-            { text: 'Stay', style: 'cancel' },
-            {
-              text: 'Leave',
-              style: 'destructive',
-              onPress: () => navigation.dispatch(e.data.action),
-            },
-          ]
-        );
-      }
+      setUnsavedChangesMessage(message);
+      setPendingNavigation(e.data.action);
+      setShowUnsavedChangesModal(true);
     });
     return unsubscribe;
   }, [navigation, hasUnsavedChanges, selectedBookings.length]);
+
+  const handleLeaveWithoutSaving = () => {
+    setShowUnsavedChangesModal(false);
+    if (pendingNavigation) {
+      navigation.dispatch(pendingNavigation);
+      setPendingNavigation(null);
+    }
+  };
 
   const loadInstructorTimeOff = async () => {
     try {
@@ -1241,6 +1232,38 @@ export default function BookingScreen({ navigation: navProp }: any) {
           </View>
         </View>
       </Modal>
+
+      {/* Unsaved Changes Confirmation Modal */}
+      <Modal
+        visible={showUnsavedChangesModal}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowUnsavedChangesModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.confirmModalContent}>
+            <Text style={styles.confirmModalTitle}>⚠️ Unsaved Changes</Text>
+            <Text style={styles.confirmModalText}>
+              {unsavedChangesMessage}
+              {'\n\n'}Are you sure you want to leave? Your selections will be lost.
+            </Text>
+            <View style={styles.confirmModalButtons}>
+              <TouchableOpacity
+                style={[styles.confirmModalButton, styles.confirmStayButton]}
+                onPress={() => setShowUnsavedChangesModal(false)}
+              >
+                <Text style={styles.confirmStayButtonText}>Stay</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.confirmModalButton, styles.confirmLeaveButton]}
+                onPress={handleLeaveWithoutSaving}
+              >
+                <Text style={styles.confirmLeaveButtonText}>Leave</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -1964,5 +1987,53 @@ const styles = StyleSheet.create({
     color: '#666',
     textAlign: 'center',
     fontStyle: 'italic',
+  },
+  confirmModalContent: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 24,
+    width: '90%',
+    maxWidth: 400,
+    boxShadow: '0px 4px 6px rgba(0,0,0,0.2)',
+  },
+  confirmModalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#333',
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  confirmModalText: {
+    fontSize: 16,
+    color: '#666',
+    marginBottom: 24,
+    textAlign: 'center',
+    lineHeight: 22,
+  },
+  confirmModalButtons: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  confirmModalButton: {
+    flex: 1,
+    padding: 14,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  confirmStayButton: {
+    backgroundColor: '#0066CC',
+  },
+  confirmStayButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  confirmLeaveButton: {
+    backgroundColor: '#DC3545',
+  },
+  confirmLeaveButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
   },
 });

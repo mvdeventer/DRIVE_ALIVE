@@ -5,9 +5,7 @@ import { useNavigation, useRoute } from '@react-navigation/native';
 import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Modal,
-  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -18,14 +16,6 @@ import FormFieldWithTip from '../../components/FormFieldWithTip';
 import InlineMessage from '../../components/InlineMessage';
 import WebNavigationHeader from '../../components/WebNavigationHeader';
 import ApiService from '../../services/api';
-
-const showAlert = (title: string, message: string) => {
-  if (Platform.OS === 'web') {
-    alert(`${title}\n\n${message}`);
-  } else {
-    Alert.alert(title, message);
-  }
-};
 
 export default function EditAdminProfileScreen({ navigation: navProp }: any) {
   const navigation = navProp || useNavigation();
