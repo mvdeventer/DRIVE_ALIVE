@@ -35,10 +35,9 @@ services:
         sync: false
     healthCheckPath: /health
 
-  # Frontend (React Native Web)
+  # Frontend (React Native Web) - Static Site
   - type: web
     name: drive-alive-web
-    runtime: node
     plan: free
     rootDir: frontend
     buildCommand: npm install && npx expo export:web
