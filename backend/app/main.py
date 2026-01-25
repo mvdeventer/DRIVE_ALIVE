@@ -13,7 +13,16 @@ from fastapi.responses import JSONResponse
 
 from .config import settings
 from .database import Base, engine
-from .routes import admin, auth, availability, bookings, instructors, payments, setup, students
+from .routes import (
+    admin,
+    auth,
+    availability,
+    bookings,
+    instructors,
+    payments,
+    setup,
+    students,
+)
 from .services.reminder_scheduler import reminder_scheduler
 
 # Create database tables
