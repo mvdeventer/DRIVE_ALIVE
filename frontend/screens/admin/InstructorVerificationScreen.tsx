@@ -6,8 +6,8 @@ import { useFocusEffect } from '@react-navigation/native';
 import React, { useCallback, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   FlatList,
+  Modal,
   RefreshControl,
   StyleSheet,
   Text,
@@ -41,6 +41,10 @@ export default function InstructorVerificationScreen({ navigation }: any) {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [confirmAction, setConfirmAction] = useState<{
+    instructor: PendingInstructor;
+    approve: boolean;
+  } | null>(null);
 
   const loadPendingInstructors = async () => {
     try {
@@ -66,33 +70,26 @@ export default function InstructorVerificationScreen({ navigation }: any) {
     loadPendingInstructors();
   };
 
-  const handleVerify = async (instructor: PendingInstructor, approve: boolean) => {
+  const handleVerify = (instructor: PendingInstructor, approve: boolean) => {
+    setConfirmAction({ instructor, approve });
+  };
+
+  const confirmVerification = async () => {
+    if (!confirmAction) return;
+
+    const { instructor, approve } = confirmAction;
     const action = approve ? 'verify' : 'reject';
 
-    Alert.alert(
-      `${approve ? 'Verify' : 'Reject'} Instructor`,
-      `Are you sure you want to ${action} ${instructor.full_name}?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: approve ? 'Verify' : 'Reject',
-          style: approve ? 'default' : 'destructive',
-          onPress: async () => {
-            try {
-              setError('');
-              await apiService.verifyInstructor(instructor.id, approve, !approve);
-              setSuccess(
-                `Successfully ${approve ? 'verified' : 'rejected'} ${instructor.full_name}`
-              );
-              setTimeout(() => setSuccess(''), 5000);
-              loadPendingInstructors();
-            } catch (err: any) {
-              setError(err.response?.data?.detail || `Failed to ${action} instructor`);
-            }
-          },
-        },
-      ]
-    );
+    try {
+      setError('');
+      setConfirmAction(null);
+      await apiService.verifyInstructor(instructor.id, approve, !approve);
+      setSuccess(`Successfully ${approve ? 'verified' : 'rejected'} ${instructor.full_name}`);
+      setTimeout(() => setSuccess(''), 5000);
+      loadPendingInstructors();
+    } catch (err: any) {
+      setError(err.response?.data?.detail || `Failed to ${action} instructor`);
+    }
   };
 
   const renderInstructor = ({ item }: { item: PendingInstructor }) => (
@@ -184,6 +181,45 @@ export default function InstructorVerificationScreen({ navigation }: any) {
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
         />
       )}
+
+      {/* Confirmation Modal */}
+      <Modal
+        visible={!!confirmAction}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setConfirmAction(null)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>
+              {confirmAction?.approve ? '✅ Verify' : '❌ Reject'} Instructor
+            </Text>
+            <Text style={styles.modalMessage}>
+              Are you sure you want to {confirmAction?.approve ? 'verify' : 'reject'}{' '}
+              {confirmAction?.instructor.full_name}?
+            </Text>
+            <View style={styles.modalButtons}>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.modalCancelButton]}
+                onPress={() => setConfirmAction(null)}
+              >
+                <Text style={styles.modalCancelText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.modalButton,
+                  confirmAction?.approve ? styles.modalConfirmButton : styles.modalRejectButton,
+                ]}
+                onPress={confirmVerification}
+              >
+                <Text style={styles.modalConfirmText}>
+                  {confirmAction?.approve ? 'Verify' : 'Reject'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -320,5 +356,61 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#666',
     textAlign: 'center',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContent: {
+    backgroundColor: '#FFF',
+    borderRadius: 12,
+    padding: 24,
+    width: '90%',
+    maxWidth: 400,
+    boxShadow: '0px 4px 6px rgba(0,0,0,0.2)',
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#333',
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  modalMessage: {
+    fontSize: 16,
+    color: '#666',
+    marginBottom: 24,
+    textAlign: 'center',
+  },
+  modalButtons: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  modalButton: {
+    flex: 1,
+    padding: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  modalCancelButton: {
+    backgroundColor: '#E0E0E0',
+  },
+  modalConfirmButton: {
+    backgroundColor: '#28A745',
+  },
+  modalRejectButton: {
+    backgroundColor: '#DC3545',
+  },
+  modalCancelText: {
+    color: '#333',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  modalConfirmText: {
+    color: '#FFF',
+    fontSize: 16,
+    fontWeight: '600',
   },
 });
