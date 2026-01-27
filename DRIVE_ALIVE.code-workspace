@@ -143,6 +143,14 @@
         "approve": true,
         "matchCommandLine": true,
       },
+      "/^git add frontend/screens/instructor/InstructorHomeScreen\\.tsx; git commit -m \"Increase tab spacing on mobile for InstructorHomeScreen - better touch targets\"; git push$/": {
+        "approve": true,
+        "matchCommandLine": true,
+      },
+      "/^\\$settingsPath = \"\\$env:APPDATA\\\\Code\\\\User\\\\settings\\.json\"; \\$settings = Get-Content \\$settingsPath -Raw \\| ConvertFrom-Json; \\$settings \\| Add-Member -NotePropertyName 'github\\.copilot\\.chat\\.mcp\\.servers' -NotePropertyValue @\\{ render = @\\{ command = 'npx'; args = @\\('-y', '@render/mcp-server-render'\\); env = @\\{ RENDER_API_KEY = 'rnd_zwyrzAgidejUku7HD67m4f5XYide' \\} \\} \\} -Force; \\$settings \\| ConvertTo-Json -Depth 10 \\| Set-Content \\$settingsPath -Encoding UTF8; Write-Host \"Render MCP server configured successfully!\"$/": {
+        "approve": true,
+        "matchCommandLine": true,
+      },
     },
   },
   "extensions": {
