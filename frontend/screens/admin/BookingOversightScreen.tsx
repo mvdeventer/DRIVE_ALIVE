@@ -7,6 +7,7 @@ import React, { useCallback, useState } from 'react';
 import {
   ActivityIndicator,
   Clipboard,
+  Dimensions,
   FlatList,
   Modal,
   Platform,
@@ -381,9 +382,9 @@ Lesson Type:    ${booking.lesson_type.toUpperCase()}
         data={filteredBookings}
         renderItem={renderBooking}
         keyExtractor={item => item.id.toString()}
-        numColumns={3}
-        key="grid"
-        columnWrapperStyle={styles.row}
+        numColumns={Dimensions.get('window').width < 768 ? 1 : 3}
+        key={Dimensions.get('window').width < 768 ? 'list' : 'grid'}
+        columnWrapperStyle={Dimensions.get('window').width < 768 ? undefined : styles.row}
         contentContainerStyle={styles.listContainer}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       />
@@ -673,8 +674,8 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     padding: Platform.OS === 'web' ? 16 : 12,
     margin: Platform.OS === 'web' ? 6 : 4,
-    flexBasis: '30%',
-    minWidth: Platform.OS === 'web' ? 280 : 200,
+    flexBasis: Dimensions.get('window').width < 768 ? '100%' : '30%',
+    minWidth: Dimensions.get('window').width < 768 ? '100%' : (Platform.OS === 'web' ? 280 : 200),
     maxWidth: '100%',
     flexGrow: 1,
     boxShadow: '0px 2px 4px #0000001A',
