@@ -1203,9 +1203,9 @@ const styles = StyleSheet.create({
   },
   cardWrapper: {
     margin: 5,
-    flexBasis: '30%',
-    minWidth: 280,
-    maxWidth: '48%',
+    flexBasis: Platform.OS === 'web' ? '30%' : '100%',
+    minWidth: Platform.OS === 'web' ? 280 : '100%',
+    maxWidth: Platform.OS === 'web' ? '48%' : '100%',
     flexGrow: 1,
   },
   userCard: {

@@ -1140,7 +1140,7 @@ const styles = StyleSheet.create({
     padding: Platform.OS === 'web' ? 10 : 8,
     borderRadius: 8,
     margin: Platform.OS === 'web' ? 5 : 4,
-    flexBasis: '22%',
+    flexBasis: Platform.OS === 'web' ? '22%' : '47%',
     minWidth: Platform.OS === 'web' ? 80 : 70,
     maxWidth: '100%',
     flexGrow: 1,
