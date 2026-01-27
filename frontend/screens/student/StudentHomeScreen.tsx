@@ -146,7 +146,7 @@ export default function StudentHomeScreen() {
         )
         .sort(
           (a: Booking, b: Booking) =>
-            new Date(b.scheduled_time).getTime() - new Date(a.scheduled_time).getTime()
+            new Date(a.scheduled_time).getTime() - new Date(b.scheduled_time).getTime()
         );
 
       console.log(`✅ Loaded ${upcoming.length} upcoming and ${past.length} past bookings`);
