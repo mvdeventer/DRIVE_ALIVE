@@ -261,24 +261,24 @@ margin: Platform.OS === 'web' ? 6 : 4,
 
 **Standard Scaling Values:**
 
-| Style Property | Web Value | Mobile Value | Reduction |
-|---------------|-----------|--------------|-----------|
-| Card Padding | 20px | 12px | 40% |
-| Card Padding (small) | 16px | 12px | 25% |
-| Card Padding (large) | 24px | 16px | 33% |
-| Font Size (title) | 32px | 24px | 25% |
-| Font Size (heading) | 24px | 20px | 17% |
-| Font Size (subheading) | 18px | 16px | 11% |
-| Font Size (body) | 16px | 14px | 13% |
-| Font Size (small) | 14px | 12px | 14% |
-| Font Size (label) | 12px | 11px | 8% |
-| Card MinWidth (large) | 140px | 100px | 29% |
-| Card MinWidth (medium) | 120px | 90px | 25% |
-| Card MinWidth (small) | 80px | 70px | 13% |
-| Margins (standard) | 6px | 4px | 33% |
-| Margins (small) | 5px | 4px | 20% |
-| Tab Padding Horizontal | 16px | 4px | 75% |
-| Tab Font Size | 14px | 11px | 21% |
+| Style Property         | Web Value | Mobile Value | Reduction |
+| ---------------------- | --------- | ------------ | --------- |
+| Card Padding           | 20px      | 12px         | 40%       |
+| Card Padding (small)   | 16px      | 12px         | 25%       |
+| Card Padding (large)   | 24px      | 16px         | 33%       |
+| Font Size (title)      | 32px      | 24px         | 25%       |
+| Font Size (heading)    | 24px      | 20px         | 17%       |
+| Font Size (subheading) | 18px      | 16px         | 11%       |
+| Font Size (body)       | 16px      | 14px         | 13%       |
+| Font Size (small)      | 14px      | 12px         | 14%       |
+| Font Size (label)      | 12px      | 11px         | 8%        |
+| Card MinWidth (large)  | 140px     | 100px        | 29%       |
+| Card MinWidth (medium) | 120px     | 90px         | 25%       |
+| Card MinWidth (small)  | 80px      | 70px         | 13%       |
+| Margins (standard)     | 6px       | 4px          | 33%       |
+| Margins (small)        | 5px       | 4px          | 20%       |
+| Tab Padding Horizontal | 16px      | 4px          | 75%       |
+| Tab Font Size          | 14px      | 11px         | 21%       |
 
 **Card Layout Pattern:**
 
