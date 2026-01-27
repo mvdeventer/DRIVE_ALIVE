@@ -231,6 +231,108 @@ scrollViewRef.current?.scrollTo({ y: 0, animated: true });
 **Extended Visibility:**
 Critical messages (conflicts, security warnings) use 5000ms duration.
 
+### Platform-Dependent Responsive Design ✅
+
+**Automatic Mobile Scaling:**
+
+- ✅ **ALL SCREENS** use Platform-dependent responsive styling
+- ✅ Automatic detection: `Platform.OS === 'web'` for conditional sizing
+- ✅ Applies to: padding, margins, fontSize, minWidth, maxWidth on all cards, text, buttons, tabs
+- ✅ Web gets larger values, iOS/Android get 20-40% smaller values
+- ✅ Ensures optimal UX across desktop web, mobile web, and native mobile apps
+
+**Responsive Pattern:**
+
+```typescript
+import { Platform } from 'react-native';
+
+// Padding example
+padding: Platform.OS === 'web' ? 20 : 12,
+
+// Font size example
+fontSize: Platform.OS === 'web' ? 18 : 16,
+
+// Min width example
+minWidth: Platform.OS === 'web' ? 140 : 100,
+
+// Margin example
+margin: Platform.OS === 'web' ? 6 : 4,
+```
+
+**Standard Scaling Values:**
+
+| Style Property | Web Value | Mobile Value | Reduction |
+|---------------|-----------|--------------|-----------|
+| Card Padding | 20px | 12px | 40% |
+| Card Padding (small) | 16px | 12px | 25% |
+| Card Padding (large) | 24px | 16px | 33% |
+| Font Size (title) | 32px | 24px | 25% |
+| Font Size (heading) | 24px | 20px | 17% |
+| Font Size (subheading) | 18px | 16px | 11% |
+| Font Size (body) | 16px | 14px | 13% |
+| Font Size (small) | 14px | 12px | 14% |
+| Font Size (label) | 12px | 11px | 8% |
+| Card MinWidth (large) | 140px | 100px | 29% |
+| Card MinWidth (medium) | 120px | 90px | 25% |
+| Card MinWidth (small) | 80px | 70px | 13% |
+| Margins (standard) | 6px | 4px | 33% |
+| Margins (small) | 5px | 4px | 20% |
+| Tab Padding Horizontal | 16px | 4px | 75% |
+| Tab Font Size | 14px | 11px | 21% |
+
+**Card Layout Pattern:**
+
+```typescript
+statCard: {
+  backgroundColor: '#F8F9FA',
+  borderRadius: 8,
+  padding: Platform.OS === 'web' ? 20 : 12,
+  margin: Platform.OS === 'web' ? 6 : 4,
+  flexBasis: '30%',
+  minWidth: Platform.OS === 'web' ? 140 : 100,
+  maxWidth: '100%',
+  flexGrow: 1,
+  alignItems: 'center',
+}
+```
+
+**Tab Navigation Pattern:**
+
+```typescript
+tab: {
+  fontSize: Platform.OS === 'web' ? 14 : 11,
+  paddingHorizontal: Platform.OS === 'web' ? 16 : 4,
+  paddingVertical: 8,
+}
+```
+
+**Screens Updated:**
+
+- ✅ **Admin Screens**: AdminDashboardScreen, BookingOversightScreen, InstructorVerificationScreen, RevenueAnalyticsScreen, InstructorEarningsOverviewScreen, UserManagementScreen
+- ✅ **Instructor Screens**: InstructorHomeScreen, EarningsReportScreen, ManageAvailabilityScreen, EditInstructorProfileScreen
+- ✅ **Student Screens**: StudentHomeScreen, InstructorListScreen, EditStudentProfileScreen
+- ✅ **Booking Screens**: BookingScreen
+- ✅ **Auth Screens**: LoginScreen, RegisterStudentScreen, RegisterInstructorScreen
+- ✅ **Payment Screens**: PaymentScreen, MockPaymentScreen
+
+**Implementation Rules:**
+
+- ❌ **NEVER** use hard-coded pixel values without Platform checks for UI elements
+- ❌ **NEVER** use CSS media queries (doesn't work in React Native)
+- ✅ **ALWAYS** use `Platform.OS === 'web'` for responsive conditional styling
+- ✅ **ALWAYS** test on mobile web browsers (Chrome/Safari mobile)
+- ✅ **ALWAYS** apply responsive pattern to new screens during development
+
+**Testing Checklist:**
+
+- [ ] Test on desktop web browser (Chrome, Firefox, Edge)
+- [ ] Test on mobile web browser (Chrome Android, Safari iOS)
+- [ ] Test on Expo Go app (iOS/Android)
+- [ ] Verify cards fit within screen width (no horizontal overflow)
+- [ ] Verify text is readable (not too small or too large)
+- [ ] Verify tabs display correctly (5+ tabs should fit)
+- [ ] Verify buttons are tappable (min 44x44px touch target on mobile)
+
 ---
 
 ## Todo List by Priority
