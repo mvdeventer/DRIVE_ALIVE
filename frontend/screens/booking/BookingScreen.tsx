@@ -1310,8 +1310,8 @@ const styles = StyleSheet.create({
   formCard: {
     backgroundColor: '#fff',
     borderRadius: 12,
-    padding: 16,
-    marginBottom: 16,
+    padding: Platform.OS === 'web' ? 16 : 12,
+    marginBottom: Platform.OS === 'web' ? 16 : 12,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
@@ -1331,7 +1331,7 @@ const styles = StyleSheet.create({
     zIndex: 1,
   },
   label: {
-    fontSize: 16,
+    fontSize: Platform.OS === 'web' ? 16 : 14,
     fontWeight: '600',
     color: '#333',
     marginBottom: 8,
@@ -1454,11 +1454,11 @@ const styles = StyleSheet.create({
     elevation: 4,
   },
   bigCalendarIcon: {
-    fontSize: 36,
+    fontSize: Platform.OS === 'web' ? 36 : 28,
     marginRight: 12,
   },
   bigCalendarText: {
-    fontSize: 18,
+    fontSize: Platform.OS === 'web' ? 18 : 16,
     color: '#fff',
     fontWeight: '600',
   },
