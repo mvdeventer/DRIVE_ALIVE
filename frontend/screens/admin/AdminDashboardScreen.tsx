@@ -6,6 +6,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import React, { useCallback, useState } from 'react';
 import {
   ActivityIndicator,
+  Platform,
   RefreshControl,
   ScrollView,
   StyleSheet,
@@ -265,8 +266,8 @@ const styles = StyleSheet.create({
   },
   header: {
     backgroundColor: '#0066CC',
-    padding: 20,
-    paddingTop: 40,
+    padding: Platform.OS === 'web' ? 20 : 15,
+    paddingTop: Platform.OS === 'web' ? 40 : 20,
   },
   headerContent: {
     flexDirection: 'row',
@@ -274,28 +275,28 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
   },
   headerTitle: {
-    fontSize: 28,
+    fontSize: Platform.OS === 'web' ? 28 : 22,
     fontWeight: 'bold',
     color: '#FFF',
   },
   headerSubtitle: {
-    fontSize: 16,
+    fontSize: Platform.OS === 'web' ? 16 : 13,
     color: '#E0E0E0',
     marginTop: 5,
   },
   section: {
     backgroundColor: '#FFF',
-    padding: 15,
-    marginTop: 15,
-    marginHorizontal: 15,
+    padding: Platform.OS === 'web' ? 15 : 10,
+    marginTop: Platform.OS === 'web' ? 15 : 10,
+    marginHorizontal: Platform.OS === 'web' ? 15 : 8,
     borderRadius: 10,
     boxShadow: '0px 2px 4px #0000001A',
   },
   sectionTitle: {
-    fontSize: 18,
+    fontSize: Platform.OS === 'web' ? 18 : 16,
     fontWeight: 'bold',
     color: '#333',
-    marginBottom: 15,
+    marginBottom: Platform.OS === 'web' ? 15 : 12,
   },
   actionGrid: {
     flexDirection: 'row',
@@ -303,11 +304,11 @@ const styles = StyleSheet.create({
     marginHorizontal: -5,
   },
   actionCard: {
-    padding: 20,
+    padding: Platform.OS === 'web' ? 20 : 12,
     borderRadius: 10,
-    margin: 6,
+    margin: Platform.OS === 'web' ? 6 : 4,
     flexBasis: '30%',
-    minWidth: 140,
+    minWidth: Platform.OS === 'web' ? 140 : 100,
     maxWidth: '100%',
     flexGrow: 1,
     alignItems: 'center',
@@ -357,10 +358,10 @@ const styles = StyleSheet.create({
   statCard: {
     backgroundColor: '#F8F9FA',
     borderRadius: 8,
-    padding: 20,
-    margin: 6,
+    padding: Platform.OS === 'web' ? 20 : 12,
+    margin: Platform.OS === 'web' ? 6 : 4,
     flexBasis: '30%',
-    minWidth: 140,
+    minWidth: Platform.OS === 'web' ? 140 : 100,
     maxWidth: '100%',
     flexGrow: 1,
     alignItems: 'center',
