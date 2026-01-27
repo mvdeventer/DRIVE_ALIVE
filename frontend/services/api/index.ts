@@ -7,22 +7,26 @@ import { Platform } from 'react-native';
 import { API_CONFIG } from '../../config';
 
 // Storage wrapper to handle web vs native
+// Using getter functions to ensure Platform is available when methods are called
 const storage = {
   async getItem(key: string): Promise<string | null> {
-    if (Platform.OS === 'web') {
+    const isWeb = Platform?.OS === 'web';
+    if (isWeb) {
       return localStorage.getItem(key);
     }
     return await SecureStore.getItemAsync(key);
   },
   async setItem(key: string, value: string): Promise<void> {
-    if (Platform.OS === 'web') {
+    const isWeb = Platform?.OS === 'web';
+    if (isWeb) {
       localStorage.setItem(key, value);
     } else {
       await SecureStore.setItemAsync(key, value);
     }
   },
   async removeItem(key: string): Promise<void> {
-    if (Platform.OS === 'web') {
+    const isWeb = Platform?.OS === 'web';
+    if (isWeb) {
       localStorage.removeItem(key);
     } else {
       await SecureStore.deleteItemAsync(key);
@@ -35,15 +39,12 @@ class ApiService {
 
   constructor() {
     // Debug: Log the API URL being used
+    const isWeb = Platform?.OS === 'web';
     console.log('API Service initialized with BASE_URL:', API_CONFIG.BASE_URL);
-    console.log('Platform:', Platform.OS);
+    console.log('Platform:', Platform?.OS || 'undefined');
     console.log(
       'Current hostname:',
-      Platform.OS === 'web'
-        ? typeof window !== 'undefined'
-          ? window.location.hostname
-          : 'N/A'
-        : 'Native'
+      isWeb && typeof window !== 'undefined' ? window.location.hostname : 'Native'
     );
 
     this.api = axios.create({
@@ -55,7 +56,7 @@ class ApiService {
       // Only use withCredentials for same-origin requests
       // For cross-origin (IP-based), we rely on Authorization header instead
       withCredentials:
-        Platform.OS === 'web' && typeof window !== 'undefined'
+        isWeb && typeof window !== 'undefined'
           ? window.location.hostname === '10.0.0.121' || window.location.hostname === '127.0.0.1'
           : false,
     });
@@ -244,11 +245,6 @@ class ApiService {
   }
 
   // Admin methods
-  async getAdminStats() {
-    const response = await this.api.get('/admin/stats');
-    return response.data;
-  }
-
   async getAdminStats() {
     const response = await this.api.get('/admin/stats');
     return response.data;

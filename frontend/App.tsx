@@ -70,13 +70,15 @@ const linking = {
 // Storage wrapper for web compatibility
 const storage = {
   async getItem(key: string): Promise<string | null> {
-    if (Platform.OS === 'web') {
+    const isWeb = Platform?.OS === 'web';
+    if (isWeb) {
       return localStorage.getItem(key);
     }
     return await SecureStore.getItemAsync(key);
   },
   async removeItem(key: string): Promise<void> {
-    if (Platform.OS === 'web') {
+    const isWeb = Platform?.OS === 'web';
+    if (isWeb) {
       localStorage.removeItem(key);
     } else {
       await SecureStore.deleteItemAsync(key);

@@ -19,13 +19,15 @@ import ApiService from '../../services/api';
 // Storage wrapper for web compatibility
 const storage = {
   async getItem(key: string): Promise<string | null> {
-    if (Platform.OS === 'web') {
+    const isWeb = Platform?.OS === 'web';
+    if (isWeb) {
       return localStorage.getItem(key);
     }
     return await SecureStore.getItemAsync(key);
   },
   async setItem(key: string, value: string): Promise<void> {
-    if (Platform.OS === 'web') {
+    const isWeb = Platform?.OS === 'web';
+    if (isWeb) {
       localStorage.setItem(key, value);
     } else {
       await SecureStore.setItemAsync(key, value);
