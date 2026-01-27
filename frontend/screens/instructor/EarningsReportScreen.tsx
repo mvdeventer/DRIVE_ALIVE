@@ -1100,10 +1100,10 @@ const styles = StyleSheet.create({
   statCard: {
     backgroundColor: '#F8F9FA',
     borderRadius: 8,
-    padding: 12,
-    margin: 5,
+    padding: Platform.OS === 'web' ? 12 : 10,
+    margin: Platform.OS === 'web' ? 5 : 4,
     flexBasis: '22%',
-    minWidth: 120,
+    minWidth: Platform.OS === 'web' ? 120 : 90,
     maxWidth: '100%',
     flexGrow: 1,
     alignItems: 'center',
