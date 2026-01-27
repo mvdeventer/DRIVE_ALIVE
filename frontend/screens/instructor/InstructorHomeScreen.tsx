@@ -1398,12 +1398,12 @@ const styles = StyleSheet.create({
     marginBottom: Platform.OS === 'web' ? 16 : 8,
     backgroundColor: '#f0f0f0',
     borderRadius: 12,
-    padding: Platform.OS === 'web' ? 4 : 2,
+    padding: Platform.OS === 'web' ? 4 : 3,
   },
   tab: {
     flex: 1,
     paddingVertical: Platform.OS === 'web' ? 12 : 8,
-    paddingHorizontal: Platform.OS === 'web' ? 16 : 4,
+    paddingHorizontal: Platform.OS === 'web' ? 16 : 8,
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: 10,
@@ -1412,7 +1412,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#007bff',
   },
   tabText: {
-    fontSize: Platform.OS === 'web' ? 14 : 11,
+    fontSize: Platform.OS === 'web' ? 14 : 12,
     fontWeight: '600',
     color: '#666',
   },
