@@ -24,11 +24,13 @@ import WebNavigationHeader from '../../components/WebNavigationHeader';
 import ApiService from '../../services/api';
 import { showMessage } from '../../utils/messageConfig';
 
-// Conditional import for DateTimePicker
-let DateTimePicker: any;
-if (Platform.OS !== 'web') {
-  DateTimePicker = require('@react-native-community/datetimepicker').default;
-}
+// Lazy load DateTimePicker for native platforms
+const getDateTimePicker = () => {
+  if (Platform.OS !== 'web') {
+    return require('@react-native-community/datetimepicker').default;
+  }
+  return null;
+};
 
 interface Booking {
   id: number;

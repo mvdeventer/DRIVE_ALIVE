@@ -19,18 +19,16 @@ import {
 import InlineMessage from '../../components/InlineMessage';
 import WebNavigationHeader from '../../components/WebNavigationHeader';
 import ApiService from '../../services/api';
+import TimePickerWheel from '../../components/TimePickerWheel';
+import CalendarPicker from '../../components/CalendarPicker';
 
-// Conditional imports for web and native
-let TimePickerWheel: any;
-let CalendarPicker: any;
-let DateTimePicker: any;
-
-if (Platform.OS === 'web') {
-  TimePickerWheel = require('../../components/TimePickerWheel').default;
-  CalendarPicker = require('../../components/CalendarPicker').default;
-} else {
-  DateTimePicker = require('@react-native-community/datetimepicker').default;
-}
+// Lazy load DateTimePicker for native platforms
+const getDateTimePicker = () => {
+  if (Platform.OS !== 'web') {
+    return require('@react-native-community/datetimepicker').default;
+  }
+  return null;
+};
 
 interface Schedule {
   id?: number;
@@ -661,15 +659,18 @@ export default function ManageAvailabilityScreen({ navigation: navProp }: any) {
               </View>
             </View>
           </Modal>
-        ) : (
-          <DateTimePicker
-            value={tempDate}
-            mode="time"
-            display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-            onChange={handleTimeChange}
-            minuteInterval={15}
-          />
-        ))}
+        ) : (() => {
+          const DateTimePicker = getDateTimePicker();
+          return DateTimePicker ? (
+            <DateTimePicker
+              value={tempDate}
+              mode="time"
+              display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+              onChange={handleTimeChange}
+              minuteInterval={15}
+            />
+          ) : null;
+        })())}
 
       {/* Date Picker Modal */}
       {showDatePicker.field &&
@@ -738,14 +739,17 @@ export default function ManageAvailabilityScreen({ navigation: navProp }: any) {
               </View>
             </View>
           </Modal>
-        ) : (
-          <DateTimePicker
-            value={tempDate}
-            mode="date"
-            display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-            onChange={handleDateChange}
-          />
-        ))}
+        ) : (() => {
+          const DateTimePicker = getDateTimePicker();
+          return DateTimePicker ? (
+            <DateTimePicker
+              value={tempDate}
+              mode="date"
+              display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+              onChange={handleDateChange}
+            />
+          ) : null;
+        })())}
 
       {/* Delete Confirmation Modal */}
       <Modal

@@ -23,10 +23,6 @@ import WebNavigationHeader from '../../components/WebNavigationHeader';
 import apiService from '../../services/api';
 import { showMessage } from '../../utils/messageConfig';
 
-const { width } = Dimensions.get('window');
-const isWeb = Platform.OS === 'web';
-const isLargeScreen = width >= 768;
-
 const SCREEN_NAME = 'UserManagementScreen';
 
 interface User {
