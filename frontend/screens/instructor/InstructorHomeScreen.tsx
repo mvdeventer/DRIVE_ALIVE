@@ -1560,9 +1560,10 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.08,
     shadowRadius: 3,
     elevation: 2,
-    minWidth: Platform.OS === 'web' ? 'calc(25% - 12px)' : '100%',
-    maxWidth: Platform.OS === 'web' ? 'calc(25% - 12px)' : '100%',
-    flex: Platform.OS === 'web' ? undefined : 1,
+    flexBasis: '30%',
+    minWidth: 200,
+    maxWidth: '100%',
+    flexGrow: 1,
   },
   lessonHeader: {
     flexDirection: 'row',
