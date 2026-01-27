@@ -142,7 +142,7 @@ const styles = StyleSheet.create({
   card: {
     backgroundColor: 'white',
     borderRadius: 10,
-    padding: 24,
+    padding: Platform.OS === 'web' ? 24 : 16,
     maxWidth: 500,
     width: '100%',
     ...Platform.select({
@@ -159,10 +159,10 @@ const styles = StyleSheet.create({
     }),
   },
   title: {
-    fontSize: 24,
+    fontSize: Platform.OS === 'web' ? 24 : 20,
     fontWeight: 'bold',
     color: '#ff9800',
-    marginBottom: 8,
+    marginBottom: Platform.OS === 'web' ? 8 : 6,
     textAlign: 'center',
   },
   subtitle: {
@@ -172,10 +172,10 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   infoText: {
-    fontSize: 16,
+    fontSize: Platform.OS === 'web' ? 16 : 14,
     color: '#333',
-    lineHeight: 24,
-    marginBottom: 24,
+    lineHeight: Platform.OS === 'web' ? 24 : 20,
+    marginBottom: Platform.OS === 'web' ? 24 : 16,
     textAlign: 'center',
   },
   buttonContainer: {

@@ -342,16 +342,16 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
   },
   title: {
-    fontSize: 24,
+    fontSize: Platform.OS === 'web' ? 24 : 20,
     fontWeight: 'bold',
-    marginBottom: 20,
+    marginBottom: Platform.OS === 'web' ? 20 : 16,
     color: '#333',
   },
   sectionTitle: {
-    fontSize: 18,
+    fontSize: Platform.OS === 'web' ? 18 : 16,
     fontWeight: '600',
-    marginTop: 15,
-    marginBottom: 10,
+    marginTop: Platform.OS === 'web' ? 15 : 12,
+    marginBottom: Platform.OS === 'web' ? 10 : 8,
     color: '#007AFF',
   },
   button: {
@@ -363,7 +363,7 @@ const styles = StyleSheet.create({
   },
   buttonText: {
     color: '#fff',
-    fontSize: 18,
+    fontSize: Platform.OS === 'web' ? 18 : 16,
     fontWeight: 'bold',
   },
 });

@@ -236,10 +236,10 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
   },
   title: {
-    fontSize: 32,
+    fontSize: Platform.OS === 'web' ? 32 : 24,
     fontWeight: 'bold',
     textAlign: 'center',
-    marginBottom: 10,
+    marginBottom: Platform.OS === 'web' ? 10 : 8,
     color: '#007AFF',
   },
   subtitle: {
@@ -265,7 +265,7 @@ const styles = StyleSheet.create({
   },
   buttonText: {
     color: '#fff',
-    fontSize: 18,
+    fontSize: Platform.OS === 'web' ? 18 : 16,
     fontWeight: 'bold',
   },
   forgotPasswordButton: {
@@ -284,7 +284,7 @@ const styles = StyleSheet.create({
   },
   linkText: {
     color: '#007AFF',
-    fontSize: 16,
+    fontSize: Platform.OS === 'web' ? 16 : 14,
   },
   debugBox: {
     backgroundColor: '#f0f0f0',
