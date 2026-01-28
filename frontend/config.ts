@@ -12,11 +12,16 @@ const getApiUrl = () => {
     return process.env.EXPO_PUBLIC_API_URL;
   }
 
-  // Development: Use local network IP
+  // Development: Use localhost for web, network IP for mobile
+  if (isWeb) {
+    return 'http://localhost:8000';
+  }
+  
+  // Mobile development: Use local network IP (update if needed)
   return 'http://10.0.0.121:8000';
 };
 
-const API_BASE_URL = getApiUrl();
+export const API_BASE_URL = getApiUrl();
 
 // Debug configuration
 // Set ENABLED to true to pre-fill registration forms for faster testing

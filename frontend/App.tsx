@@ -21,6 +21,7 @@ import RegisterChoiceScreen from './screens/auth/RegisterChoiceScreen';
 import RegisterInstructorScreen from './screens/auth/RegisterInstructorScreen';
 import RegisterStudentScreen from './screens/auth/RegisterStudentScreen';
 import ResetPasswordScreen from './screens/auth/ResetPasswordScreen';
+import SetupScreen from './screens/auth/SetupScreen';
 
 // Student Screens
 import BookingScreen from './screens/booking/BookingScreen';
@@ -42,6 +43,9 @@ import PaymentSuccessScreen from './screens/payment/PaymentSuccessScreen';
 
 // API Service
 import ApiService from './services/api';
+
+// Setup Service
+import SetupService from './services/setup';
 
 // Admin Screens
 import AdminDashboardScreen from './screens/admin/AdminDashboardScreen';
@@ -91,11 +95,28 @@ export default function App() {
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [userRole, setUserRole] = useState<string | null>(null);
   const [userName, setUserName] = useState<string>('');
+  const [requiresSetup, setRequiresSetup] = useState<boolean>(false);
   const navigationRef = useRef<any>(null);
 
   useEffect(() => {
-    checkAuth();
+    checkInitialization();
   }, []);
+
+  const checkInitialization = async () => {
+    try {
+      // First check if system is initialized (admin exists)
+      const setupStatus = await SetupService.checkSetupStatus();
+      setRequiresSetup(setupStatus.requires_setup);
+
+      // Then check authentication
+      await checkAuth();
+    } catch (error) {
+      console.error('Error checking initialization:', error);
+      setRequiresSetup(false);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const checkAuth = async () => {
     try {
@@ -146,6 +167,12 @@ export default function App() {
   }
 
   const handleAuthChange = async () => {
+    await checkAuth();
+  };
+
+  const handleSetupComplete = async () => {
+    // After setup is complete, refresh and check auth
+    setRequiresSetup(false);
     await checkAuth();
   };
 
@@ -202,13 +229,15 @@ export default function App() {
       >
         <Stack.Navigator
           initialRouteName={
-            !isAuthenticated
-              ? 'Login'
-              : userRole === 'admin'
-                ? 'AdminDashboard'
-                : userRole === 'instructor'
-                  ? 'InstructorHome'
-                  : 'StudentHome'
+            requiresSetup
+              ? 'Setup'
+              : !isAuthenticated
+                ? 'Login'
+                : userRole === 'admin'
+                  ? 'AdminDashboard'
+                  : userRole === 'instructor'
+                    ? 'InstructorHome'
+                    : 'StudentHome'
           }
           screenOptions={({ navigation, route }) => ({
             headerStyle: {
@@ -237,6 +266,26 @@ export default function App() {
             headerShown: true,
           })}
         >
+          {/* Setup Stack - Shown when admin doesn't exist */}
+          {requiresSetup && (
+            <Stack.Screen
+              name="Setup"
+              component={SetupScreen}
+              options={{ title: 'Initial Setup', headerShown: true }}
+              listeners={{
+                focus: () => {
+                  // Refresh setup status when returning to Setup screen
+                  SetupService.checkSetupStatus().then(status => {
+                    if (!status.requires_setup) {
+                      setRequiresSetup(false);
+                      handleSetupComplete();
+                    }
+                  });
+                },
+              }}
+            />
+          )}
+
           {/* Auth Stack - Always available */}
           <Stack.Screen name="Login" options={{ title: 'Login', headerShown: !isAuthenticated }}>
             {props => <LoginScreen {...props} onAuthChange={handleAuthChange} />}

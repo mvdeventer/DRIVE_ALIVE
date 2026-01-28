@@ -42,27 +42,37 @@ async def create_admin(
 ):
     """
     Create a new admin user (requires existing admin privileges)
+    
+    If email exists, user must provide correct password to add admin role.
     """
-    # Check if email or phone already exists
-    existing_user = (
-        db.query(User)
-        .filter((User.email == admin_data.email) | (User.phone == admin_data.phone))
-        .first()
-    )
+    from ..utils.auth import verify_password
+    
+    # Check if email already exists
+    existing_user = db.query(User).filter(User.email == admin_data.email).first()
 
     if existing_user:
-        if existing_user.email == admin_data.email:
+        # Check if user already has admin role
+        if existing_user.role == UserRole.ADMIN:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Email already registered: {admin_data.email}",
+                detail=f"This email already has admin privileges.",
             )
-        else:
+        
+        # Verify password matches (for security)
+        if not verify_password(admin_data.password, existing_user.password_hash):
             raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Phone number already registered: {admin_data.phone}",
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail=f"Email is already registered with a different password. Please use the correct password to add admin role.",
             )
-
-    # Create admin user
+        
+        # Update existing user to admin role
+        existing_user.role = UserRole.ADMIN
+        existing_user.status = UserStatus.ACTIVE
+        db.commit()
+        db.refresh(existing_user)
+        return existing_user
+    
+    # Create new admin user
     new_admin = User(
         email=admin_data.email,
         phone=admin_data.phone,

@@ -10,9 +10,12 @@ from fastapi import FastAPI, Request, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from sqlalchemy.orm import Session
 
 from .config import settings
-from .database import Base, engine
+from .database import Base, engine, SessionLocal
+from .models.user import User, UserRole, UserStatus
+from .utils.auth import get_password_hash
 from .routes import (
     admin,
     auth,
@@ -48,7 +51,21 @@ async def lifespan(app: FastAPI):
     )
     print("=" * 80)
 
+    # Check admin status (no longer auto-creating admin - use setup screen)
+    print("\n🔐 Checking for admin user...")
+    db = SessionLocal()
+    try:
+        existing_admin = db.query(User).filter(User.role == UserRole.ADMIN).first()
+        if existing_admin:
+            print(f"✅ Admin user exists: {existing_admin.email}")
+        else:
+            print("⚠️  No admin user found - setup required")
+            print("📋 Navigate to the app to create an admin via the setup screen")
+    finally:
+        db.close()
+
     # Start background reminder scheduler
+    task = None
     if settings.TWILIO_ACCOUNT_SID:
         print("🚀 Starting WhatsApp reminder scheduler...")
         task = asyncio.create_task(reminder_scheduler.start())

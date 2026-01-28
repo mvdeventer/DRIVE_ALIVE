@@ -37,7 +37,7 @@ class User(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     email = Column(String, unique=True, index=True, nullable=False)
-    phone = Column(String, index=True, nullable=False)
+    phone = Column(String, index=True, nullable=False)  # Not unique - allows multi-role users
     password_hash = Column(String, nullable=False)
     first_name = Column(String, nullable=False)
     last_name = Column(String, nullable=False)
@@ -77,7 +77,7 @@ class Instructor(Base):
     license_types = Column(
         String, nullable=False
     )  # Comma-separated license codes (e.g., "CODE8,CODE10")
-    id_number = Column(String, unique=True, nullable=False)  # South African ID
+    id_number = Column(String, nullable=False)  # South African ID - not unique to allow multi-role
     vehicle_registration = Column(String, nullable=False)
     vehicle_make = Column(String, nullable=False)
     vehicle_model = Column(String, nullable=False)
@@ -142,7 +142,7 @@ class Student(Base):
     user_id = Column(Integer, ForeignKey("users.id"), unique=True, nullable=False)
 
     # Student details
-    id_number = Column(String, unique=True, nullable=False)  # South African ID
+    id_number = Column(String, nullable=False)  # South African ID - not unique to allow multi-role
     learners_permit_number = Column(String, nullable=True)
 
     # Emergency contact

@@ -341,14 +341,34 @@ tab: {
 
 - [x] User registration (Instructor + Student with form validation)
 - [x] Authentication system (OAuth2 JWT, email/phone login)
+- [x] **System Initialization** ✅
+  - [x] Interactive setup page for first-time admin creation
+  - [x] Student/instructor registration only available after admin exists
+  - [x] Only existing admins can create new admins
+  - [x] `/setup/status` endpoint for checking initialization state
+  - [x] `/setup/create-initial-admin` endpoint for admin creation
+  - [x] Frontend SetupScreen component integrated into App.tsx
+  - [x] See [SETUP_INTEGRATION_GUIDE.md](SETUP_INTEGRATION_GUIDE.md) for details
+  - [x] See [SYSTEM_INITIALIZATION.md](SYSTEM_INITIALIZATION.md) for flow overview
+- [x] **Multi-Role User System** ✅
+  - [x] One person can have multiple roles (Student, Instructor, Admin)
+  - [x] Same phone and ID number allowed for same user across roles
+  - [x] Different users CANNOT share phone numbers or ID numbers (application validates)
+  - [x] Password verification when adding roles to existing account
+  - [x] Prevents duplicate role profiles
+  - [x] Database schema updated (unique constraints removed from phone/id_number)
+  - [x] Application-level validation for cross-user uniqueness
+  - [x] See [MULTI_ROLE_IMPLEMENTATION.md](MULTI_ROLE_IMPLEMENTATION.md) for complete details
+  - [x] See [MULTI_ROLE_USERS.md](MULTI_ROLE_USERS.md) for API examples
 - [x] Debug mode with pre-filled credentials
 - [x] Database clearing functionality
-- [x] Duplicate ID number error handling
 - [x] Backend API endpoints:
   - [x] Auth routes (register, login, token refresh)
+  - [x] Setup routes (status check, initial admin creation)
   - [x] Booking routes (create, update, cancel, list)
   - [x] Payment routes (Stripe, PayFast integration)
   - [x] Instructor routes (profile, availability)
+  - [x] Admin routes (user management, verification, analytics)
 
 ### Phase 2: Core Features ✅
 
@@ -799,3 +819,133 @@ showMessage(setErrorMessage, "Failed!", SCREEN_NAME, "error", "error");
 - Troubleshooting guide included
 
 **Status:** ✅ Implemented and tested (Jan 25, 2026)
+## Recent Updates (Jan 28, 2026 - Multi-Role User System)
+
+### Multi-Role User Support ✅
+
+**Feature:** Allow one person to have multiple roles (Student, Instructor, Admin) using the same contact information
+
+**Database Schema Changes** ✅
+
+- ✅ Removed unique constraint from `users.phone` (email remains unique identifier)
+- ✅ Removed unique constraint from `instructors.id_number`
+- ✅ Removed unique constraint from `students.id_number`
+- ✅ Created migration script: `backend/migrations/remove_unique_constraints.py`
+
+**Registration Logic Updates** ✅
+
+- ✅ Student registration checks for existing email
+  - If exists: Verifies password, creates Student profile for existing user
+  - If new: Validates phone/ID not used by other users, creates new User + Student profile
+- ✅ Instructor registration checks for existing email
+  - If exists: Verifies password, creates Instructor profile for existing user
+  - If new: Validates phone/ID not used by other users, creates new User + Instructor profile
+- ✅ Admin creation checks for existing email
+  - If exists: Verifies password, upgrades user to Admin role
+  - If new: Creates new User with Admin role
+- ✅ Prevents duplicate role profiles per user
+- ✅ Requires correct password when adding role to existing account
+- ✅ Prevents different users from sharing phone numbers or ID numbers
+
+**Security Features** ✅
+
+- ✅ Password verification prevents unauthorized role additions
+- ✅ Email remains unique identifier for user accounts
+- ✅ License numbers still unique (cannot share across instructors)
+- ✅ Clear error messages for duplicate roles and wrong passwords
+
+**Use Cases:**
+
+- Instructor who is also a Student (can book lessons from other instructors)
+- Admin who is also an Instructor (manages system and teaches)
+- Student who becomes an Instructor (seamless upgrade path)
+
+**API Behavior:**
+
+```
+Scenario 1: Register Student → Add Instructor Role
+1. POST /auth/register/student (email: john@example.com, password: Pass123)
+   → Creates User + Student profile
+2. POST /auth/register/instructor (email: john@example.com, password: Pass123)
+   → Creates Instructor profile for existing user
+   → Now has both Student + Instructor profiles
+
+Scenario 2: Wrong Password Error
+1. POST /auth/register/instructor (email: john@example.com, password: WrongPass)
+   → 401 Unauthorized: "Email is already registered with a different password..."
+
+Scenario 3: Duplicate Role Error
+1. POST /auth/register/student (email: john@example.com, ...)
+   → 400 Bad Request: "This email already has a student profile. Please log in instead."
+```
+
+**Files Modified:**
+
+- `backend/app/models/user.py` - Removed unique constraints
+- `backend/app/services/auth.py` - Updated registration logic
+- `backend/app/routes/admin.py` - Updated admin creation
+- Created: `backend/migrations/remove_unique_constraints.py`
+- Created: `MULTI_ROLE_USERS.md` (comprehensive documentation)
+- Updated: `AGENTS.md` (Phase 1 checklist)
+
+**Migration Required:**
+
+```bash
+cd backend
+python migrations/remove_unique_constraints.py
+```
+
+**Documentation:**
+
+- Created comprehensive guide: `MULTI_ROLE_USERS.md`
+- Includes API examples, use cases, testing guide
+- Security considerations documented
+- Rollback plan provided
+
+**Status:** ✅ Implemented and ready for testing (Jan 28, 2026)
+
+## Recent Updates (Jan 28, 2026 - Setup Screen Integration)
+
+### Frontend Setup Screen Integration ✅
+
+**Feature:** Interactive setup page for first-time admin creation with app.tsx integration
+
+**Frontend Components Created** ✅
+
+- ✅ **SetupService** (`frontend/services/setup.ts`)
+  - Checks `/setup/status` endpoint for initialization status
+  - Determines whether to show Setup or Login screen
+  - Handles network errors gracefully
+  
+- ✅ **SetupScreen** (`frontend/screens/auth/SetupScreen.tsx`)
+  - Complete React Native form component
+  - Fields: first_name, last_name, email, phone, password, confirmPassword
+  - Comprehensive validation with per-field error display
+  - Loading state during submission
+  - Success message with auto-redirect to Login (2s)
+  - Cross-platform styling (web and mobile responsive)
+  - Info box explaining admin role and security tips
+
+**App.tsx Integration** ✅
+
+- ✅ Added SetupScreen and SetupService imports
+- ✅ Added `requiresSetup` state variable
+- ✅ Created `checkInitialization()` to check setup status on app launch
+- ✅ Updated `initialRouteName` to prioritize Setup screen if needed
+- ✅ Added conditional Setup screen to Navigator
+- ✅ Added listener to auto-dismiss setup screen after admin creation
+- ✅ Created `handleSetupComplete()` callback for post-setup initialization
+
+**Files Created:**
+
+- `frontend/services/setup.ts` - Setup service for API calls
+- `frontend/screens/auth/SetupScreen.tsx` - Setup form component
+- `SETUP_INTEGRATION_GUIDE.md` - Integration testing guide
+- `MULTI_ROLE_IMPLEMENTATION.md` - Complete implementation summary
+
+**Files Modified:**
+
+- `frontend/App.tsx` - Setup screen integration and initialization logic
+- `AGENTS.md` - Updated Phase 1 checklist with setup screen details
+
+**Status:** ✅ Complete and ready for end-to-end testing (Jan 28, 2026)

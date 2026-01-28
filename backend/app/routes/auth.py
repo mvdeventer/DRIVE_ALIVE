@@ -63,7 +63,17 @@ async def get_current_user(
 async def register_student(student_data: StudentCreate, db: Session = Depends(get_db)):
     """
     Register a new student
+    Note: Admin user must exist before students can register
     """
+    from ..services.initialization import InitializationService
+    
+    # Check if admin exists
+    if not InitializationService.admin_exists(db):
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="System is not initialized. Please contact administrator to complete initial setup first.",
+        )
+    
     user, student = AuthService.create_student(db, student_data)
     token = AuthService.create_user_token(user)
 
@@ -83,7 +93,17 @@ async def register_instructor(
 ):
     """
     Register a new instructor
+    Note: Admin user must exist before instructors can register
     """
+    from ..services.initialization import InitializationService
+    
+    # Check if admin exists
+    if not InitializationService.admin_exists(db):
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="System is not initialized. Please contact administrator to complete initial setup first.",
+        )
+    
     try:
         print(f"[DEBUG] Received instructor registration data: {instructor_data}")
         user, instructor = AuthService.create_instructor(db, instructor_data)
