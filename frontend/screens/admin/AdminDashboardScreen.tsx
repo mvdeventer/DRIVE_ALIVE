@@ -498,60 +498,6 @@ export default function AdminDashboardScreen({ navigation }: any) {
 
       {/* Database Management Modal */}
       <Modal
-            <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Booking Statistics</Text>
-              <View style={styles.statsGrid}>
-                <View style={styles.statCard}>
-                  <Text style={styles.statValue}>{stats.total_bookings}</Text>
-                  <Text style={styles.statLabel}>Total</Text>
-                </View>
-                <View style={styles.statCard}>
-                  <Text style={[styles.statValue, styles.statWarning]}>
-                    {stats.pending_bookings}
-                  </Text>
-                  <Text style={styles.statLabel}>Pending</Text>
-                </View>
-                <View style={styles.statCard}>
-                  <Text style={[styles.statValue, styles.statSuccess]}>
-                    {stats.completed_bookings}
-                  </Text>
-                  <Text style={styles.statLabel}>Completed</Text>
-                </View>
-                <View style={styles.statCard}>
-                  <Text style={[styles.statValue, styles.statDanger]}>
-                    {stats.cancelled_bookings}
-                  </Text>
-                  <Text style={styles.statLabel}>Cancelled</Text>
-                </View>
-              </View>
-            </View>
-
-            {/* Revenue Overview */}
-            <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Revenue Overview</Text>
-              <View style={styles.revenueCard}>
-                <View style={styles.revenueRow}>
-                  <Text style={styles.revenueLabel}>Total Revenue</Text>
-                  <Text style={[styles.revenueValue, styles.statSuccess]}>
-                    R{stats.total_revenue.toFixed(2)}
-                  </Text>
-                </View>
-                <View style={styles.revenueRow}>
-                  <Text style={styles.revenueLabel}>Average Booking</Text>
-                  <Text style={styles.revenueValue}>R{stats.avg_booking_value.toFixed(2)}</Text>
-                </View>
-                <View style={styles.revenueRow}>
-                  <Text style={styles.revenueLabel}>Completed Lessons</Text>
-                  <Text style={styles.revenueValue}>{stats.completed_bookings}</Text>
-                </View>
-              </View>
-            </View>
-          </>
-        )}
-      </ScrollView>
-
-      {/* Database Management Modal */}
-      <Modal
         visible={showDbModal}
         transparent
         animationType="fade"

@@ -77,8 +77,11 @@ export default function VerificationPendingScreen({ route, navigation }: Props) 
       {/* Main Message */}
       <View style={styles.mainMessage}>
         <Text style={styles.mainText}>
-          Hi {firstName}! We've sent verification links to confirm it's really you.
+          ✅ Registration successful! We've sent verification links to confirm it's really you.
         </Text>
+          <Text style={styles.mainTextEmphasis}>
+          Please check your email and WhatsApp. Complete registration by clicking the verification link.
+          </Text>
       </View>
 
       {/* Verification Details Card */}
@@ -269,6 +272,14 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     lineHeight: 22,
   },
+    mainTextEmphasis: {
+      fontSize: Platform.OS === 'web' ? 16 : 14,
+      color: '#212529',
+      textAlign: 'center',
+      lineHeight: 22,
+      marginTop: 8,
+      fontWeight: '600',
+    },
   detailsCard: {
     backgroundColor: '#fff',
     borderRadius: 12,

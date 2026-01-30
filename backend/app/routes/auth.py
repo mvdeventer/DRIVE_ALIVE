@@ -92,22 +92,20 @@ async def register_student(student_data: StudentCreate, db: Session = Depends(ge
         validity_minutes=validity_minutes
     )
     
-    # Send verification messages
-    verification_result = {"email_sent": False, "whatsapp_sent": False, "expires_in_minutes": validity_minutes}
-    if admin and admin.smtp_email and admin.smtp_password:
-        result = VerificationService.send_verification_messages(
-            db=db,
-            user=user,
-            verification_token=verification_token,
-            frontend_url=settings.FRONTEND_URL,
-            admin_smtp_email=admin.smtp_email,
-            admin_smtp_password=admin.smtp_password
-        )
-        verification_result = {
-            "email_sent": result.get("email_sent", False),
-            "whatsapp_sent": result.get("whatsapp_sent", False),
-            "expires_in_minutes": validity_minutes
-        }
+    # Send verification messages (WhatsApp always attempted, email only if SMTP configured)
+    result = VerificationService.send_verification_messages(
+        db=db,
+        user=user,
+        verification_token=verification_token,
+        frontend_url=settings.FRONTEND_URL,
+        admin_smtp_email=admin.smtp_email if admin else None,
+        admin_smtp_password=admin.smtp_password if admin else None,
+    )
+    verification_result = {
+        "email_sent": result.get("email_sent", False),
+        "whatsapp_sent": result.get("whatsapp_sent", False),
+        "expires_in_minutes": validity_minutes,
+    }
     
     return {
         "message": "Registration successful! Please check your email and WhatsApp to verify your account.",
@@ -158,22 +156,20 @@ async def register_instructor(
             validity_minutes=validity_minutes
         )
         
-        # Send verification messages
-        verification_result = {"email_sent": False, "whatsapp_sent": False, "expires_in_minutes": validity_minutes}
-        if admin and admin.smtp_email and admin.smtp_password:
-            result = VerificationService.send_verification_messages(
-                db=db,
-                user=user,
-                verification_token=verification_token,
-                frontend_url=settings.FRONTEND_URL,
-                admin_smtp_email=admin.smtp_email,
-                admin_smtp_password=admin.smtp_password
-            )
-            verification_result = {
-                "email_sent": result.get("email_sent", False),
-                "whatsapp_sent": result.get("whatsapp_sent", False),
-                "expires_in_minutes": validity_minutes
-            }
+        # Send verification messages (WhatsApp always attempted, email only if SMTP configured)
+        result = VerificationService.send_verification_messages(
+            db=db,
+            user=user,
+            verification_token=verification_token,
+            frontend_url=settings.FRONTEND_URL,
+            admin_smtp_email=admin.smtp_email if admin else None,
+            admin_smtp_password=admin.smtp_password if admin else None,
+        )
+        verification_result = {
+            "email_sent": result.get("email_sent", False),
+            "whatsapp_sent": result.get("whatsapp_sent", False),
+            "expires_in_minutes": validity_minutes,
+        }
         
         return {
             "message": "Registration successful! Please check your email and WhatsApp to verify your account.",

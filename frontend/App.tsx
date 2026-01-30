@@ -215,11 +215,6 @@ export default function App() {
     </TouchableOpacity>
   );
 
-  const WebBackButton = ({ navigation }: any) => (
-    <TouchableOpacity onPress={() => navigation.goBack()} style={styles.webBackButton}>
-      <Text style={styles.webBackButtonText}>← Back</Text>
-    </TouchableOpacity>
-  );
 
   return (
     <>
@@ -253,17 +248,14 @@ export default function App() {
             headerTitleStyle: {
               fontWeight: 'bold',
             },
-            // Show back button on web for all authenticated screens except dashboard
-            headerLeft:
-              Platform.OS === 'web' &&
-              isAuthenticated &&
-              route.name !== 'AdminDashboard' &&
-              route.name !== 'InstructorHome' &&
-              route.name !== 'StudentHome'
-                ? () => <WebBackButton navigation={navigation} />
-                : isAuthenticated && userName && !navigation.canGoBack() && Platform.OS !== 'web'
-                  ? () => <UserNameDisplay />
-                  : undefined,
+            // Use React Navigation built-in back button
+            headerBackVisible: navigation.canGoBack(),
+            headerBackTitle: 'Back',
+            headerLeft: navigation.canGoBack()
+              ? undefined // Let React Navigation handle back button
+              : isAuthenticated && userName && Platform.OS !== 'web'
+                ? () => <UserNameDisplay />
+                : undefined,
             // Show logout button on mobile only (web has GlobalTopBar)
             headerRight:
               isAuthenticated && Platform.OS !== 'web' ? () => <LogoutButton /> : undefined,
@@ -456,18 +448,6 @@ const styles = StyleSheet.create({
     borderRadius: 5,
   },
   logoutText: {
-    color: '#fff',
-    fontWeight: '600',
-    fontSize: 14,
-  },
-  webBackButton: {
-    marginLeft: 15,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    borderRadius: 5,
-  },
-  webBackButtonText: {
     color: '#fff',
     fontWeight: '600',
     fontSize: 14,

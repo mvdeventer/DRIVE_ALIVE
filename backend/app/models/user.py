@@ -56,6 +56,11 @@ class User(Base):
     smtp_password = Column(String, nullable=True)  # Gmail app password
     verification_link_validity_minutes = Column(Integer, default=30)  # Default 30 minutes
 
+    # Backup configuration (for admin only)
+    backup_interval_minutes = Column(Integer, default=10)  # Backup every 10 minutes
+    retention_days = Column(Integer, default=30)  # Keep uncompressed backups for 30 days
+    auto_archive_after_days = Column(Integer, default=14)  # Archive to ZIP after 14 days
+
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())

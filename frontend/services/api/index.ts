@@ -416,11 +416,7 @@ class ApiService {
     return response.data;
   }
 
-  async updateAdminSettings(data: {
-    smtp_email?: string | null;
-    smtp_password?: string | null;
-    verification_link_validity_minutes?: number;
-  }) {
+  async updateAdminSettings(data: any) {
     const response = await this.api.put('/admin/settings', data);
     return response.data;
   }

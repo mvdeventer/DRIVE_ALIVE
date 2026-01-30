@@ -41,38 +41,50 @@ payments handled in-app, GPS pickup/drop-off, WhatsApp reminders, and compliance
 
 **Back Button:**
 
-- ✅ **USE REACT NAVIGATION'S BUILT-IN BACK BUTTON** - Automatically provided by React Navigation
-- ✅ Configured globally in `App.tsx` with `headerBackVisible: true`
-- ✅ Appears in `headerLeft` position (top-left corner) when navigation stack allows going back
+- ✅ **USE WebNavigationHeader COMPONENT** - Custom component for consistent back button across all screens
+- ✅ Imported from `frontend/components/WebNavigationHeader`
+- ✅ Appears in top-left corner (header left position)
 - ✅ Works consistently across all platforms (mobile, web)
-- ✅ Automatically respects `beforeRemove` navigation listeners for unsaved changes
-- ❌ **NEVER** add custom "← Back" buttons in screen headers (duplicates built-in functionality)
-- ❌ **NEVER** use `navigation.goBack()` in custom header buttons
+- ✅ Automatically calls `navigation.goBack()` when clicked
+- ✅ Respects `beforeRemove` navigation listeners for unsaved changes
+- ❌ **NEVER** rely on React Navigation's built-in back button
+- ❌ **NEVER** add custom "← Back" buttons in screen content
 - ❌ **NEVER** create `backButton` or `backButtonText` styles in screen stylesheets
 
-**Implementation:**
+**Implementation Pattern:**
 
 ```typescript
-// In App.tsx navigation config (already configured)
-screenOptions={{
-  headerBackVisible: true,
-  headerBackTitle: 'Back',
-  // ... other options
-}}
+// Import WebNavigationHeader
+import WebNavigationHeader from '../../components/WebNavigationHeader';
 
-// Exception: Error states may show custom back button in content
-// Example: BookingScreen when no instructor selected
-if (!instructor) {
+export default function MyScreen({ navigation }: any) {
   return (
-    <View style={styles.errorContainer}>
-      <Text style={styles.errorText}>No instructor selected</Text>
-      <TouchableOpacity onPress={() => navigation.goBack()}>
-        <Text>← Go Back</Text>
-      </TouchableOpacity>
+    <View style={styles.container}>
+      {/* Add WebNavigationHeader at the top */}
+      <WebNavigationHeader
+        title="Screen Title"
+        onBack={() => navigation.goBack()}
+        showBackButton={true}
+      />
+
+      {/* Rest of screen content */}
+      <ScrollView>
+        {/* ... */}
+      </ScrollView>
     </View>
   );
 }
 ```
+
+**Used In:**
+- ✅ All admin screens (UserManagementScreen, BookingOversightScreen, AdminSettingsScreen, etc.)
+- ✅ Instructor screens (ManageAvailabilityScreen, EditInstructorProfileScreen, etc.)
+- ✅ Student screens (EditStudentProfileScreen, etc.)
+- ✅ Profile editing screens
+
+**Exception - No Back Button Needed:**
+- Root screens (Login, Setup, StudentHome, InstructorHome, AdminDashboard)
+- Screens without parent navigation stack
 
 **Logout Button:**
 
@@ -1485,3 +1497,105 @@ PUT `/admin/settings`:
 
 **Status:** ✅ Complete and ready for testing (Jan 30, 2026)
 
+## Recent Updates (Jan 30, 2026 - WhatsApp Verification Button & Timezone Fix)
+
+### WhatsApp Verification Button ✅
+
+**Feature:** Simplified WhatsApp verification message with clickable link instead of plain text
+
+**Changes Made:**
+
+- ✅ **New Method in WhatsAppService** (`app/services/whatsapp_service.py`)
+  - Added `send_verification_message()` method
+  - Sends message body with clickable verification URL
+  - URL automatically becomes tappable in WhatsApp (blue hyperlink)
+  - No code/button template required (works in Twilio sandbox)
+
+- ✅ **Updated VerificationService** (`app/services/verification_service.py`)
+  - Changed to call `send_verification_message()` instead of generic `send_message()`
+  - Passes verification link for URL display
+
+**WhatsApp Message Format:**
+```
+🎉 Welcome Martin!
+
+Click here to verify your Drive Alive account:
+http://localhost:8081/verify-account?token=...
+
+⏰ Link expires in: 30 minutes
+
+Not you? Ignore this message.
+```
+
+**User Experience:**
+- Message displays in WhatsApp chat
+- URL appears as blue clickable link
+- Users tap link → Opens verification page
+- Works on all WhatsApp clients (mobile app, web, desktop)
+
+### Timezone Comparison Fix ✅
+
+**Problem:** 500 error when clicking verification link - "can't compare offset-naive and offset-aware datetimes"
+
+**Root Cause:**
+- SQLite stores timezone-aware datetimes as strings
+- When retrieved, SQLAlchemy sometimes returns them as timezone-naive
+- Comparing naive with aware datetimes raises TypeError
+
+**Solution Implemented:**
+
+- ✅ **Helper Method in VerificationService** (`_ensure_timezone_aware()`)
+  - Converts timezone-naive datetimes to timezone-aware (UTC)
+  - Handles SQLite's implicit timezone stripping
+  - Simple utility to ensure consistent datetime handling
+
+- ✅ **Updated `verify_token()` Method**
+  - Uses helper to ensure `expires_at` is timezone-aware before comparison
+  - Prevents "can't compare offset-naive and offset-aware" error
+
+- ✅ **Updated `delete_unverified_users()` Method**
+  - Fetches all unused tokens first (not via SQL comparison)
+  - Filters expired tokens in Python (handles timezone safely)
+  - More reliable cleanup of unverified expired accounts
+
+**Code Pattern:**
+```python
+@staticmethod
+def _ensure_timezone_aware(dt: datetime) -> datetime:
+    """Ensure a datetime is timezone-aware (UTC)"""
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=timezone.utc)
+    return dt
+
+# Usage in verify_token():
+expires_at = VerificationService._ensure_timezone_aware(verification_token.expires_at)
+if datetime.now(timezone.utc) > expires_at:
+    # Token is expired
+```
+
+### AdminSettingsScreen Back Button ✅
+
+**Feature:** Added WebNavigationHeader component to AdminSettingsScreen for consistent back button
+
+**Changes:**
+- ✅ Added WebNavigationHeader import
+- ✅ Wrapped ScrollView in View container with WebNavigationHeader at top
+- ✅ Consistent styling with other admin screens
+- ✅ Back button now appears in top-left corner
+
+**Pattern Used:**
+```typescript
+<View style={styles.container}>
+  <WebNavigationHeader
+    title="Admin Settings"
+    onBack={() => navigation.goBack()}
+    showBackButton={true}
+  />
+  <ScrollView ref={scrollViewRef} style={styles.scrollContent}>
+    {/* Screen content */}
+  </ScrollView>
+</View>
+```
+
+**Status:** ✅ Complete (Jan 30, 2026)
+```

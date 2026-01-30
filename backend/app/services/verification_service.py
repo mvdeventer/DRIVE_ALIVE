@@ -18,6 +18,22 @@ class VerificationService:
     """Service for handling account verification"""
 
     @staticmethod
+    def _ensure_timezone_aware(dt: datetime) -> datetime:
+        """
+        Ensure a datetime is timezone-aware (UTC)
+        
+        Args:
+            dt: Datetime object (may be naive or aware)
+            
+        Returns:
+            Timezone-aware datetime in UTC
+        """
+        if dt.tzinfo is None:
+            # If naive, assume UTC
+            return dt.replace(tzinfo=timezone.utc)
+        return dt
+
+    @staticmethod
     def generate_verification_token() -> str:
         """Generate a secure random verification token"""
         return secrets.token_urlsafe(32)
@@ -83,8 +99,10 @@ class VerificationService:
             logger.warning(f"Verification token already used: {token[:10]}...")
             return None
 
-        # Check if expired
-        if datetime.now(timezone.utc) > verification_token.expires_at:
+        # Check if expired (ensure both datetimes are timezone-aware)
+        expires_at = VerificationService._ensure_timezone_aware(verification_token.expires_at)
+        
+        if datetime.now(timezone.utc) > expires_at:
             logger.warning(f"Verification token expired: {token[:10]}...")
             return None
 
@@ -161,18 +179,17 @@ class VerificationService:
         else:
             logger.warning(f"Admin SMTP credentials not configured. Email not sent to {user.email}")
 
-        # Send WhatsApp (using Twilio sandbox)
+        # Send WhatsApp (using Twilio sandbox with button)
         whatsapp_sent = False
         try:
             whatsapp_service = WhatsAppService()
-            message = (
-                f"🎉 Welcome {user.first_name}!\n\n"
-                f"Verify your Drive Alive account:\n"
-                f"{verification_link}\n\n"
-                f"⏰ Link expires in: {validity_minutes} minutes\n\n"
-                f"Not you? Ignore this message."
+            # Send message with verification button instead of full URL
+            whatsapp_sent = whatsapp_service.send_verification_message(
+                phone=user.phone,
+                first_name=user.first_name,
+                verification_link=verification_link,
+                validity_minutes=validity_minutes
             )
-            whatsapp_sent = whatsapp_service.send_message(user.phone, message)
         except Exception as e:
             logger.error(f"Failed to send WhatsApp verification to {user.phone}: {str(e)}")
 
@@ -192,11 +209,17 @@ class VerificationService:
             int: Number of users deleted
         """
         try:
-            # Find expired verification tokens
-            expired_tokens = db.query(VerificationToken).filter(
-                VerificationToken.expires_at < datetime.now(timezone.utc),
+            # Find all unused verification tokens
+            all_tokens = db.query(VerificationToken).filter(
                 VerificationToken.is_used == False
             ).all()
+
+            # Filter expired tokens in Python (handles timezone comparison safely)
+            current_time = datetime.now(timezone.utc)
+            expired_tokens = [
+                token for token in all_tokens
+                if VerificationService._ensure_timezone_aware(token.expires_at) < current_time
+            ]
 
             users_to_delete = []
             for token in expired_tokens:

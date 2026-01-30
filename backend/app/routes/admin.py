@@ -16,6 +16,7 @@ from ..models.booking import Booking, BookingStatus
 from ..models.user import Instructor, Student, User, UserRole, UserStatus
 from ..schemas.admin import (
     AdminCreateRequest,
+    AdminSettingsUpdate,
     AdminStats,
     BookingOverview,
     InstructorVerificationRequest,
@@ -1197,35 +1198,37 @@ async def get_admin_settings(
         "smtp_email": current_admin.smtp_email,
         "smtp_password": current_admin.smtp_password,
         "verification_link_validity_minutes": current_admin.verification_link_validity_minutes or 30,
+        "backup_interval_minutes": current_admin.backup_interval_minutes or 10,
+        "retention_days": current_admin.retention_days or 30,
+        "auto_archive_after_days": current_admin.auto_archive_after_days or 14,
     }
 
 
 @router.put("/settings")
 async def update_admin_settings(
-    smtp_email: Optional[str] = None,
-    smtp_password: Optional[str] = None,
-    verification_link_validity_minutes: Optional[int] = 30,
-    current_admin: Annotated[User, Depends(require_admin)] = Depends(require_admin),
+    current_admin: Annotated[User, Depends(require_admin)],
     db: Session = Depends(get_db),
+    settings_update: AdminSettingsUpdate = None,
 ):
     """
-    Update admin user's settings (email configuration and verification link validity)
+    Update admin user's settings (email configuration, verification link validity, and backup settings)
     """
-    # Validation
-    if verification_link_validity_minutes is not None:
-        if verification_link_validity_minutes < 15 or verification_link_validity_minutes > 120:
-            raise HTTPException(
-                status_code=400,
-                detail="Verification link validity must be between 15 and 120 minutes",
-            )
+    if settings_update is None:
+        raise HTTPException(status_code=400, detail="No settings provided")
 
     # Update settings
-    if smtp_email is not None:
-        current_admin.smtp_email = smtp_email if smtp_email else None
-    if smtp_password is not None:
-        current_admin.smtp_password = smtp_password if smtp_password else None
-    if verification_link_validity_minutes is not None:
-        current_admin.verification_link_validity_minutes = verification_link_validity_minutes
+    if settings_update.smtp_email is not None:
+        current_admin.smtp_email = settings_update.smtp_email if settings_update.smtp_email else None
+    if settings_update.smtp_password is not None:
+        current_admin.smtp_password = settings_update.smtp_password if settings_update.smtp_password else None
+    if settings_update.verification_link_validity_minutes is not None:
+        current_admin.verification_link_validity_minutes = settings_update.verification_link_validity_minutes
+    if settings_update.backup_interval_minutes is not None:
+        current_admin.backup_interval_minutes = settings_update.backup_interval_minutes
+    if settings_update.retention_days is not None:
+        current_admin.retention_days = settings_update.retention_days
+    if settings_update.auto_archive_after_days is not None:
+        current_admin.auto_archive_after_days = settings_update.auto_archive_after_days
 
     db.commit()
     db.refresh(current_admin)
@@ -1234,5 +1237,8 @@ async def update_admin_settings(
         "message": "Settings updated successfully",
         "smtp_email": current_admin.smtp_email,
         "verification_link_validity_minutes": current_admin.verification_link_validity_minutes,
+        "backup_interval_minutes": current_admin.backup_interval_minutes,
+        "retention_days": current_admin.retention_days,
+        "auto_archive_after_days": current_admin.auto_archive_after_days,
     }
 

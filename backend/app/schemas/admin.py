@@ -30,6 +30,25 @@ class AdminCreateRequest(BaseModel):
     verification_link_validity_minutes: Optional[int] = 30  # Default 30 minutes
 
 
+class AdminSettingsUpdate(BaseModel):
+    """Schema for updating admin settings"""
+
+    smtp_email: Optional[EmailStr] = None
+    smtp_password: Optional[str] = None
+    verification_link_validity_minutes: Optional[int] = Field(
+        default=30, ge=15, le=120
+    )
+    backup_interval_minutes: Optional[int] = Field(
+        default=10, ge=5, le=60
+    )
+    retention_days: Optional[int] = Field(
+        default=30, ge=7, le=365
+    )
+    auto_archive_after_days: Optional[int] = Field(
+        default=14, ge=1, le=180
+    )
+
+
 # ==================== Statistics Schemas ====================
 
 

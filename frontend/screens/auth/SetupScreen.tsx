@@ -143,16 +143,30 @@ export default function SetupScreen({ navigation }: SetupScreenProps) {
         const data = await response.json();
         const validityTime = formData.linkValidity || '30';
         setSuccessMessage(
-          `✅ Admin account created successfully!\n\n` +
-          `📧 Verification links for new users will be valid for ${validityTime} minutes.\n\n` +
+          `✅ Registration successful!\n\n` +
+          `Please check your email and WhatsApp to verify your account.\n` +
+          `Complete registration by clicking the verification link.\n\n` +
+          `⏰ Link expires in ${validityTime} minutes.\n\n` +
           `You can change this setting anytime in Admin Dashboard → Settings.`
         );
-        
-        // Wait 4 seconds to let user read the message, then redirect to login
+
+        const verificationData = data.verification_sent || {
+          email_sent: false,
+          whatsapp_sent: false,
+          expires_in_minutes: parseInt(validityTime, 10) || 30,
+        };
+
+        // Navigate to verification pending screen
         setTimeout(() => {
-          // Navigate to login screen
-          navigation.replace('Login');
-        }, 4000);
+          navigation.replace('VerificationPending', {
+            email: formData.email,
+            phone: formData.phone,
+            firstName: formData.firstName,
+            emailSent: verificationData.email_sent,
+            whatsappSent: verificationData.whatsapp_sent,
+            expiryMinutes: verificationData.expires_in_minutes || 30,
+          });
+        }, 500);
       } else {
         const errorData = await response.json();
         setErrorMessage(

@@ -346,6 +346,55 @@ Drive Safe! 🚗
             logger.error(f"Failed to send daily summary: {str(e)}")
             return False
 
+    def send_verification_message(
+        self,
+        phone: str,
+        first_name: str,
+        verification_link: str,
+        validity_minutes: int
+    ) -> bool:
+        """
+        Send verification message with clickable link
+        
+        Args:
+            phone: Phone number in any format
+            first_name: User's first name
+            verification_link: Full verification URL
+            validity_minutes: Link validity time in minutes
+            
+        Returns:
+            bool: True if successful, False otherwise
+        """
+        if not self.client:
+            logger.warning("Twilio client not initialized. Skipping verification message.")
+            return False
+
+        try:
+            to_number = self._format_phone_number(phone)
+            
+            # Message body with clickable link
+            message_body = (
+                f"🎉 Welcome {first_name}!\n\n"
+                f"Click here to verify your Drive Alive account:\n"
+                f"{verification_link}\n\n"
+                f"⏰ Link expires in: {validity_minutes} minutes\n\n"
+                f"Not you? Ignore this message."
+            )
+            
+            # Send message (link will be clickable in WhatsApp)
+            msg = self.client.messages.create(
+                body=message_body,
+                from_=self.whatsapp_number,
+                to=to_number
+            )
+            
+            logger.info(f"WhatsApp verification message sent to {phone}: {msg.sid}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Failed to send WhatsApp verification message to {phone}: {str(e)}")
+            return False
+
 
 # Global service instance
 whatsapp_service = WhatsAppService()

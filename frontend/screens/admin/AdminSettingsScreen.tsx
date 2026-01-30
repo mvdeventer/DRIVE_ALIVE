@@ -17,12 +17,14 @@ import {
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import InlineMessage from '../../components/InlineMessage';
+import WebNavigationHeader from '../../components/WebNavigationHeader';
 import apiService from '../../services/api';
 
 const SCREEN_NAME = 'AdminSettingsScreen';
 
 export default function AdminSettingsScreen({ navigation }: any) {
   const scrollViewRef = useRef<ScrollView>(null);
+  const pendingNavActionRef = useRef<any>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
@@ -31,11 +33,15 @@ export default function AdminSettingsScreen({ navigation }: any) {
   const [testingEmail, setTestingEmail] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [showUnsavedModal, setShowUnsavedModal] = useState(false);
 
   const [formData, setFormData] = useState({
     smtpEmail: '',
     smtpPassword: '',
     linkValidity: '30',
+    backupIntervalMinutes: '10',
+    retentionDays: '30',
+    autoArchiveAfterDays: '14',
     testRecipient: '',
   });
 
@@ -43,6 +49,9 @@ export default function AdminSettingsScreen({ navigation }: any) {
     smtpEmail: '',
     smtpPassword: '',
     linkValidity: '30',
+    backupIntervalMinutes: '10',
+    retentionDays: '30',
+    autoArchiveAfterDays: '14',
   });
 
   const loadSettings = async () => {
@@ -54,6 +63,9 @@ export default function AdminSettingsScreen({ navigation }: any) {
         smtpEmail: data.smtp_email || '',
         smtpPassword: data.smtp_password || '',
         linkValidity: data.verification_link_validity_minutes?.toString() || '30',
+        backupIntervalMinutes: data.backup_interval_minutes?.toString() || '10',
+        retentionDays: data.retention_days?.toString() || '30',
+        autoArchiveAfterDays: data.auto_archive_after_days?.toString() || '14',
         testRecipient: '',
       };
 
@@ -62,6 +74,9 @@ export default function AdminSettingsScreen({ navigation }: any) {
         smtpEmail: settingsData.smtpEmail,
         smtpPassword: settingsData.smtpPassword,
         linkValidity: settingsData.linkValidity,
+        backupIntervalMinutes: settingsData.backupIntervalMinutes,
+        retentionDays: settingsData.retentionDays,
+        autoArchiveAfterDays: settingsData.autoArchiveAfterDays,
       });
     } catch (err: any) {
       scrollViewRef.current?.scrollTo({ y: 0, animated: true });
@@ -94,7 +109,10 @@ export default function AdminSettingsScreen({ navigation }: any) {
     return (
       formData.smtpEmail !== originalData.smtpEmail ||
       formData.smtpPassword !== originalData.smtpPassword ||
-      formData.linkValidity !== originalData.linkValidity
+      formData.linkValidity !== originalData.linkValidity ||
+      formData.backupIntervalMinutes !== originalData.backupIntervalMinutes ||
+      formData.retentionDays !== originalData.retentionDays ||
+      formData.autoArchiveAfterDays !== originalData.autoArchiveAfterDays
     );
   };
 
@@ -119,7 +137,10 @@ export default function AdminSettingsScreen({ navigation }: any) {
         smtp_email: formData.smtpEmail || null,
         smtp_password: formData.smtpPassword || null,
         verification_link_validity_minutes: parseInt(formData.linkValidity) || 30,
-      });
+        backup_interval_minutes: parseInt(formData.backupIntervalMinutes) || 10,
+        retention_days: parseInt(formData.retentionDays) || 30,
+        auto_archive_after_days: parseInt(formData.autoArchiveAfterDays) || 14,
+      } as any);
 
       scrollViewRef.current?.scrollTo({ y: 0, animated: true });
       setSuccessMessage('✅ Settings saved successfully!');
@@ -129,6 +150,9 @@ export default function AdminSettingsScreen({ navigation }: any) {
         smtpEmail: formData.smtpEmail,
         smtpPassword: formData.smtpPassword,
         linkValidity: formData.linkValidity,
+        backupIntervalMinutes: formData.backupIntervalMinutes,
+        retentionDays: formData.retentionDays,
+        autoArchiveAfterDays: formData.autoArchiveAfterDays,
       });
 
       // Clear success message after 4 seconds
@@ -195,28 +219,8 @@ export default function AdminSettingsScreen({ navigation }: any) {
       }
 
       e.preventDefault();
-
-      if (Platform.OS === 'web') {
-        const confirmLeave = window.confirm(
-          'You have unsaved changes. Are you sure you want to leave?'
-        );
-        if (confirmLeave) {
-          navigation.dispatch(e.data.action);
-        }
-      } else {
-        Alert.alert(
-          'Unsaved Changes',
-          'You have unsaved changes. Are you sure you want to leave?',
-          [
-            { text: 'Stay', style: 'cancel' },
-            {
-              text: 'Discard Changes',
-              style: 'destructive',
-              onPress: () => navigation.dispatch(e.data.action),
-            },
-          ]
-        );
-      }
+      pendingNavActionRef.current = e.data.action;
+      setShowUnsavedModal(true);
     });
 
     return unsubscribe;
@@ -232,17 +236,18 @@ export default function AdminSettingsScreen({ navigation }: any) {
   }
 
   return (
-    <>
+    <View style={styles.container}>
+      <WebNavigationHeader
+        title="Admin Settings"
+        onBack={() => navigation.goBack()}
+        showBackButton={true}
+      />
+
       <ScrollView
         ref={scrollViewRef}
-        style={styles.container}
+        style={styles.scrollContent}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       >
-        <View style={styles.header}>
-          <Text style={styles.title}>⚙️ Admin Settings</Text>
-          <Text style={styles.subtitle}>Configure system-wide verification settings</Text>
-        </View>
-
         {successMessage ? <InlineMessage message={successMessage} type="success" /> : null}
         {errorMessage ? <InlineMessage message={errorMessage} type="error" /> : null}
 
@@ -340,14 +345,71 @@ export default function AdminSettingsScreen({ navigation }: any) {
             </View>
           </View>
 
+          {/* Backup Configuration Section */}
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>💾 Backup Configuration</Text>
+            <Text style={styles.sectionSubtitle}>
+              Configure automatic database backup settings and retention policies
+            </Text>
+
+            <View style={styles.formGroup}>
+              <Text style={styles.label}>Backup Interval (Minutes)</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="10"
+                value={formData.backupIntervalMinutes}
+                onChangeText={(value) => handleChange('backupIntervalMinutes', value)}
+                keyboardType="number-pad"
+                editable={!saving}
+              />
+              <Text style={styles.hint}>
+                How often to create automatic backups (5-60 minutes recommended)
+              </Text>
+            </View>
+
+            <View style={styles.formGroup}>
+              <Text style={styles.label}>Retention Days</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="30"
+                value={formData.retentionDays}
+                onChangeText={(value) => handleChange('retentionDays', value)}
+                keyboardType="number-pad"
+                editable={!saving}
+              />
+              <Text style={styles.hint}>
+                Keep uncompressed backups for this many days (default: 30 days)
+              </Text>
+            </View>
+
+            <View style={styles.formGroup}>
+              <Text style={styles.label}>Auto-Archive After Days</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="14"
+                value={formData.autoArchiveAfterDays}
+                onChangeText={(value) => handleChange('autoArchiveAfterDays', value)}
+                keyboardType="number-pad"
+                editable={!saving}
+              />
+              <Text style={styles.hint}>
+                Compress old backups to ZIP after this many days (default: 14 days)
+              </Text>
+            </View>
+          </View>
+
           {/* Info Box */}
           <View style={styles.infoBox}>
-            <Text style={styles.infoTitle}>ℹ️ About Verification Settings</Text>
+            <Text style={styles.infoTitle}>ℹ️ About These Settings</Text>
             <Text style={styles.infoText}>
-              • New students and instructors receive verification emails{'\n'}
+              <Text style={{ fontWeight: 'bold' }}>Verification:</Text>{'\n'}
+              • New users receive verification emails/WhatsApp{'\n'}
               • Verification links expire after the configured time{'\n'}
-              • Users cannot log in until they verify their account{'\n'}
-              • You can change these settings anytime
+              • Users cannot log in until they verify{'\n\n'}
+              <Text style={{ fontWeight: 'bold' }}>Backups:</Text>{'\n'}
+              • Automatic database backups on your schedule{'\n'}
+              • Old backups are compressed to save storage{'\n'}
+              • You can restore from any backup anytime
             </Text>
           </View>
 
@@ -406,6 +468,27 @@ export default function AdminSettingsScreen({ navigation }: any) {
                   <Text style={styles.confirmValue}>{formData.linkValidity} minutes</Text>
                 </>
               )}
+
+              {formData.backupIntervalMinutes !== originalData.backupIntervalMinutes && (
+                <>
+                  <Text style={styles.confirmLabel}>Backup Interval:</Text>
+                  <Text style={styles.confirmValue}>{formData.backupIntervalMinutes} minutes</Text>
+                </>
+              )}
+
+              {formData.retentionDays !== originalData.retentionDays && (
+                <>
+                  <Text style={styles.confirmLabel}>Retention Days:</Text>
+                  <Text style={styles.confirmValue}>{formData.retentionDays} days</Text>
+                </>
+              )}
+
+              {formData.autoArchiveAfterDays !== originalData.autoArchiveAfterDays && (
+                <>
+                  <Text style={styles.confirmLabel}>Auto-Archive After:</Text>
+                  <Text style={styles.confirmValue}>{formData.autoArchiveAfterDays} days</Text>
+                </>
+              )}
             </View>
 
             <View style={styles.modalButtons}>
@@ -426,7 +509,47 @@ export default function AdminSettingsScreen({ navigation }: any) {
           </View>
         </View>
       </Modal>
-    </>
+
+      {/* Unsaved Changes Modal */}
+      <Modal
+        visible={showUnsavedModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowUnsavedModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitleWarning}>Unsaved Changes</Text>
+            <Text style={styles.modalSubtitle}>
+              You have unsaved changes. Do you want to discard them?
+            </Text>
+
+            <View style={styles.modalButtons}>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.modalButtonSecondary]}
+                onPress={() => setShowUnsavedModal(false)}
+              >
+                <Text style={styles.modalButtonTextSecondary}>Stay</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.modalButton, styles.modalButtonDanger]}
+                onPress={() => {
+                  setShowUnsavedModal(false);
+                  const action = pendingNavActionRef.current;
+                  pendingNavActionRef.current = null;
+                  if (action) {
+                    navigation.dispatch(action);
+                  }
+                }}
+              >
+                <Text style={styles.modalButtonTextPrimary}>Discard Changes</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+    </View>
   );
 }
 
@@ -434,6 +557,9 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#F8F9FA',
+  },
+  scrollContent: {
+    flex: 1,
   },
   loadingContainer: {
     flex: 1,
@@ -605,6 +731,12 @@ const styles = StyleSheet.create({
     color: '#28A745',
     marginBottom: 8,
   },
+  modalTitleWarning: {
+    fontSize: Platform.OS === 'web' ? 20 : 18,
+    fontWeight: 'bold',
+    color: '#DC3545',
+    marginBottom: 8,
+  },
   modalSubtitle: {
     fontSize: Platform.OS === 'web' ? 14 : 13,
     color: '#6C757D',
@@ -642,6 +774,9 @@ const styles = StyleSheet.create({
   },
   modalButtonPrimary: {
     backgroundColor: '#28A745',
+  },
+  modalButtonDanger: {
+    backgroundColor: '#DC3545',
   },
   modalButtonTextSecondary: {
     color: '#fff',
