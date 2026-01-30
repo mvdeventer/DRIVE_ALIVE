@@ -39,6 +39,7 @@ export default function LoginScreen({ navigation, onAuthChange }: any) {
   const [emailOrPhone, setEmailOrPhone] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
   const [message, setMessage] = useState<{
     type: 'success' | 'error' | 'warning' | 'info';
     text: string;
@@ -200,10 +201,19 @@ export default function LoginScreen({ navigation, onAuthChange }: any) {
         placeholder="Password"
         value={password}
         onChangeText={setPassword}
-        secureTextEntry
+        secureTextEntry={!showPassword}
         onSubmitEditing={handleLogin}
         returnKeyType="go"
       />
+
+      <TouchableOpacity
+        style={styles.showPasswordButton}
+        onPress={() => setShowPassword(!showPassword)}
+      >
+        <Text style={styles.showPasswordText}>
+          {showPassword ? '🙈 Hide Password' : '👁️ Show Password'}
+        </Text>
+      </TouchableOpacity>
 
       <TouchableOpacity style={styles.button} onPress={handleLogin} disabled={loading}>
         {loading ? (
@@ -269,6 +279,16 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: Platform.OS === 'web' ? 18 : 16,
     fontWeight: 'bold',
+  },
+  showPasswordButton: {
+    marginBottom: 15,
+    padding: 8,
+    alignItems: 'center',
+  },
+  showPasswordText: {
+    color: '#007bff',
+    fontSize: 14,
+    fontWeight: '600',
   },
   forgotPasswordButton: {
     marginTop: 12,

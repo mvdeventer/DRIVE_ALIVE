@@ -22,6 +22,8 @@ import RegisterInstructorScreen from './screens/auth/RegisterInstructorScreen';
 import RegisterStudentScreen from './screens/auth/RegisterStudentScreen';
 import ResetPasswordScreen from './screens/auth/ResetPasswordScreen';
 import SetupScreen from './screens/auth/SetupScreen';
+import VerifyAccountScreen from './screens/auth/VerifyAccountScreen';
+import VerificationPendingScreen from './screens/auth/VerificationPendingScreen';
 
 // Student Screens
 import BookingScreen from './screens/booking/BookingScreen';
@@ -49,12 +51,14 @@ import SetupService from './services/setup';
 
 // Admin Screens
 import AdminDashboardScreen from './screens/admin/AdminDashboardScreen';
+import AdminSettingsScreen from './screens/admin/AdminSettingsScreen';
 import BookingOversightScreen from './screens/admin/BookingOversightScreen';
 import EditAdminProfileScreen from './screens/admin/EditAdminProfileScreen';
 import InstructorEarningsOverviewScreen from './screens/admin/InstructorEarningsOverviewScreen';
 import InstructorVerificationScreen from './screens/admin/InstructorVerificationScreen';
 import RevenueAnalyticsScreen from './screens/admin/RevenueAnalyticsScreen';
 import UserManagementScreen from './screens/admin/UserManagementScreen';
+
 
 const Stack = createNativeStackNavigator();
 
@@ -63,6 +67,7 @@ const linking = {
   prefixes: ['http://10.0.0.121:3000', 'http://10.0.0.121:8081', 'https://drivealive.co.za'],
   config: {
     screens: {
+      VerifyAccount: 'verify-account',
       ResetPassword: 'reset-password',
       PaymentMock: 'payment/mock',
       PaymentSuccess: 'payment/success',
@@ -296,6 +301,11 @@ export default function App() {
             options={{ title: 'Forgot Password', headerShown: !isAuthenticated }}
           />
           <Stack.Screen
+            name="VerifyAccount"
+            component={VerifyAccountScreen}
+            options={{ title: 'Verify Account', headerShown: !isAuthenticated }}
+          />
+          <Stack.Screen
             name="ResetPassword"
             component={ResetPasswordScreen}
             options={{ title: 'Reset Password', headerShown: !isAuthenticated }}
@@ -314,6 +324,11 @@ export default function App() {
             name="RegisterInstructor"
             component={RegisterInstructorScreen}
             options={{ title: 'Register as Instructor', headerShown: !isAuthenticated }}
+          />
+          <Stack.Screen
+            name="VerificationPending"
+            component={VerificationPendingScreen}
+            options={{ title: 'Verify Your Account', headerShown: !isAuthenticated }}
           />
 
           {/* Student Stack */}
@@ -413,6 +428,11 @@ export default function App() {
             name="InstructorEarningsOverview"
             component={InstructorEarningsOverviewScreen}
             options={{ title: 'Instructor Earnings' }}
+          />
+          <Stack.Screen
+            name="AdminSettings"
+            component={AdminSettingsScreen}
+            options={{ title: 'Admin Settings' }}
           />
         </Stack.Navigator>
       </NavigationContainer>

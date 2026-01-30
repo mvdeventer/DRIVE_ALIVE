@@ -62,8 +62,15 @@ def create_initial_admin(admin_data: AdminCreateRequest, db: Session = Depends(g
         password_hash=get_password_hash(admin_data.password),
         first_name=admin_data.first_name,
         last_name=admin_data.last_name,
+        id_number=admin_data.id_number,
         role=UserRole.ADMIN,
         status=UserStatus.ACTIVE,
+        address=admin_data.address,
+        address_latitude=admin_data.address_latitude,
+        address_longitude=admin_data.address_longitude,
+        smtp_email=admin_data.smtp_email,
+        smtp_password=admin_data.smtp_password,
+        verification_link_validity_minutes=admin_data.verification_link_validity_minutes or 30,
     )
 
     db.add(new_admin)

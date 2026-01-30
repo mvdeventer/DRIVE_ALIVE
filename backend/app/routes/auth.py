@@ -64,8 +64,11 @@ async def register_student(student_data: StudentCreate, db: Session = Depends(ge
     """
     Register a new student
     Note: Admin user must exist before students can register
+    Creates user as inactive and sends email/WhatsApp verification
     """
     from ..services.initialization import InitializationService
+    from ..services.verification_service import VerificationService
+    from ..config import settings
     
     # Check if admin exists
     if not InitializationService.admin_exists(db):
@@ -74,14 +77,44 @@ async def register_student(student_data: StudentCreate, db: Session = Depends(ge
             detail="System is not initialized. Please contact administrator to complete initial setup first.",
         )
     
+    # Create student (user will be inactive)
     user, student = AuthService.create_student(db, student_data)
-    token = AuthService.create_user_token(user)
-
+    
+    # Get admin SMTP settings
+    admin = db.query(User).filter(User.role == UserRole.ADMIN).first()
+    validity_minutes = admin.verification_link_validity_minutes if admin else 30
+    
+    # Create verification token
+    verification_token = VerificationService.create_verification_token(
+        db=db,
+        user_id=user.id,
+        token_type="email",
+        validity_minutes=validity_minutes
+    )
+    
+    # Send verification messages
+    verification_result = {"email_sent": False, "whatsapp_sent": False, "expires_in_minutes": validity_minutes}
+    if admin and admin.smtp_email and admin.smtp_password:
+        result = VerificationService.send_verification_messages(
+            db=db,
+            user=user,
+            verification_token=verification_token,
+            frontend_url=settings.FRONTEND_URL,
+            admin_smtp_email=admin.smtp_email,
+            admin_smtp_password=admin.smtp_password
+        )
+        verification_result = {
+            "email_sent": result.get("email_sent", False),
+            "whatsapp_sent": result.get("whatsapp_sent", False),
+            "expires_in_minutes": validity_minutes
+        }
+    
     return {
-        "user": UserResponse.model_validate(user),
+        "message": "Registration successful! Please check your email and WhatsApp to verify your account.",
+        "user_id": user.id,
         "student_id": student.id,
-        "access_token": token,
-        "token_type": "bearer",
+        "verification_sent": verification_result,
+        "note": "Account will be activated after verification. The verification link is valid for {} minutes.".format(validity_minutes)
     }
 
 
@@ -94,8 +127,11 @@ async def register_instructor(
     """
     Register a new instructor
     Note: Admin user must exist before instructors can register
+    Creates user as inactive and sends email/WhatsApp verification
     """
     from ..services.initialization import InitializationService
+    from ..services.verification_service import VerificationService
+    from ..config import settings
     
     # Check if admin exists
     if not InitializationService.admin_exists(db):
@@ -106,14 +142,45 @@ async def register_instructor(
     
     try:
         print(f"[DEBUG] Received instructor registration data: {instructor_data}")
+        
+        # Create instructor (user will be inactive)
         user, instructor = AuthService.create_instructor(db, instructor_data)
-        token = AuthService.create_user_token(user)
-
+        
+        # Get admin SMTP settings
+        admin = db.query(User).filter(User.role == UserRole.ADMIN).first()
+        validity_minutes = admin.verification_link_validity_minutes if admin else 30
+        
+        # Create verification token
+        verification_token = VerificationService.create_verification_token(
+            db=db,
+            user_id=user.id,
+            token_type="email",
+            validity_minutes=validity_minutes
+        )
+        
+        # Send verification messages
+        verification_result = {"email_sent": False, "whatsapp_sent": False, "expires_in_minutes": validity_minutes}
+        if admin and admin.smtp_email and admin.smtp_password:
+            result = VerificationService.send_verification_messages(
+                db=db,
+                user=user,
+                verification_token=verification_token,
+                frontend_url=settings.FRONTEND_URL,
+                admin_smtp_email=admin.smtp_email,
+                admin_smtp_password=admin.smtp_password
+            )
+            verification_result = {
+                "email_sent": result.get("email_sent", False),
+                "whatsapp_sent": result.get("whatsapp_sent", False),
+                "expires_in_minutes": validity_minutes
+            }
+        
         return {
-            "user": UserResponse.model_validate(user),
+            "message": "Registration successful! Please check your email and WhatsApp to verify your account.",
+            "user_id": user.id,
             "instructor_id": instructor.id,
-            "access_token": token,
-            "token_type": "bearer",
+            "verification_sent": verification_result,
+            "note": "Account will be activated after verification. The verification link is valid for {} minutes.".format(validity_minutes)
         }
     except Exception as e:
         print(f"[ERROR] Registration failed: {type(e).__name__}: {str(e)}")
@@ -205,6 +272,10 @@ async def update_user_profile(
         current_user.last_name = user_update.last_name
     if user_update.phone is not None:
         current_user.phone = user_update.phone
+    if user_update.id_number is not None:
+        current_user.id_number = user_update.id_number
+    if user_update.address is not None:
+        current_user.address = user_update.address
 
     db.commit()
     db.refresh(current_user)

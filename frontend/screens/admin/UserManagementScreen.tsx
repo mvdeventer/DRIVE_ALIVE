@@ -56,6 +56,7 @@ export default function UserManagementScreen({ navigation }: any) {
     phone: '',
   });
   const [resetPasswordModalVisible, setResetPasswordModalVisible] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [confirmAction, setConfirmAction] = useState<{
@@ -120,6 +121,7 @@ export default function UserManagementScreen({ navigation }: any) {
       const userPhone = normalizePhone(user.phone);
 
       const searchMatch =
+        user.id.toString().includes(searchQuery) || // Search by User ID
         user.full_name.toLowerCase().includes(query) ||
         user.email.toLowerCase().includes(query) ||
         userPhone.includes(normalizedQuery) ||
@@ -453,12 +455,15 @@ export default function UserManagementScreen({ navigation }: any) {
 
   const renderUser = ({ item }: { item: User }) => (
     <View style={styles.userCard}>
+      <View style={styles.userIdBadge}>
+        <Text style={styles.userIdText}>User ID: #{item.id}</Text>
+      </View>
       <View style={styles.userHeader}>
         <View style={styles.userInfo}>
           <Text style={styles.userName}>{item.full_name}</Text>
           <Text style={styles.userEmail}>{item.email}</Text>
           <Text style={styles.userPhone}>{item.phone}</Text>
-          {item.id_number && <Text style={styles.userIdNumber}>ID: {item.id_number}</Text>}
+          {item.id_number && <Text style={styles.userIdNumber}>SA ID: {item.id_number}</Text>}
         </View>
         <View style={styles.badges}>
           <View style={[styles.badge, getRoleBadgeStyle(item.role)]}>
@@ -745,7 +750,7 @@ export default function UserManagementScreen({ navigation }: any) {
                   value={newPassword}
                   onChangeText={setNewPassword}
                   placeholder="Enter new password"
-                  secureTextEntry
+                  secureTextEntry={!showPassword}
                 />
               </View>
 
@@ -756,9 +761,18 @@ export default function UserManagementScreen({ navigation }: any) {
                   value={confirmPassword}
                   onChangeText={setConfirmPassword}
                   placeholder="Confirm new password"
-                  secureTextEntry
+                  secureTextEntry={!showPassword}
                 />
               </View>
+
+              <TouchableOpacity
+                style={styles.showPasswordButton}
+                onPress={() => setShowPassword(!showPassword)}
+              >
+                <Text style={styles.showPasswordText}>
+                  {showPassword ? '🙈 Hide Password' : '👁️ Show Password'}
+                </Text>
+              </TouchableOpacity>
 
               <Text style={styles.infoText}>Password must be at least 6 characters long</Text>
             </View>
@@ -1215,6 +1229,20 @@ const styles = StyleSheet.create({
     boxShadow: '0px 1px 3px rgba(0,0,0,0.1)',
     width: '100%',
   },
+  userIdBadge: {
+    backgroundColor: '#E3F2FD',
+    borderRadius: 4,
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    marginBottom: 8,
+    alignSelf: 'flex-start',
+  },
+  userIdText: {
+    fontSize: 11,
+    fontWeight: 'bold',
+    color: '#1976D2',
+    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+  },
   userHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -1422,6 +1450,16 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#666',
     marginBottom: 5,
+  },
+  showPasswordButton: {
+    marginBottom: 15,
+    padding: 8,
+    alignItems: 'center',
+  },
+  showPasswordText: {
+    color: '#007bff',
+    fontSize: 14,
+    fontWeight: '600',
   },
   helperText: {
     fontSize: 12,

@@ -21,6 +21,13 @@ class AdminCreateRequest(BaseModel):
     password: str = Field(..., min_length=6)
     first_name: str
     last_name: str
+    id_number: str = Field(..., min_length=13, max_length=13)
+    address: Optional[str] = None
+    address_latitude: Optional[float] = -33.9249  # Default: Cape Town
+    address_longitude: Optional[float] = 18.4241
+    smtp_email: Optional[str] = None  # Gmail address for sending verification emails
+    smtp_password: Optional[str] = None  # Gmail app password
+    verification_link_validity_minutes: Optional[int] = 30  # Default 30 minutes
 
 
 # ==================== Statistics Schemas ====================

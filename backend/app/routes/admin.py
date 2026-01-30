@@ -70,6 +70,17 @@ async def create_admin(
         existing_user.status = UserStatus.ACTIVE
         db.commit()
         db.refresh(existing_user)
+        
+        # Trigger backup after successful role addition
+        try:
+            from ..services.backup_scheduler import backup_scheduler
+            from datetime import datetime
+            backup_scheduler.create_backup(
+                f"role_creation_admin_{existing_user.id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+            )
+        except Exception as e:
+            print(f"Warning: Backup after admin role creation failed: {e}")
+        
         return existing_user
     
     # Create new admin user
@@ -79,6 +90,7 @@ async def create_admin(
         password_hash=get_password_hash(admin_data.password),
         first_name=admin_data.first_name,
         last_name=admin_data.last_name,
+        id_number=admin_data.id_number,
         role=UserRole.ADMIN,
         status=UserStatus.ACTIVE,
     )
@@ -86,6 +98,16 @@ async def create_admin(
     db.add(new_admin)
     db.commit()
     db.refresh(new_admin)
+
+    # Trigger backup after successful admin creation
+    try:
+        from ..services.backup_scheduler import backup_scheduler
+        from datetime import datetime
+        backup_scheduler.create_backup(
+            f"role_creation_admin_{new_admin.id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+        )
+    except Exception as e:
+        print(f"Warning: Backup after admin creation failed: {e}")
 
     return new_admin
 
@@ -1156,3 +1178,61 @@ async def get_all_instructors_earnings_summary(
     summary.sort(key=lambda x: x["total_earnings"], reverse=True)
 
     return {"instructors": summary, "total_instructors": len(summary)}
+
+
+# ==================== Admin Settings ====================
+
+
+@router.get("/settings")
+async def get_admin_settings(
+    current_admin: Annotated[User, Depends(require_admin)],
+    db: Session = Depends(get_db),
+):
+    """
+    Get current admin user's settings
+    """
+    return {
+        "user_id": current_admin.id,
+        "email": current_admin.email,
+        "smtp_email": current_admin.smtp_email,
+        "smtp_password": current_admin.smtp_password,
+        "verification_link_validity_minutes": current_admin.verification_link_validity_minutes or 30,
+    }
+
+
+@router.put("/settings")
+async def update_admin_settings(
+    smtp_email: Optional[str] = None,
+    smtp_password: Optional[str] = None,
+    verification_link_validity_minutes: Optional[int] = 30,
+    current_admin: Annotated[User, Depends(require_admin)] = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    """
+    Update admin user's settings (email configuration and verification link validity)
+    """
+    # Validation
+    if verification_link_validity_minutes is not None:
+        if verification_link_validity_minutes < 15 or verification_link_validity_minutes > 120:
+            raise HTTPException(
+                status_code=400,
+                detail="Verification link validity must be between 15 and 120 minutes",
+            )
+
+    # Update settings
+    if smtp_email is not None:
+        current_admin.smtp_email = smtp_email if smtp_email else None
+    if smtp_password is not None:
+        current_admin.smtp_password = smtp_password if smtp_password else None
+    if verification_link_validity_minutes is not None:
+        current_admin.verification_link_validity_minutes = verification_link_validity_minutes
+
+    db.commit()
+    db.refresh(current_admin)
+
+    return {
+        "message": "Settings updated successfully",
+        "smtp_email": current_admin.smtp_email,
+        "verification_link_validity_minutes": current_admin.verification_link_validity_minutes,
+    }
+

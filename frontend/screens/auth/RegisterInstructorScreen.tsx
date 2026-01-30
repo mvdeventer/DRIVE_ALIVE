@@ -4,11 +4,13 @@
 import React, { useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Modal,
   ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
+  Platform,
 } from 'react-native';
 import FormFieldWithTip from '../../components/FormFieldWithTip';
 import InlineMessage from '../../components/InlineMessage';
@@ -47,10 +49,12 @@ export default function RegisterInstructorScreen({ navigation }: any) {
       : '',
   });
   const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
   const [message, setMessage] = useState<{
     type: 'success' | 'error' | 'warning' | 'info';
     text: string;
   } | null>(null);
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
   const scrollViewRef = useRef<ScrollView>(null);
 
   const handleRegister = async () => {
@@ -107,7 +111,11 @@ export default function RegisterInstructorScreen({ navigation }: any) {
     }
 
     setMessage(null);
+    setShowConfirmModal(true); // Show confirmation modal
+  };
 
+  const confirmAndSubmit = async () => {
+    setShowConfirmModal(false);
     setLoading(true);
 
     try {
@@ -136,20 +144,21 @@ export default function RegisterInstructorScreen({ navigation }: any) {
 
       const response = await ApiService.post('/auth/register/instructor', registrationData);
 
-      // Show success message and scroll to top
-      setMessage({
-        type: 'success',
-        text: '✅ Success! Registration successful! Redirecting to login...',
-      });
-      scrollViewRef.current?.scrollTo({ y: 0, animated: true });
+      // Capture verification info from response
+      const verificationData = response.verification_sent || {
+        email_sent: false,
+        whatsapp_sent: false,
+      };
 
-      // Auto-navigate to login after 4 seconds
-      setTimeout(() => {
-        navigation.reset({
-          index: 0,
-          routes: [{ name: 'Login' }],
-        });
-      }, 4000);
+      // Navigate to verification pending screen
+      navigation.replace('VerificationPending', {
+        email: formData.email,
+        phone: formData.phone,
+        firstName: formData.first_name,
+        emailSent: verificationData.email_sent,
+        whatsappSent: verificationData.whatsapp_sent,
+        expiryMinutes: verificationData.expires_in_minutes || 30,
+      });
     } catch (error: any) {
       console.error('Registration error:', error);
       console.error('Error response:', error.response);
@@ -391,7 +400,7 @@ export default function RegisterInstructorScreen({ navigation }: any) {
           placeholder="Minimum 6 characters"
           value={formData.password}
           onChangeText={text => updateFormData('password', text)}
-          secureTextEntry
+          secureTextEntry={!showPassword}
         />
 
         <FormFieldWithTip
@@ -401,8 +410,17 @@ export default function RegisterInstructorScreen({ navigation }: any) {
           placeholder="Re-enter your password"
           value={formData.confirmPassword}
           onChangeText={text => updateFormData('confirmPassword', text)}
-          secureTextEntry
+          secureTextEntry={!showPassword}
         />
+
+        <TouchableOpacity
+          style={styles.showPasswordButton}
+          onPress={() => setShowPassword(!showPassword)}
+        >
+          <Text style={styles.showPasswordText}>
+            {showPassword ? '🙈 Hide Password' : '👁️ Show Password'}
+          </Text>
+        </TouchableOpacity>
 
         <TouchableOpacity
           style={[styles.button, loading && styles.buttonDisabled]}
@@ -421,6 +439,87 @@ export default function RegisterInstructorScreen({ navigation }: any) {
           <Text style={styles.linkText}>Already have an account? Login</Text>
         </TouchableOpacity>
       </ScrollView>
+
+      {/* Confirmation Modal */}
+      <Modal
+        visible={showConfirmModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowConfirmModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <ScrollView contentContainerStyle={styles.modalScrollContent}>
+            <View style={styles.modalContent}>
+              <Text style={styles.modalTitle}>✓ Confirm Registration Details</Text>
+              <Text style={styles.modalSubtitle}>Please review your instructor information</Text>
+              
+              <View style={styles.confirmDetails}>
+                <Text style={styles.confirmSectionTitle}>Personal Information</Text>
+                <Text style={styles.confirmLabel}>Name:</Text>
+                <Text style={styles.confirmValue}>{formData.first_name} {formData.last_name}</Text>
+                
+                <Text style={styles.confirmLabel}>Email:</Text>
+                <Text style={styles.confirmValue}>{formData.email}</Text>
+                
+                <Text style={styles.confirmLabel}>Phone:</Text>
+                <Text style={styles.confirmValue}>{formData.phone}</Text>
+                
+                <Text style={styles.confirmLabel}>ID Number:</Text>
+                <Text style={styles.confirmValue}>{formData.id_number}</Text>
+                
+                <Text style={styles.confirmLabel}>Location:</Text>
+                <Text style={styles.confirmValue}>{formData.suburb ? `${formData.suburb}, ` : ''}{formData.city}, {formData.province}</Text>
+
+                <Text style={styles.confirmSectionTitle}>License & Vehicle</Text>
+                <Text style={styles.confirmLabel}>License Number:</Text>
+                <Text style={styles.confirmValue}>{formData.license_number}</Text>
+                
+                <Text style={styles.confirmLabel}>License Types:</Text>
+                <Text style={styles.confirmValue}>{formData.license_types.join(', ')}</Text>
+                
+                <Text style={styles.confirmLabel}>Vehicle:</Text>
+                <Text style={styles.confirmValue}>{formData.vehicle_make} {formData.vehicle_model} ({formData.vehicle_year})</Text>
+                
+                <Text style={styles.confirmLabel}>Registration:</Text>
+                <Text style={styles.confirmValue}>{formData.vehicle_registration}</Text>
+
+                <Text style={styles.confirmSectionTitle}>Rates & Service</Text>
+                <Text style={styles.confirmLabel}>Hourly Rate:</Text>
+                <Text style={styles.confirmValue}>R{formData.hourly_rate}/hour</Text>
+                
+                <Text style={styles.confirmLabel}>Service Radius:</Text>
+                <Text style={styles.confirmValue}>{formData.service_radius_km}km</Text>
+                
+                <Text style={styles.confirmLabel}>Max Travel Distance:</Text>
+                <Text style={styles.confirmValue}>{formData.max_travel_distance_km}km (R{formData.rate_per_km_beyond_radius}/km beyond)</Text>
+                
+                {formData.bio && (
+                  <>
+                    <Text style={styles.confirmLabel}>Bio:</Text>
+                    <Text style={styles.confirmValue}>{formData.bio}</Text>
+                  </>
+                )}
+              </View>
+
+              <View style={styles.modalButtons}>
+                <TouchableOpacity
+                  style={[styles.modalButton, styles.modalButtonSecondary]}
+                  onPress={() => setShowConfirmModal(false)}
+                >
+                  <Text style={styles.modalButtonTextSecondary}>✏️ Edit</Text>
+                </TouchableOpacity>
+                
+                <TouchableOpacity
+                  style={[styles.modalButton, styles.modalButtonPrimary]}
+                  onPress={confirmAndSubmit}
+                >
+                  <Text style={styles.modalButtonText}>✓ Confirm & Register</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </ScrollView>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -471,6 +570,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginTop: 20,
     marginBottom: 15,
+  },
+  showPasswordButton: {
+    marginBottom: 15,
+    padding: 8,
+    alignItems: 'center',
+  },
+  showPasswordText: {
+    color: '#007bff',
+    fontSize: 14,
+    fontWeight: '600',
   },
   buttonDisabled: {
     backgroundColor: '#ccc',
@@ -533,6 +642,96 @@ const styles = StyleSheet.create({
   pickerCloseButtonText: {
     color: '#fff',
     fontSize: 16,
+    fontWeight: '600',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalScrollContent: {
+    flexGrow: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  modalContent: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: Platform.OS === 'web' ? 30 : 24,
+    width: Platform.OS === 'web' ? '50%' : '95%',
+    maxWidth: 600,
+    maxHeight: '90%',
+  },
+  modalTitle: {
+    fontSize: Platform.OS === 'web' ? 22 : 20,
+    fontWeight: 'bold',
+    color: '#28a745',
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  modalSubtitle: {
+    fontSize: Platform.OS === 'web' ? 14 : 12,
+    color: '#666',
+    marginBottom: 20,
+    textAlign: 'center',
+  },
+  confirmDetails: {
+    backgroundColor: '#f8f9fa',
+    borderRadius: 8,
+    padding: Platform.OS === 'web' ? 20 : 16,
+    marginBottom: 20,
+  },
+  confirmSectionTitle: {
+    fontSize: Platform.OS === 'web' ? 16 : 14,
+    fontWeight: 'bold',
+    color: '#007AFF',
+    marginTop: 12,
+    marginBottom: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#ddd',
+    paddingBottom: 4,
+  },
+  confirmLabel: {
+    fontSize: Platform.OS === 'web' ? 14 : 12,
+    fontWeight: '600',
+    color: '#666',
+    marginTop: 8,
+  },
+  confirmValue: {
+    fontSize: Platform.OS === 'web' ? 16 : 14,
+    color: '#333',
+    marginBottom: 8,
+    fontWeight: '500',
+  },
+  modalButtons: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  modalButton: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  modalButtonPrimary: {
+    backgroundColor: '#28a745',
+  },
+  modalButtonSecondary: {
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: '#dc3545',
+  },
+  modalButtonText: {
+    color: '#fff',
+    fontSize: Platform.OS === 'web' ? 16 : 14,
+    fontWeight: '600',
+  },
+  modalButtonTextSecondary: {
+    color: '#dc3545',
+    fontSize: Platform.OS === 'web' ? 16 : 14,
     fontWeight: '600',
   },
 });

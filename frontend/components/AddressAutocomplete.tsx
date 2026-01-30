@@ -138,7 +138,7 @@ export default function AddressAutocomplete({
     setCoordinates(coords);
     setLoadingGPS(false);
 
-    // Notify parent component of coordinates
+    // Notify parent immediately that location was captured
     if (onLocationCapture) {
       onLocationCapture(coords);
     }
@@ -290,7 +290,7 @@ export default function AddressAutocomplete({
       {coordinates && (
         <View style={styles.successContainer}>
           <Text style={styles.successText}>
-            ✓ Location captured: {coordinates.latitude.toFixed(6)},{' '}
+            ✓ GPS Location: {coordinates.latitude.toFixed(6)},{' '}
             {coordinates.longitude.toFixed(6)}
           </Text>
         </View>

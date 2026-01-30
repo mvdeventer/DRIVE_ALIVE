@@ -1,0 +1,24 @@
+{
+  "users": [
+    {
+      "id": 1,
+      "email": "mvdeventer123@gmail.com",
+      "phone": "0611154598",
+      "password_hash": "$2b$12$u2TVISdLh44b2xB/dMLh8.ZJADcn3fM9UnEY09kiZkGvRd7CJfTdi",
+      "first_name": "Martin",
+      "last_name": "van Deventer",
+      "role": "admin",
+      "status": "active",
+      "firebase_uid": null,
+      "address": "40 Potgieter Crescent\nMorgenster\nBrackenfell\n7560",
+      "address_latitude": -33.86553774493649,
+      "address_longitude": 18.70038051656175,
+      "created_at": "2026-01-30T08:24:12",
+      "updated_at": "2026-01-30T08:24:17",
+      "last_login": "2026-01-30T08:24:17.214741"
+    }
+  ],
+  "instructors": [],
+  "students": [],
+  "bookings": []
+}

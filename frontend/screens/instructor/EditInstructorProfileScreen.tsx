@@ -62,6 +62,7 @@ export default function EditInstructorProfileScreen({ navigation: navProp }: any
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
   const [passwordData, setPasswordData] = useState({
     currentPassword: '',
     newPassword: '',
@@ -598,7 +599,7 @@ export default function EditInstructorProfileScreen({ navigation: navProp }: any
               placeholder="Enter current password"
               value={passwordData.currentPassword}
               onChangeText={value => setPasswordData(prev => ({ ...prev, currentPassword: value }))}
-              secureTextEntry
+              secureTextEntry={!showPassword}
               tooltip="Your current password for verification"
             />
 
@@ -608,7 +609,7 @@ export default function EditInstructorProfileScreen({ navigation: navProp }: any
               placeholder="Enter new password"
               value={passwordData.newPassword}
               onChangeText={value => setPasswordData(prev => ({ ...prev, newPassword: value }))}
-              secureTextEntry
+              secureTextEntry={!showPassword}
               tooltip="New password (minimum 6 characters)"
             />
 
@@ -618,9 +619,18 @@ export default function EditInstructorProfileScreen({ navigation: navProp }: any
               placeholder="Confirm new password"
               value={passwordData.confirmPassword}
               onChangeText={value => setPasswordData(prev => ({ ...prev, confirmPassword: value }))}
-              secureTextEntry
+              secureTextEntry={!showPassword}
               tooltip="Re-enter your new password"
             />
+
+            <TouchableOpacity
+              style={styles.showPasswordButton}
+              onPress={() => setShowPassword(!showPassword)}
+            >
+              <Text style={styles.showPasswordText}>
+                {showPassword ? '🙈 Hide Password' : '👁️ Show Password'}
+              </Text>
+            </TouchableOpacity>
 
             <View style={styles.modalButtons}>
               <TouchableOpacity
@@ -834,6 +844,16 @@ const styles = StyleSheet.create({
   modalSaveButtonText: {
     color: '#fff',
     fontSize: 16,
+    fontWeight: '600',
+  },
+  showPasswordButton: {
+    marginBottom: 15,
+    padding: 8,
+    alignItems: 'center',
+  },
+  showPasswordText: {
+    color: '#007bff',
+    fontSize: 14,
     fontWeight: '600',
   },
   confirmModalContent: {

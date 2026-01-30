@@ -41,9 +41,20 @@ class User(Base):
     password_hash = Column(String, nullable=False)
     first_name = Column(String, nullable=False)
     last_name = Column(String, nullable=False)
+    id_number = Column(String, nullable=True)  # South African ID number (nullable for legacy users)
     role = Column(SQLEnum(UserRole), nullable=False)
     status = Column(SQLEnum(UserStatus), default=UserStatus.ACTIVE)
     firebase_uid = Column(String, unique=True, nullable=True, index=True)
+
+    # Address fields (optional for all users)
+    address = Column(String, nullable=True)
+    address_latitude = Column(Float, nullable=True)
+    address_longitude = Column(Float, nullable=True)
+
+    # Email configuration (for admin only - used to send verification emails)
+    smtp_email = Column(String, nullable=True)  # Gmail address
+    smtp_password = Column(String, nullable=True)  # Gmail app password
+    verification_link_validity_minutes = Column(Integer, default=30)  # Default 30 minutes
 
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())
@@ -57,6 +68,9 @@ class User(Base):
     student_profile = relationship("Student", back_populates="user", uselist=False)
     password_reset_tokens = relationship(
         "PasswordResetToken", back_populates="user", cascade="all, delete-orphan"
+    )
+    verification_tokens = relationship(
+        "VerificationToken", back_populates="user", cascade="all, delete-orphan"
     )
 
     @property

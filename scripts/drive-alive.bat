@@ -328,7 +328,7 @@ if exist "%FRONTEND_PID_FILE%" (
     if !errorlevel! equ 0 (
         echo   Stopping frontend process tree...
         taskkill /T /PID !FRONTEND_PID! >nul 2>&1
-        timeout /t 2 /nobreak >nul
+        timeout /t 1 /nobreak >nul
         taskkill /F /T /PID !FRONTEND_PID! >nul 2>&1
         echo %COLOR_GREEN%  Frontend process stopped.%COLOR_RESET%
     ) else (

@@ -30,12 +30,15 @@ export default function EditAdminProfileScreen({ navigation: navProp }: any) {
     phone: '',
     first_name: '',
     last_name: '',
+    id_number: '',
+    address: '',
   });
   const [originalFormData, setOriginalFormData] = useState(formData);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
   const [passwordData, setPasswordData] = useState({
     currentPassword: '',
     newPassword: '',
@@ -45,6 +48,7 @@ export default function EditAdminProfileScreen({ navigation: navProp }: any) {
   const [pendingNavigation, setPendingNavigation] = useState<any>(null);
   const [successMessage, setSuccessMessage] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
+  const [userId, setUserId] = useState<number | null>(null);
 
   useEffect(() => {
     loadProfile();
@@ -102,17 +106,22 @@ export default function EditAdminProfileScreen({ navigation: navProp }: any) {
 
       const user = userRes.data;
 
+      setUserId(user.id);
       setFormData({
         email: user.email || '',
         phone: user.phone || '',
         first_name: user.first_name || '',
         last_name: user.last_name || '',
+        id_number: user.id_number || '',
+        address: user.address || '',
       });
       setOriginalFormData({
         email: user.email || '',
         phone: user.phone || '',
         first_name: user.first_name || '',
         last_name: user.last_name || '',
+        id_number: user.id_number || '',
+        address: user.address || '',
       });
     } catch (error: any) {
       console.error('Error loading profile:', error);
@@ -136,6 +145,8 @@ export default function EditAdminProfileScreen({ navigation: navProp }: any) {
           first_name: formData.first_name,
           last_name: formData.last_name,
           phone: formData.phone,
+          id_number: formData.id_number,
+          address: formData.address,
         });
       } else {
         // Admin editing own profile
@@ -143,6 +154,8 @@ export default function EditAdminProfileScreen({ navigation: navProp }: any) {
           first_name: formData.first_name,
           last_name: formData.last_name,
           phone: formData.phone,
+          id_number: formData.id_number,
+          address: formData.address,
         });
       }
 
@@ -214,6 +227,15 @@ export default function EditAdminProfileScreen({ navigation: navProp }: any) {
         {successMessage && <InlineMessage message={successMessage} type="success" />}
         {errorMessage && <InlineMessage message={errorMessage} type="error" />}
 
+        {/* User ID Display */}
+        {userId && (
+          <View style={styles.userIdCard}>
+            <Text style={styles.userIdLabel}>User ID:</Text>
+            <Text style={styles.userIdValue}>#{userId}</Text>
+            <Text style={styles.userIdHint}>Use this ID to search for this user</Text>
+          </View>
+        )}
+
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Personal Information</Text>
 
@@ -252,6 +274,26 @@ export default function EditAdminProfileScreen({ navigation: navProp }: any) {
             keyboardType="phone-pad"
             tooltip="Format: +27XXXXXXXXX or 0XXXXXXXXX"
             required
+          />
+
+          <FormFieldWithTip
+            label="ID Number"
+            value={formData.id_number}
+            onChangeText={text => setFormData({ ...formData, id_number: text })}
+            placeholder="13-digit SA ID number"
+            keyboardType="numeric"
+            maxLength={13}
+            tooltip="South African ID number (13 digits)"
+          />
+
+          <FormFieldWithTip
+            label="Address"
+            value={formData.address}
+            onChangeText={text => setFormData({ ...formData, address: text })}
+            placeholder="Enter full address"
+            multiline
+            numberOfLines={3}
+            tooltip="Full residential or office address"
           />
         </View>
 
@@ -295,7 +337,7 @@ export default function EditAdminProfileScreen({ navigation: navProp }: any) {
               value={passwordData.currentPassword}
               onChangeText={text => setPasswordData({ ...passwordData, currentPassword: text })}
               placeholder="Enter current password"
-              secureTextEntry
+              secureTextEntry={!showPassword}
               required
             />
 
@@ -304,7 +346,7 @@ export default function EditAdminProfileScreen({ navigation: navProp }: any) {
               value={passwordData.newPassword}
               onChangeText={text => setPasswordData({ ...passwordData, newPassword: text })}
               placeholder="Enter new password"
-              secureTextEntry
+              secureTextEntry={!showPassword}
               tooltip="Minimum 8 characters"
               required
             />
@@ -314,9 +356,18 @@ export default function EditAdminProfileScreen({ navigation: navProp }: any) {
               value={passwordData.confirmPassword}
               onChangeText={text => setPasswordData({ ...passwordData, confirmPassword: text })}
               placeholder="Re-enter new password"
-              secureTextEntry
+              secureTextEntry={!showPassword}
               required
             />
+
+            <TouchableOpacity
+              style={styles.showPasswordButton}
+              onPress={() => setShowPassword(!showPassword)}
+            >
+              <Text style={styles.showPasswordText}>
+                {showPassword ? '🙈 Hide Password' : '👁️ Show Password'}
+              </Text>
+            </TouchableOpacity>
 
             <View style={styles.modalButtons}>
               <TouchableOpacity
@@ -380,6 +431,37 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     padding: 20,
+  },
+  userIdCard: {
+    backgroundColor: '#E3F2FD',
+    borderLeftWidth: 4,
+    borderLeftColor: '#2196F3',
+    borderRadius: 8,
+    padding: 16,
+    marginBottom: 20,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    flexWrap: 'wrap',
+  },
+  userIdLabel: {
+    fontSize: 14,
+    color: '#1976D2',
+    fontWeight: '600',
+    marginRight: 8,
+  },
+  userIdValue: {
+    fontSize: 18,
+    color: '#0D47A1',
+    fontWeight: 'bold',
+    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+  },
+  userIdHint: {
+    fontSize: 12,
+    color: '#1976D2',
+    fontStyle: 'italic',
+    width: '100%',
+    marginTop: 4,
   },
   section: {
     backgroundColor: '#FFF',
@@ -484,6 +566,16 @@ const styles = StyleSheet.create({
   },
   modalSaveButtonText: {
     color: '#FFF',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  showPasswordButton: {
+    marginBottom: 15,
+    padding: 8,
+    alignItems: 'center',
+  },
+  showPasswordText: {
+    color: '#007bff',
     fontSize: 14,
     fontWeight: '600',
   },

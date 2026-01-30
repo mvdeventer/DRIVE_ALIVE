@@ -3,7 +3,7 @@
  */
 import { CommonActions, useFocusEffect, useNavigation } from '@react-navigation/native';
 import * as SecureStore from 'expo-secure-store';
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -47,6 +47,7 @@ interface StudentProfile {
 
 export default function StudentHomeScreen() {
   const navigation = useNavigation();
+  const scrollViewRef = useRef<ScrollView>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [profile, setProfile] = useState<StudentProfile | null>(null);
@@ -167,6 +168,7 @@ export default function StudentHomeScreen() {
       console.error('Error response:', error.response?.data);
       console.error('Error status:', error.response?.status);
       const errorMsg = error.response?.data?.detail || 'Failed to load dashboard data';
+      scrollViewRef.current?.scrollTo({ y: 0, animated: true });
       setMessage({ type: 'error', text: errorMsg });
       setTimeout(() => setMessage(null), 5000);
     } finally {
@@ -224,6 +226,7 @@ export default function StudentHomeScreen() {
               style: 'destructive',
               onPress: () => {
                 setUpcomingBookings(prev => prev.filter(b => b.id !== booking.id));
+                scrollViewRef.current?.scrollTo({ y: 0, animated: true });
                 setMessage({ type: 'success', text: '✅ Lesson removed from list' });
                 setTimeout(() => setMessage(null), 3000);
               },
@@ -233,6 +236,7 @@ export default function StudentHomeScreen() {
         );
       } else if (confirmed) {
         setUpcomingBookings(prev => prev.filter(b => b.id !== booking.id));
+        scrollViewRef.current?.scrollTo({ y: 0, animated: true });
         setMessage({ type: 'success', text: '✅ Lesson removed from list' });
         setTimeout(() => setMessage(null), 3000);
       }
@@ -245,6 +249,7 @@ export default function StudentHomeScreen() {
 
     // Check if lesson is in the past
     if (hoursUntilLesson < 0) {
+      scrollViewRef.current?.scrollTo({ y: 0, animated: true });
       setMessage({ type: 'error', text: 'Cannot delete a lesson that has already passed' });
       setTimeout(() => setMessage(null), 3000);
       return;
@@ -296,11 +301,13 @@ export default function StudentHomeScreen() {
       // Remove from local state immediately (optimistic update)
       setUpcomingBookings(prev => prev.filter(b => b.id !== bookingId));
 
+      scrollViewRef.current?.scrollTo({ y: 0, animated: true });
       setMessage({ type: 'success', text: '✅ Booking deleted successfully' });
       setTimeout(() => setMessage(null), 3000);
     } catch (error: any) {
       console.error('Error deleting booking:', error);
       const errorMsg = error.response?.data?.detail || 'Failed to delete booking';
+      scrollViewRef.current?.scrollTo({ y: 0, animated: true });
       setMessage({ type: 'error', text: errorMsg });
       setTimeout(() => setMessage(null), 3000);
     }
@@ -350,6 +357,7 @@ export default function StudentHomeScreen() {
   const handleHideCompletedLesson = (booking: Booking) => {
     // Check if lesson has a rating - MUST rate before hiding
     if (!booking.review_rating && !selectedRatings[booking.id]) {
+      scrollViewRef.current?.scrollTo({ y: 0, animated: true });
       setMessage({
         type: 'error',
         text: '⚠️ Please rate this lesson before hiding it. Select 1-5 stars above.',
@@ -452,6 +460,7 @@ export default function StudentHomeScreen() {
 
   return (
     <ScrollView
+      ref={scrollViewRef}
       style={styles.container}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
     >

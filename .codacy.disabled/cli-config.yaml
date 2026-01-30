@@ -1,0 +1,39 @@
+# Codacy CLI Configuration
+# This file configures the Codacy CLI for local analysis
+
+# Project identification (optional - can be left empty for local-only analysis)
+# These values are used when connecting to Codacy Cloud
+# project:
+#   provider: gh  # Options: gh (GitHub), gl (GitLab), bb (Bitbucket)
+#   organization: your-org-name
+#   repository: DRIVE_ALIVE
+
+# Analysis configuration
+analysis:
+  # Tools to run (matches codacy.yaml configuration)
+  tools:
+    - trivy
+    - dartanalyzer
+    - eslint
+    - pylint
+    - pmd
+    - semgrep
+  
+  # Patterns to exclude from analysis
+  exclude:
+    - "**/node_modules/**"
+    - "**/venv/**"
+    - "**/.venv/**"
+    - "**/build/**"
+    - "**/dist/**"
+    - "**/__pycache__/**"
+    - "**/.pytest_cache/**"
+    - "**/migrations/**"
+    - "**/.git/**"
+    - "**/image/**"
+    - "**/.archive/**"
+
+# Output configuration
+output:
+  format: json  # Options: json, text, sarif
+  verbose: false

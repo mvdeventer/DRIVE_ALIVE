@@ -352,6 +352,79 @@ class ApiService {
     return response.data;
   }
 
+  // Database Backup/Restore Methods
+  async backupDatabase() {
+    const response = await this.api.get('/admin/database/backup', {
+      responseType: 'blob',
+    });
+    return response;
+  }
+
+  async listBackups() {
+    const response = await this.api.get('/admin/database/backups/list');
+    return response.data;
+  }
+
+  async downloadBackupFromServer(filename: string) {
+    const response = await this.api.get(`/admin/database/backups/download/${filename}`, {
+      responseType: 'blob',
+    });
+    return response;
+  }
+
+  async getAllBackups() {
+    const response = await this.api.get('/admin/database/backups/all');
+    return response.data;
+  }
+
+  async getBackupConfig() {
+    const response = await this.api.get('/admin/database/backups/config');
+    return response.data;
+  }
+
+  async updateBackupConfig(config: any) {
+    const response = await this.api.put('/admin/database/backups/config', config);
+    return response.data;
+  }
+
+  async extractFromArchive(archiveName: string, backupFilename: string) {
+    const response = await this.api.get(
+      `/admin/database/backups/extract/${archiveName}/${backupFilename}`
+    );
+    return response.data;
+  }
+
+  async resetDatabase() {
+    const response = await this.api.post('/admin/database/reset');
+    return response.data;
+  }
+
+  async restoreDatabase(file: File | Blob) {
+    const formData = new FormData();
+    formData.append('file', file);
+    const response = await this.api.post('/admin/database/restore', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+    return response.data;
+  }
+
+  // Admin Settings Methods
+  async getAdminSettings() {
+    const response = await this.api.get('/admin/settings');
+    return response.data;
+  }
+
+  async updateAdminSettings(data: {
+    smtp_email?: string | null;
+    smtp_password?: string | null;
+    verification_link_validity_minutes?: number;
+  }) {
+    const response = await this.api.put('/admin/settings', data);
+    return response.data;
+  }
+
   // Mock Payment Methods
   async completeMockPayment(sessionId: string, success: boolean = true) {
     const response = await this.api.post('/payments/mock-complete', {

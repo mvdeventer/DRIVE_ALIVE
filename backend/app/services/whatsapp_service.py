@@ -56,6 +56,34 @@ class WhatsAppService:
 
         return f"whatsapp:{phone}"
 
+    def send_message(self, phone: str, message: str) -> bool:
+        """
+        Send a generic WhatsApp message
+        
+        Args:
+            phone: Phone number in any format
+            message: Message body text
+            
+        Returns:
+            bool: True if successful, False otherwise
+        """
+        if not self.client:
+            logger.warning("Twilio client not initialized. Skipping WhatsApp message.")
+            return False
+
+        try:
+            to_number = self._format_phone_number(phone)
+            msg = self.client.messages.create(
+                body=message,
+                from_=self.whatsapp_number,
+                to=to_number
+            )
+            logger.info(f"WhatsApp message sent to {phone}: {msg.sid}")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to send WhatsApp message to {phone}: {str(e)}")
+            return False
+
     def send_booking_confirmation(
         self,
         student_name: str,

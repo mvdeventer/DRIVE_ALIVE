@@ -21,12 +21,16 @@ from .routes import (
     auth,
     availability,
     bookings,
+    database,
     instructors,
     payments,
     setup,
     students,
+    verification,
 )
 from .services.reminder_scheduler import reminder_scheduler
+from .services.backup_scheduler import backup_scheduler
+from .services.verification_cleanup_scheduler import verification_cleanup_scheduler
 
 # Create database tables
 Base.metadata.create_all(bind=engine)
@@ -69,6 +73,14 @@ async def lifespan(app: FastAPI):
     if settings.TWILIO_ACCOUNT_SID:
         print("🚀 Starting WhatsApp reminder scheduler...")
         task = asyncio.create_task(reminder_scheduler.start())
+    
+    # Start backup scheduler
+    print("🔄 Starting automated backup scheduler...")
+    backup_task = asyncio.create_task(backup_scheduler.start())
+
+    # Start verification cleanup scheduler
+    print("🧹 Starting verification cleanup scheduler...")
+    verification_cleanup_task = asyncio.create_task(verification_cleanup_scheduler.start())
 
     yield
 
@@ -82,6 +94,26 @@ async def lifespan(app: FastAPI):
                 await task
             except asyncio.CancelledError:
                 pass
+    
+    # Stop backup scheduler
+    print("🛑 Stopping backup scheduler...")
+    await backup_scheduler.stop()
+    if backup_task:
+        backup_task.cancel()
+        try:
+            await backup_task
+        except asyncio.CancelledError:
+            pass
+
+    # Stop verification cleanup scheduler
+    print("🛑 Stopping verification cleanup scheduler...")
+    await verification_cleanup_scheduler.stop()
+    if verification_cleanup_task:
+        verification_cleanup_task.cancel()
+        try:
+            await verification_cleanup_task
+        except asyncio.CancelledError:
+            pass
 
 
 # Create FastAPI app with lifespan
@@ -156,7 +188,9 @@ async def validation_exception_handler(_request: Request, exc: RequestValidation
 # Include routers
 app.include_router(setup.router)  # ⚠️ REMOVE AFTER CREATING ADMIN USER
 app.include_router(admin.router)
+app.include_router(database.router)
 app.include_router(auth.router)
+app.include_router(verification.router)
 app.include_router(availability.router)
 app.include_router(bookings.router)
 app.include_router(instructors.router)

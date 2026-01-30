@@ -11,7 +11,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from ..config import settings
-from ..models.user import Instructor, Student, User, UserRole
+from ..models.user import Instructor, Student, User, UserRole, UserStatus
 from ..schemas.user import InstructorCreate, StudentCreate, UserCreate
 from ..utils.auth import create_access_token, get_password_hash, verify_password
 
@@ -101,7 +101,7 @@ class AuthService:
                         detail=f"ID number '{instructor_data.id_number}' is already registered to another student. Please check your ID number.",
                     )
                 
-                # Create new user
+                # Create new user (INACTIVE - requires email/WhatsApp verification)
                 user = User(
                     email=instructor_data.email,
                     phone=instructor_data.phone,
@@ -109,10 +109,11 @@ class AuthService:
                     last_name=instructor_data.last_name,
                     password_hash=get_password_hash(instructor_data.password),
                     role=UserRole.INSTRUCTOR,
+                    status=UserStatus.INACTIVE,  # Requires verification
                 )
                 db.add(user)
                 db.flush()  # Flush to get user.id without committing
-                print(f"[DEBUG] Created new user {user.id} with email {user.email} for instructor role")
+                print(f"[DEBUG] Created new user {user.id} with email {user.email} for instructor role (INACTIVE - awaiting verification)")
 
             # Check if license number exists
             existing_license = db.query(Instructor).filter(Instructor.license_number == instructor_data.license_number).first()
@@ -156,6 +157,16 @@ class AuthService:
             db.commit()
             db.refresh(user)
             db.refresh(instructor)
+
+            # Trigger backup after successful role creation
+            try:
+                from .backup_scheduler import backup_scheduler
+                backup_scheduler.create_backup(
+                    f"role_creation_instructor_{user.id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+                )
+            except Exception as e:
+                # Log but don't fail the request if backup fails
+                print(f"Warning: Backup after instructor role creation failed: {e}")
 
             return user, instructor
 
@@ -230,7 +241,7 @@ class AuthService:
                         detail=f"ID number '{student_data.id_number}' is already registered to another student. Please check your ID number.",
                     )
                 
-                # Create new user
+                # Create new user (INACTIVE - requires email/WhatsApp verification)
                 user = User(
                     email=student_data.email,
                     phone=student_data.phone,
@@ -238,6 +249,7 @@ class AuthService:
                     last_name=student_data.last_name,
                     password_hash=get_password_hash(student_data.password),
                     role=UserRole.STUDENT,
+                    status=UserStatus.INACTIVE,  # Requires verification
                 )
                 db.add(user)
                 db.flush()  # Flush to get user.id without committing
@@ -263,6 +275,16 @@ class AuthService:
             db.commit()
             db.refresh(user)
             db.refresh(student)
+
+            # Trigger backup after successful role creation
+            try:
+                from .backup_scheduler import backup_scheduler
+                backup_scheduler.create_backup(
+                    f"role_creation_student_{user.id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+                )
+            except Exception as e:
+                # Log but don't fail the request if backup fails
+                print(f"Warning: Backup after student role creation failed: {e}")
 
             return user, student
 
@@ -307,7 +329,7 @@ class AuthService:
         if user.status == UserStatus.INACTIVE:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="Your account has been deactivated. Please contact support for assistance.",
+                detail="Your account is not verified. Please check your email and WhatsApp for the verification link. If you didn't receive it, please register again.",
             )
         elif user.status == UserStatus.SUSPENDED:
             raise HTTPException(
