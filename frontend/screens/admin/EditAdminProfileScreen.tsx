@@ -92,20 +92,22 @@ export default function EditAdminProfileScreen({ navigation: navProp }: any) {
       const currentUser = meRes.data;
       setCurrentUserId(currentUser.id);
 
-      let userRes;
+      let user;
 
       if (params?.userId && params.userId !== currentUser.id) {
         // Editing another admin's profile
         setIsEditingOtherAdmin(true);
-        userRes = await ApiService.get(`/admin/users/${params.userId}`);
+        const userRes = await ApiService.get(`/admin/users/${params.userId}`);
+        user = userRes.data;
       } else {
         // Editing own profile
         setIsEditingOtherAdmin(false);
-        userRes = meRes; // Use already fetched current user data
+        user = currentUser; // Use already fetched current user data
       }
 
-      const user = userRes.data;
-
+      console.log('User data loaded:', user);
+      console.log('User ID:', user.id);
+      
       setUserId(user.id);
       setFormData({
         email: user.email || '',
@@ -228,10 +230,11 @@ export default function EditAdminProfileScreen({ navigation: navProp }: any) {
         {errorMessage && <InlineMessage message={errorMessage} type="error" />}
 
         {/* User ID Display */}
-        {!loading && userId && (
+        {userId !== null && (
           <View style={styles.userIdCard}>
-            <Text style={styles.userIdLabel}>User ID:</Text>
-            <Text style={styles.userIdValue}>#{userId}</Text>
+            <Text style={styles.userIdLabel}>
+              User ID: <Text style={styles.userIdValue}>#{userId}</Text>
+            </Text>
             <Text style={styles.userIdHint}>Use this ID to search for this user</Text>
           </View>
         )}

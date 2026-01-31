@@ -131,9 +131,13 @@ export default function UserManagementScreen({ navigation }: any) {
       const query = searchQuery.toLowerCase();
       const normalizedQuery = normalizePhone(searchQuery);
       const userPhone = normalizePhone(user.phone);
+      
+      // Remove # prefix if present for ID search (e.g., "#1" or "#2")
+      const idSearchQuery = searchQuery.replace(/^#/, '');
 
       const searchMatch =
-        user.id.toString().includes(searchQuery) || // Search by User ID
+        user.id.toString() === idSearchQuery || // Exact ID match (e.g., "1" or "#1")
+        user.id.toString().includes(searchQuery) || // Partial ID match
         user.full_name.toLowerCase().includes(query) ||
         user.email.toLowerCase().includes(query) ||
         userPhone.includes(normalizedQuery) ||
@@ -521,14 +525,12 @@ export default function UserManagementScreen({ navigation }: any) {
 
     return (
       <View style={styles.userCard}>
-        <View style={styles.userIdBadge}>
+        <View style={[styles.userIdBadge, isOriginalAdmin && styles.originalAdminBadgeContainer]}>
           <Text style={styles.userIdText}>User ID: #{item.id}</Text>
+          {isOriginalAdmin && (
+            <Text style={styles.originalAdminBadgeText}>🛡️ ORIGINAL ADMIN - PROTECTED</Text>
+          )}
         </View>
-        {isOriginalAdmin && (
-          <View style={styles.originalAdminBadge}>
-            <Text style={styles.originalAdminText}>🛡️ ORIGINAL ADMIN - PROTECTED ACCOUNT</Text>
-          </View>
-        )}
         <View style={styles.userHeader}>
           <View style={styles.userInfo}>
             <Text style={styles.userName}>{item.full_name}</Text>
@@ -1388,12 +1390,25 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     marginBottom: 8,
     alignSelf: 'flex-start',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
   userIdText: {
     fontSize: 11,
     fontWeight: 'bold',
     color: '#1976D2',
     fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+  },
+  originalAdminBadgeContainer: {
+    backgroundColor: '#FFD700',
+    borderWidth: 1,
+    borderColor: '#FFA500',
+  },
+  originalAdminBadgeText: {
+    fontSize: Platform.OS === 'web' ? 10 : 9,
+    fontWeight: 'bold',
+    color: '#8B4513',
   },
   originalAdminBadge: {
     backgroundColor: '#FFD700',
@@ -1418,6 +1433,19 @@ const styles = StyleSheet.create({
   },
   userInfo: {
     flex: 1,
+  },
+  userIdBadge: {
+    fontSize: Platform.OS === 'web' ? 12 : 11,
+    fontWeight: '700',
+    color: '#007AFF',
+    backgroundColor: '#E3F2FD',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 4,
+    alignSelf: 'flex-start',
+    marginBottom: 6,
+    borderWidth: 1,
+    borderColor: '#90CAF9',
   },
   userName: {
     fontSize: 16,
