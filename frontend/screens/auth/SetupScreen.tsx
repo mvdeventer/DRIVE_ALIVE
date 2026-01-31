@@ -26,6 +26,8 @@ interface FormData {
   smtpPassword: string;
   linkValidity: string;
   testRecipient: string;
+  twilioSenderPhoneNumber: string;  // Twilio sender number (FROM)
+  twilioPhoneNumber: string;  // Admin's phone for receiving tests (TO)
 }
 
 interface SetupScreenProps {
@@ -46,6 +48,8 @@ export default function SetupScreen({ navigation }: SetupScreenProps) {
     smtpPassword: '',
     linkValidity: '30',
     testRecipient: '',
+    twilioSenderPhoneNumber: '',  // Twilio sender number
+    twilioPhoneNumber: '',  // Admin's test recipient phone
   });
 
   const [pickupCoordinates, setPickupCoordinates] = useState<{
@@ -58,6 +62,7 @@ export default function SetupScreen({ navigation }: SetupScreenProps) {
   const [showPassword, setShowPassword] = useState(false);
   const [showSmtpPassword, setShowSmtpPassword] = useState(false);
   const [testingEmail, setTestingEmail] = useState(false);
+  const [testingWhatsApp, setTestingWhatsApp] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
   const [showConfirmModal, setShowConfirmModal] = useState(false);
@@ -136,6 +141,8 @@ export default function SetupScreen({ navigation }: SetupScreenProps) {
           smtp_email: formData.smtpEmail || null,
           smtp_password: formData.smtpPassword || null,
           verification_link_validity_minutes: formData.linkValidity ? parseInt(formData.linkValidity) : 30,
+          twilio_sender_phone_number: formData.twilioSenderPhoneNumber || null,  // Twilio sender number
+          twilio_phone_number: formData.twilioPhoneNumber || null,  // Admin's test recipient phone
         }),
       });
 
@@ -201,12 +208,14 @@ export default function SetupScreen({ navigation }: SetupScreenProps) {
           smtp_email: formData.smtpEmail,
           smtp_password: formData.smtpPassword,
           test_recipient: formData.testRecipient,
+          verification_link_validity_minutes: parseInt(formData.verificationLinkValidityMinutes) || 30,
         }),
       });
 
       if (response.ok) {
         const data = await response.json();
-        setSuccessMessage(`✅ ${data.message || 'Test email sent successfully! Check your inbox.'}`);
+        const storedMsg = data.stored_in_db ? ' (Config saved to database ✅)' : ' (Not stored - admin account will be created next)';
+        setSuccessMessage(`✅ ${data.message || 'Test email sent successfully! Check your inbox.'}${storedMsg}`);
       } else {
         const errorData = await response.json();
         setErrorMessage(`❌ Test failed: ${errorData.detail || 'Unknown error'}`);
@@ -216,6 +225,52 @@ export default function SetupScreen({ navigation }: SetupScreenProps) {
       console.error('Test email error:', error);
     } finally {
       setTestingEmail(false);
+    }
+  };
+
+  const handleTestWhatsApp = async () => {
+    if (!formData.twilioPhoneNumber) {
+      setErrorMessage('Please enter your phone number to receive the test message');
+      return;
+    }
+    
+    if (!formData.twilioSenderPhoneNumber) {
+      setErrorMessage('Please enter your Twilio sender phone number (e.g., +14155238886 for sandbox)');
+      return;
+    }
+
+    setTestingWhatsApp(true);
+    setErrorMessage('');
+    setSuccessMessage('');
+
+    try {
+      const requestBody = {
+        phone: formData.twilioPhoneNumber,
+        twilio_sender_phone_number: formData.twilioSenderPhoneNumber,
+      };
+      console.log('Sending WhatsApp test request:', requestBody);
+      
+      const response = await fetch('http://localhost:8000/verify/test-whatsapp', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(requestBody),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        const storedMsg = data.stored_in_db ? ' (Config saved to database ✅)' : ' (Not stored - admin account will be created next)';
+        setSuccessMessage(`✅ WhatsApp message sent!${storedMsg} Check your phone in a few seconds.`);
+      } else {
+        const errorData = await response.json();
+        setErrorMessage(`❌ Test failed: ${errorData.detail || 'Unknown error'}`);
+      }
+    } catch (error) {
+      setErrorMessage('❌ Network error while testing WhatsApp. Please check your connection.');
+      console.error('Test WhatsApp error:', error);
+    } finally {
+      setTestingWhatsApp(false);
     }
   };
 
@@ -488,6 +543,56 @@ export default function SetupScreen({ navigation }: SetupScreenProps) {
             </View>
           )}
 
+          {/* Twilio WhatsApp Configuration Section */}
+          <View style={styles.testWhatsAppSection}>
+            <Text style={styles.sectionTitle}>💬 Twilio WhatsApp Configuration (Optional)</Text>
+            
+            {/* Twilio Sender Number */}
+            <View style={styles.formGroup}>
+              <Text style={styles.label}>Twilio Sender Phone Number</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="e.g., +14155238886 (sandbox) or your business number"
+                value={formData.twilioSenderPhoneNumber}
+                onChangeText={(value) => handleChange('twilioSenderPhoneNumber', value)}
+                keyboardType="phone-pad"
+                autoCapitalize="none"
+                editable={!loading && !testingWhatsApp}
+              />
+              <Text style={styles.hint}>
+                📱 This is your Twilio account's phone number. Used as the FROM number in all messages. Example: +14155238886 for sandbox.
+              </Text>
+            </View>
+
+            {/* Test Recipient Number */}
+            <View style={styles.formGroup}>
+              <Text style={styles.label}>Your Phone Number (For Testing)</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="Enter your phone to receive test messages (e.g., +27123456789)"
+                value={formData.twilioPhoneNumber}
+                onChangeText={(value) => handleChange('twilioPhoneNumber', value)}
+                keyboardType="phone-pad"
+                autoCapitalize="none"
+                editable={!loading && !testingWhatsApp}
+              />
+              <Text style={styles.hint}>
+                🔔 Enter YOUR phone number to receive test messages. If using sandbox, first register at twilio.com/console/sms/whatsapp/learn
+              </Text>
+            </View>
+
+            {/* Send Test Button */}
+            <TouchableOpacity
+              style={[styles.testWhatsAppButton, (!formData.twilioSenderPhoneNumber || !formData.twilioPhoneNumber || testingWhatsApp) && styles.buttonDisabled]}
+              onPress={handleTestWhatsApp}
+              disabled={!formData.twilioSenderPhoneNumber || !formData.twilioPhoneNumber || testingWhatsApp}
+            >
+              <Text style={styles.testWhatsAppButtonText}>
+                {testingWhatsApp ? '⏳ Sending WhatsApp...' : '💬 Send Test WhatsApp'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+
           {/* Submit Button */}
           <TouchableOpacity
             style={[styles.submitButton, loading && styles.submitButtonDisabled]}
@@ -557,6 +662,18 @@ export default function SetupScreen({ navigation }: SetupScreenProps) {
                 <Text style={styles.confirmLabel}>📧 Email Configuration:</Text>
                 <Text style={styles.confirmValue}>Gmail: {formData.smtpEmail}</Text>
                 <Text style={styles.confirmValue}>Link Validity: {formData.linkValidity} minutes</Text>
+              </>
+            )}
+
+            {(formData.twilioSenderPhoneNumber || formData.twilioPhoneNumber) && (
+              <>
+                <Text style={styles.confirmLabel}>💬 WhatsApp Configuration:</Text>
+                {formData.twilioSenderPhoneNumber && (
+                  <Text style={styles.confirmValue}>Sender Phone: {formData.twilioSenderPhoneNumber}</Text>
+                )}
+                {formData.twilioPhoneNumber && (
+                  <Text style={styles.confirmValue}>Test Recipient: {formData.twilioPhoneNumber}</Text>
+                )}
               </>
             )}
           </View>
@@ -826,6 +943,26 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   testEmailButtonText: {
+    color: '#fff',
+    fontSize: Platform.OS === 'web' ? 16 : 14,
+    fontWeight: '600',
+  },
+  testWhatsAppSection: {
+    backgroundColor: '#e8f5e9',
+    borderRadius: 8,
+    padding: Platform.OS === 'web' ? 16 : 12,
+    borderWidth: 1,
+    borderColor: '#25D366',
+    marginTop: 12,
+  },
+  testWhatsAppButton: {
+    backgroundColor: '#25D366',
+    paddingVertical: Platform.OS === 'web' ? 14 : 12,
+    borderRadius: 8,
+    marginTop: 12,
+    alignItems: 'center',
+  },
+  testWhatsAppButtonText: {
     color: '#fff',
     fontSize: Platform.OS === 'web' ? 16 : 14,
     fontWeight: '600',

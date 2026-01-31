@@ -71,6 +71,8 @@ def create_initial_admin(admin_data: AdminCreateRequest, db: Session = Depends(g
         smtp_email=admin_data.smtp_email,
         smtp_password=admin_data.smtp_password,
         verification_link_validity_minutes=admin_data.verification_link_validity_minutes or 30,
+        twilio_sender_phone_number=admin_data.twilio_sender_phone_number,
+        twilio_phone_number=admin_data.twilio_phone_number,
     )
 
     db.add(new_admin)

@@ -55,16 +55,35 @@ async def lifespan(app: FastAPI):
     )
     print("=" * 80)
 
+    # Create all tables (if they don't exist)
+    print("\n📊 Ensuring database tables exist...")
+    try:
+        from .database import Base, engine
+        Base.metadata.create_all(bind=engine)
+        print("✅ Database tables ready")
+    except Exception as e:
+        print(f"⚠️  Warning initializing tables: {e}")
+
     # Check admin status (no longer auto-creating admin - use setup screen)
     print("\n🔐 Checking for admin user...")
     db = SessionLocal()
     try:
-        existing_admin = db.query(User).filter(User.role == UserRole.ADMIN).first()
-        if existing_admin:
-            print(f"✅ Admin user exists: {existing_admin.email}")
-        else:
-            print("⚠️  No admin user found - setup required")
-            print("📋 Navigate to the app to create an admin via the setup screen")
+        # Use a simple approach: try to query, catch if table structure issue
+        try:
+            existing_admin = db.query(User).filter(User.role == UserRole.ADMIN).all()
+            if existing_admin:
+                print(f"✅ Admin user exists: {existing_admin[0].email}")
+            else:
+                print("⚠️  No admin user found - setup required")
+                print("📋 Navigate to the app to create an admin via the setup screen")
+        except Exception as query_error:
+            # If query fails due to schema issues, recreate tables
+            print(f"⚠️  Database schema issue detected: {query_error}")
+            print("🔨 Recreating database schema...")
+            from .database import Base, engine
+            Base.metadata.drop_all(bind=engine)
+            Base.metadata.create_all(bind=engine)
+            print("✅ Database schema recreated successfully")
     finally:
         db.close()
 

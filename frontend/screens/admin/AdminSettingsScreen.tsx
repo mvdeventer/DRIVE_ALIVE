@@ -31,6 +31,7 @@ export default function AdminSettingsScreen({ navigation }: any) {
   const [successMessage, setSuccessMessage] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
   const [testingEmail, setTestingEmail] = useState(false);
+  const [testingWhatsApp, setTestingWhatsApp] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [showUnsavedModal, setShowUnsavedModal] = useState(false);
@@ -42,6 +43,8 @@ export default function AdminSettingsScreen({ navigation }: any) {
     backupIntervalMinutes: '10',
     retentionDays: '30',
     autoArchiveAfterDays: '14',
+    twilioPhoneNumber: '',
+    adminPhoneNumber: '',
     testRecipient: '',
   });
 
@@ -52,6 +55,8 @@ export default function AdminSettingsScreen({ navigation }: any) {
     backupIntervalMinutes: '10',
     retentionDays: '30',
     autoArchiveAfterDays: '14',
+    twilioPhoneNumber: '',
+    adminPhoneNumber: '',
   });
 
   const loadSettings = async () => {
@@ -66,6 +71,8 @@ export default function AdminSettingsScreen({ navigation }: any) {
         backupIntervalMinutes: data.backup_interval_minutes?.toString() || '10',
         retentionDays: data.retention_days?.toString() || '30',
         autoArchiveAfterDays: data.auto_archive_after_days?.toString() || '14',
+        twilioPhoneNumber: data.twilio_sender_phone_number || '',
+        adminPhoneNumber: data.twilio_phone_number || '',
         testRecipient: '',
       };
 
@@ -77,6 +84,8 @@ export default function AdminSettingsScreen({ navigation }: any) {
         backupIntervalMinutes: settingsData.backupIntervalMinutes,
         retentionDays: settingsData.retentionDays,
         autoArchiveAfterDays: settingsData.autoArchiveAfterDays,
+        twilioPhoneNumber: settingsData.twilioPhoneNumber,
+        adminPhoneNumber: settingsData.adminPhoneNumber,
       });
     } catch (err: any) {
       scrollViewRef.current?.scrollTo({ y: 0, animated: true });
@@ -112,7 +121,8 @@ export default function AdminSettingsScreen({ navigation }: any) {
       formData.linkValidity !== originalData.linkValidity ||
       formData.backupIntervalMinutes !== originalData.backupIntervalMinutes ||
       formData.retentionDays !== originalData.retentionDays ||
-      formData.autoArchiveAfterDays !== originalData.autoArchiveAfterDays
+      formData.autoArchiveAfterDays !== originalData.autoArchiveAfterDays ||
+      formData.twilioPhoneNumber !== originalData.twilioPhoneNumber
     );
   };
 
@@ -140,6 +150,8 @@ export default function AdminSettingsScreen({ navigation }: any) {
         backup_interval_minutes: parseInt(formData.backupIntervalMinutes) || 10,
         retention_days: parseInt(formData.retentionDays) || 30,
         auto_archive_after_days: parseInt(formData.autoArchiveAfterDays) || 14,
+        twilio_sender_phone_number: formData.twilioPhoneNumber || null,
+        twilio_phone_number: formData.adminPhoneNumber || null,
       } as any);
 
       scrollViewRef.current?.scrollTo({ y: 0, animated: true });
@@ -153,6 +165,8 @@ export default function AdminSettingsScreen({ navigation }: any) {
         backupIntervalMinutes: formData.backupIntervalMinutes,
         retentionDays: formData.retentionDays,
         autoArchiveAfterDays: formData.autoArchiveAfterDays,
+        twilioPhoneNumber: formData.twilioPhoneNumber,
+        adminPhoneNumber: formData.adminPhoneNumber,
       });
 
       // Clear success message after 4 seconds
@@ -212,6 +226,51 @@ export default function AdminSettingsScreen({ navigation }: any) {
     }
   };
 
+  const handleTestWhatsApp = async () => {
+    if (!formData.twilioPhoneNumber || !formData.adminPhoneNumber) {
+      scrollViewRef.current?.scrollTo({ y: 0, animated: true });
+      setErrorMessage('Please fill in both Twilio sender number and your phone number');
+      setTimeout(() => setErrorMessage(''), 5000);
+      return;
+    }
+
+    setTestingWhatsApp(true);
+    setErrorMessage('');
+    setSuccessMessage('');
+
+    try {
+      const response = await fetch('http://localhost:8000/verify/test-whatsapp', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          phone: formData.adminPhoneNumber,
+          twilio_sender_phone_number: formData.twilioPhoneNumber,
+        }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        scrollViewRef.current?.scrollTo({ y: 0, animated: true });
+        setSuccessMessage(`✅ ${data.message || 'Test WhatsApp sent successfully! Check your phone.'}`);
+        setTimeout(() => setSuccessMessage(''), 4000);
+      } else {
+        const errorData = await response.json();
+        scrollViewRef.current?.scrollTo({ y: 0, animated: true });
+        setErrorMessage(`❌ Test failed: ${errorData.detail || 'Unknown error'}`);
+        setTimeout(() => setErrorMessage(''), 5000);
+      }
+    } catch (error) {
+      scrollViewRef.current?.scrollTo({ y: 0, animated: true });
+      setErrorMessage('❌ Network error while testing WhatsApp. Please check your connection.');
+      setTimeout(() => setErrorMessage(''), 5000);
+      console.error('Test WhatsApp error:', error);
+    } finally {
+      setTestingWhatsApp(false);
+    }
+  };
+
   React.useEffect(() => {
     const unsubscribe = navigation.addListener('beforeRemove', (e: any) => {
       if (!hasUnsavedChanges()) {
@@ -256,7 +315,7 @@ export default function AdminSettingsScreen({ navigation }: any) {
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>📧 Email Configuration</Text>
             <Text style={styles.sectionSubtitle}>
-              Configure Gmail SMTP to send verification emails to new users
+              Configure Gmail SMTP to send verification emails (🌍 Global setting - shared by all admins)
             </Text>
 
             <View style={styles.formGroup}>
@@ -398,6 +457,60 @@ export default function AdminSettingsScreen({ navigation }: any) {
             </View>
           </View>
 
+          {/* Twilio WhatsApp Configuration Section */}
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>💬 WhatsApp Configuration</Text>
+            <Text style={styles.sectionSubtitle}>
+              Configure Twilio sender number (🌍 Global) and your phone for testing
+            </Text>
+
+            <View style={styles.formGroup}>
+              <Text style={styles.label}>Twilio Sender Phone Number (FROM)</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="+14155238886 (Twilio sandbox)"
+                value={formData.twilioPhoneNumber}
+                onChangeText={(value) => handleChange('twilioPhoneNumber', value)}
+                keyboardType="phone-pad"
+                autoCapitalize="none"
+                editable={!saving}
+              />
+              <Text style={styles.hint}>
+                This number sends all WhatsApp messages (sandbox: +14155238886 or your Twilio number)
+              </Text>
+            </View>
+
+            <View style={styles.formGroup}>
+              <Text style={styles.label}>Your Phone Number (TO - for testing)</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="+27611154598"
+                value={formData.adminPhoneNumber}
+                onChangeText={(value) => handleChange('adminPhoneNumber', value)}
+                keyboardType="phone-pad"
+                autoCapitalize="none"
+                editable={!saving}
+              />
+              <Text style={styles.hint}>
+                Your personal phone number to receive test WhatsApp messages
+              </Text>
+            </View>
+
+            <TouchableOpacity
+              style={[
+                styles.testWhatsAppButton,
+                (!formData.twilioPhoneNumber || !formData.adminPhoneNumber || testingWhatsApp) &&
+                  styles.buttonDisabled,
+              ]}
+              onPress={handleTestWhatsApp}
+              disabled={!formData.twilioPhoneNumber || !formData.adminPhoneNumber || testingWhatsApp}
+            >
+              <Text style={styles.testWhatsAppButtonText}>
+                {testingWhatsApp ? '⏳ Sending WhatsApp...' : '💬 Send Test WhatsApp'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+
           {/* Info Box */}
           <View style={styles.infoBox}>
             <Text style={styles.infoTitle}>ℹ️ About These Settings</Text>
@@ -487,6 +600,20 @@ export default function AdminSettingsScreen({ navigation }: any) {
                 <>
                   <Text style={styles.confirmLabel}>Auto-Archive After:</Text>
                   <Text style={styles.confirmValue}>{formData.autoArchiveAfterDays} days</Text>
+                </>
+              )}
+
+              {formData.twilioPhoneNumber !== originalData.twilioPhoneNumber && (
+                <>
+                  <Text style={styles.confirmLabel}>Twilio Sender Phone:</Text>
+                  <Text style={styles.confirmValue}>{formData.twilioPhoneNumber || '(Not set)'}</Text>
+                </>
+              )}
+
+              {formData.adminPhoneNumber !== originalData.adminPhoneNumber && (
+                <>
+                  <Text style={styles.confirmLabel}>Your Phone Number:</Text>
+                  <Text style={styles.confirmValue}>{formData.adminPhoneNumber || '(Not set)'}</Text>
                 </>
               )}
             </View>
@@ -676,6 +803,18 @@ const styles = StyleSheet.create({
     opacity: 0.6,
   },
   testButtonText: {
+    color: '#fff',
+    fontSize: Platform.OS === 'web' ? 16 : 14,
+    fontWeight: '600',
+  },
+  testWhatsAppButton: {
+    backgroundColor: '#25D366',
+    borderRadius: 6,
+    padding: Platform.OS === 'web' ? 14 : 12,
+    alignItems: 'center',
+    marginTop: 16,
+  },
+  testWhatsAppButtonText: {
     color: '#fff',
     fontSize: Platform.OS === 'web' ? 16 : 14,
     fontWeight: '600',

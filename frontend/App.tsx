@@ -53,6 +53,7 @@ import SetupService from './services/setup';
 import AdminDashboardScreen from './screens/admin/AdminDashboardScreen';
 import AdminSettingsScreen from './screens/admin/AdminSettingsScreen';
 import BookingOversightScreen from './screens/admin/BookingOversightScreen';
+import CreateAdminScreen from './screens/admin/CreateAdminScreen';
 import EditAdminProfileScreen from './screens/admin/EditAdminProfileScreen';
 import InstructorEarningsOverviewScreen from './screens/admin/InstructorEarningsOverviewScreen';
 import InstructorVerificationScreen from './screens/admin/InstructorVerificationScreen';
@@ -425,6 +426,11 @@ export default function App() {
             name="AdminSettings"
             component={AdminSettingsScreen}
             options={{ title: 'Admin Settings' }}
+          />
+          <Stack.Screen
+            name="CreateAdmin"
+            component={CreateAdminScreen}
+            options={{ title: 'Create Admin' }}
           />
         </Stack.Navigator>
       </NavigationContainer>

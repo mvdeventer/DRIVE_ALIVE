@@ -20,9 +20,6 @@ class WhatsAppService:
         """Initialize Twilio client"""
         self.account_sid = settings.TWILIO_ACCOUNT_SID
         self.auth_token = settings.TWILIO_AUTH_TOKEN
-        self.whatsapp_number = (
-            settings.TWILIO_WHATSAPP_NUMBER or "whatsapp:+14155238886"
-        )
 
         if not self.account_sid or not self.auth_token:
             logger.warning(
@@ -32,6 +29,72 @@ class WhatsAppService:
         else:
             self.client = Client(self.account_sid, self.auth_token)
             logger.info("WhatsApp service initialized successfully")
+
+    @staticmethod
+    def get_admin_twilio_sender_phone(db=None) -> str:
+        """
+        Get the admin's configured Twilio sender phone number from database
+        
+        Args:
+            db: Database session (will be obtained from DI if not provided)
+            
+        Returns:
+            str: Admin's Twilio sender phone number in WhatsApp format (whatsapp:+...)
+                 Returns default sandbox number if not configured
+        """
+        try:
+            if db is None:
+                from ..database import SessionLocal
+                db = SessionLocal()
+                should_close = True
+            else:
+                should_close = False
+            
+            from ..models.user import User, UserRole
+            admin = db.query(User).filter(User.role == UserRole.ADMIN).first()
+            
+            if should_close:
+                db.close()
+            
+            # Get sender number from database, fallback to sandbox
+            sender_number = admin.twilio_sender_phone_number if admin and admin.twilio_sender_phone_number else "+14155238886"
+            
+            # Format for WhatsApp
+            return f"whatsapp:{sender_number}"
+            
+        except Exception as e:
+            logger.warning(f"Failed to get admin Twilio sender phone: {str(e)}")
+            return "whatsapp:+14155238886"  # Default sandbox number
+    
+    @staticmethod
+    def get_admin_twilio_phone(db=None) -> Optional[str]:
+        """
+        Get the admin's personal phone number for receiving test messages
+        
+        Args:
+            db: Database session (will be obtained from DI if not provided)
+            
+        Returns:
+            str: Admin's personal phone number or None if not configured
+        """
+        try:
+            if db is None:
+                from ..database import SessionLocal
+                db = SessionLocal()
+                should_close = True
+            else:
+                should_close = False
+            
+            from ..models.user import User, UserRole
+            admin = db.query(User).filter(User.role == UserRole.ADMIN).first()
+            
+            if should_close:
+                db.close()
+            
+            return admin.twilio_phone_number if admin else None
+        except Exception as e:
+            logger.warning(f"Failed to get admin Twilio phone: {str(e)}")
+            return None
 
     def _format_phone_number(self, phone: str) -> str:
         """
@@ -72,13 +135,16 @@ class WhatsAppService:
             return False
 
         try:
+            # Get sender number from database
+            from_number = self.get_admin_twilio_sender_phone()
             to_number = self._format_phone_number(phone)
+            
             msg = self.client.messages.create(
                 body=message,
-                from_=self.whatsapp_number,
+                from_=from_number,
                 to=to_number
             )
-            logger.info(f"WhatsApp message sent to {phone}: {msg.sid}")
+            logger.info(f"WhatsApp message sent from {from_number} to {phone}: {msg.sid}")
             return True
         except Exception as e:
             logger.error(f"Failed to send WhatsApp message to {phone}: {str(e)}")
@@ -127,12 +193,13 @@ Drive Safe! 🚗
 - Drive Alive Team"""
 
             to_number = self._format_phone_number(student_phone)
+            from_number = self.get_admin_twilio_sender_phone()
 
             message = self.client.messages.create(
-                body=message_body, from_=self.whatsapp_number, to=to_number
+                body=message_body, from_=from_number, to=to_number
             )
 
-            logger.info(f"Booking confirmation sent to {student_name}: {message.sid}")
+            logger.info(f"Booking confirmation sent from {from_number} to {student_name}: {message.sid}")
             return True
 
         except Exception as e:
@@ -183,12 +250,13 @@ Drive Safe! 🚗
 - Drive Alive Team"""
 
             to_number = self._format_phone_number(student_phone)
+            from_number = self.get_admin_twilio_sender_phone()
 
             message = self.client.messages.create(
-                body=message_body, from_=self.whatsapp_number, to=to_number
+                body=message_body, from_=from_number, to=to_number
             )
 
-            logger.info(f"Student 1hr reminder sent to {student_name}: {message.sid}")
+            logger.info(f"Student 1hr reminder sent from {from_number} to {student_name}: {message.sid}")
             return True
 
         except Exception as e:
@@ -239,12 +307,13 @@ Drive Safe! 🚗
 - Drive Alive Team"""
 
             to_number = self._format_phone_number(instructor_phone)
+            from_number = self.get_admin_twilio_sender_phone()
 
             message = self.client.messages.create(
-                body=message_body, from_=self.whatsapp_number, to=to_number
+                body=message_body, from_=from_number, to=to_number
             )
 
-            logger.info(f"Instructor reminder sent to {instructor_name}: {message.sid}")
+            logger.info(f"Instructor reminder sent from {from_number} to {instructor_name}: {message.sid}")
             return True
 
         except Exception as e:
@@ -297,13 +366,14 @@ Drive Safe! 🚗
 - Drive Alive Team"""
 
             to_number = self._format_phone_number(instructor_phone)
+            from_number = self.get_admin_twilio_sender_phone()
 
             message = self.client.messages.create(
-                body=message_body, from_=self.whatsapp_number, to=to_number
+                body=message_body, from_=from_number, to=to_number
             )
 
             logger.info(
-                f"Same-day booking notification sent to {instructor_name}: {message.sid}"
+                f"Same-day booking notification sent from {from_number} to {instructor_name}: {message.sid}"
             )
             return True
 
@@ -334,12 +404,13 @@ Drive Safe! 🚗
 - Drive Alive Team"""
 
             to_number = self._format_phone_number(instructor_phone)
+            from_number = self.get_admin_twilio_sender_phone()
 
             message = self.client.messages.create(
-                body=message_body, from_=self.whatsapp_number, to=to_number
+                body=message_body, from_=from_number, to=to_number
             )
 
-            logger.info(f"Daily summary sent to {instructor_name}: {message.sid}")
+            logger.info(f"Daily summary sent from {from_number} to {instructor_name}: {message.sid}")
             return True
 
         except Exception as e:
@@ -371,6 +442,7 @@ Drive Safe! 🚗
 
         try:
             to_number = self._format_phone_number(phone)
+            from_number = self.get_admin_twilio_sender_phone()
             
             # Message body with clickable link
             message_body = (
@@ -384,7 +456,7 @@ Drive Safe! 🚗
             # Send message (link will be clickable in WhatsApp)
             msg = self.client.messages.create(
                 body=message_body,
-                from_=self.whatsapp_number,
+                from_=from_number,
                 to=to_number
             )
             

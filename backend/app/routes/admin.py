@@ -16,6 +16,7 @@ from ..models.booking import Booking, BookingStatus
 from ..models.user import Instructor, Student, User, UserRole, UserStatus
 from ..schemas.admin import (
     AdminCreateRequest,
+    AdminCreateResponse,
     AdminSettingsUpdate,
     AdminStats,
     BookingOverview,
@@ -24,7 +25,6 @@ from ..schemas.admin import (
     RevenueStats,
     UserManagementResponse,
 )
-from ..schemas.user import UserResponse
 from ..utils.auth import get_password_hash
 
 router = APIRouter(prefix="/admin", tags=["Admin Dashboard"])
@@ -34,7 +34,7 @@ router = APIRouter(prefix="/admin", tags=["Admin Dashboard"])
 
 
 @router.post(
-    "/create", response_model=UserResponse, status_code=status.HTTP_201_CREATED
+    "/create", response_model=AdminCreateResponse, status_code=status.HTTP_201_CREATED
 )
 async def create_admin(
     admin_data: AdminCreateRequest,
@@ -47,6 +47,8 @@ async def create_admin(
     If email exists, user must provide correct password to add admin role.
     """
     from ..utils.auth import verify_password
+    from ..services.verification_service import VerificationService
+    from ..config import settings
     
     # Check if email already exists
     existing_user = db.query(User).filter(User.email == admin_data.email).first()
@@ -66,23 +68,48 @@ async def create_admin(
                 detail=f"Email is already registered with a different password. Please use the correct password to add admin role.",
             )
         
-        # Update existing user to admin role
+        # Update existing user to admin role (requires verification)
         existing_user.role = UserRole.ADMIN
-        existing_user.status = UserStatus.ACTIVE
+        existing_user.status = UserStatus.INACTIVE
         db.commit()
         db.refresh(existing_user)
+
+        validity_minutes = existing_user.verification_link_validity_minutes or 30
+        verification_token = VerificationService.create_verification_token(
+            db=db,
+            user_id=existing_user.id,
+            token_type="email",
+            validity_minutes=validity_minutes,
+        )
+
+        verification_result = VerificationService.send_verification_messages(
+            db=db,
+            user=existing_user,
+            verification_token=verification_token,
+            frontend_url=settings.FRONTEND_URL,
+            admin_smtp_email=existing_user.smtp_email,
+            admin_smtp_password=existing_user.smtp_password,
+        )
         
         # Trigger backup after successful role addition
         try:
             from ..services.backup_scheduler import backup_scheduler
-            from datetime import datetime
             backup_scheduler.create_backup(
                 f"role_creation_admin_{existing_user.id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
             )
         except Exception as e:
             print(f"Warning: Backup after admin role creation failed: {e}")
         
-        return existing_user
+        return {
+            "message": "Admin role added. Verification required to activate.",
+            "user_id": existing_user.id,
+            "verification_sent": {
+                "email_sent": verification_result.get("email_sent", False),
+                "whatsapp_sent": verification_result.get("whatsapp_sent", False),
+                "expires_in_minutes": verification_result.get("expires_in_minutes", validity_minutes),
+            },
+            "note": f"Account will be activated after verification. The verification link is valid for {validity_minutes} minutes.",
+        }
     
     # Create new admin user
     new_admin = User(
@@ -92,25 +119,58 @@ async def create_admin(
         first_name=admin_data.first_name,
         last_name=admin_data.last_name,
         id_number=admin_data.id_number,
+        address=admin_data.address,
+        address_latitude=admin_data.address_latitude,
+        address_longitude=admin_data.address_longitude,
         role=UserRole.ADMIN,
-        status=UserStatus.ACTIVE,
+        status=UserStatus.INACTIVE,
+        smtp_email=admin_data.smtp_email,
+        smtp_password=admin_data.smtp_password,
+        verification_link_validity_minutes=admin_data.verification_link_validity_minutes,
+        twilio_sender_phone_number=admin_data.twilio_sender_phone_number,  # Twilio sender number
+        twilio_phone_number=admin_data.twilio_phone_number,  # Admin's test recipient phone
     )
 
     db.add(new_admin)
     db.commit()
     db.refresh(new_admin)
 
+    validity_minutes = new_admin.verification_link_validity_minutes or 30
+    verification_token = VerificationService.create_verification_token(
+        db=db,
+        user_id=new_admin.id,
+        token_type="email",
+        validity_minutes=validity_minutes,
+    )
+
+    verification_result = VerificationService.send_verification_messages(
+        db=db,
+        user=new_admin,
+        verification_token=verification_token,
+        frontend_url=settings.FRONTEND_URL,
+        admin_smtp_email=new_admin.smtp_email,
+        admin_smtp_password=new_admin.smtp_password,
+    )
+
     # Trigger backup after successful admin creation
     try:
         from ..services.backup_scheduler import backup_scheduler
-        from datetime import datetime
         backup_scheduler.create_backup(
             f"role_creation_admin_{new_admin.id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
         )
     except Exception as e:
         print(f"Warning: Backup after admin creation failed: {e}")
 
-    return new_admin
+    return {
+        "message": "Registration successful! Please check your email and WhatsApp to verify your account.",
+        "user_id": new_admin.id,
+        "verification_sent": {
+            "email_sent": verification_result.get("email_sent", False),
+            "whatsapp_sent": verification_result.get("whatsapp_sent", False),
+            "expires_in_minutes": verification_result.get("expires_in_minutes", validity_minutes),
+        },
+        "note": f"Account will be activated after verification. The verification link is valid for {validity_minutes} minutes.",
+    }
 
 
 @router.get("/stats", response_model=AdminStats)
@@ -357,6 +417,21 @@ async def update_user_status(
             detail="User not found",
         )
 
+    # Only the first/original admin can change status of other admins
+    if user.role == UserRole.ADMIN:
+        admins = db.query(User).filter(User.role == UserRole.ADMIN).order_by(User.id.asc()).all()
+        if not admins:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="No admin user found in system",
+            )
+        first_admin = admins[0]
+        if current_admin.id != first_admin.id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Only the original admin can change another admin's status",
+            )
+
     # Prevent admin from deactivating themselves
     if user.id == current_admin.id:
         raise HTTPException(
@@ -373,6 +448,57 @@ async def update_user_status(
         "message": f"User status updated from {old_status.value} to {new_status.value}",
         "user_id": user_id,
         "new_status": new_status.value,
+    }
+
+
+@router.delete("/admins/{admin_id}")
+async def delete_admin(
+    admin_id: int,
+    current_admin: Annotated[User, Depends(require_admin)],
+    db: Session = Depends(get_db),
+):
+    """
+    Delete an admin user (only the original admin can delete other admins)
+    """
+    if admin_id == current_admin.id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot delete your own admin account",
+        )
+
+    admins = db.query(User).filter(User.role == UserRole.ADMIN).order_by(User.id.asc()).all()
+    if not admins:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="No admin user found in system",
+        )
+
+    first_admin = admins[0]
+    if current_admin.id != first_admin.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only the original admin can delete other admins",
+        )
+
+    if admin_id == first_admin.id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot delete the original admin account",
+        )
+
+    admin_user = db.query(User).filter(User.id == admin_id).first()
+    if not admin_user or admin_user.role != UserRole.ADMIN:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Admin user not found",
+        )
+
+    db.delete(admin_user)
+    db.commit()
+
+    return {
+        "message": "Admin deleted successfully",
+        "admin_id": admin_id,
     }
 
 
@@ -669,6 +795,8 @@ async def get_user_details(
 ):
     """
     Get detailed information about a specific user
+    
+    Restriction: Only the original admin can view/edit the original admin's profile
     """
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
@@ -676,6 +804,18 @@ async def get_user_details(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="User not found",
         )
+    
+    # Check if trying to access original admin's profile
+    if user.role == UserRole.ADMIN:
+        admins = db.query(User).filter(User.role == UserRole.ADMIN).order_by(User.id.asc()).all()
+        if admins:
+            first_admin = admins[0]
+            # If requesting original admin's details and current user is not the original admin
+            if user_id == first_admin.id and current_admin.id != first_admin.id:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Only the original admin can view or edit the original admin's profile",
+                )
 
     result = {
         "id": user.id,
@@ -687,6 +827,8 @@ async def get_user_details(
         "status": user.status.value,
         "created_at": user.created_at,
         "last_login": user.last_login,
+        "id_number": user.id_number,
+        "address": user.address,
     }
 
     # Get role-specific details
@@ -1190,18 +1332,38 @@ async def get_admin_settings(
     db: Session = Depends(get_db),
 ):
     """
-    Get current admin user's settings
+    Get global admin settings (stored on the first admin user)
+    
+    All admins share the same email and WhatsApp configuration for consistency.
+    Settings are retrieved from the first admin in the system.
     """
-    return {
-        "user_id": current_admin.id,
-        "email": current_admin.email,
-        "smtp_email": current_admin.smtp_email,
-        "smtp_password": current_admin.smtp_password,
-        "verification_link_validity_minutes": current_admin.verification_link_validity_minutes or 30,
-        "backup_interval_minutes": current_admin.backup_interval_minutes or 10,
-        "retention_days": current_admin.retention_days or 30,
-        "auto_archive_after_days": current_admin.auto_archive_after_days or 14,
-    }
+    try:
+        # Get the first admin (by user ID) - this is our global settings holder
+        # Using all() to avoid LIMIT/OFFSET issues, then get first from list
+        admins = db.query(User).filter(User.role == UserRole.ADMIN).order_by(User.id.asc()).all()
+        
+        if not admins or len(admins) == 0:
+            raise HTTPException(status_code=500, detail="No admin user found in system")
+        
+        first_admin = admins[0]
+        
+        return {
+            "user_id": first_admin.id,
+            "email": first_admin.email,
+            "smtp_email": first_admin.smtp_email,
+            "smtp_password": first_admin.smtp_password,
+            "verification_link_validity_minutes": first_admin.verification_link_validity_minutes or 30,
+            "backup_interval_minutes": first_admin.backup_interval_minutes or 10,
+            "retention_days": first_admin.retention_days or 30,
+            "auto_archive_after_days": first_admin.auto_archive_after_days or 14,
+            "twilio_sender_phone_number": first_admin.twilio_sender_phone_number,  # Twilio sender number
+            "twilio_phone_number": first_admin.twilio_phone_number,  # Admin's test recipient phone
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error fetching admin settings: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to fetch settings: {str(e)}")
 
 
 @router.put("/settings")
@@ -1211,34 +1373,62 @@ async def update_admin_settings(
     settings_update: AdminSettingsUpdate = None,
 ):
     """
-    Update admin user's settings (email configuration, verification link validity, and backup settings)
+    Update global admin settings (updates the first admin's configuration)
+    
+    All admins share the same email and WhatsApp configuration.
+    When any admin updates settings, it affects all admins in the system.
+    Settings are stored on the first admin user.
     """
     if settings_update is None:
         raise HTTPException(status_code=400, detail="No settings provided")
+    
+    try:
+        # Get the first admin (by user ID) - this is our global settings holder
+        # Using all() to avoid LIMIT/OFFSET issues, then get first from list
+        admins = db.query(User).filter(User.role == UserRole.ADMIN).order_by(User.id.asc()).all()
+        
+        if not admins or len(admins) == 0:
+            raise HTTPException(status_code=500, detail="No admin user found in system")
+        
+        first_admin = admins[0]
 
-    # Update settings
-    if settings_update.smtp_email is not None:
-        current_admin.smtp_email = settings_update.smtp_email if settings_update.smtp_email else None
-    if settings_update.smtp_password is not None:
-        current_admin.smtp_password = settings_update.smtp_password if settings_update.smtp_password else None
-    if settings_update.verification_link_validity_minutes is not None:
-        current_admin.verification_link_validity_minutes = settings_update.verification_link_validity_minutes
-    if settings_update.backup_interval_minutes is not None:
-        current_admin.backup_interval_minutes = settings_update.backup_interval_minutes
-    if settings_update.retention_days is not None:
-        current_admin.retention_days = settings_update.retention_days
-    if settings_update.auto_archive_after_days is not None:
-        current_admin.auto_archive_after_days = settings_update.auto_archive_after_days
+        # Update global settings on the first admin
+        if settings_update.smtp_email is not None:
+            first_admin.smtp_email = settings_update.smtp_email if settings_update.smtp_email else None
+        if settings_update.smtp_password is not None:
+            first_admin.smtp_password = settings_update.smtp_password if settings_update.smtp_password else None
+        if settings_update.verification_link_validity_minutes is not None:
+            first_admin.verification_link_validity_minutes = settings_update.verification_link_validity_minutes
+        if settings_update.backup_interval_minutes is not None:
+            first_admin.backup_interval_minutes = settings_update.backup_interval_minutes
+        if settings_update.retention_days is not None:
+            first_admin.retention_days = settings_update.retention_days
+        if settings_update.auto_archive_after_days is not None:
+            first_admin.auto_archive_after_days = settings_update.auto_archive_after_days
+        if settings_update.twilio_sender_phone_number is not None:
+            first_admin.twilio_sender_phone_number = settings_update.twilio_sender_phone_number if settings_update.twilio_sender_phone_number else None
+        if settings_update.twilio_phone_number is not None:
+            first_admin.twilio_phone_number = settings_update.twilio_phone_number if settings_update.twilio_phone_number else None
 
-    db.commit()
-    db.refresh(current_admin)
+        db.commit()
+        db.refresh(first_admin)
 
-    return {
-        "message": "Settings updated successfully",
-        "smtp_email": current_admin.smtp_email,
-        "verification_link_validity_minutes": current_admin.verification_link_validity_minutes,
-        "backup_interval_minutes": current_admin.backup_interval_minutes,
-        "retention_days": current_admin.retention_days,
-        "auto_archive_after_days": current_admin.auto_archive_after_days,
-    }
+        return {
+            "message": "Global settings updated successfully for all admins",
+            "updated_on_admin_id": first_admin.id,
+            "smtp_email": first_admin.smtp_email,
+            "verification_link_validity_minutes": first_admin.verification_link_validity_minutes,
+            "backup_interval_minutes": first_admin.backup_interval_minutes,
+            "retention_days": first_admin.retention_days,
+            "auto_archive_after_days": first_admin.auto_archive_after_days,
+            "twilio_sender_phone_number": first_admin.twilio_sender_phone_number,
+            "twilio_phone_number": first_admin.twilio_phone_number,
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        print(f"Error updating admin settings: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to update settings: {str(e)}")
+
 

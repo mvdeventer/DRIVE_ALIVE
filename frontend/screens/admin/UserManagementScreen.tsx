@@ -40,6 +40,7 @@ interface User {
 
 export default function UserManagementScreen({ navigation }: any) {
   const [users, setUsers] = useState<User[]>([]);
+  const [currentUserId, setCurrentUserId] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState('');
@@ -63,6 +64,7 @@ export default function UserManagementScreen({ navigation }: any) {
     user: User;
     newStatus: string;
   } | null>(null);
+  const [confirmDeleteAdmin, setConfirmDeleteAdmin] = useState<User | null>(null);
   const [scheduleModalVisible, setScheduleModalVisible] = useState(false);
   const [instructorSchedule, setInstructorSchedule] = useState<any>(null);
   const [loadingSchedule, setLoadingSchedule] = useState(false);
@@ -82,8 +84,18 @@ export default function UserManagementScreen({ navigation }: any) {
     }
   };
 
+  const loadCurrentUser = async () => {
+    try {
+      const currentUser = await apiService.getCurrentUser();
+      setCurrentUserId(currentUser.id);
+    } catch (err: any) {
+      console.error('Failed to load current user:', err);
+    }
+  };
+
   useFocusEffect(
     useCallback(() => {
+      loadCurrentUser();
       loadUsers();
     }, [roleFilter, statusFilter])
   );
@@ -129,7 +141,22 @@ export default function UserManagementScreen({ navigation }: any) {
 
       return roleMatch && statusMatch && searchMatch;
     })
-    .sort((a, b) => a.full_name.localeCompare(b.full_name));
+    .sort((a, b) => {
+      // Special sorting for admins: original admin first, then alphabetical
+      if (activeTab === 'admin') {
+        const adminUsers = users.filter(u => u.role === 'admin');
+        const firstAdminId = adminUsers.length > 0 ? Math.min(...adminUsers.map(u => u.id)) : null;
+        
+        // If 'a' is the original admin, it comes first
+        if (a.id === firstAdminId) return -1;
+        // If 'b' is the original admin, it comes first
+        if (b.id === firstAdminId) return 1;
+        // Otherwise, sort alphabetically
+        return a.full_name.localeCompare(b.full_name);
+      }
+      // For non-admin tabs, just sort alphabetically
+      return a.full_name.localeCompare(b.full_name);
+    });
 
   const handleStatusChange = (user: User, newStatus: string) => {
     console.log('handleStatusChange called:', user.full_name, newStatus);
@@ -165,6 +192,39 @@ export default function UserManagementScreen({ navigation }: any) {
         err.response?.data?.detail || 'Failed to update user status',
         SCREEN_NAME,
         'statusChange',
+        'error'
+      );
+    }
+  };
+
+  const handleDeleteAdmin = (user: User) => {
+    setConfirmDeleteAdmin(user);
+  };
+
+  const confirmDeleteAdminAction = async () => {
+    if (!confirmDeleteAdmin) return;
+
+    try {
+      setError('');
+      await apiService.deleteAdmin(confirmDeleteAdmin.id);
+
+      setConfirmDeleteAdmin(null);
+
+      showMessage(
+        setSuccess,
+        `Admin ${confirmDeleteAdmin.full_name} deleted successfully`,
+        SCREEN_NAME,
+        'adminDelete',
+        'success'
+      );
+
+      await loadUsers();
+    } catch (err: any) {
+      showMessage(
+        setError,
+        err.response?.data?.detail || 'Failed to delete admin',
+        SCREEN_NAME,
+        'adminDelete',
         'error'
       );
     }
@@ -453,27 +513,38 @@ export default function UserManagementScreen({ navigation }: any) {
     }
   };
 
-  const renderUser = ({ item }: { item: User }) => (
-    <View style={styles.userCard}>
-      <View style={styles.userIdBadge}>
-        <Text style={styles.userIdText}>User ID: #{item.id}</Text>
-      </View>
-      <View style={styles.userHeader}>
-        <View style={styles.userInfo}>
-          <Text style={styles.userName}>{item.full_name}</Text>
-          <Text style={styles.userEmail}>{item.email}</Text>
-          <Text style={styles.userPhone}>{item.phone}</Text>
-          {item.id_number && <Text style={styles.userIdNumber}>SA ID: {item.id_number}</Text>}
+  const renderUser = ({ item }: { item: User }) => {
+    // Check if this is the original admin
+    const adminUsers = users.filter(u => u.role === 'admin');
+    const firstAdminId = adminUsers.length > 0 ? Math.min(...adminUsers.map(u => u.id)) : null;
+    const isOriginalAdmin = item.role === 'admin' && item.id === firstAdminId;
+
+    return (
+      <View style={styles.userCard}>
+        <View style={styles.userIdBadge}>
+          <Text style={styles.userIdText}>User ID: #{item.id}</Text>
         </View>
-        <View style={styles.badges}>
-          <View style={[styles.badge, getRoleBadgeStyle(item.role)]}>
-            <Text style={styles.badgeText}>{item.role.toUpperCase()}</Text>
+        {isOriginalAdmin && (
+          <View style={styles.originalAdminBadge}>
+            <Text style={styles.originalAdminText}>🛡️ ORIGINAL ADMIN - PROTECTED ACCOUNT</Text>
           </View>
-          <View style={[styles.badge, getStatusBadgeStyle(item.status)]}>
-            <Text style={styles.badgeText}>{item.status.toUpperCase()}</Text>
+        )}
+        <View style={styles.userHeader}>
+          <View style={styles.userInfo}>
+            <Text style={styles.userName}>{item.full_name}</Text>
+            <Text style={styles.userEmail}>{item.email}</Text>
+            <Text style={styles.userPhone}>{item.phone}</Text>
+            {item.id_number && <Text style={styles.userIdNumber}>SA ID: {item.id_number}</Text>}
+          </View>
+          <View style={styles.badges}>
+            <View style={[styles.badge, getRoleBadgeStyle(item.role)]}>
+              <Text style={styles.badgeText}>{item.role.toUpperCase()}</Text>
+            </View>
+            <View style={[styles.badge, getStatusBadgeStyle(item.status)]}>
+              <Text style={styles.badgeText}>{item.status.toUpperCase()}</Text>
+            </View>
           </View>
         </View>
-      </View>
 
       <View style={styles.userDetails}>
         <Text style={styles.userDetailText}>
@@ -490,18 +561,58 @@ export default function UserManagementScreen({ navigation }: any) {
       </View>
 
       <View style={styles.actionButtons}>
-        <TouchableOpacity
-          style={[styles.actionButton, styles.editButton]}
-          onPress={() => handleEditUser(item)}
-        >
-          <Text style={styles.actionButtonText}>✏️ Edit</Text>
-        </TouchableOpacity>
+        {(() => {
+          // Check if this is the original admin and if current user can edit
+          if (item.role === 'admin') {
+            const adminUsers = users.filter(u => u.role === 'admin');
+            if (adminUsers.length > 0) {
+              const firstAdminId = Math.min(...adminUsers.map(u => u.id));
+              const isOriginalAdmin = item.id === firstAdminId;
+              const isCurrentUserOriginalAdmin = currentUserId === firstAdminId;
+              
+              // If viewing original admin and current user is NOT the original admin, hide Edit button
+              if (isOriginalAdmin && !isCurrentUserOriginalAdmin) {
+                return null;
+              }
+            }
+          }
+          
+          return (
+            <TouchableOpacity
+              style={[styles.actionButton, styles.editButton]}
+              onPress={() => handleEditUser(item)}
+            >
+              <Text style={styles.actionButtonText}>✏️ Edit</Text>
+            </TouchableOpacity>
+          );
+        })()}
         <TouchableOpacity
           style={[styles.actionButton, styles.passwordButton]}
           onPress={() => handleOpenResetPassword(item)}
         >
           <Text style={styles.actionButtonText}>🔑 Reset PW</Text>
         </TouchableOpacity>
+        {item.role === 'admin' && (() => {
+          // Find the first admin (lowest ID among admins)
+          const adminUsers = users.filter(u => u.role === 'admin');
+          if (adminUsers.length === 0) return null;
+          
+          const firstAdminId = Math.min(...adminUsers.map(u => u.id));
+          const isFirstAdmin = item.id === firstAdminId;
+          
+          // NEVER show delete button for the first admin (they are protected forever)
+          if (isFirstAdmin) return null;
+          
+          // For other admins: any logged-in admin can delete them (except the first admin)
+          return (
+            <TouchableOpacity
+              style={[styles.actionButton, styles.deactivateButton]}
+              onPress={() => handleDeleteAdmin(item)}
+            >
+              <Text style={styles.actionButtonText}>🗑️ Delete</Text>
+            </TouchableOpacity>
+          );
+        })()}
         {item.role === 'instructor' && (
           <>
             <TouchableOpacity
@@ -534,7 +645,7 @@ export default function UserManagementScreen({ navigation }: any) {
             <Text style={styles.actionButtonText}>✅ Activate</Text>
           </TouchableOpacity>
         ) : null}
-        {item.status === 'active' && (
+        {item.status === 'active' && !isOriginalAdmin && (
           <>
             <TouchableOpacity
               style={[styles.actionButton, styles.deactivateButton]}
@@ -552,7 +663,8 @@ export default function UserManagementScreen({ navigation }: any) {
         )}
       </View>
     </View>
-  );
+    );
+  };
 
   if (loading) {
     return (
@@ -851,6 +963,46 @@ export default function UserManagementScreen({ navigation }: any) {
                 <Text style={styles.saveModalButtonText}>
                   {confirmAction?.newStatus === 'ACTIVE' ? 'Confirm' : 'Confirm'}
                 </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Delete Admin Confirmation Modal */}
+      <Modal
+        animationType="fade"
+        transparent={true}
+        visible={!!confirmDeleteAdmin}
+        onRequestClose={() => setConfirmDeleteAdmin(null)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>🗑️ Confirm Admin Deletion</Text>
+            </View>
+
+            <View style={styles.modalBody}>
+              <Text style={styles.confirmText}>
+                Are you sure you want to delete{'\n'}
+                <Text style={styles.boldText}>{confirmDeleteAdmin?.full_name}</Text>?
+              </Text>
+              <Text style={styles.warningText}>
+                ⚠️ This permanently removes the admin account.
+              </Text>
+            </View>
+            <View style={styles.modalFooter}>
+              <TouchableOpacity
+                style={styles.cancelModalButton}
+                onPress={() => setConfirmDeleteAdmin(null)}
+              >
+                <Text style={styles.cancelModalButtonText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.saveModalButton, styles.deactivateButton]}
+                onPress={confirmDeleteAdminAction}
+              >
+                <Text style={styles.saveModalButtonText}>Delete</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -1242,6 +1394,22 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#1976D2',
     fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+  },
+  originalAdminBadge: {
+    backgroundColor: '#FFD700',
+    borderRadius: 6,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    marginBottom: 12,
+    borderWidth: 2,
+    borderColor: '#FFA500',
+    alignItems: 'center',
+  },
+  originalAdminText: {
+    fontSize: Platform.OS === 'web' ? 14 : 12,
+    fontWeight: 'bold',
+    color: '#8B4513',
+    textAlign: 'center',
   },
   userHeader: {
     flexDirection: 'row',

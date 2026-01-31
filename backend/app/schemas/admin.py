@@ -4,11 +4,43 @@ Admin dashboard schemas for request/response validation
 
 from datetime import datetime
 from typing import List, Optional
+import re
 
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field, field_validator
 
 from ..models.booking import BookingStatus
 from ..models.user import UserRole, UserStatus
+
+
+def validate_phone_number(phone: Optional[str]) -> Optional[str]:
+    """Validate and format phone number to international format"""
+    if phone is None or phone == "":
+        return None
+    
+    # Remove spaces, dashes, parentheses
+    cleaned = phone.replace(" ", "").replace("-", "").replace("(", "").replace(")", "")
+    
+    # Auto-format to international format
+    if cleaned.startswith("0"):
+        # Local South African format (0611154598 → +27611154598)
+        cleaned = "+27" + cleaned[1:]
+    elif cleaned.startswith("27") and not cleaned.startswith("+"):
+        # International without + (27611154598 → +27611154598)
+        cleaned = "+" + cleaned
+    elif not cleaned.startswith("+"):
+        # No country code, assume SA (+)
+        cleaned = "+" + cleaned
+    
+    # Validate format after conversion
+    if not re.match(r'^\+\d{10,15}$', cleaned):
+        raise ValueError(
+            f"Phone number must be in international format with country code "
+            f"(e.g., +27123456789 or +14155238886). Must have 10-15 digits after the + sign. "
+            f"Got: '{phone}' (cleaned to: '{cleaned}')"
+        )
+    
+    return cleaned
+
 
 # ==================== Admin Management Schemas ====================
 
@@ -28,6 +60,30 @@ class AdminCreateRequest(BaseModel):
     smtp_email: Optional[str] = None  # Gmail address for sending verification emails
     smtp_password: Optional[str] = None  # Gmail app password
     verification_link_validity_minutes: Optional[int] = 30  # Default 30 minutes
+    twilio_sender_phone_number: Optional[str] = None  # Twilio sender number (FROM in messages) - e.g., +14155238886
+    twilio_phone_number: Optional[str] = None  # Admin's phone number for receiving test messages (TO in test messages)
+
+    @field_validator('phone', 'twilio_sender_phone_number', 'twilio_phone_number')
+    @classmethod
+    def validate_phones(cls, v):
+        return validate_phone_number(v)
+
+
+class VerificationSentInfo(BaseModel):
+    """Verification send status"""
+
+    email_sent: bool
+    whatsapp_sent: bool
+    expires_in_minutes: int
+
+
+class AdminCreateResponse(BaseModel):
+    """Response for admin creation with verification info"""
+
+    message: str
+    user_id: int
+    verification_sent: VerificationSentInfo
+    note: str
 
 
 class AdminSettingsUpdate(BaseModel):
@@ -38,6 +94,8 @@ class AdminSettingsUpdate(BaseModel):
     verification_link_validity_minutes: Optional[int] = Field(
         default=30, ge=15, le=120
     )
+    twilio_sender_phone_number: Optional[str] = None  # Twilio sender number (FROM in messages)
+    twilio_phone_number: Optional[str] = None  # Admin's phone number for test messages (TO)
     backup_interval_minutes: Optional[int] = Field(
         default=10, ge=5, le=60
     )
@@ -47,6 +105,11 @@ class AdminSettingsUpdate(BaseModel):
     auto_archive_after_days: Optional[int] = Field(
         default=14, ge=1, le=180
     )
+
+    @field_validator('twilio_sender_phone_number', 'twilio_phone_number')
+    @classmethod
+    def validate_twilio_phones(cls, v):
+        return validate_phone_number(v)
 
 
 # ==================== Statistics Schemas ====================

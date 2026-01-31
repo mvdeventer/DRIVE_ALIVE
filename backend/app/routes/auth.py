@@ -218,6 +218,8 @@ async def get_current_user_info(
         "last_name": current_user.last_name,
         "role": current_user.role.value,
         "status": current_user.status.value,
+        "id_number": current_user.id_number,
+        "address": current_user.address,
     }
 
     # Add role-specific details

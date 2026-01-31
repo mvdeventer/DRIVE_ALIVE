@@ -1,0 +1,5 @@
+{
+  "retention_days": 30,
+  "auto_archive_after_days": 14,
+  "backup_interval_minutes": 10
+}

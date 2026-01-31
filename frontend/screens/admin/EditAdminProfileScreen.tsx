@@ -228,7 +228,7 @@ export default function EditAdminProfileScreen({ navigation: navProp }: any) {
         {errorMessage && <InlineMessage message={errorMessage} type="error" />}
 
         {/* User ID Display */}
-        {userId && (
+        {!loading && userId && (
           <View style={styles.userIdCard}>
             <Text style={styles.userIdLabel}>User ID:</Text>
             <Text style={styles.userIdValue}>#{userId}</Text>
