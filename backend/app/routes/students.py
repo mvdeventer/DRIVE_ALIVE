@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 from ..database import get_db
 from ..models.user import Student as StudentModel
 from ..models.user import User, UserRole
-from ..routes.auth import get_current_user
+from ..routes.auth import get_current_user, get_active_role
 from ..schemas.user import StudentResponse, StudentUpdate
 
 router = APIRouter(prefix="/students", tags=["Students"])
@@ -24,7 +24,8 @@ async def get_student_profile(
     """
     Get current student's profile
     """
-    if current_user.role != UserRole.STUDENT:
+    active_role = get_active_role(current_user)
+    if active_role != UserRole.STUDENT.value:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Only students can access student profile",
@@ -69,7 +70,8 @@ async def update_student_profile(
     """
     Update student profile (students only)
     """
-    if current_user.role != UserRole.STUDENT:
+    active_role = get_active_role(current_user)
+    if active_role != UserRole.STUDENT.value:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Only students can update student profile",

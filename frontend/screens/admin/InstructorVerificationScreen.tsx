@@ -363,13 +363,14 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.5)',
     justifyContent: 'center',
     alignItems: 'center',
+    padding: Platform.OS === 'web' ? 20 : 10,
   },
   modalContent: {
     backgroundColor: '#FFF',
     borderRadius: 12,
-    padding: 24,
-    width: '90%',
-    maxWidth: 400,
+    padding: Platform.OS === 'web' ? 32 : 24,
+    width: Platform.OS === 'web' ? '45%' : '92%',
+    maxWidth: 550,
     boxShadow: '0px 4px 6px rgba(0,0,0,0.2)',
   },
   modalTitle: {

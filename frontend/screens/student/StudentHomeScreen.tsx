@@ -81,7 +81,7 @@ export default function StudentHomeScreen() {
 
   const loadHiddenBookings = async () => {
     try {
-      const storage = Platform.OS === 'web' ? localStorage : SecureStore;
+      const storage = Platform.OS === 'web' ? sessionStorage : SecureStore; // Changed from localStorage
       const stored =
         Platform.OS === 'web'
           ? storage.getItem('hidden_bookings')
@@ -99,7 +99,7 @@ export default function StudentHomeScreen() {
 
   const saveHiddenBookings = async (ids: Set<number>) => {
     try {
-      const storage = Platform.OS === 'web' ? localStorage : SecureStore;
+      const storage = Platform.OS === 'web' ? sessionStorage : SecureStore; // Changed from localStorage
       const idsArray = Array.from(ids);
       const jsonString = JSON.stringify(idsArray);
 
@@ -185,7 +185,7 @@ export default function StudentHomeScreen() {
   const handleLogout = async () => {
     try {
       if (Platform.OS === 'web') {
-        localStorage.clear();
+        sessionStorage.clear(); // Changed from localStorage
         window.location.reload();
       } else {
         await SecureStore.deleteItemAsync('access_token');
@@ -1102,8 +1102,19 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
     justifyContent: 'center',
     alignItems: 'center',
+    padding: Platform.OS === 'web' ? 20 : 10,
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   modalContent: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: Platform.OS === 'web' ? 32 : 24,
+    width: Platform.OS === 'web' ? '45%' : '92%',
+    maxWidth: 550,
+    maxHeight: '85%',
     backgroundColor: '#fff',
     borderRadius: 12,
     width: '90%',

@@ -14,7 +14,7 @@ from ..database import get_db
 from ..models.availability import CustomAvailability, DayOfWeek, InstructorSchedule, TimeOffException
 from ..models.booking import Booking, BookingStatus
 from ..models.user import Instructor, User, UserRole
-from ..routes.auth import get_current_user
+from ..routes.auth import get_current_user, get_active_role
 from ..schemas.availability import (
     AvailabilityOverview,
     AvailableSlotsByDateResponse,
@@ -314,7 +314,8 @@ async def create_schedule(
     db: Session = Depends(get_db),
 ):
     """Create a new weekly schedule entry (instructors only)"""
-    if current_user.role != UserRole.INSTRUCTOR:
+    active_role = get_active_role(current_user)
+    if active_role != UserRole.INSTRUCTOR.value:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only instructors can create schedules")
 
     instructor = db.query(Instructor).filter(Instructor.user_id == current_user.id).first()
@@ -337,7 +338,8 @@ async def create_bulk_schedule(
     db: Session = Depends(get_db),
 ):
     """Create multiple schedule entries at once (instructors only)"""
-    if current_user.role != UserRole.INSTRUCTOR:
+    active_role = get_active_role(current_user)
+    if active_role != UserRole.INSTRUCTOR.value:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only instructors can create schedules")
 
     instructor = db.query(Instructor).filter(Instructor.user_id == current_user.id).first()
@@ -364,7 +366,8 @@ async def get_my_schedule(
     db: Session = Depends(get_db),
 ):
     """Get current user's weekly schedule (instructors only)"""
-    if current_user.role != UserRole.INSTRUCTOR:
+    active_role = get_active_role(current_user)
+    if active_role != UserRole.INSTRUCTOR.value:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only instructors can access schedules")
 
     instructor = db.query(Instructor).filter(Instructor.user_id == current_user.id).first()
@@ -384,7 +387,8 @@ async def update_schedule(
     db: Session = Depends(get_db),
 ):
     """Update a schedule entry (instructors only)"""
-    if current_user.role != UserRole.INSTRUCTOR:
+    active_role = get_active_role(current_user)
+    if active_role != UserRole.INSTRUCTOR.value:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only instructors can update schedules")
 
     instructor = db.query(Instructor).filter(Instructor.user_id == current_user.id).first()
@@ -412,7 +416,8 @@ async def delete_schedule(
     db: Session = Depends(get_db),
 ):
     """Delete a schedule entry (instructors only)"""
-    if current_user.role != UserRole.INSTRUCTOR:
+    active_role = get_active_role(current_user)
+    if active_role != UserRole.INSTRUCTOR.value:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only instructors can delete schedules")
 
     instructor = db.query(Instructor).filter(Instructor.user_id == current_user.id).first()
@@ -440,7 +445,8 @@ async def create_time_off(
     db: Session = Depends(get_db),
 ):
     """Create a time off entry (instructors only)"""
-    if current_user.role != UserRole.INSTRUCTOR:
+    active_role = get_active_role(current_user)
+    if active_role != UserRole.INSTRUCTOR.value:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only instructors can create time off")
 
     instructor = db.query(Instructor).filter(Instructor.user_id == current_user.id).first()
@@ -462,7 +468,8 @@ async def get_my_time_off(
     db: Session = Depends(get_db),
 ):
     """Get current user's time off entries (instructors only)"""
-    if current_user.role != UserRole.INSTRUCTOR:
+    active_role = get_active_role(current_user)
+    if active_role != UserRole.INSTRUCTOR.value:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only instructors can access time off")
 
     instructor = db.query(Instructor).filter(Instructor.user_id == current_user.id).first()
@@ -481,7 +488,8 @@ async def delete_time_off(
     db: Session = Depends(get_db),
 ):
     """Delete a time off entry (instructors only)"""
-    if current_user.role != UserRole.INSTRUCTOR:
+    active_role = get_active_role(current_user)
+    if active_role != UserRole.INSTRUCTOR.value:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only instructors can delete time off")
 
     instructor = db.query(Instructor).filter(Instructor.user_id == current_user.id).first()
@@ -509,7 +517,8 @@ async def create_custom_availability(
     db: Session = Depends(get_db),
 ):
     """Create a custom availability entry (instructors only)"""
-    if current_user.role != UserRole.INSTRUCTOR:
+    active_role = get_active_role(current_user)
+    if active_role != UserRole.INSTRUCTOR.value:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only instructors can create custom availability")
 
     instructor = db.query(Instructor).filter(Instructor.user_id == current_user.id).first()
@@ -531,7 +540,8 @@ async def get_my_custom_availability(
     db: Session = Depends(get_db),
 ):
     """Get current user's custom availability entries (instructors only)"""
-    if current_user.role != UserRole.INSTRUCTOR:
+    active_role = get_active_role(current_user)
+    if active_role != UserRole.INSTRUCTOR.value:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only instructors can access custom availability")
 
     instructor = db.query(Instructor).filter(Instructor.user_id == current_user.id).first()
@@ -550,7 +560,8 @@ async def delete_custom_availability(
     db: Session = Depends(get_db),
 ):
     """Delete a custom availability entry (instructors only)"""
-    if current_user.role != UserRole.INSTRUCTOR:
+    active_role = get_active_role(current_user)
+    if active_role != UserRole.INSTRUCTOR.value:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only instructors can delete custom availability")
 
     instructor = db.query(Instructor).filter(Instructor.user_id == current_user.id).first()
@@ -577,7 +588,8 @@ async def get_availability_overview(
     db: Session = Depends(get_db),
 ):
     """Get complete availability overview (instructors only)"""
-    if current_user.role != UserRole.INSTRUCTOR:
+    active_role = get_active_role(current_user)
+    if active_role != UserRole.INSTRUCTOR.value:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only instructors can access availability overview")
 
     instructor = db.query(Instructor).filter(Instructor.user_id == current_user.id).first()

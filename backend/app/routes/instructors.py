@@ -13,7 +13,7 @@ from ..database import get_db
 from ..models.booking import Booking, BookingStatus
 from ..models.user import Instructor as InstructorModel
 from ..models.user import User, UserRole
-from ..routes.auth import get_current_user
+from ..routes.auth import get_current_user, get_active_role
 from ..schemas.user import InstructorLocation, InstructorResponse, InstructorUpdate
 
 router = APIRouter(prefix="/instructors", tags=["Instructors"])
@@ -124,7 +124,9 @@ async def get_instructor_profile(
     """
     Get current instructor's profile
     """
-    if current_user.role != UserRole.INSTRUCTOR:
+    
+    active_role = get_active_role(current_user)
+    if active_role != UserRole.INSTRUCTOR.value:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Only instructors can access instructor profile",
@@ -185,11 +187,13 @@ async def get_earnings_report(
     """
     Get comprehensive earnings report for the current instructor
     """
+    
+    active_role = get_active_role(current_user)
     print(
-        f"🔍 EARNINGS ENDPOINT CALLED for user: {current_user.email}, role: {current_user.role}"
+        f"🔍 EARNINGS ENDPOINT CALLED for user: {current_user.email}, active_role: {active_role}"
     )
 
-    if current_user.role != UserRole.INSTRUCTOR:
+    if active_role != UserRole.INSTRUCTOR.value:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Only instructors can access this endpoint",
@@ -424,7 +428,9 @@ async def update_instructor_profile(
     """
     Update instructor profile (instructors only)
     """
-    if current_user.role != UserRole.INSTRUCTOR:
+    
+    active_role = get_active_role(current_user)
+    if active_role != UserRole.INSTRUCTOR.value:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Only instructors can update instructor profile",
@@ -491,7 +497,8 @@ async def update_instructor_location(
     """
     Update instructor GPS location (instructors only)
     """
-    if current_user.role != UserRole.INSTRUCTOR:
+    active_role = get_active_role(current_user)
+    if active_role != UserRole.INSTRUCTOR.value:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Only instructors can update location",
@@ -528,7 +535,8 @@ async def get_my_bookings(
     """
     Get all bookings for the current instructor
     """
-    if current_user.role != UserRole.INSTRUCTOR:
+    active_role = get_active_role(current_user)
+    if active_role != UserRole.INSTRUCTOR.value:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Only instructors can access this endpoint",
@@ -602,7 +610,8 @@ async def update_availability(
     """
     Update instructor availability status
     """
-    if current_user.role != UserRole.INSTRUCTOR:
+    active_role = get_active_role(current_user)
+    if active_role != UserRole.INSTRUCTOR.value:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Only instructors can update availability",

@@ -534,14 +534,14 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.5)',
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 20,
+    padding: Platform.OS === 'web' ? 20 : 10,
   },
   modalContent: {
     backgroundColor: '#FFF',
     borderRadius: 12,
-    padding: 20,
-    width: '100%',
-    maxWidth: 500,
+    padding: Platform.OS === 'web' ? 32 : 24,
+    width: Platform.OS === 'web' ? '45%' : '92%',
+    maxWidth: 550,
   },
   modalTitle: {
     fontSize: 20,

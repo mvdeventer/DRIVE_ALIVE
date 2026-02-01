@@ -798,14 +798,14 @@ const styles = StyleSheet.create({
     backgroundColor: '#00000080',
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 20,
+    padding: Platform.OS === 'web' ? 20 : 10,
   },
   modalContainer: {
     backgroundColor: '#FFF',
     borderRadius: 12,
-    width: '90%',
-    maxWidth: 600,
-    maxHeight: '90%',
+    width: Platform.OS === 'web' ? '50%' : '92%',
+    maxWidth: 650,
+    maxHeight: '85%',
     boxShadow: '0px 4px 15px #0000004D',
   },
   modalHeader: {

@@ -46,6 +46,7 @@ export default function AdminSettingsScreen({ navigation }: any) {
     twilioPhoneNumber: '',
     adminPhoneNumber: '',
     testRecipient: '',
+    inactivityTimeout: '15',  // Auto-logout timeout in minutes
   });
 
   const [originalData, setOriginalData] = useState({
@@ -57,6 +58,7 @@ export default function AdminSettingsScreen({ navigation }: any) {
     autoArchiveAfterDays: '14',
     twilioPhoneNumber: '',
     adminPhoneNumber: '',
+    inactivityTimeout: '15',
   });
 
   const loadSettings = async () => {
@@ -74,6 +76,7 @@ export default function AdminSettingsScreen({ navigation }: any) {
         twilioPhoneNumber: data.twilio_sender_phone_number || '',
         adminPhoneNumber: data.twilio_phone_number || '',
         testRecipient: '',
+        inactivityTimeout: data.inactivity_timeout_minutes?.toString() || '15',
       };
 
       setFormData(settingsData);
@@ -86,6 +89,7 @@ export default function AdminSettingsScreen({ navigation }: any) {
         autoArchiveAfterDays: settingsData.autoArchiveAfterDays,
         twilioPhoneNumber: settingsData.twilioPhoneNumber,
         adminPhoneNumber: settingsData.adminPhoneNumber,
+        inactivityTimeout: settingsData.inactivityTimeout,
       });
     } catch (err: any) {
       scrollViewRef.current?.scrollTo({ y: 0, animated: true });
@@ -119,10 +123,12 @@ export default function AdminSettingsScreen({ navigation }: any) {
       formData.smtpEmail !== originalData.smtpEmail ||
       formData.smtpPassword !== originalData.smtpPassword ||
       formData.linkValidity !== originalData.linkValidity ||
+      formData.inactivityTimeout !== originalData.inactivityTimeout ||
       formData.backupIntervalMinutes !== originalData.backupIntervalMinutes ||
       formData.retentionDays !== originalData.retentionDays ||
       formData.autoArchiveAfterDays !== originalData.autoArchiveAfterDays ||
-      formData.twilioPhoneNumber !== originalData.twilioPhoneNumber
+      formData.twilioPhoneNumber !== originalData.twilioPhoneNumber ||
+      formData.adminPhoneNumber !== originalData.adminPhoneNumber
     );
   };
 
@@ -152,6 +158,7 @@ export default function AdminSettingsScreen({ navigation }: any) {
         auto_archive_after_days: parseInt(formData.autoArchiveAfterDays) || 14,
         twilio_sender_phone_number: formData.twilioPhoneNumber || null,
         twilio_phone_number: formData.adminPhoneNumber || null,
+        inactivity_timeout_minutes: parseInt(formData.inactivityTimeout) || 15,
       } as any);
 
       scrollViewRef.current?.scrollTo({ y: 0, animated: true });
@@ -167,6 +174,7 @@ export default function AdminSettingsScreen({ navigation }: any) {
         autoArchiveAfterDays: formData.autoArchiveAfterDays,
         twilioPhoneNumber: formData.twilioPhoneNumber,
         adminPhoneNumber: formData.adminPhoneNumber,
+        inactivityTimeout: formData.inactivityTimeout,
       });
 
       // Clear success message after 4 seconds
@@ -367,6 +375,25 @@ export default function AdminSettingsScreen({ navigation }: any) {
               />
               <Text style={styles.hint}>
                 How long verification links remain valid (15-120 minutes recommended)
+              </Text>
+            </View>
+
+            <View style={styles.formGroup}>
+              <Text style={styles.label}>⏱️ Auto-Logout Timeout (Minutes)</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="15"
+                value={formData.inactivityTimeout}
+                onChangeText={(value) => handleChange('inactivityTimeout', value)}
+                keyboardType="number-pad"
+                editable={!saving}
+              />
+              <Text style={styles.hint}>
+                Automatically log out inactive users after this many minutes (1-120 minutes). 
+                Applies to all users (students, instructors, admins). Default: 15 minutes.
+              </Text>
+              <Text style={[styles.hint, { marginTop: 5, fontWeight: '600', color: '#007AFF' }]}>
+                💡 On web browsers, closing the tab/window will also log out users immediately.
               </Text>
             </View>
 
@@ -579,6 +606,13 @@ export default function AdminSettingsScreen({ navigation }: any) {
                 <>
                   <Text style={styles.confirmLabel}>Link Validity:</Text>
                   <Text style={styles.confirmValue}>{formData.linkValidity} minutes</Text>
+                </>
+              )}
+
+              {formData.inactivityTimeout !== originalData.inactivityTimeout && (
+                <>
+                  <Text style={styles.confirmLabel}>⏱️ Auto-Logout Timeout:</Text>
+                  <Text style={styles.confirmValue}>{formData.inactivityTimeout} minutes</Text>
                 </>
               )}
 
@@ -855,14 +889,14 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
     justifyContent: 'center',
     alignItems: 'center',
-    padding: Platform.OS === 'web' ? 20 : 16,
+    padding: Platform.OS === 'web' ? 20 : 10,
   },
   modalContent: {
     backgroundColor: '#fff',
     borderRadius: 12,
-    padding: Platform.OS === 'web' ? 24 : 20,
-    width: Platform.OS === 'web' ? '40%' : '90%',
-    maxWidth: 500,
+    padding: Platform.OS === 'web' ? 32 : 24,
+    width: Platform.OS === 'web' ? '45%' : '92%',
+    maxWidth: 550,
   },
   modalTitle: {
     fontSize: Platform.OS === 'web' ? 20 : 18,

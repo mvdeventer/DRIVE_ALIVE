@@ -49,6 +49,9 @@ import ApiService from './services/api';
 // Setup Service
 import SetupService from './services/setup';
 
+// Inactivity Manager
+import InactivityManager from './utils/inactivityManager';
+
 // Admin Screens
 import AdminDashboardScreen from './screens/admin/AdminDashboardScreen';
 import AdminSettingsScreen from './screens/admin/AdminSettingsScreen';
@@ -78,18 +81,19 @@ const linking = {
 };
 
 // Storage wrapper for web compatibility
+// Using sessionStorage on web (clears when browser/tab closes)
 const storage = {
   async getItem(key: string): Promise<string | null> {
     const isWeb = Platform?.OS === 'web';
     if (isWeb) {
-      return localStorage.getItem(key);
+      return sessionStorage.getItem(key); // Changed from localStorage
     }
     return await SecureStore.getItemAsync(key);
   },
   async removeItem(key: string): Promise<void> {
     const isWeb = Platform?.OS === 'web';
     if (isWeb) {
-      localStorage.removeItem(key);
+      sessionStorage.removeItem(key); // Changed from localStorage
     } else {
       await SecureStore.deleteItemAsync(key);
     }
@@ -102,11 +106,28 @@ export default function App() {
   const [userRole, setUserRole] = useState<string | null>(null);
   const [userName, setUserName] = useState<string>('');
   const [requiresSetup, setRequiresSetup] = useState<boolean>(false);
+  const [inactivityTimeout, setInactivityTimeout] = useState<number>(15); // Default 15 minutes
   const navigationRef = useRef<any>(null);
 
   useEffect(() => {
     checkInitialization();
   }, []);
+
+  // Inactivity tracking - start when authenticated, stop when logged out
+  useEffect(() => {
+    if (isAuthenticated) {
+      // Fetch timeout setting from server and start tracking
+      fetchInactivityTimeout();
+      InactivityManager.startTracking(handleLogout, inactivityTimeout);
+      console.log('🕐 Inactivity tracking started');
+    } else {
+      InactivityManager.stopTracking();
+    }
+
+    return () => {
+      InactivityManager.stopTracking();
+    };
+  }, [isAuthenticated, inactivityTimeout]);
 
   const checkInitialization = async () => {
     try {
@@ -165,6 +186,21 @@ export default function App() {
       // Set generic name if profile fetch fails
       const roleName = role ? role.charAt(0).toUpperCase() + role.slice(1) : 'User';
       setUserName(roleName);
+    }
+  };
+
+  const fetchInactivityTimeout = async () => {
+    try {
+      // Fetch global inactivity timeout from server
+      const response = await ApiService.get('/auth/inactivity-timeout');
+      const timeout = response.data.inactivity_timeout_minutes || 15;
+      setInactivityTimeout(timeout);
+      InactivityManager.updateTimeout(timeout);
+      console.log(`⏱️ Inactivity timeout loaded: ${timeout} minutes`);
+    } catch (error) {
+      console.error('Error fetching inactivity timeout:', error);
+      // Use default 15 minutes if fetch fails
+      setInactivityTimeout(15);
     }
   };
 

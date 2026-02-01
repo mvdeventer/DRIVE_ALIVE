@@ -573,7 +573,7 @@ export default function BookingScreen({ navigation: navProp }: any) {
   const handleLogout = async () => {
     try {
       if (Platform.OS === 'web') {
-        localStorage.clear();
+        sessionStorage.clear(); // Changed from localStorage
         window.location.reload();
       } else {
         await SecureStore.deleteItemAsync('access_token');
@@ -1841,7 +1841,8 @@ const styles = StyleSheet.create({
   },
   submitButton: {
     backgroundColor: '#28a745',
-    padding: 16,
+    paddingVertical: Platform.OS === 'web' ? 16 : 14,
+    paddingHorizontal: Platform.OS === 'web' ? 32 : 24,
     borderRadius: 8,
     alignItems: 'center',
     marginBottom: 32,
@@ -1901,12 +1902,12 @@ const styles = StyleSheet.create({
   },
   confirmCancelButtons: {
     flexDirection: 'row',
-    gap: 12,
+    gap: Platform.OS === 'web' ? 16 : 12,
   },
   confirmButton: {
     flex: 1,
-    paddingVertical: 12,
-    paddingHorizontal: 16,
+    paddingVertical: Platform.OS === 'web' ? 14 : 12,
+    paddingHorizontal: Platform.OS === 'web' ? 20 : 16,
     borderRadius: 8,
     alignItems: 'center',
   },
@@ -1948,6 +1949,9 @@ const styles = StyleSheet.create({
   calendarModalContent: {
     backgroundColor: '#fff',
     borderRadius: 12,
+    padding: Platform.OS === 'web' ? 32 : 24,
+    width: Platform.OS === 'web' ? '45%' : '92%',
+    maxWidth: 550,
     padding: 20,
     maxWidth: 400,
     width: '90%',
@@ -2001,6 +2005,9 @@ const styles = StyleSheet.create({
   confirmModalContent: {
     backgroundColor: '#fff',
     borderRadius: 12,
+    padding: Platform.OS === 'web' ? 32 : 24,
+    width: Platform.OS === 'web' ? '45%' : '92%',
+    maxWidth: 550,
     padding: 24,
     width: '90%',
     maxWidth: 400,

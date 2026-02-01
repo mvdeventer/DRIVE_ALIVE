@@ -236,7 +236,7 @@ export default function InstructorHomeScreen() {
   const handleLogout = async () => {
     try {
       if (Platform.OS === 'web') {
-        localStorage.clear();
+        sessionStorage.clear(); // Changed from localStorage
         window.location.reload();
       } else {
         await SecureStore.deleteItemAsync('access_token');
@@ -1743,15 +1743,20 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
     justifyContent: 'center',
     alignItems: 'center',
+    padding: Platform.OS === 'web' ? 20 : 10,
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
     padding: 20,
   },
   modalContent: {
     backgroundColor: '#fff',
-    borderRadius: 16,
-    width: '100%',
-    maxWidth: 500,
-    maxHeight: '90%',
-    padding: 20,
+    borderRadius: 12,
+    padding: Platform.OS === 'web' ? 32 : 24,
+    width: Platform.OS === 'web' ? '45%' : '92%',
+    maxWidth: 550,
+    maxHeight: '85%',
   },
   modalHeader: {
     flexDirection: 'row',

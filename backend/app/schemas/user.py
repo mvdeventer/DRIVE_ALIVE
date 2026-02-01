@@ -177,7 +177,7 @@ class InstructorBase(BaseModel):
     vehicle_model: str
     vehicle_year: int
     province: Optional[str] = None
-    city: str  # Operating city
+    city: Optional[str] = None
     suburb: Optional[str] = None
     hourly_rate: float
     service_radius_km: float = 20.0
@@ -256,7 +256,7 @@ class InstructorResponse(UserResponse):
     vehicle_model: str
     vehicle_year: int
     province: Optional[str] = None
-    city: str
+    city: Optional[str] = None
     suburb: Optional[str] = None
     is_available: bool
     hourly_rate: float
@@ -287,8 +287,8 @@ class StudentBase(BaseModel):
     emergency_contact_phone: str
     address_line1: str
     address_line2: Optional[str] = None
-    province: str
-    city: str
+    province: Optional[str] = None
+    city: Optional[str] = None
     suburb: Optional[str] = None
     postal_code: str
 
@@ -378,8 +378,8 @@ class StudentResponse(UserResponse):
     emergency_contact_phone: str
     address_line1: str
     address_line2: Optional[str] = None
-    province: str
-    city: str
+    province: Optional[str] = None
+    city: Optional[str] = None
     suburb: Optional[str] = None
     postal_code: str
 

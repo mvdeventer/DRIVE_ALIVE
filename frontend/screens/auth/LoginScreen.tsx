@@ -5,6 +5,7 @@ import * as SecureStore from 'expo-secure-store';
 import React, { useState } from 'react';
 import {
   ActivityIndicator,
+  Modal,
   Platform,
   StyleSheet,
   Text,
@@ -17,18 +18,19 @@ import { API_CONFIG } from '../../config';
 import ApiService from '../../services/api';
 
 // Storage wrapper for web compatibility
+// Using sessionStorage on web (clears when browser/tab closes)
 const storage = {
   async getItem(key: string): Promise<string | null> {
     const isWeb = Platform?.OS === 'web';
     if (isWeb) {
-      return localStorage.getItem(key);
+      return sessionStorage.getItem(key); // Changed from localStorage
     }
     return await SecureStore.getItemAsync(key);
   },
   async setItem(key: string, value: string): Promise<void> {
     const isWeb = Platform?.OS === 'web';
     if (isWeb) {
-      localStorage.setItem(key, value);
+      sessionStorage.setItem(key, value); // Changed from localStorage
     } else {
       await SecureStore.setItemAsync(key, value);
     }
@@ -40,73 +42,114 @@ export default function LoginScreen({ navigation, onAuthChange }: any) {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [showRoleModal, setShowRoleModal] = useState(false);
+  const [roleOptions, setRoleOptions] = useState<string[]>([]);
   const [message, setMessage] = useState<{
     type: 'success' | 'error' | 'warning' | 'info';
     text: string;
   } | null>(null);
 
-  const handleLogin = async () => {
+  const getRoleLabel = (role: string) => {
+    if (role === 'admin') return 'Admin Profile';
+    if (role === 'instructor') return 'Instructor Profile';
+    if (role === 'student') return 'Student Profile';
+    return role;
+  };
+
+  const normalizeLoginIdentifier = () => {
+    let normalizedEmailOrPhone = emailOrPhone.trim();
+    if (/^0\d{9}$/.test(normalizedEmailOrPhone)) {
+      normalizedEmailOrPhone = '+27' + normalizedEmailOrPhone.substring(1);
+    }
+    return normalizedEmailOrPhone;
+  };
+
+  const buildLoginBody = (selectedRole?: string) => {
+    const params = new URLSearchParams();
+    params.append('username', normalizeLoginIdentifier());
+    params.append('password', password);
+    if (selectedRole) {
+      params.append('role', selectedRole);
+    }
+    return params.toString();
+  };
+
+  const fetchLoginResponse = async (body: string) => {
+    const fetchResponse = await fetch(`${API_CONFIG.BASE_URL}/auth/login`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body,
+    });
+
+    const data = await fetchResponse.json();
+    if (!fetchResponse.ok) {
+      throw new Error(data.detail || 'Login failed');
+    }
+
+    return data;
+  };
+
+  const requestLogin = async (selectedRole?: string) => {
+    return fetchLoginResponse(buildLoginBody(selectedRole));
+  };
+
+  const finalizeLogin = async (accessToken: string, role?: string) => {
+    console.log('[LoginScreen] finalizeLogin called with role:', role);
+    await ApiService.setAuthToken(accessToken);
+    console.log('[LoginScreen] Auth token set in ApiService');
+
+    // Use role from login response if provided, otherwise fetch from /auth/me
+    let userRole = role;
+    if (!userRole) {
+      console.log('[LoginScreen] No role provided, fetching from /auth/me');
+      const user = await ApiService.getCurrentUser();
+      userRole = user.role;
+      console.log('[LoginScreen] Fetched role from /auth/me:', userRole);
+    }
+    
+    console.log('[LoginScreen] Storing user_role in AsyncStorage:', userRole);
+    await storage.setItem('user_role', userRole);
+
+    if (onAuthChange) {
+      onAuthChange();
+    }
+
+    console.log('[LoginScreen] Navigating based on role:', userRole);
+    if (userRole === 'admin') {
+      navigation.replace('AdminDashboard');
+    } else if (userRole === 'student') {
+      navigation.replace('StudentHome');
+    } else if (userRole === 'instructor') {
+      navigation.replace('InstructorHome');
+    }
+  };
+
+  const performLogin = async (selectedRole?: string) => {
     if (!emailOrPhone || !password) {
       setMessage({ type: 'error', text: 'Please fill in all fields' });
       setTimeout(() => setMessage(null), 3000);
       return;
     }
 
-    setLoading(true);
-
     try {
-      // Normalize phone number format for South African numbers
-      let normalizedEmailOrPhone = emailOrPhone.trim();
-      if (/^0\d{9}$/.test(normalizedEmailOrPhone)) {
-        normalizedEmailOrPhone = '+27' + normalizedEmailOrPhone.substring(1);
+      setLoading(true);
+      console.log('[LoginScreen] performLogin called with selectedRole:', selectedRole);
+
+      const data = await requestLogin(selectedRole);
+      console.log('[LoginScreen] Login response:', data);
+
+      if (data.requires_role_selection && Array.isArray(data.available_roles)) {
+        console.log('[LoginScreen] Role selection required:', data.available_roles);
+        setRoleOptions(data.available_roles);
+        setShowRoleModal(true);
+        return;
       }
 
-      // Try using fetch directly first to test connectivity
-      console.log('Attempting fetch-based login...');
-      const params = new URLSearchParams();
-      params.append('username', normalizedEmailOrPhone);
-      params.append('password', password);
-
-      const fetchResponse = await fetch(`${API_CONFIG.BASE_URL}/auth/login`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
-        },
-        body: params.toString(),
-      });
-
-      console.log('Fetch response status:', fetchResponse.status);
-      const data = await fetchResponse.json();
-      console.log('Fetch response data:', data);
-
-      if (!fetchResponse.ok) {
-        throw new Error(data.detail || 'Login failed');
-      }
-
-      // Store token and continue with ApiService for other calls
-      await ApiService.setAuthToken(data.access_token);
-
-      // Get user info to determine role
-      const user = await ApiService.getCurrentUser();
-
-      // Store user role BEFORE triggering auth change
-      await storage.setItem('user_role', user.role);
-
-      // Trigger auth state update in App.tsx
-      if (onAuthChange) {
-        onAuthChange();
-      }
-
-      // Navigate based on user role
-      if (user.role === 'admin') {
-        navigation.replace('AdminDashboard');
-      } else if (user.role === 'student') {
-        navigation.replace('StudentHome');
-      } else if (user.role === 'instructor') {
-        navigation.replace('InstructorHome');
-      }
-
-      // REMOVED: window.location.reload() - causes navigation issues
+      // Pass both access_token AND role from login response to finalizeLogin
+      console.log('[LoginScreen] Calling finalizeLogin with role:', data.role);
+      await finalizeLogin(data.access_token, data.role);
     } catch (error: any) {
       console.error('Login error:', error);
       console.error('Error response:', error.response);
@@ -140,8 +183,18 @@ export default function LoginScreen({ navigation, onAuthChange }: any) {
         text: `Login Failed (${statusCode}): ${errorMessage}`,
       });
       setTimeout(() => setMessage(null), 8000); // Longer timeout for network errors
+    } finally {
       setLoading(false);
     }
+  };
+
+  const handleLogin = async () => {
+    await performLogin();
+  };
+
+  const handleRoleSelect = async (role: string) => {
+    setShowRoleModal(false);
+    await performLogin(role);
   };
 
   return (
@@ -184,6 +237,39 @@ export default function LoginScreen({ navigation, onAuthChange }: any) {
           />
         </View>
       )}
+
+      <Modal
+        visible={showRoleModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowRoleModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Select Profile</Text>
+            <Text style={styles.modalSubtitle}>
+              This account has multiple profiles. Choose which one to use.
+            </Text>
+
+            {roleOptions.map(role => (
+              <TouchableOpacity
+                key={role}
+                style={styles.roleOption}
+                onPress={() => handleRoleSelect(role)}
+              >
+                <Text style={styles.roleOptionText}>{getRoleLabel(role)}</Text>
+              </TouchableOpacity>
+            ))}
+
+            <TouchableOpacity
+              style={styles.modalCancelButton}
+              onPress={() => setShowRoleModal(false)}
+            >
+              <Text style={styles.modalCancelText}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
 
       <TextInput
         style={styles.input}
@@ -318,5 +404,57 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#666',
     fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: Platform.OS === 'web' ? 20 : 10,
+  },
+  modalContent: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: Platform.OS === 'web' ? 32 : 24,
+    width: Platform.OS === 'web' ? '45%' : '92%',
+    maxWidth: 550,
+  },
+  modalTitle: {
+    fontSize: Platform.OS === 'web' ? 22 : 18,
+    fontWeight: '700',
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  modalSubtitle: {
+    fontSize: Platform.OS === 'web' ? 14 : 12,
+    color: '#666',
+    textAlign: 'center',
+    marginBottom: 16,
+  },
+  roleOption: {
+    backgroundColor: '#F0F6FF',
+    paddingVertical: Platform.OS === 'web' ? 12 : 10,
+    paddingHorizontal: 14,
+    borderRadius: 8,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: '#D6E4FF',
+  },
+  roleOptionText: {
+    fontSize: Platform.OS === 'web' ? 16 : 14,
+    color: '#0057D9',
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+  modalCancelButton: {
+    marginTop: 4,
+    paddingVertical: 10,
+    borderRadius: 8,
+    backgroundColor: '#F1F3F5',
+  },
+  modalCancelText: {
+    textAlign: 'center',
+    color: '#555',
+    fontWeight: '600',
   },
 });

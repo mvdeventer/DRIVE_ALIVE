@@ -12,10 +12,10 @@ import {
   View,
   Platform,
 } from 'react-native';
+import AddressAutocomplete from '../../components/AddressAutocomplete';
 import FormFieldWithTip from '../../components/FormFieldWithTip';
 import InlineMessage from '../../components/InlineMessage';
 import LicenseTypeSelector from '../../components/LicenseTypeSelector';
-import LocationSelector from '../../components/LocationSelector';
 import { DEBUG_CONFIG } from '../../config';
 import ApiService from '../../services/api';
 
@@ -37,9 +37,6 @@ export default function RegisterInstructorScreen({ navigation }: any) {
     vehicle_make: DEBUG_CONFIG.ENABLED ? 'Toyota' : '',
     vehicle_model: DEBUG_CONFIG.ENABLED ? 'Corolla' : '',
     vehicle_year: DEBUG_CONFIG.ENABLED ? '2020' : '',
-    province: DEBUG_CONFIG.ENABLED ? 'Gauteng' : '',
-    city: DEBUG_CONFIG.ENABLED ? 'Johannesburg' : '',
-    suburb: DEBUG_CONFIG.ENABLED ? 'Sandton' : '',
     hourly_rate: DEBUG_CONFIG.ENABLED ? '350' : '',
     service_radius_km: '20',
     max_travel_distance_km: '50',
@@ -77,7 +74,6 @@ export default function RegisterInstructorScreen({ navigation }: any) {
     if (!formData.vehicle_make) missingFields.push('Vehicle Make');
     if (!formData.vehicle_model) missingFields.push('Vehicle Model');
     if (!formData.vehicle_year) missingFields.push('Vehicle Year');
-    if (!formData.city) missingFields.push('City');
     if (!formData.hourly_rate) missingFields.push('Hourly Rate');
     if (!formData.password) missingFields.push('Password');
     if (!formData.confirmPassword) missingFields.push('Confirm Password');
@@ -132,9 +128,7 @@ export default function RegisterInstructorScreen({ navigation }: any) {
         vehicle_make: formData.vehicle_make,
         vehicle_model: formData.vehicle_model,
         vehicle_year: parseInt(formData.vehicle_year),
-        province: formData.province || null,
-        city: formData.city,
-        suburb: formData.suburb || null,
+
         hourly_rate: parseFloat(formData.hourly_rate),
         service_radius_km: parseFloat(formData.service_radius_km),
         max_travel_distance_km: parseFloat(formData.max_travel_distance_km),
@@ -186,6 +180,14 @@ export default function RegisterInstructorScreen({ navigation }: any) {
 
   const updateFormData = (field: string, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }));
+  };
+
+  // GPS address value for instructor (no longer used since no manual fields)
+  const instructorAddressValue = '';
+
+  const handleInstructorAddressChange = (value: string) => {
+    // GPS address captured for location tracking only
+    console.log('GPS address captured:', value);
   };
 
   return (
@@ -321,23 +323,16 @@ export default function RegisterInstructorScreen({ navigation }: any) {
           keyboardType="numeric"
         />
 
-        <LocationSelector
-          label="Operating Location"
-          tooltip="Select your province, city, and suburb where you primarily operate. Students will search for instructors in their area."
-          required
-          selectedProvince={formData.province}
-          selectedCity={formData.city}
-          selectedSuburb={formData.suburb}
-          onProvinceChange={province =>
-            setFormData(prev => ({ ...prev, province, city: '', suburb: '' }))
-          }
-          onCityChange={city => setFormData(prev => ({ ...prev, city, suburb: '' }))}
-          onSuburbChange={suburb => setFormData(prev => ({ ...prev, suburb }))}
-          onPostalCodeChange={postalCode =>
-            setFormData(prev => ({ ...prev, postal_code: postalCode || prev.postal_code }))
-          }
-          showSuburbs={true}
-        />
+        <View style={styles.addressGpsContainer}>
+          <Text style={styles.addressGpsLabel}>Operating Address (GPS)</Text>
+          <AddressAutocomplete
+            value={instructorAddressValue}
+            onChangeText={handleInstructorAddressChange}
+          />
+          <Text style={styles.addressGpsHint}>
+            📍 Use GPS to capture your operating location address.
+          </Text>
+        </View>
 
         {/* Service Information */}
         <Text style={styles.sectionTitle}>Service Details</Text>
@@ -538,6 +533,23 @@ const styles = StyleSheet.create({
     marginBottom: 10,
     color: '#333',
   },
+  addressGpsContainer: {
+    backgroundColor: '#F8F9FA',
+    borderRadius: 8,
+    padding: Platform.OS === 'web' ? 16 : 12,
+    marginBottom: 16,
+  },
+  addressGpsLabel: {
+    fontSize: Platform.OS === 'web' ? 16 : 14,
+    fontWeight: '600',
+    marginBottom: 8,
+    color: '#333',
+  },
+  addressGpsHint: {
+    marginTop: 8,
+    fontSize: Platform.OS === 'web' ? 12 : 11,
+    color: '#666',
+  },
   subtitle: {
     fontSize: 16,
     color: '#666',
@@ -565,8 +577,9 @@ const styles = StyleSheet.create({
   },
   button: {
     backgroundColor: '#007AFF',
-    padding: 15,
-    borderRadius: 10,
+    paddingVertical: Platform.OS === 'web' ? 16 : 14,
+    paddingHorizontal: Platform.OS === 'web' ? 32 : 24,
+    borderRadius: 8,
     alignItems: 'center',
     marginTop: 20,
     marginBottom: 15,
@@ -578,22 +591,23 @@ const styles = StyleSheet.create({
   },
   showPasswordText: {
     color: '#007bff',
-    fontSize: 14,
+    fontSize: Platform.OS === 'web' ? 15 : 14,
     fontWeight: '600',
   },
   buttonDisabled: {
     backgroundColor: '#ccc',
+    opacity: 0.7,
   },
   buttonText: {
     color: '#fff',
-    fontSize: 18,
+    fontSize: Platform.OS === 'web' ? 18 : 16,
     fontWeight: 'bold',
   },
   linkText: {
     color: '#007AFF',
     textAlign: 'center',
     marginTop: 10,
-    fontSize: 16,
+    fontSize: Platform.OS === 'web' ? 16 : 14,
   },
   pickerOverlay: {
     position: 'absolute',
@@ -649,70 +663,73 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
     justifyContent: 'center',
     alignItems: 'center',
+    padding: Platform.OS === 'web' ? 20 : 10,
   },
   modalScrollContent: {
     flexGrow: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 20,
+    padding: Platform.OS === 'web' ? 20 : 10,
   },
   modalContent: {
     backgroundColor: '#fff',
     borderRadius: 12,
-    padding: Platform.OS === 'web' ? 30 : 24,
-    width: Platform.OS === 'web' ? '50%' : '95%',
-    maxWidth: 600,
+    padding: Platform.OS === 'web' ? 32 : 24,
+    width: Platform.OS === 'web' ? '50%' : '92%',
+    maxWidth: 650,
     maxHeight: '90%',
   },
   modalTitle: {
-    fontSize: Platform.OS === 'web' ? 22 : 20,
+    fontSize: Platform.OS === 'web' ? 24 : 20,
     fontWeight: 'bold',
     color: '#28a745',
-    marginBottom: 8,
+    marginBottom: 10,
     textAlign: 'center',
   },
   modalSubtitle: {
-    fontSize: Platform.OS === 'web' ? 14 : 12,
+    fontSize: Platform.OS === 'web' ? 15 : 13,
     color: '#666',
     marginBottom: 20,
     textAlign: 'center',
+    lineHeight: 22,
   },
   confirmDetails: {
     backgroundColor: '#f8f9fa',
     borderRadius: 8,
-    padding: Platform.OS === 'web' ? 20 : 16,
-    marginBottom: 20,
+    padding: Platform.OS === 'web' ? 24 : 18,
+    marginBottom: 24,
   },
   confirmSectionTitle: {
-    fontSize: Platform.OS === 'web' ? 16 : 14,
+    fontSize: Platform.OS === 'web' ? 17 : 15,
     fontWeight: 'bold',
     color: '#007AFF',
-    marginTop: 12,
-    marginBottom: 8,
+    marginTop: 14,
+    marginBottom: 10,
     borderBottomWidth: 1,
     borderBottomColor: '#ddd',
-    paddingBottom: 4,
+    paddingBottom: 6,
   },
   confirmLabel: {
-    fontSize: Platform.OS === 'web' ? 14 : 12,
+    fontSize: Platform.OS === 'web' ? 14 : 13,
     fontWeight: '600',
     color: '#666',
-    marginTop: 8,
+    marginTop: 10,
   },
   confirmValue: {
-    fontSize: Platform.OS === 'web' ? 16 : 14,
+    fontSize: Platform.OS === 'web' ? 16 : 15,
     color: '#333',
-    marginBottom: 8,
+    marginBottom: 10,
     fontWeight: '500',
   },
   modalButtons: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    gap: 12,
+    gap: Platform.OS === 'web' ? 16 : 12,
   },
   modalButton: {
     flex: 1,
-    paddingVertical: 12,
+    paddingVertical: Platform.OS === 'web' ? 14 : 12,
+    paddingHorizontal: Platform.OS === 'web' ? 20 : 16,
     borderRadius: 8,
     alignItems: 'center',
   },
@@ -721,17 +738,17 @@ const styles = StyleSheet.create({
   },
   modalButtonSecondary: {
     backgroundColor: '#fff',
-    borderWidth: 1,
+    borderWidth: 2,
     borderColor: '#dc3545',
   },
   modalButtonText: {
     color: '#fff',
-    fontSize: Platform.OS === 'web' ? 16 : 14,
+    fontSize: Platform.OS === 'web' ? 16 : 15,
     fontWeight: '600',
   },
   modalButtonTextSecondary: {
     color: '#dc3545',
-    fontSize: Platform.OS === 'web' ? 16 : 14,
+    fontSize: Platform.OS === 'web' ? 16 : 15,
     fontWeight: '600',
   },
 });

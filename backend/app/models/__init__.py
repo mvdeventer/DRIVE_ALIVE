@@ -13,6 +13,7 @@ from .password_reset import PasswordResetToken
 from .payment import Transaction, TransactionStatus, TransactionType
 from .payment_session import PaymentSession, PaymentSessionStatus
 from .user import Instructor, Student, User, UserRole, UserStatus
+from .verification_token import VerificationToken
 
 __all__ = [
     "User",
@@ -29,9 +30,10 @@ __all__ = [
     "TransactionStatus",
     "PaymentSession",
     "PaymentSessionStatus",
+    "PasswordResetToken",
+    "VerificationToken",
     "InstructorSchedule",
     "TimeOffException",
     "CustomAvailability",
     "DayOfWeek",
-    "PasswordResetToken",
 ]

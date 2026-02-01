@@ -145,8 +145,8 @@ export default function AdminDashboardScreen({ navigation }: any) {
       // STEP 3: Clear authentication tokens and force full logout
       const storage = Platform.OS === 'web' ? localStorage : SecureStore;
       if (Platform.OS === 'web') {
-        storage.removeItem('access_token');
-        storage.removeItem('user_role');
+        sessionStorage.removeItem('access_token'); // Changed from storage
+        sessionStorage.removeItem('user_role');
       } else {
         await storage.deleteItemAsync('access_token');
         await storage.deleteItemAsync('user_role');
@@ -955,14 +955,14 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 20,
+    padding: Platform.OS === 'web' ? 20 : 10,
   },
   modalContent: {
     backgroundColor: '#FFF',
     borderRadius: 12,
-    padding: Platform.OS === 'web' ? 30 : 20,
-    width: '100%',
-    maxWidth: 500,
+    padding: Platform.OS === 'web' ? 32 : 24,
+    width: Platform.OS === 'web' ? '45%' : '92%',
+    maxWidth: 550,
   },
   modalTitle: {
     fontSize: Platform.OS === 'web' ? 24 : 20,

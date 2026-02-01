@@ -17,7 +17,7 @@ from ..database import get_db
 from ..models.booking import Booking, BookingStatus, PaymentStatus
 from ..models.payment_session import PaymentSession, PaymentSessionStatus
 from ..models.user import Instructor, Student, User, UserRole
-from ..routes.auth import get_current_user
+from ..routes.auth import get_current_user, get_active_role
 from ..schemas.payment import PaymentInitiateRequest, PaymentInitiateResponse
 from ..services.whatsapp_service import whatsapp_service
 
@@ -39,7 +39,8 @@ async def initiate_payment(
     Initiate payment session BEFORE creating bookings
     Returns Stripe Checkout URL
     """
-    if current_user.role != UserRole.STUDENT:
+    active_role = get_active_role(current_user)
+    if active_role != UserRole.STUDENT.value:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Only students can create bookings",

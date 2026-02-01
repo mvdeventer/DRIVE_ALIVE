@@ -13,9 +13,9 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import AddressAutocomplete from '../../components/AddressAutocomplete';
 import FormFieldWithTip from '../../components/FormFieldWithTip';
 import InlineMessage from '../../components/InlineMessage';
-import LocationSelector from '../../components/LocationSelector';
 import { DEBUG_CONFIG } from '../../config';
 import ApiService from '../../services/api';
 
@@ -29,9 +29,6 @@ export default function RegisterStudentScreen({ navigation }: any) {
   const learnersPermitRef = useRef<TextInput>(null);
   const emergencyNameRef = useRef<TextInput>(null);
   const emergencyPhoneRef = useRef<TextInput>(null);
-  const addressLine1Ref = useRef<TextInput>(null);
-  const addressLine2Ref = useRef<TextInput>(null);
-  const postalCodeRef = useRef<TextInput>(null);
   const passwordRef = useRef<TextInput>(null);
   const confirmPasswordRef = useRef<TextInput>(null);
 
@@ -50,9 +47,6 @@ export default function RegisterStudentScreen({ navigation }: any) {
     emergency_contact_phone: DEBUG_CONFIG.ENABLED ? '+27821234567' : '',
     address_line1: DEBUG_CONFIG.ENABLED ? '123 Main Street' : '',
     address_line2: DEBUG_CONFIG.ENABLED ? 'Apartment 4B' : '',
-    province: DEBUG_CONFIG.ENABLED ? 'Gauteng' : '',
-    city: DEBUG_CONFIG.ENABLED ? 'Johannesburg' : '',
-    suburb: DEBUG_CONFIG.ENABLED ? 'Sandton' : '',
     postal_code: DEBUG_CONFIG.ENABLED ? '2000' : '',
   });
   const [loading, setLoading] = useState(false);
@@ -134,6 +128,25 @@ export default function RegisterStudentScreen({ navigation }: any) {
 
   const updateField = (field: string, value: string) => {
     setFormData({ ...formData, [field]: value });
+  };
+
+  const addressValue = [
+    formData.address_line1,
+    formData.postal_code,
+  ]
+    .filter(part => part && part.trim())
+    .join('\n');
+
+  const handleAddressChange = (value: string) => {
+    const lines = value.split('\n').map(line => line.trim()).filter(Boolean);
+    const street = lines[0] || '';
+    const postal = lines[lines.length - 1] || '';
+
+    setFormData(prev => ({
+      ...prev,
+      address_line1: street,
+      postal_code: postal || prev.postal_code,
+    }));
   };
 
   return (
@@ -247,64 +260,22 @@ export default function RegisterStudentScreen({ navigation }: any) {
         tip="South African format: +27 followed by 9 digits"
         maxLength={12}
         returnKeyType="next"
-        onSubmitEditing={() => addressLine1Ref.current?.focus()}
+        onSubmitEditing={() => passwordRef.current?.focus()}
         blurOnSubmit={false}
       />
 
       <Text style={styles.sectionTitle}>Address</Text>
-      <FormFieldWithTip
-        ref={addressLine1Ref}
-        label="Address Line 1"
-        placeholder="Street address"
-        value={formData.address_line1}
-        onChangeText={value => updateField('address_line1', value)}
-        tip="Your residential address - we'll use this for pickups"
-        returnKeyType="next"
-        onSubmitEditing={() => addressLine2Ref.current?.focus()}
-        blurOnSubmit={false}
-      />
-      <FormFieldWithTip
-        ref={addressLine2Ref}
-        label="Address Line 2 (Optional)"
-        placeholder="Apartment, suite, etc."
-        value={formData.address_line2}
-        onChangeText={value => updateField('address_line2', value)}
-        tip="Optional additional address information"
-        returnKeyType="next"
-        onSubmitEditing={() => postalCodeRef.current?.focus()}
-        blurOnSubmit={false}
-      />
-
-      <LocationSelector
-        label="Residential Location"
-        tooltip="Select your province, city, and suburb where you live. This helps match you with nearby instructors."
-        required
-        selectedProvince={formData.province}
-        selectedCity={formData.city}
-        selectedSuburb={formData.suburb}
-        onProvinceChange={province =>
-          setFormData(prev => ({ ...prev, province, city: '', suburb: '' }))
-        }
-        onCityChange={city => setFormData(prev => ({ ...prev, city, suburb: '' }))}
-        onSuburbChange={suburb => setFormData(prev => ({ ...prev, suburb }))}
-        onPostalCodeChange={postalCode =>
-          setFormData(prev => ({ ...prev, postal_code: postalCode || prev.postal_code }))
-        }
-        showSuburbs={true}
-      />
-
-      <FormFieldWithTip
-        ref={postalCodeRef}
-        label="Postal Code"
-        placeholder="Postal code"
-        value={formData.postal_code}
-        onChangeText={value => updateField('postal_code', value)}
-        keyboardType="numeric"
-        tip="4-digit postal code"
-        returnKeyType="next"
-        onSubmitEditing={() => passwordRef.current?.focus()}
-        blurOnSubmit={false}
-      />
+      <View style={styles.addressGpsContainer}>
+        <Text style={styles.addressGpsLabel}>Address with GPS</Text>
+        <AddressAutocomplete
+          value={addressValue}
+          onChangeText={handleAddressChange}
+        />
+        <Text style={styles.addressGpsHint}>
+          📍 Use GPS to auto-fill your address and postal code. You can still edit
+          the fields below if needed.
+        </Text>
+      </View>
 
       <Text style={styles.sectionTitle}>Security</Text>
       <FormFieldWithTip
@@ -380,8 +351,12 @@ export default function RegisterStudentScreen({ navigation }: any) {
             <Text style={styles.confirmLabel}>ID Number:</Text>
             <Text style={styles.confirmValue}>{formData.id_number}</Text>
             
-            <Text style={styles.confirmLabel}>City:</Text>
-            <Text style={styles.confirmValue}>{formData.city}, {formData.province}</Text>
+            <Text style={styles.confirmLabel}>Address:</Text>
+            <Text style={styles.confirmValue}>
+              {formData.address_line1}
+              {formData.address_line2 ? `, ${formData.address_line2}` : ''}
+              {formData.postal_code ? `, ${formData.postal_code}` : ''}
+            </Text>
           </View>
 
           <View style={styles.modalButtons}>
@@ -418,6 +393,23 @@ const styles = StyleSheet.create({
     marginBottom: Platform.OS === 'web' ? 20 : 16,
     color: '#333',
   },
+  addressGpsContainer: {
+    backgroundColor: '#F8F9FA',
+    borderRadius: 8,
+    padding: Platform.OS === 'web' ? 16 : 12,
+    marginBottom: 16,
+  },
+  addressGpsLabel: {
+    fontSize: Platform.OS === 'web' ? 16 : 14,
+    fontWeight: '600',
+    marginBottom: 8,
+    color: '#333',
+  },
+  addressGpsHint: {
+    marginTop: 8,
+    fontSize: Platform.OS === 'web' ? 12 : 11,
+    color: '#666',
+  },
   sectionTitle: {
     fontSize: Platform.OS === 'web' ? 18 : 16,
     fontWeight: '600',
@@ -427,7 +419,8 @@ const styles = StyleSheet.create({
   },
   button: {
     backgroundColor: '#007AFF',
-    padding: 15,
+    paddingVertical: Platform.OS === 'web' ? 16 : 14,
+    paddingHorizontal: Platform.OS === 'web' ? 32 : 24,
     borderRadius: 8,
     alignItems: 'center',
     marginTop: 20,
@@ -439,7 +432,7 @@ const styles = StyleSheet.create({
   },
   showPasswordText: {
     color: '#007bff',
-    fontSize: 14,
+    fontSize: Platform.OS === 'web' ? 15 : 14,
     fontWeight: '600',
   },
   buttonText: {
@@ -460,54 +453,57 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
     justifyContent: 'center',
     alignItems: 'center',
+    padding: Platform.OS === 'web' ? 20 : 10,
   },
   modalContent: {
     backgroundColor: '#fff',
     borderRadius: 12,
-    padding: Platform.OS === 'web' ? 30 : 24,
-    width: Platform.OS === 'web' ? '40%' : '85%',
-    maxWidth: 500,
-    maxHeight: '80%',
+    padding: Platform.OS === 'web' ? 32 : 24,
+    width: Platform.OS === 'web' ? '45%' : '92%',
+    maxWidth: 550,
+    maxHeight: '85%',
   },
   modalTitle: {
-    fontSize: Platform.OS === 'web' ? 22 : 20,
+    fontSize: Platform.OS === 'web' ? 24 : 20,
     fontWeight: 'bold',
     color: '#28a745',
-    marginBottom: 8,
+    marginBottom: 10,
     textAlign: 'center',
   },
   modalSubtitle: {
-    fontSize: Platform.OS === 'web' ? 14 : 12,
+    fontSize: Platform.OS === 'web' ? 15 : 13,
     color: '#666',
     marginBottom: 20,
     textAlign: 'center',
+    lineHeight: 22,
   },
   confirmDetails: {
     backgroundColor: '#f8f9fa',
     borderRadius: 8,
-    padding: Platform.OS === 'web' ? 20 : 16,
-    marginBottom: 20,
+    padding: Platform.OS === 'web' ? 24 : 18,
+    marginBottom: 24,
   },
   confirmLabel: {
-    fontSize: Platform.OS === 'web' ? 14 : 12,
+    fontSize: Platform.OS === 'web' ? 14 : 13,
     fontWeight: '600',
     color: '#666',
-    marginTop: 8,
+    marginTop: 10,
   },
   confirmValue: {
-    fontSize: Platform.OS === 'web' ? 16 : 14,
+    fontSize: Platform.OS === 'web' ? 16 : 15,
     color: '#333',
-    marginBottom: 8,
+    marginBottom: 10,
     fontWeight: '500',
   },
   modalButtons: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    gap: 12,
+    gap: Platform.OS === 'web' ? 16 : 12,
   },
   modalButton: {
     flex: 1,
-    paddingVertical: 12,
+    paddingVertical: Platform.OS === 'web' ? 14 : 12,
+    paddingHorizontal: Platform.OS === 'web' ? 20 : 16,
     borderRadius: 8,
     alignItems: 'center',
   },
@@ -516,17 +512,17 @@ const styles = StyleSheet.create({
   },
   modalButtonSecondary: {
     backgroundColor: '#fff',
-    borderWidth: 1,
+    borderWidth: 2,
     borderColor: '#dc3545',
   },
   modalButtonText: {
     color: '#fff',
-    fontSize: Platform.OS === 'web' ? 16 : 14,
+    fontSize: Platform.OS === 'web' ? 16 : 15,
     fontWeight: '600',
   },
   modalButtonTextSecondary: {
     color: '#dc3545',
-    fontSize: Platform.OS === 'web' ? 16 : 14,
+    fontSize: Platform.OS === 'web' ? 16 : 15,
     fontWeight: '600',
   },
 });

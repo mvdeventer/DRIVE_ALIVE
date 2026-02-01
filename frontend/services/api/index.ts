@@ -12,14 +12,14 @@ const storage = {
   async getItem(key: string): Promise<string | null> {
     const isWeb = Platform?.OS === 'web';
     if (isWeb) {
-      return localStorage.getItem(key);
+      return sessionStorage.getItem(key); // Changed from localStorage
     }
     return await SecureStore.getItemAsync(key);
   },
   async setItem(key: string, value: string): Promise<void> {
     const isWeb = Platform?.OS === 'web';
     if (isWeb) {
-      localStorage.setItem(key, value);
+      sessionStorage.setItem(key, value); // Changed from localStorage
     } else {
       await SecureStore.setItemAsync(key, value);
     }
@@ -27,7 +27,7 @@ const storage = {
   async removeItem(key: string): Promise<void> {
     const isWeb = Platform?.OS === 'web';
     if (isWeb) {
-      localStorage.removeItem(key);
+      sessionStorage.removeItem(key); // Changed from localStorage
     } else {
       await SecureStore.deleteItemAsync(key);
     }
@@ -428,6 +428,31 @@ class ApiService {
 
   async deleteAdmin(adminId: number) {
     const response = await this.api.delete(`/admin/admins/${adminId}`);
+    return response.data;
+  }
+
+  async deleteInstructor(userId: number) {
+    const response = await this.api.delete(`/admin/instructors/${userId}`);
+    return response.data;
+  }
+
+  async getInstructorBookingSummary(userId: number) {
+    const response = await this.api.get(`/admin/instructors/${userId}/booking-summary`);
+    return response.data;
+  }
+
+  async deleteStudent(userId: number) {
+    const response = await this.api.delete(`/admin/students/${userId}`);
+    return response.data;
+  }
+
+  async getStudentBookingSummary(userId: number) {
+    const response = await this.api.get(`/admin/students/${userId}/booking-summary`);
+    return response.data;
+  }
+
+  async deleteUser(userId: number) {
+    const response = await this.api.delete(`/admin/users/${userId}`);
     return response.data;
   }
 

@@ -19,7 +19,7 @@ from ..models.availability import (
 )
 from ..models.booking import Booking, BookingStatus, PaymentStatus
 from ..models.user import Instructor, Student, User, UserRole
-from ..routes.auth import get_current_user
+from ..routes.auth import get_current_user, get_active_role
 from ..schemas.booking import (
     BookingCancel,
     BookingCreate,
@@ -85,7 +85,8 @@ async def create_booking(
     Create a new booking (students only)
     """
     # Verify user is a student
-    if current_user.role != UserRole.STUDENT:
+    active_role = get_active_role(current_user)
+    if active_role != UserRole.STUDENT.value:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Only students can create bookings",
@@ -105,6 +106,13 @@ async def create_booking(
     if not instructor:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Instructor not found"
+        )
+
+    # Prevent self-booking (student cannot book themselves as instructor)
+    if instructor.user_id == current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="You cannot book a lesson with yourself. Please select a different instructor.",
         )
 
     if not instructor.is_available:
@@ -374,7 +382,8 @@ async def create_bulk_bookings(
     Validates all bookings first, then creates them atomically
     """
     # Verify user is a student
-    if current_user.role != UserRole.STUDENT:
+    active_role = get_active_role(current_user)
+    if active_role != UserRole.STUDENT.value:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Only students can create bookings",
@@ -718,11 +727,12 @@ async def get_bookings(
 
     query = db.query(Booking)
 
-    if current_user.role == UserRole.STUDENT:
+    active_role = get_active_role(current_user)
+    if active_role == UserRole.STUDENT.value:
         student = db.query(Student).filter(Student.user_id == current_user.id).first()
         if student:
             query = query.filter(Booking.student_id == student.id)
-    elif current_user.role == UserRole.INSTRUCTOR:
+    elif active_role == UserRole.INSTRUCTOR.value:
         instructor = (
             db.query(Instructor).filter(Instructor.user_id == current_user.id).first()
         )
@@ -751,7 +761,8 @@ async def get_my_bookings(
 
     bookings_list = []
 
-    if current_user.role == UserRole.STUDENT:
+    active_role = get_active_role(current_user)
+    if active_role == UserRole.STUDENT.value:
         student = db.query(Student).filter(Student.user_id == current_user.id).first()
         if not student:
             return []
@@ -809,7 +820,7 @@ async def get_my_bookings(
             }
             bookings_list.append(booking_dict)
 
-    elif current_user.role == UserRole.INSTRUCTOR:
+    elif active_role == UserRole.INSTRUCTOR.value:
         instructor = (
             db.query(Instructor).filter(Instructor.user_id == current_user.id).first()
         )
@@ -896,7 +907,7 @@ async def get_booking(
         return BookingResponse.from_orm(booking)
     elif instructor and booking.instructor_id == instructor.id:
         return BookingResponse.from_orm(booking)
-    elif current_user.role == UserRole.ADMIN:
+    elif active_role == UserRole.ADMIN.value:
         return BookingResponse.from_orm(booking)
     else:
         raise HTTPException(
@@ -975,7 +986,7 @@ async def cancel_booking(
         cancelled_by = "student"
     elif instructor and booking.instructor_id == instructor.id:
         cancelled_by = "instructor"
-    elif current_user.role == UserRole.ADMIN:
+    elif active_role == UserRole.ADMIN.value:
         cancelled_by = "admin"
     else:
         raise HTTPException(
@@ -1082,7 +1093,8 @@ async def create_review(
     from ..models.booking import Review
 
     # Verify user is a student
-    if current_user.role != UserRole.STUDENT:
+    active_role = get_active_role(current_user)
+    if active_role != UserRole.STUDENT.value:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Only students can create reviews",
@@ -1201,7 +1213,8 @@ async def reschedule_booking(
     Reschedule a booking to a new date/time (instructor only)
     """
     # Verify user is an instructor
-    if current_user.role != UserRole.INSTRUCTOR:
+    active_role = get_active_role(current_user)
+    if active_role != UserRole.INSTRUCTOR.value:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Only instructors can reschedule bookings",

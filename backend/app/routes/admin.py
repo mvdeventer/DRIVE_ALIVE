@@ -355,11 +355,26 @@ async def get_all_users(
 ):
     """
     Get list of all users with filtering options
+    
+    Multi-role system: Users can have multiple profiles (Student, Instructor, Admin)
+    When filtering by role, we check for the existence of the corresponding profile:
+    - STUDENT: users with student profiles
+    - INSTRUCTOR: users with instructor profiles  
+    - ADMIN: users with role=ADMIN (admin is role-based, not profile-based)
     """
     query = db.query(User)
 
-    if role:
-        query = query.filter(User.role == role)
+    # Filter by role - check for actual profiles in multi-role system
+    if role == UserRole.STUDENT:
+        # Get users who have a student profile
+        query = query.join(Student, Student.user_id == User.id)
+    elif role == UserRole.INSTRUCTOR:
+        # Get users who have an instructor profile
+        query = query.join(Instructor, Instructor.user_id == User.id)
+    elif role == UserRole.ADMIN:
+        # Admin is role-based, not profile-based
+        query = query.filter(User.role == UserRole.ADMIN)
+    
     if status:
         query = query.filter(User.status == status)
 
@@ -370,17 +385,31 @@ async def get_all_users(
         # Get id_number and booking_fee from instructor or student profile
         id_number = None
         booking_fee = None
-        if user.role == UserRole.INSTRUCTOR:
+        
+        # When filtering by role, get data from the corresponding profile
+        if role == UserRole.INSTRUCTOR:
             instructor = (
                 db.query(Instructor).filter(Instructor.user_id == user.id).first()
             )
             if instructor:
                 id_number = instructor.id_number
                 booking_fee = instructor.booking_fee
-        elif user.role == UserRole.STUDENT:
+        elif role == UserRole.STUDENT:
             student = db.query(Student).filter(Student.user_id == user.id).first()
             if student:
                 id_number = student.id_number
+        else:
+            # No specific role filter - check both profiles
+            instructor = (
+                db.query(Instructor).filter(Instructor.user_id == user.id).first()
+            )
+            if instructor:
+                id_number = instructor.id_number
+                booking_fee = instructor.booking_fee
+            else:
+                student = db.query(Student).filter(Student.user_id == user.id).first()
+                if student:
+                    id_number = student.id_number
 
         result.append(
             UserManagementResponse(
@@ -499,6 +528,287 @@ async def delete_admin(
     return {
         "message": "Admin deleted successfully",
         "admin_id": admin_id,
+    }
+
+
+@router.delete("/instructors/{user_id}")
+async def delete_instructor(
+    user_id: int,
+    current_admin: Annotated[User, Depends(require_admin)],
+    db: Session = Depends(get_db),
+):
+    """
+    Delete an instructor profile (allows user to re-register as instructor)
+    
+    - Removes instructor profile only
+    - If user has no other profiles, user account is also deleted
+    - User can re-register as instructor
+    - Does NOT delete bookings (keeps history)
+    """
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found",
+        )
+
+    instructor = db.query(Instructor).filter(Instructor.user_id == user_id).first()
+    if not instructor:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Instructor profile not found for this user",
+        )
+
+    active_statuses = [
+        BookingStatus.PENDING,
+        BookingStatus.CONFIRMED,
+        BookingStatus.IN_PROGRESS,
+    ]
+    instructor_active_bookings = (
+        db.query(Booking)
+        .filter(Booking.instructor_id == instructor.id, Booking.status.in_(active_statuses))
+        .count()
+    )
+    instructor_total_bookings = (
+        db.query(Booking).filter(Booking.instructor_id == instructor.id).count()
+    )
+
+    # Delete related bookings to satisfy FK constraints
+    if instructor_total_bookings > 0:
+        db.query(Booking).filter(Booking.instructor_id == instructor.id).delete(
+            synchronize_session=False
+        )
+
+    # Delete instructor profile
+    db.delete(instructor)
+    
+    # Check if user has any other profiles
+    remaining_student = db.query(Student).filter(Student.user_id == user_id).first()
+    remaining_admin_profile = db.query(User).filter(User.id == user_id, User.role == UserRole.ADMIN).first()
+    
+    # If no other profiles and not an admin, delete the user account too
+    if not remaining_student and not remaining_admin_profile:
+        db.delete(user)
+    
+    db.commit()
+
+    return {
+        "message": "Instructor profile deleted successfully",
+        "user_id": user_id,
+        "email": user.email,
+        "active_bookings_deleted": instructor_active_bookings,
+        "total_bookings_deleted": instructor_total_bookings,
+        "note": "Related bookings removed. User account also removed if no other profiles remain.",
+    }
+
+
+@router.get("/instructors/{user_id}/booking-summary")
+async def get_instructor_booking_summary(
+    user_id: int,
+    current_admin: Annotated[User, Depends(require_admin)],
+    db: Session = Depends(get_db),
+):
+    """Get active/total booking counts for an instructor profile"""
+    instructor = db.query(Instructor).filter(Instructor.user_id == user_id).first()
+    if not instructor:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Instructor profile not found for this user",
+        )
+
+    active_statuses = [
+        BookingStatus.PENDING,
+        BookingStatus.CONFIRMED,
+        BookingStatus.IN_PROGRESS,
+    ]
+    active_count = (
+        db.query(Booking)
+        .filter(Booking.instructor_id == instructor.id, Booking.status.in_(active_statuses))
+        .count()
+    )
+    total_count = (
+        db.query(Booking).filter(Booking.instructor_id == instructor.id).count()
+    )
+
+    return {
+        "active_bookings": active_count,
+        "total_bookings": total_count,
+    }
+
+
+@router.delete("/students/{user_id}")
+async def delete_student(
+    user_id: int,
+    current_admin: Annotated[User, Depends(require_admin)],
+    db: Session = Depends(get_db),
+):
+    """
+    Delete a student profile (allows user to re-register as student)
+    
+    - Removes student profile only
+    - If user has no other profiles, user account is also deleted
+    - User can re-register as student
+    - Does NOT delete bookings (keeps history)
+    """
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found",
+        )
+
+    student = db.query(Student).filter(Student.user_id == user_id).first()
+    if not student:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Student profile not found for this user",
+        )
+
+    active_statuses = [
+        BookingStatus.PENDING,
+        BookingStatus.CONFIRMED,
+        BookingStatus.IN_PROGRESS,
+    ]
+    student_active_bookings = (
+        db.query(Booking)
+        .filter(Booking.student_id == student.id, Booking.status.in_(active_statuses))
+        .count()
+    )
+    student_total_bookings = (
+        db.query(Booking).filter(Booking.student_id == student.id).count()
+    )
+
+    # Delete related bookings to satisfy FK constraints
+    if student_total_bookings > 0:
+        db.query(Booking).filter(Booking.student_id == student.id).delete(
+            synchronize_session=False
+        )
+
+    # Delete student profile
+    db.delete(student)
+    
+    # Check if user has any other profiles
+    remaining_instructor = db.query(Instructor).filter(Instructor.user_id == user_id).first()
+    remaining_admin_profile = db.query(User).filter(User.id == user_id, User.role == UserRole.ADMIN).first()
+    
+    # If no other profiles and not an admin, delete the user account too
+    if not remaining_instructor and not remaining_admin_profile:
+        db.delete(user)
+    
+    db.commit()
+
+    return {
+        "message": "Student profile deleted successfully",
+        "user_id": user_id,
+        "email": user.email,
+        "active_bookings_deleted": student_active_bookings,
+        "total_bookings_deleted": student_total_bookings,
+        "note": "Related bookings removed. User account also removed if no other profiles remain.",
+    }
+
+
+@router.get("/students/{user_id}/booking-summary")
+async def get_student_booking_summary(
+    user_id: int,
+    current_admin: Annotated[User, Depends(require_admin)],
+    db: Session = Depends(get_db),
+):
+    """Get active/total booking counts for a student profile"""
+    student = db.query(Student).filter(Student.user_id == user_id).first()
+    if not student:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Student profile not found for this user",
+        )
+
+    active_statuses = [
+        BookingStatus.PENDING,
+        BookingStatus.CONFIRMED,
+        BookingStatus.IN_PROGRESS,
+    ]
+    active_count = (
+        db.query(Booking)
+        .filter(Booking.student_id == student.id, Booking.status.in_(active_statuses))
+        .count()
+    )
+    total_count = (
+        db.query(Booking).filter(Booking.student_id == student.id).count()
+    )
+
+    return {
+        "active_bookings": active_count,
+        "total_bookings": total_count,
+    }
+
+
+@router.delete("/users/{user_id}")
+async def delete_user(
+    user_id: int,
+    current_admin: Annotated[User, Depends(require_admin)],
+    db: Session = Depends(get_db),
+):
+    """
+    Delete entire user account (COMPLETE removal)
+    
+    - Removes user account AND all related profiles
+    - Deletes instructor profile (if exists)
+    - Deletes student profile (if exists)
+    - Deletes bookings, schedules, time-off
+    - User can re-register with same email
+    - CAUTION: This is permanent deletion
+    """
+    if user_id == current_admin.id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot delete your own account",
+        )
+
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found",
+        )
+
+    # Prevent deleting original admin
+    if user.role == UserRole.ADMIN:
+        admins = db.query(User).filter(User.role == UserRole.ADMIN).order_by(User.id.asc()).all()
+        if admins and user.id == admins[0].id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Cannot delete the original admin account",
+            )
+
+    # Delete related instructor profile and data
+    instructor = db.query(Instructor).filter(Instructor.user_id == user_id).first()
+    if instructor:
+        # Delete instructor schedules
+        db.query(InstructorSchedule).filter(InstructorSchedule.instructor_id == instructor.id).delete()
+        # Delete time-off exceptions
+        db.query(TimeOffException).filter(TimeOffException.instructor_id == instructor.id).delete()
+        # Delete bookings as instructor
+        db.query(Booking).filter(Booking.instructor_id == instructor.id).delete()
+        # Delete instructor profile
+        db.delete(instructor)
+
+    # Delete related student profile and data
+    student = db.query(Student).filter(Student.user_id == user_id).first()
+    if student:
+        # Delete bookings as student
+        db.query(Booking).filter(Booking.student_id == student.id).delete()
+        # Delete student profile
+        db.delete(student)
+
+    # Delete user account
+    user_email = user.email
+    db.delete(user)
+    db.commit()
+
+    return {
+        "message": "User account and all related data deleted successfully",
+        "user_id": user_id,
+        "email": user_email,
+        "note": "User can re-register with this email",
     }
 
 
@@ -1358,6 +1668,7 @@ async def get_admin_settings(
             "auto_archive_after_days": first_admin.auto_archive_after_days or 14,
             "twilio_sender_phone_number": first_admin.twilio_sender_phone_number,  # Twilio sender number
             "twilio_phone_number": first_admin.twilio_phone_number,  # Admin's test recipient phone
+            "inactivity_timeout_minutes": first_admin.inactivity_timeout_minutes or 15,  # Auto-logout timeout
         }
     except HTTPException:
         raise
@@ -1409,6 +1720,8 @@ async def update_admin_settings(
             first_admin.twilio_sender_phone_number = settings_update.twilio_sender_phone_number if settings_update.twilio_sender_phone_number else None
         if settings_update.twilio_phone_number is not None:
             first_admin.twilio_phone_number = settings_update.twilio_phone_number if settings_update.twilio_phone_number else None
+        if settings_update.inactivity_timeout_minutes is not None:
+            first_admin.inactivity_timeout_minutes = settings_update.inactivity_timeout_minutes
 
         db.commit()
         db.refresh(first_admin)
@@ -1423,6 +1736,7 @@ async def update_admin_settings(
             "auto_archive_after_days": first_admin.auto_archive_after_days,
             "twilio_sender_phone_number": first_admin.twilio_sender_phone_number,
             "twilio_phone_number": first_admin.twilio_phone_number,
+            "inactivity_timeout_minutes": first_admin.inactivity_timeout_minutes,
         }
     except HTTPException:
         raise

@@ -667,7 +667,7 @@ export default function EarningsReportScreen({ navigation }: any) {
   }
 
   return (
-    <>
+    <View style={styles.outerContainer}>
       <WebNavigationHeader
         title="Earnings Report"
         onBack={() => navigation.goBack()}
@@ -984,7 +984,7 @@ export default function EarningsReportScreen({ navigation }: any) {
           </View>
         </View>
       </Modal>
-    </>
+    </View>
   );
 }
 
@@ -1004,6 +1004,10 @@ const getStatusColor = (status: string) => {
 };
 
 const styles = StyleSheet.create({
+  outerContainer: {
+    flex: 1,
+    backgroundColor: '#f5f5f5',
+  },
   container: {
     flex: 1,
     backgroundColor: '#f5f5f5',

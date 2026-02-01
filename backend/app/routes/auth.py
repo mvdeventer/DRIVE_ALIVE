@@ -5,7 +5,7 @@ Authentication routes
 from datetime import datetime, timezone
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, Form, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 
@@ -18,7 +18,6 @@ from ..schemas.user import (
     InstructorCreate,
     ResetPasswordRequest,
     StudentCreate,
-    Token,
     UserResponse,
     UserUpdate,
 )
@@ -54,7 +53,22 @@ async def get_current_user(
     if user is None:
         raise credentials_exception
 
+    token_role = payload.get("role")
+    if token_role:
+        print(f"🔐 [AUTH] JWT token role: {token_role}, Database role: {user.role.value}")
+        setattr(user, "active_role", token_role)
+    else:
+        # Fallback to database role if no role in JWT
+        setattr(user, "active_role", user.role.value)
+
     return user
+
+
+def get_active_role(user: User) -> str:
+    """
+    Get the active role from the current user session (from JWT token or fallback to database role)
+    """
+    return getattr(user, "active_role", user.role.value)
 
 
 @router.post(
@@ -186,9 +200,10 @@ async def register_instructor(
         raise
 
 
-@router.post("/login", response_model=Token)
+@router.post("/login", response_model=dict)
 async def login(
     form_data: Annotated[OAuth2PasswordRequestForm, Depends()],
+    role: str | None = Form(None),
     db: Session = Depends(get_db),
 ):
     """
@@ -196,10 +211,48 @@ async def login(
     """
     # authenticate_user now raises HTTPException with specific error messages
     user = AuthService.authenticate_user(db, form_data.username, form_data.password)
+    
+    print(f"🔐 [LOGIN] User: {user.email}, Received role param: {role}")
 
-    access_token = AuthService.create_user_token(user)
+    available_roles: set[str] = set()
 
-    return {"access_token": access_token, "token_type": "bearer"}
+    if user.role == UserRole.ADMIN:
+        available_roles.add(UserRole.ADMIN.value)
+    if user.role == UserRole.INSTRUCTOR:
+        available_roles.add(UserRole.INSTRUCTOR.value)
+    if user.role == UserRole.STUDENT:
+        available_roles.add(UserRole.STUDENT.value)
+
+    if db.query(Instructor).filter(Instructor.user_id == user.id).first():
+        available_roles.add(UserRole.INSTRUCTOR.value)
+    if db.query(Student).filter(Student.user_id == user.id).first():
+        available_roles.add(UserRole.STUDENT.value)
+
+    print(f"🔐 [LOGIN] Available roles for {user.email}: {available_roles}")
+
+    if role is None and len(available_roles) > 1:
+        print(f"🔐 [LOGIN] Multiple roles available, returning role selection required")
+        return {
+            "requires_role_selection": True,
+            "available_roles": sorted(list(available_roles)),
+        }
+
+    selected_role = role or next(iter(available_roles))
+    if selected_role not in available_roles:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid role selection for this account.",
+        )
+
+    print(f"🔐 [LOGIN] Creating token with selected_role: {selected_role}")
+    access_token = AuthService.create_user_token(user, selected_role)
+
+    print(f"🔐 [LOGIN] Returning role: {selected_role}")
+    return {
+        "access_token": access_token,
+        "token_type": "bearer",
+        "role": selected_role,
+    }
 
 
 @router.get("/me")
@@ -210,20 +263,21 @@ async def get_current_user_info(
     """
     Get current user information with profile details
     """
+    active_role = getattr(current_user, "active_role", current_user.role.value)
     user_data = {
         "id": current_user.id,
         "email": current_user.email,
         "phone": current_user.phone,
         "first_name": current_user.first_name,
         "last_name": current_user.last_name,
-        "role": current_user.role.value,
+        "role": active_role,
         "status": current_user.status.value,
         "id_number": current_user.id_number,
         "address": current_user.address,
     }
 
     # Add role-specific details
-    if current_user.role == UserRole.INSTRUCTOR:
+    if active_role == UserRole.INSTRUCTOR.value:
         instructor = (
             db.query(Instructor).filter(Instructor.user_id == current_user.id).first()
         )
@@ -239,7 +293,7 @@ async def get_current_user_info(
                 }
             )
 
-    elif current_user.role == UserRole.STUDENT:
+    elif active_role == UserRole.STUDENT.value:
         student = db.query(Student).filter(Student.user_id == current_user.id).first()
         if student:
             user_data.update(
@@ -252,6 +306,29 @@ async def get_current_user_info(
             )
 
     return user_data
+
+
+@router.get("/inactivity-timeout")
+async def get_inactivity_timeout(db: Session = Depends(get_db)):
+    """
+    Get global inactivity timeout setting (public endpoint - no auth required)
+    Used by frontend to configure auto-logout timer
+    """
+    try:
+        # Get first admin's settings (global config)
+        from ..models.user import UserRole
+        
+        admin = db.query(User).filter(User.role == UserRole.ADMIN).order_by(User.id.asc()).first()
+        
+        if admin and admin.inactivity_timeout_minutes:
+            return {"inactivity_timeout_minutes": admin.inactivity_timeout_minutes}
+        
+        # Default to 15 minutes if not configured
+        return {"inactivity_timeout_minutes": 15}
+    except Exception as e:
+        print(f"Error fetching inactivity timeout: {str(e)}")
+        # Return default on error
+        return {"inactivity_timeout_minutes": 15}
 
 
 @router.put("/me", response_model=UserResponse)

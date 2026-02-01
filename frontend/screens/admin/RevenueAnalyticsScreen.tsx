@@ -137,15 +137,16 @@ export default function RevenueAnalyticsScreen({ navigation }: any) {
   }
 
   return (
-    <ScrollView
-      style={styles.container}
-      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-    >
+    <View style={styles.container}>
       <WebNavigationHeader
         title="Revenue Analytics"
         onBack={() => navigation.goBack()}
         showBackButton={true}
       />
+      <ScrollView
+        style={styles.scrollContent}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+      >
 
       {/* Instructor Filter */}
       <View style={styles.filterSection}>
@@ -254,7 +255,8 @@ export default function RevenueAnalyticsScreen({ navigation }: any) {
           </View>
         </>
       )}
-    </ScrollView>
+      </ScrollView>
+    </View>
   );
 }
 
@@ -262,6 +264,9 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#F5F5F5',
+  },
+  scrollContent: {
+    flex: 1,
   },
   header: {
     alignItems: 'center',

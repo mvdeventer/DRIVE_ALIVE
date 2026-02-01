@@ -28,7 +28,7 @@ export default function PaymentSuccessScreen() {
     try {
       // Get payment session ID from storage
       const paymentSessionId =
-        Platform.OS === 'web' ? localStorage.getItem('payment_session_id') : null; // Handle mobile storage if needed
+        Platform.OS === 'web' ? sessionStorage.getItem('payment_session_id') : null; // Changed from localStorage
 
       if (!paymentSessionId) {
         setStatus('failed');

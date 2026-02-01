@@ -279,6 +279,185 @@ scrollViewRef.current?.scrollTo({ y: 0, animated: true });
 **Extended Visibility:**
 Critical messages (conflicts, security warnings) use 5000ms duration.
 
+### Standardized Modal & Button Sizing ✅
+
+**Purpose:** Consistent modal and button appearance across all screens (Windows, iOS, Android)
+
+**Modal Standards:**
+
+```typescript
+// Modal Overlay
+modalOverlay: {
+  flex: 1,
+  backgroundColor: 'rgba(0, 0, 0, 0.5)',
+  justifyContent: 'center',
+  alignItems: 'center',
+  padding: Platform.OS === 'web' ? 20 : 10,
+}
+
+// Modal Content Container
+modalContent: {
+  backgroundColor: '#fff',
+  borderRadius: 12,
+  padding: Platform.OS === 'web' ? 32 : 24,
+  width: Platform.OS === 'web' ? '45%' : '92%',  // Small modals
+  maxWidth: 550,  // or 650 for larger modals
+  maxHeight: '85%',
+}
+
+// Confirmation/Details Section
+confirmDetails: {
+  backgroundColor: '#f8f9fa',
+  borderRadius: 8,
+  padding: Platform.OS === 'web' ? 24 : 18,
+  marginBottom: 24,
+}
+```
+
+**Modal Typography:**
+
+```typescript
+modalTitle: {
+  fontSize: Platform.OS === 'web' ? 24 : 20,
+  fontWeight: 'bold',
+  color: '#28a745',  // or '#007AFF' for info modals
+  marginBottom: 10,
+  textAlign: 'center',
+}
+
+modalSubtitle: {
+  fontSize: Platform.OS === 'web' ? 15 : 13,
+  color: '#666',
+  marginBottom: 20,
+  textAlign: 'center',
+  lineHeight: 22,
+}
+
+confirmLabel: {
+  fontSize: Platform.OS === 'web' ? 14 : 13,
+  fontWeight: '600',
+  color: '#666',
+  marginTop: 10,
+}
+
+confirmValue: {
+  fontSize: Platform.OS === 'web' ? 16 : 15,
+  color: '#333',
+  marginBottom: 10,
+  fontWeight: '500',
+}
+```
+
+**Button Standards:**
+
+```typescript
+// Primary Action Button
+button: {
+  backgroundColor: '#007AFF',
+  paddingVertical: Platform.OS === 'web' ? 16 : 14,
+  paddingHorizontal: Platform.OS === 'web' ? 32 : 24,
+  borderRadius: 8,
+  alignItems: 'center',
+  marginTop: 20,
+}
+
+buttonText: {
+  color: '#fff',
+  fontSize: Platform.OS === 'web' ? 18 : 16,
+  fontWeight: 'bold',
+}
+
+// Modal Buttons Container
+modalButtons: {
+  flexDirection: 'row',
+  justifyContent: 'space-between',
+  gap: Platform.OS === 'web' ? 16 : 12,
+}
+
+// Individual Modal Buttons
+modalButton: {
+  flex: 1,
+  paddingVertical: Platform.OS === 'web' ? 14 : 12,
+  paddingHorizontal: Platform.OS === 'web' ? 20 : 16,
+  borderRadius: 8,
+  alignItems: 'center',
+}
+
+modalButtonPrimary: {
+  backgroundColor: '#28a745',  // Green for confirm
+}
+
+modalButtonSecondary: {
+  backgroundColor: '#fff',
+  borderWidth: 2,
+  borderColor: '#dc3545',  // Red border for cancel
+}
+
+modalButtonText: {
+  color: '#fff',
+  fontSize: Platform.OS === 'web' ? 16 : 15,
+  fontWeight: '600',
+}
+
+modalButtonTextSecondary: {
+  color: '#dc3545',  // Red text for cancel
+  fontSize: Platform.OS === 'web' ? 16 : 15,
+  fontWeight: '600',
+}
+```
+
+**Button Disabled State:**
+
+```typescript
+buttonDisabled: {
+  backgroundColor: '#ccc',
+  opacity: 0.7,
+}
+```
+
+**Size Variations:**
+
+| Modal Type | Web Width | Mobile Width | MaxWidth |
+|-----------|-----------|--------------|----------|
+| Small (Confirm/Alert) | 45% | 92% | 550px |
+| Medium (Forms) | 50% | 92% | 650px |
+| Large (Scrollable Lists) | 60% | 95% | 800px |
+
+**Implementation Rules:**
+
+- ❌ **NEVER** use hard-coded pixel padding without Platform checks
+- ❌ **NEVER** mix different modal button styles within the same app
+- ✅ **ALWAYS** use standardized sizes from this guide
+- ✅ **ALWAYS** test on web (desktop), mobile web, and native apps
+- ✅ **ALWAYS** include gap spacing between modal buttons
+
+**Standard Modal Colors:**
+
+- **Success/Confirm**: `#28a745` (Green)
+- **Primary/Info**: `#007AFF` (Blue)
+- **Cancel/Danger**: `#dc3545` (Red)
+- **Neutral/Secondary**: `#6c757d` (Gray)
+- **Background**: `#f8f9fa` (Light Gray)
+
+**Screens Using Standards:**
+- ✅ RegisterStudentScreen, RegisterInstructorScreen, SetupScreen (Registration)
+- ✅ CreateAdminScreen (Admin creation)
+- ✅ UserManagementScreen, BookingScreen, ManageAvailabilityScreen (Admin/Booking)
+- ✅ EditStudentProfileScreen, EditInstructorProfileScreen, EditAdminProfileScreen (Profile editing)
+- ✅ StudentHomeScreen, InstructorHomeScreen (Home screens with modals)
+- ✅ LoginScreen (Multi-role selection modal)
+- ✅ InstructorVerificationScreen, BookingOversightScreen (Admin management)
+- ✅ AdminSettingsScreen, AdminDashboardScreen (Admin settings/dashboard)
+- ✅ InstructorEarningsOverviewScreen (Admin earnings detail modal)
+
+**Screens WITHOUT Modals (No changes needed):**
+- EarningsReportScreen (bottom sheet modal - custom design, left as-is)
+- PaymentScreen, PaymentSuccessScreen, PaymentCancelScreen, MockPaymentScreen (no modals)
+- RevenueAnalyticsScreen, AdminDashboardScreen stats cards (no modals, stats only)
+- InstructorListScreen (no modals, list only)
+- ForgotPasswordScreen, ResetPasswordScreen, VerifyAccountScreen, VerificationPendingScreen (no modals)
+- RegisterChoiceScreen (no modals)
+
 ### Platform-Dependent Responsive Design ✅
 
 **Automatic Mobile Scaling:**

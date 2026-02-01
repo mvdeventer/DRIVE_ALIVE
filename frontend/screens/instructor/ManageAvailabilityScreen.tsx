@@ -431,14 +431,15 @@ export default function ManageAvailabilityScreen({ navigation: navProp }: any) {
   }
 
   return (
-    <ScrollView ref={scrollViewRef} style={styles.container}>
+    <View style={styles.container}>
       <WebNavigationHeader
         title="Manage Availability"
         onBack={() => navInstance.goBack()}
         showBackButton={true}
       />
-      {/* Header */}
-      <View style={styles.header}>
+      <ScrollView ref={scrollViewRef} style={styles.scrollContent}>
+        {/* Header */}
+        <View style={styles.header}>
         <Text style={styles.title}>📅 Manage Availability</Text>
         {hasUnsavedChanges && (
           <View style={styles.unsavedBadge}>
@@ -825,7 +826,8 @@ export default function ManageAvailabilityScreen({ navigation: navProp }: any) {
           </View>
         </View>
       </Modal>
-    </ScrollView>
+      </ScrollView>
+    </View>
   );
 }
 
@@ -833,6 +835,9 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#f5f5f5',
+  },
+  scrollContent: {
+    flex: 1,
   },
   loadingContainer: {
     flex: 1,
@@ -1076,27 +1081,29 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
     justifyContent: 'center',
     alignItems: 'center',
+    padding: Platform.OS === 'web' ? 20 : 10,
   },
   modalContent: {
     backgroundColor: '#fff',
     borderRadius: 12,
-    padding: 24,
-    width: '90%',
-    maxWidth: 500,
-    maxHeight: '80%',
+    padding: Platform.OS === 'web' ? 32 : 24,
+    width: Platform.OS === 'web' ? '45%' : '92%',
+    maxWidth: 550,
+    maxHeight: '85%',
   },
   modalTitle: {
-    fontSize: 18,
+    fontSize: Platform.OS === 'web' ? 24 : 20,
     fontWeight: 'bold',
     color: '#333',
-    marginBottom: 8,
+    marginBottom: 10,
     textAlign: 'center',
   },
   modalSubtitle: {
-    fontSize: 14,
+    fontSize: Platform.OS === 'web' ? 15 : 13,
     color: '#666',
-    marginBottom: 16,
+    marginBottom: 20,
     textAlign: 'center',
+    lineHeight: 22,
   },
   modalFooter: {
     marginTop: 16,

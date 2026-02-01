@@ -58,6 +58,9 @@ class User(Base):
 
     # Backup configuration (for admin only)
     backup_interval_minutes = Column(Integer, default=10)  # Backup every 10 minutes
+
+    # Session configuration (for admin only - global setting)
+    inactivity_timeout_minutes = Column(Integer, default=15)  # Auto-logout after 15 minutes idle
     retention_days = Column(Integer, default=30)  # Keep uncompressed backups for 30 days
     auto_archive_after_days = Column(Integer, default=14)  # Archive to ZIP after 14 days
 
@@ -110,7 +113,7 @@ class Instructor(Base):
     current_latitude = Column(Float, nullable=True)
     current_longitude = Column(Float, nullable=True)
     province = Column(String, nullable=True)  # Operating province
-    city = Column(String, nullable=False)  # Operating city
+    city = Column(String, nullable=True)  # Operating city (GPS-captured)
     suburb = Column(String, nullable=True)  # Operating suburb
     service_radius_km = Column(Float, default=20.0)
     max_travel_distance_km = Column(
@@ -175,8 +178,8 @@ class Student(Base):
     # Address
     address_line1 = Column(String, nullable=False)
     address_line2 = Column(String, nullable=True)
-    province = Column(String, nullable=False)
-    city = Column(String, nullable=False)
+    province = Column(String, nullable=True)  # GPS-captured
+    city = Column(String, nullable=True)  # GPS-captured
     suburb = Column(String, nullable=True)
     postal_code = Column(String, nullable=False)
 

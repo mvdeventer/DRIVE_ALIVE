@@ -1023,13 +1023,15 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.5)',
     justifyContent: 'center',
     alignItems: 'center',
+    padding: Platform.OS === 'web' ? 20 : 10,
   },
   modalContent: {
     backgroundColor: '#fff',
-    borderRadius: 10,
-    width: Platform.OS === 'web' ? '80%' : '95%',
+    borderRadius: 12,
+    padding: Platform.OS === 'web' ? 32 : 24,
+    width: Platform.OS === 'web' ? '60%' : '95%',
     maxWidth: 800,
-    maxHeight: '90%',
+    maxHeight: '85%',
     ...Platform.select({
       web: {
         boxShadow: '0 4px 6px rgba(0,0,0,0.1)',

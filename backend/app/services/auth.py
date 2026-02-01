@@ -2,7 +2,6 @@
 Authentication service
 """
 
-import uuid
 from datetime import datetime
 from typing import Optional
 
@@ -291,14 +290,14 @@ class AuthService:
         except HTTPException:
             db.rollback()
             raise
-        except IntegrityError as e:
+        except IntegrityError:
             db.rollback()
             # Re-raise integrity errors with generic message
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Registration failed due to duplicate data.",
             )
-        except Exception as e:
+        except Exception:
             db.rollback()
             raise
 
@@ -344,10 +343,13 @@ class AuthService:
         return user
 
     @staticmethod
-    def create_user_token(user: User) -> str:
+    def create_user_token(user: User, role: Optional[str] = None) -> str:
         """
         Create access token for user
         """
-        token_data = {"sub": str(user.id), "email": user.email, "role": user.role.value}
+        selected_role = role or user.role.value
+        print(f"🔑 [CREATE_TOKEN] User: {user.email}, role param: {role}, user.role: {user.role.value}, selected_role: {selected_role}")
+        token_data = {"sub": str(user.id), "email": user.email, "role": selected_role}
+        print(f"🔑 [CREATE_TOKEN] Token data: {token_data}")
 
         return create_access_token(token_data)

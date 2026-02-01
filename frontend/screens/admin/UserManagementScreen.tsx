@@ -38,6 +38,11 @@ interface User {
   last_login: string | null;
 }
 
+interface BookingSummary {
+  active_bookings: number;
+  total_bookings: number;
+}
+
 export default function UserManagementScreen({ navigation }: any) {
   const [users, setUsers] = useState<User[]>([]);
   const [currentUserId, setCurrentUserId] = useState<number | null>(null);
@@ -65,6 +70,10 @@ export default function UserManagementScreen({ navigation }: any) {
     newStatus: string;
   } | null>(null);
   const [confirmDeleteAdmin, setConfirmDeleteAdmin] = useState<User | null>(null);
+  const [confirmDeleteInstructor, setConfirmDeleteInstructor] = useState<User | null>(null);
+  const [confirmDeleteStudent, setConfirmDeleteStudent] = useState<User | null>(null);
+  const [instructorBookingSummary, setInstructorBookingSummary] = useState<BookingSummary | null>(null);
+  const [studentBookingSummary, setStudentBookingSummary] = useState<BookingSummary | null>(null);
   const [scheduleModalVisible, setScheduleModalVisible] = useState(false);
   const [instructorSchedule, setInstructorSchedule] = useState<any>(null);
   const [loadingSchedule, setLoadingSchedule] = useState(false);
@@ -123,10 +132,9 @@ export default function UserManagementScreen({ navigation }: any) {
 
   const filteredUsers = users
     .filter(user => {
-      const roleMatch = user.role === activeTab;
       const statusMatch = !statusFilter || user.status === statusFilter;
 
-      if (!searchQuery) return roleMatch && statusMatch;
+      if (!searchQuery) return statusMatch;
 
       const query = searchQuery.toLowerCase();
       const normalizedQuery = normalizePhone(searchQuery);
@@ -143,7 +151,7 @@ export default function UserManagementScreen({ navigation }: any) {
         userPhone.includes(normalizedQuery) ||
         (user.id_number && user.id_number.includes(searchQuery));
 
-      return roleMatch && statusMatch && searchMatch;
+      return statusMatch && searchMatch;
     })
     .sort((a, b) => {
       // Special sorting for admins: original admin first, then alphabetical
@@ -229,6 +237,106 @@ export default function UserManagementScreen({ navigation }: any) {
         err.response?.data?.detail || 'Failed to delete admin',
         SCREEN_NAME,
         'adminDelete',
+        'error'
+      );
+    }
+  };
+
+  const handleDeleteInstructor = async (user: User) => {
+    setConfirmDeleteInstructor(null);
+    setInstructorBookingSummary(null);
+
+    try {
+      const summary = await apiService.getInstructorBookingSummary(user.id);
+      setInstructorBookingSummary(summary);
+    } catch (err: any) {
+      showMessage(
+        setError,
+        err.response?.data?.detail || 'Failed to load instructor booking summary',
+        SCREEN_NAME,
+        'instructorDelete',
+        'error'
+      );
+    }
+
+    setConfirmDeleteInstructor(user);
+  };
+
+  const confirmDeleteInstructorAction = async () => {
+    if (!confirmDeleteInstructor) return;
+
+    try {
+      setError('');
+      await apiService.deleteInstructor(confirmDeleteInstructor.id);
+
+      setConfirmDeleteInstructor(null);
+      setInstructorBookingSummary(null);
+
+      showMessage(
+        setSuccess,
+        `Instructor profile for ${confirmDeleteInstructor.full_name} deleted successfully. User can re-register as instructor.`,
+        SCREEN_NAME,
+        'instructorDelete',
+        'success'
+      );
+
+      await loadUsers();
+    } catch (err: any) {
+      showMessage(
+        setError,
+        err.response?.data?.detail || 'Failed to delete instructor',
+        SCREEN_NAME,
+        'instructorDelete',
+        'error'
+      );
+    }
+  };
+
+  const handleDeleteStudent = async (user: User) => {
+    setConfirmDeleteStudent(null);
+    setStudentBookingSummary(null);
+
+    try {
+      const summary = await apiService.getStudentBookingSummary(user.id);
+      setStudentBookingSummary(summary);
+    } catch (err: any) {
+      showMessage(
+        setError,
+        err.response?.data?.detail || 'Failed to load student booking summary',
+        SCREEN_NAME,
+        'studentDelete',
+        'error'
+      );
+    }
+
+    setConfirmDeleteStudent(user);
+  };
+
+  const confirmDeleteStudentAction = async () => {
+    if (!confirmDeleteStudent) return;
+
+    try {
+      setError('');
+      await apiService.deleteStudent(confirmDeleteStudent.id);
+
+      setConfirmDeleteStudent(null);
+      setStudentBookingSummary(null);
+
+      showMessage(
+        setSuccess,
+        `Student profile for ${confirmDeleteStudent.full_name} deleted successfully. User can re-register as student.`,
+        SCREEN_NAME,
+        'studentDelete',
+        'success'
+      );
+
+      await loadUsers();
+    } catch (err: any) {
+      showMessage(
+        setError,
+        err.response?.data?.detail || 'Failed to delete student',
+        SCREEN_NAME,
+        'studentDelete',
         'error'
       );
     }
@@ -518,18 +626,19 @@ export default function UserManagementScreen({ navigation }: any) {
   };
 
   const renderUser = ({ item }: { item: User }) => {
-    // Check if this is the original admin
+    const isAdminTab = activeTab === 'admin';
+    const isInstructorTab = activeTab === 'instructor';
+    const isStudentTab = activeTab === 'student';
+
+    // Check if this is the original admin (only relevant on admin tab)
     const adminUsers = users.filter(u => u.role === 'admin');
     const firstAdminId = adminUsers.length > 0 ? Math.min(...adminUsers.map(u => u.id)) : null;
-    const isOriginalAdmin = item.role === 'admin' && item.id === firstAdminId;
+    const isOriginalAdmin = isAdminTab && item.role === 'admin' && item.id === firstAdminId;
 
     return (
       <View style={styles.userCard}>
-        <View style={[styles.userIdBadge, isOriginalAdmin && styles.originalAdminBadgeContainer]}>
+        <View style={styles.userIdBadge}>
           <Text style={styles.userIdText}>User ID: #{item.id}</Text>
-          {isOriginalAdmin && (
-            <Text style={styles.originalAdminBadgeText}>🛡️ ORIGINAL ADMIN - PROTECTED</Text>
-          )}
         </View>
         <View style={styles.userHeader}>
           <View style={styles.userInfo}>
@@ -557,28 +666,33 @@ export default function UserManagementScreen({ navigation }: any) {
             Last Login: {new Date(item.last_login).toLocaleDateString()}
           </Text>
         )}
-        {item.role === 'instructor' && item.booking_fee !== undefined && (
+        {isInstructorTab && item.booking_fee !== undefined && item.booking_fee !== null && (
           <Text style={styles.userDetailText}>Booking Fee: R{item.booking_fee.toFixed(2)}</Text>
         )}
       </View>
 
       <View style={styles.actionButtons}>
+        {isOriginalAdmin && (
+          <View style={styles.originalAdminActionBadge}>
+            <Text style={styles.originalAdminActionBadgeText} numberOfLines={1} ellipsizeMode="tail">
+              🛡️ ORIGINAL ADMIN - PROTECTED
+            </Text>
+          </View>
+        )}
         {(() => {
-          // Check if this is the original admin and if current user can edit
-          if (item.role === 'admin') {
+          if (isAdminTab) {
             const adminUsers = users.filter(u => u.role === 'admin');
             if (adminUsers.length > 0) {
               const firstAdminId = Math.min(...adminUsers.map(u => u.id));
-              const isOriginalAdmin = item.id === firstAdminId;
               const isCurrentUserOriginalAdmin = currentUserId === firstAdminId;
-              
+
               // If viewing original admin and current user is NOT the original admin, hide Edit button
-              if (isOriginalAdmin && !isCurrentUserOriginalAdmin) {
+              if (item.id === firstAdminId && !isCurrentUserOriginalAdmin) {
                 return null;
               }
             }
           }
-          
+
           return (
             <TouchableOpacity
               style={[styles.actionButton, styles.editButton]}
@@ -594,18 +708,15 @@ export default function UserManagementScreen({ navigation }: any) {
         >
           <Text style={styles.actionButtonText}>🔑 Reset PW</Text>
         </TouchableOpacity>
-        {item.role === 'admin' && (() => {
-          // Find the first admin (lowest ID among admins)
+        {isAdminTab && (() => {
           const adminUsers = users.filter(u => u.role === 'admin');
           if (adminUsers.length === 0) return null;
-          
+
           const firstAdminId = Math.min(...adminUsers.map(u => u.id));
-          const isFirstAdmin = item.id === firstAdminId;
-          
+
           // NEVER show delete button for the first admin (they are protected forever)
-          if (isFirstAdmin) return null;
-          
-          // For other admins: any logged-in admin can delete them (except the first admin)
+          if (item.id === firstAdminId) return null;
+
           return (
             <TouchableOpacity
               style={[styles.actionButton, styles.deactivateButton]}
@@ -615,7 +726,7 @@ export default function UserManagementScreen({ navigation }: any) {
             </TouchableOpacity>
           );
         })()}
-        {item.role === 'instructor' && (
+        {isInstructorTab && (
           <>
             <TouchableOpacity
               style={[styles.actionButton, styles.scheduleButton]}
@@ -630,7 +741,21 @@ export default function UserManagementScreen({ navigation }: any) {
             >
               <Text style={styles.actionButtonText}>💰 Manage Fee</Text>
             </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.actionButton, styles.deleteButton]}
+              onPress={() => handleDeleteInstructor(item)}
+            >
+              <Text style={styles.actionButtonText}>🗑️ Delete</Text>
+            </TouchableOpacity>
           </>
+        )}
+        {isStudentTab && (
+          <TouchableOpacity
+            style={[styles.actionButton, styles.deleteButton]}
+            onPress={() => handleDeleteStudent(item)}
+          >
+            <Text style={styles.actionButtonText}>🗑️ Delete</Text>
+          </TouchableOpacity>
         )}
         {item.status === 'suspended' ? (
           <TouchableOpacity
@@ -1005,6 +1130,118 @@ export default function UserManagementScreen({ navigation }: any) {
                 onPress={confirmDeleteAdminAction}
               >
                 <Text style={styles.saveModalButtonText}>Delete</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Delete Instructor Confirmation Modal */}
+      <Modal
+        animationType="fade"
+        transparent={true}
+        visible={!!confirmDeleteInstructor}
+        onRequestClose={() => setConfirmDeleteInstructor(null)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>🗑️ Confirm Instructor Deletion</Text>
+            </View>
+
+            <View style={styles.modalBody}>
+              <Text style={styles.confirmText}>
+                Are you sure you want to delete the instructor profile for{'\n'}
+                <Text style={styles.boldText}>{confirmDeleteInstructor?.full_name}</Text>?
+              </Text>
+              {instructorBookingSummary && instructorBookingSummary.active_bookings > 0 && (
+                <Text style={styles.warningText}>
+                  ⚠️ This instructor has {instructorBookingSummary.active_bookings} active
+                  booking{instructorBookingSummary.active_bookings === 1 ? '' : 's'}. Deleting
+                  will cancel and remove them.
+                </Text>
+              )}
+              {instructorBookingSummary && (
+                <Text style={styles.warningText}>
+                  Total bookings on record: {instructorBookingSummary.total_bookings}
+                </Text>
+              )}
+              <Text style={styles.warningText}>
+                ⚠️ This removes the instructor profile and all related bookings. The user account
+                remains intact and they can re-register as an instructor later.
+              </Text>
+            </View>
+            <View style={styles.modalFooter}>
+              <TouchableOpacity
+                style={styles.cancelModalButton}
+                onPress={() => {
+                  setConfirmDeleteInstructor(null);
+                  setInstructorBookingSummary(null);
+                }}
+              >
+                <Text style={styles.cancelModalButtonText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.saveModalButton, styles.deactivateButton]}
+                onPress={confirmDeleteInstructorAction}
+              >
+                <Text style={styles.saveModalButtonText}>Delete Profile</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Delete Student Confirmation Modal */}
+      <Modal
+        animationType="fade"
+        transparent={true}
+        visible={!!confirmDeleteStudent}
+        onRequestClose={() => setConfirmDeleteStudent(null)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>🗑️ Confirm Student Deletion</Text>
+            </View>
+
+            <View style={styles.modalBody}>
+              <Text style={styles.confirmText}>
+                Are you sure you want to delete the student profile for{'\n'}
+                <Text style={styles.boldText}>{confirmDeleteStudent?.full_name}</Text>?
+              </Text>
+              {studentBookingSummary && studentBookingSummary.active_bookings > 0 && (
+                <Text style={styles.warningText}>
+                  ⚠️ This student has {studentBookingSummary.active_bookings} active
+                  booking{studentBookingSummary.active_bookings === 1 ? '' : 's'}. Deleting
+                  will cancel and remove them.
+                </Text>
+              )}
+              {studentBookingSummary && (
+                <Text style={styles.warningText}>
+                  Total bookings on record: {studentBookingSummary.total_bookings}
+                </Text>
+              )}
+              <Text style={styles.warningText}>
+                ⚠️ This removes the student profile and all related bookings. The user account
+                remains intact and they can re-register as a student later.
+              </Text>
+            </View>
+            <View style={styles.modalFooter}>
+              <TouchableOpacity
+                style={styles.cancelModalButton}
+                onPress={() => {
+                  setConfirmDeleteStudent(null);
+                  setStudentBookingSummary(null);
+                }}
+              >
+                <Text style={styles.cancelModalButtonText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.saveModalButton, styles.deactivateButton]}
+                onPress={confirmDeleteStudentAction}
+              >
+                <Text style={styles.saveModalButtonText}>Delete Profile</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -1410,6 +1647,24 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#8B4513',
   },
+  originalAdminActionBadge: {
+    backgroundColor: '#FFD700',
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#FFA500',
+    paddingVertical: Platform.OS === 'web' ? 6 : 4,
+    paddingHorizontal: Platform.OS === 'web' ? 10 : 6,
+    marginRight: Platform.OS === 'web' ? 8 : 6,
+    marginBottom: Platform.OS === 'web' ? 0 : 6,
+    alignSelf: 'center',
+    flexShrink: 1,
+    maxWidth: '100%',
+  },
+  originalAdminActionBadgeText: {
+    fontSize: Platform.OS === 'web' ? 11 : 9,
+    fontWeight: 'bold',
+    color: '#8B4513',
+  },
   originalAdminBadge: {
     backgroundColor: '#FFD700',
     borderRadius: 6,
@@ -1567,6 +1822,9 @@ const styles = StyleSheet.create({
   suspendButton: {
     backgroundColor: '#DC3545',
   },
+  deleteButton: {
+    backgroundColor: '#DC3545',
+  },
   actionButtonText: {
     color: '#FFF',
     fontSize: 12,
@@ -1577,24 +1835,27 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
     justifyContent: 'center',
     alignItems: 'center',
+    padding: Platform.OS === 'web' ? 20 : 10,
   },
   modalContainer: {
     backgroundColor: '#FFF',
     borderRadius: 12,
-    width: '90%',
-    maxWidth: 500,
-    maxHeight: '80%',
+    padding: Platform.OS === 'web' ? 32 : 24,
+    width: Platform.OS === 'web' ? '50%' : '92%',
+    maxWidth: 650,
+    maxHeight: '85%',
   },
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 20,
+    paddingBottom: Platform.OS === 'web' ? 20 : 16,
+    marginBottom: Platform.OS === 'web' ? 20 : 16,
     borderBottomWidth: 1,
     borderBottomColor: '#E0E0E0',
   },
   modalTitle: {
-    fontSize: 18,
+    fontSize: Platform.OS === 'web' ? 24 : 20,
     fontWeight: 'bold',
     color: '#333',
     flex: 1,
@@ -1666,34 +1927,11 @@ const styles = StyleSheet.create({
   modalFooter: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    padding: 20,
+    paddingTop: Platform.OS === 'web' ? 20 : 16,
+    marginTop: Platform.OS === 'web' ? 20 : 16,
     borderTopWidth: 1,
     borderTopColor: '#E0E0E0',
-  },
-  cancelModalButton: {
-    flex: 1,
-    backgroundColor: '#6C757D',
-    padding: 15,
-    borderRadius: 8,
-    marginRight: 10,
-    alignItems: 'center',
-  },
-  cancelModalButtonText: {
-    color: '#FFF',
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  saveModalButton: {
-    flex: 1,
-    backgroundColor: '#0066CC',
-    padding: 15,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  saveModalButtonText: {
-    color: '#FFF',
-    fontSize: 16,
-    fontWeight: 'bold',
+    gap: Platform.OS === 'web' ? 16 : 12,
   },
   modalBody: {
     padding: 20,

@@ -79,14 +79,25 @@ export default function InstructorListScreen({ navigation }: any) {
 
   const loadInstructors = async () => {
     try {
+      // Get current user to filter out self
+      const currentUserResponse = await ApiService.getCurrentUser();
+      const currentUserId = currentUserResponse.id;
+
       // Load ALL instructors (not just available)
       const response = await ApiService.get('/instructors/', {
         params: {
           available_only: false,
         },
       });
-      setInstructors(response.data);
-      setFilteredInstructors(response.data);
+
+      // Filter out instructors where user is the same person (prevent self-booking)
+      const allInstructors = response.data;
+      const filteredInstructors = allInstructors.filter(
+        (instructor: Instructor) => instructor.id !== currentUserId
+      );
+
+      setInstructors(filteredInstructors);
+      setFilteredInstructors(filteredInstructors);
     } catch (error: any) {
       console.error('Error loading instructors:', error);
       if (Platform.OS === 'web') {
@@ -118,11 +129,11 @@ export default function InstructorListScreen({ navigation }: any) {
       const query = searchQuery.toLowerCase();
       filtered = filtered.filter(
         i =>
-          i.first_name.toLowerCase().includes(query) ||
-          i.last_name.toLowerCase().includes(query) ||
-          i.vehicle_make.toLowerCase().includes(query) ||
-          i.vehicle_model.toLowerCase().includes(query) ||
-          i.city.toLowerCase().includes(query) ||
+          (i.first_name && i.first_name.toLowerCase().includes(query)) ||
+          (i.last_name && i.last_name.toLowerCase().includes(query)) ||
+          (i.vehicle_make && i.vehicle_make.toLowerCase().includes(query)) ||
+          (i.vehicle_model && i.vehicle_model.toLowerCase().includes(query)) ||
+          (i.city && i.city.toLowerCase().includes(query)) ||
           (i.suburb && i.suburb.toLowerCase().includes(query)) ||
           (i.province && i.province.toLowerCase().includes(query))
       );
@@ -139,7 +150,7 @@ export default function InstructorListScreen({ navigation }: any) {
   const handleLogout = async () => {
     try {
       if (Platform.OS === 'web') {
-        localStorage.clear();
+        sessionStorage.clear(); // Changed from localStorage
         window.location.reload();
       } else {
         await SecureStore.deleteItemAsync('access_token');

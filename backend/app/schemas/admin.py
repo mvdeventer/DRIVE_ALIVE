@@ -105,6 +105,9 @@ class AdminSettingsUpdate(BaseModel):
     auto_archive_after_days: Optional[int] = Field(
         default=14, ge=1, le=180
     )
+    inactivity_timeout_minutes: Optional[int] = Field(
+        default=15, ge=1, le=120
+    )  # Auto-logout timeout (1-120 minutes)
 
     @field_validator('twilio_sender_phone_number', 'twilio_phone_number')
     @classmethod
