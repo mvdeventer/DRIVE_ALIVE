@@ -57,6 +57,8 @@ import AdminDashboardScreen from './screens/admin/AdminDashboardScreen';
 import AdminSettingsScreen from './screens/admin/AdminSettingsScreen';
 import BookingOversightScreen from './screens/admin/BookingOversightScreen';
 import CreateAdminScreen from './screens/admin/CreateAdminScreen';
+// Lazy-loaded for code splitting (large component)
+const DatabaseInterfaceScreen = React.lazy(() => import('./screens/admin/DatabaseInterfaceScreen'));
 import EditAdminProfileScreen from './screens/admin/EditAdminProfileScreen';
 import InstructorEarningsOverviewScreen from './screens/admin/InstructorEarningsOverviewScreen';
 import InstructorVerificationScreen from './screens/admin/InstructorVerificationScreen';
@@ -468,6 +470,16 @@ export default function App() {
             component={CreateAdminScreen}
             options={{ title: 'Create Admin' }}
           />
+          <Stack.Screen
+            name="DatabaseInterface"
+            options={{ title: 'Database Interface' }}
+          >
+            {(props) => (
+              <React.Suspense fallback={<Text style={{ padding: 20, textAlign: 'center' }}>Loading Database Interface...</Text>}>
+                <DatabaseInterfaceScreen {...props} />
+              </React.Suspense>
+            )}
+          </Stack.Screen>
         </Stack.Navigator>
       </NavigationContainer>
     </>

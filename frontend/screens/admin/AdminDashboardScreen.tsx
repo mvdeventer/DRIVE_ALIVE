@@ -410,6 +410,14 @@ export default function AdminDashboardScreen({ navigation }: any) {
                   <Text style={styles.actionIcon}>👤</Text>
                   <Text style={styles.actionTitle}>Create Admin</Text>
                 </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[styles.actionCard, styles.actionDatabase]}
+                  onPress={() => navigation.navigate('DatabaseInterface')}
+                >
+                  <Text style={styles.actionIcon}>🗄️</Text>
+                  <Text style={styles.actionTitle}>Database</Text>
+                </TouchableOpacity>
               </View>
             </View>
 
@@ -843,6 +851,9 @@ const styles = StyleSheet.create({
   },
   actionCreateAdmin: {
     backgroundColor: '#20C997',
+  },
+  actionDatabase: {
+    backgroundColor: '#0D6EFD',
   },
   actionIcon: {
     fontSize: 26,

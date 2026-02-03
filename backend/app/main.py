@@ -22,6 +22,7 @@ from .routes import (
     availability,
     bookings,
     database,
+    database_interface,
     instructors,
     payments,
     setup,
@@ -208,6 +209,7 @@ async def validation_exception_handler(_request: Request, exc: RequestValidation
 app.include_router(setup.router)  # ⚠️ REMOVE AFTER CREATING ADMIN USER
 app.include_router(admin.router)
 app.include_router(database.router)
+app.include_router(database_interface.router)  # 🗄️ Database Interface (Admin CRUD)
 app.include_router(auth.router)
 app.include_router(verification.router)
 app.include_router(availability.router)

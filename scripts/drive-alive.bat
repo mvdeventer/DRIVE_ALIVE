@@ -498,8 +498,8 @@ if "%CLEAR_DB%"=="1" (
     )
 )
 
-echo %COLOR_YELLOW%Starting Frontend Server (with tunnel mode and HTTPS for online features)...%COLOR_RESET%
-powershell -Command "$process = Start-Process cmd -ArgumentList '/k', 'cd /d \"%FRONTEND_DIR%\" && npx expo start --tunnel --https' -WindowStyle Normal -PassThru; $process.Id | Out-File -FilePath '%FRONTEND_PID_FILE%' -Encoding ASCII -NoNewline; Write-Host \"Frontend started with PID: $($process.Id)\" -ForegroundColor Green"
+echo %COLOR_YELLOW%Starting Frontend Server (localhost mode)...%COLOR_RESET%
+powershell -Command "$process = Start-Process cmd -ArgumentList '/k', 'cd /d \"%FRONTEND_DIR%\" && npx expo start --localhost' -WindowStyle Normal -PassThru; $process.Id | Out-File -FilePath '%FRONTEND_PID_FILE%' -Encoding ASCII -NoNewline; Write-Host \"Frontend started with PID: $($process.Id)\" -ForegroundColor Green"
 
 echo.
 echo %COLOR_GREEN%Servers are starting...%COLOR_RESET%
@@ -586,8 +586,8 @@ for /f "tokens=5" %%a in ('netstat -ano ^| findstr ":19000" ^| findstr "LISTENIN
 taskkill /FI "WINDOWTITLE eq Drive Alive - Frontend*" /T >nul 2>&1
 timeout /t 1 /nobreak >nul
 taskkill /FI "WINDOWTITLE eq Drive Alive - Frontend*" /T /F >nul 2>&1
-echo %COLOR_YELLOW%Starting Frontend Server only (with tunnel mode and HTTPS for online features)...%COLOR_RESET%
-powershell -Command "$process = Start-Process cmd -ArgumentList '/k', 'cd /d \"%FRONTEND_DIR%\" && npx expo start --tunnel --https' -WindowStyle Normal -PassThru; $process.Id | Out-File -FilePath '%FRONTEND_PID_FILE%' -Encoding ASCII -NoNewline; Write-Host \"Frontend started with PID: $($process.Id)\" -ForegroundColor Green"
+echo %COLOR_YELLOW%Starting Frontend Server only (localhost mode)...%COLOR_RESET%
+powershell -Command "$process = Start-Process cmd -ArgumentList '/k', 'cd /d \"%FRONTEND_DIR%\" && npx expo start --localhost' -WindowStyle Normal -PassThru; $process.Id | Out-File -FilePath '%FRONTEND_PID_FILE%' -Encoding ASCII -NoNewline; Write-Host \"Frontend started with PID: $($process.Id)\" -ForegroundColor Green"
 echo.
 echo %COLOR_GREEN%Frontend server started: %FRONTEND_URL%%COLOR_RESET%
 goto :eof
