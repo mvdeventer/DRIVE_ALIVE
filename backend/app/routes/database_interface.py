@@ -106,12 +106,30 @@ async def list_users(
             )
         )
     
-    # Apply role filter
+    # Apply role filter (checks both user.role AND related profiles)
     if filter_role:
-        try:
-            role = UserRole[filter_role.upper()]
-            query = query.filter(User.role == role)
-        except KeyError:
+        filter_role_upper = filter_role.upper()
+        
+        if filter_role_upper == "STUDENT":
+            # Show users who have a student profile OR whose role is STUDENT
+            query = query.outerjoin(Student).filter(
+                or_(
+                    User.role == UserRole.STUDENT,
+                    Student.id.isnot(None)
+                )
+            )
+        elif filter_role_upper == "INSTRUCTOR":
+            # Show users who have an instructor profile OR whose role is INSTRUCTOR
+            query = query.outerjoin(Instructor).filter(
+                or_(
+                    User.role == UserRole.INSTRUCTOR,
+                    Instructor.id.isnot(None)
+                )
+            )
+        elif filter_role_upper == "ADMIN":
+            # Show users whose role is ADMIN
+            query = query.filter(User.role == UserRole.ADMIN)
+        else:
             raise HTTPException(400, detail=f"Invalid role: {filter_role}")
     
     # Apply status filter
