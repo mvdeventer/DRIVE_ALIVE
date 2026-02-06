@@ -1,13 +1,14 @@
 """
 Verification routes for email/phone confirmation
 """
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from app.database import get_db
 from app.services.verification_service import VerificationService
 from app.services.email_service import EmailService
 from app.models.user import User
+from app.utils.rate_limiter import limiter
 import logging
 
 logger = logging.getLogger(__name__)
@@ -95,7 +96,12 @@ def test_email_configuration(request: TestEmailRequest, db: Session = Depends(ge
 
 
 @router.post("/account")
-def verify_account(request: VerifyAccountRequest, db: Session = Depends(get_db)):
+@limiter.limit("10/hour")  # Max 10 verification attempts per hour per IP
+def verify_account(
+    request: Request,  # Required for rate limiter
+    verify_data: VerifyAccountRequest,
+    db: Session = Depends(get_db)
+):
     """
     Verify a user's account using their verification token
 
@@ -104,7 +110,7 @@ def verify_account(request: VerifyAccountRequest, db: Session = Depends(get_db))
     """
     try:
         # Verify token
-        verification_token = VerificationService.verify_token(db, request.token)
+        verification_token = VerificationService.verify_token(db, verify_data.token)
 
         if not verification_token:
             raise HTTPException(
@@ -140,7 +146,12 @@ def verify_account(request: VerifyAccountRequest, db: Session = Depends(get_db))
 
 
 @router.get("/resend")
-def resend_verification(email: str = Query(...), db: Session = Depends(get_db)):
+@limiter.limit("3/hour")  # Max 3 resend requests per hour per IP
+def resend_verification(
+    request: Request,  # Required for rate limiter
+    email: str = Query(...),
+    db: Session = Depends(get_db)
+):
     """
     Resend verification email/WhatsApp to a user
 

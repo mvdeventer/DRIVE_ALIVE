@@ -5,7 +5,7 @@ Authentication routes
 from datetime import datetime, timezone
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Form, HTTPException, status
+from fastapi import APIRouter, Depends, Form, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 from sqlalchemy.sql import func
@@ -25,6 +25,7 @@ from ..schemas.user import (
 from ..services.auth import AuthService
 from ..services.email_service import email_service
 from ..utils.auth import decode_access_token, get_password_hash, verify_password
+from ..utils.rate_limiter import limiter
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/login")
@@ -75,7 +76,12 @@ def get_active_role(user: User) -> str:
 @router.post(
     "/register/student", response_model=dict, status_code=status.HTTP_201_CREATED
 )
-async def register_student(student_data: StudentCreate, db: Session = Depends(get_db)):
+@limiter.limit("3/hour")  # Max 3 student registrations per hour per IP
+async def register_student(
+    request: Request,  # Required for rate limiter
+    student_data: StudentCreate,
+    db: Session = Depends(get_db)
+):
     """
     Register a new student
     Note: Admin user must exist before students can register
@@ -134,8 +140,11 @@ async def register_student(student_data: StudentCreate, db: Session = Depends(ge
 @router.post(
     "/register/instructor", response_model=dict, status_code=status.HTTP_201_CREATED
 )
+@limiter.limit("3/hour")  # Max 3 instructor registrations per hour per IP
 async def register_instructor(
-    instructor_data: InstructorCreate, db: Session = Depends(get_db)
+    request: Request,  # Required for rate limiter
+    instructor_data: InstructorCreate,
+    db: Session = Depends(get_db)
 ):
     """
     Register a new instructor
@@ -202,7 +211,9 @@ async def register_instructor(
 
 
 @router.post("/login", response_model=dict)
+@limiter.limit("5/minute")  # Max 5 login attempts per minute per IP
 async def login(
+    request: Request,  # Required for rate limiter
     form_data: Annotated[OAuth2PasswordRequestForm, Depends()],
     role: str | None = Form(None),
     db: Session = Depends(get_db),
@@ -396,15 +407,17 @@ async def change_password(
 
 
 @router.post("/forgot-password")
+@limiter.limit("3/hour")  # Max 3 password reset requests per hour per IP
 async def forgot_password(
-    request: ForgotPasswordRequest,
+    request: Request,  # Required for rate limiter
+    password_request: ForgotPasswordRequest,
     db: Session = Depends(get_db),
 ):
     """
     Request password reset - sends email with reset token
     """
     # Find user by email
-    user = db.query(User).filter(User.email == request.email).first()
+    user = db.query(User).filter(User.email == password_request.email).first()
 
     # Always return success to prevent email enumeration attacks
     if not user:
@@ -444,8 +457,10 @@ async def forgot_password(
 
 
 @router.post("/reset-password")
+@limiter.limit("5/hour")  # Max 5 password resets per hour per IP
 async def reset_password(
-    request: ResetPasswordRequest,
+    request: Request,  # Required for rate limiter
+    reset_data: ResetPasswordRequest,
     db: Session = Depends(get_db),
 ):
     """
@@ -454,7 +469,7 @@ async def reset_password(
     # Find token
     token_record = (
         db.query(PasswordResetToken)
-        .filter(PasswordResetToken.token == request.token)
+        .filter(PasswordResetToken.token == reset_data.token)
         .first()
     )
 
@@ -479,7 +494,7 @@ async def reset_password(
         )
 
     # Update password
-    user.password_hash = get_password_hash(request.new_password)
+    user.password_hash = get_password_hash(reset_data.new_password)
 
     # Mark token as used
     token_record.used_at = datetime.now(timezone.utc)
