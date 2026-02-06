@@ -333,7 +333,7 @@ class AuthService:
         elif user.status == UserStatus.SUSPENDED:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="Your account has been suspended. Please contact support for more information.",
+                detail="Your account is SUSPENDED. Please contact support for more information.",
             )
 
         # Update last login

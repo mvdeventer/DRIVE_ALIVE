@@ -10,6 +10,7 @@ from geopy.distance import geodesic
 from sqlalchemy.orm import Session
 
 from ..database import get_db
+from ..middleware.admin import require_admin
 from ..models.booking import Booking, BookingStatus
 from ..models.user import Instructor as InstructorModel
 from ..models.user import User, UserRole
@@ -644,15 +645,12 @@ async def update_availability(
 @router.post("/{instructor_id}/verify", response_model=dict)
 async def verify_instructor(
     instructor_id: int,
-    current_user: Annotated[User, Depends(get_current_user)],
+    current_user: Annotated[User, Depends(require_admin)],
     db: Session = Depends(get_db),
 ):
     """
     Verify an instructor (Admin only)
-    TODO: Implement proper admin role checking
     """
-    # TODO: Add admin role check when admin functionality is implemented
-    # For now, only allow instructors to verify themselves (temporary for development)
 
     instructor = (
         db.query(InstructorModel).filter(InstructorModel.id == instructor_id).first()
@@ -680,14 +678,12 @@ async def verify_instructor(
 @router.post("/{instructor_id}/unverify", response_model=dict)
 async def unverify_instructor(
     instructor_id: int,
-    current_user: Annotated[User, Depends(get_current_user)],
+    current_user: Annotated[User, Depends(require_admin)],
     db: Session = Depends(get_db),
 ):
     """
     Unverify an instructor (Admin only)
-    TODO: Implement proper admin role checking
     """
-    # TODO: Add admin role check when admin functionality is implemented
 
     instructor = (
         db.query(InstructorModel).filter(InstructorModel.id == instructor_id).first()
@@ -713,14 +709,12 @@ async def unverify_instructor(
 
 @router.get("/unverified/list", response_model=List[InstructorResponse])
 async def get_unverified_instructors(
-    current_user: Annotated[User, Depends(get_current_user)],
+    current_user: Annotated[User, Depends(require_admin)],
     db: Session = Depends(get_db),
 ):
     """
     Get list of unverified instructors (Admin only)
-    TODO: Implement proper admin role checking
     """
-    # TODO: Add admin role check when admin functionality is implemented
 
     # Query unverified instructors
     instructors = (

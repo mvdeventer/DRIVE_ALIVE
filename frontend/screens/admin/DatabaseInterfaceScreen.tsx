@@ -1492,7 +1492,7 @@ const DatabaseInterfaceScreen = ({ navigation }: any) => {
         {activeTab === 'users' && !usersTable.loading && usersTable.data.length > 0 && (
           <View style={styles.table}>
             <View style={styles.tableHeader}>
-              <View style={[styles.tableCell, { flex: 0.5 }]}>
+              <View style={{ flex: 0.5 }}>
                 <TouchableOpacity
                   onPress={selectAllRows}
                   style={styles.headerCheckbox}
@@ -1518,7 +1518,7 @@ const DatabaseInterfaceScreen = ({ navigation }: any) => {
             </View>
             {usersTable.data.map((user, idx) => (
               <View key={idx} style={styles.tableRow}>
-                <View style={[styles.tableCell, { flex: 0.5 }]}>
+                <View style={{ flex: 0.5 }}>
                   <TouchableOpacity
                     onPress={() => toggleRowSelection(user.id)}
                     style={styles.rowCheckbox}
@@ -1557,12 +1557,13 @@ const DatabaseInterfaceScreen = ({ navigation }: any) => {
                     <TouchableOpacity
                       style={[
                         styles.deleteButton,
-                        user.status === 'SUSPENDED' && styles.activateButton
+                        user.status === 'ACTIVE' && styles.activateButton,
+                        user.status === 'SUSPENDED' && styles.suspendedButton
                       ]}
                       onPress={() => openDeleteModal(user.id, user.row_type)}
                     >
                       <Text style={styles.deleteButtonText}>
-                        {user.status === 'SUSPENDED' ? '✅ Activate' : '⛔ Suspend'}
+                        {user.status === 'SUSPENDED' ? '✅ Unsuspend' : '⛔ Suspend'}
                       </Text>
                     </TouchableOpacity>
                   ) : (
@@ -1578,7 +1579,7 @@ const DatabaseInterfaceScreen = ({ navigation }: any) => {
         {activeTab === 'students' && !studentsTable.loading && studentsTable.data.length > 0 && (
           <View style={styles.table}>
             <View style={styles.tableHeader}>
-              <View style={[styles.tableCell, { flex: 0.5 }]}>
+              <View style={{ flex: 0.5 }}>
                 <TouchableOpacity
                   onPress={selectAllRows}
                   style={styles.headerCheckbox}
@@ -1603,7 +1604,7 @@ const DatabaseInterfaceScreen = ({ navigation }: any) => {
             </View>
             {studentsTable.data.map((student, idx) => (
               <View key={idx} style={styles.tableRow}>
-                <View style={[styles.tableCell, { flex: 0.5 }]}>
+                <View style={{ flex: 0.5 }}>
                   <TouchableOpacity
                     onPress={() => toggleRowSelection(student.id)}
                     style={styles.rowCheckbox}
@@ -2040,7 +2041,10 @@ const styles = StyleSheet.create({
     minWidth: 80,
   },
   activateButton: {
-    backgroundColor: '#28a745',
+    backgroundColor: '#28a745', // Green for active users (safe to suspend)
+  },
+  suspendedButton: {
+    backgroundColor: '#ffc107', // Yellow for suspended users (can unsuspend)
   },
   editButtonText: {
     color: '#fff',

@@ -8,6 +8,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Form, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
+from sqlalchemy.sql import func
 
 from ..database import get_db
 from ..models.password_reset import PasswordResetToken
@@ -282,13 +283,26 @@ async def get_current_user_info(
             db.query(Instructor).filter(Instructor.user_id == current_user.id).first()
         )
         if instructor:
+            # Calculate total earnings from completed bookings
+            from ..models.booking import Booking, BookingStatus, PaymentStatus
+            total_earnings = (
+                db.query(func.sum(Booking.amount))
+                .filter(
+                    Booking.instructor_id == instructor.id,
+                    Booking.status == BookingStatus.COMPLETED,
+                    Booking.payment_status == PaymentStatus.PAID,
+                )
+                .scalar()
+                or 0.0
+            )
+            
             user_data.update(
                 {
                     "instructor_id": instructor.id,
                     "license_types": instructor.license_types,
                     "hourly_rate": float(instructor.hourly_rate),
                     "is_available": instructor.is_available,
-                    "total_earnings": 0.0,  # TODO: Calculate from completed bookings
+                    "total_earnings": float(total_earnings),
                     "rating": float(instructor.rating) if instructor.rating else 0.0,
                 }
             )
