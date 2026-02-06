@@ -46,6 +46,7 @@ interface Instructor {
   is_verified: boolean;
   current_latitude?: number;
   current_longitude?: number;
+  is_self?: boolean;
 }
 
 export default function InstructorListScreen({ navigation }: any) {
@@ -79,7 +80,7 @@ export default function InstructorListScreen({ navigation }: any) {
 
   const loadInstructors = async () => {
     try {
-      // Get current user to filter out self
+      // Get current user to identify their instructor profile
       const currentUserResponse = await ApiService.getCurrentUser();
       const currentUserId = currentUserResponse.id;
 
@@ -90,14 +91,13 @@ export default function InstructorListScreen({ navigation }: any) {
         },
       });
 
-      // Filter out instructors where user is the same person (prevent self-booking)
-      const allInstructors = response.data;
-      const filteredInstructors = allInstructors.filter(
-        (instructor: Instructor) => instructor.id !== currentUserId
-      );
+      const allInstructors = response.data.map((instructor: Instructor) => ({
+        ...instructor,
+        is_self: instructor.id === currentUserId,
+      }));
 
-      setInstructors(filteredInstructors);
-      setFilteredInstructors(filteredInstructors);
+      setInstructors(allInstructors);
+      setFilteredInstructors(allInstructors);
     } catch (error: any) {
       console.error('Error loading instructors:', error);
       if (Platform.OS === 'web') {
@@ -173,6 +173,15 @@ export default function InstructorListScreen({ navigation }: any) {
   };
 
   const handleBookLesson = (instructor: Instructor) => {
+    if (instructor.is_self) {
+      if (Platform.OS === 'web') {
+        alert('You cannot book lessons with your own instructor profile.');
+      } else {
+        Alert.alert('Not Allowed', 'You cannot book lessons with your own instructor profile.');
+      }
+      return;
+    }
+
     if (!instructor.is_available) {
       if (Platform.OS === 'web') {
         alert('This instructor is currently unavailable');
@@ -387,9 +396,16 @@ ${studentName}`;
         <View style={styles.instructorHeader}>
           <View style={styles.instructorInfo}>
             <View style={styles.nameRow}>
-              <Text style={styles.instructorName}>
-                {item.first_name} {item.last_name} {item.is_verified && '✅'}
-              </Text>
+              <View style={styles.nameBadgesRow}>
+                <Text style={styles.instructorName}>
+                  {item.first_name} {item.last_name} {item.is_verified && '✅'}
+                </Text>
+                {item.is_self && (
+                  <View style={styles.selfBadge}>
+                    <Text style={styles.selfBadgeText}>Your Instructor Profile</Text>
+                  </View>
+                )}
+              </View>
               <View
                 style={[
                   styles.availabilityBadge,
@@ -433,9 +449,12 @@ ${studentName}`;
         {/* Action Buttons */}
         <View style={styles.actionButtonsContainer}>
           <TouchableOpacity
-            style={[styles.primaryButton, !item.is_available && styles.primaryButtonDisabled]}
+            style={[
+              styles.primaryButton,
+              (!item.is_available || item.is_self) && styles.primaryButtonDisabled,
+            ]}
             onPress={() => handleBookLesson(item)}
-            disabled={!item.is_available}
+            disabled={!item.is_available || !!item.is_self}
           >
             <Text style={styles.primaryButtonText}>📅 Book Lesson</Text>
           </TouchableOpacity>
@@ -800,6 +819,25 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 6,
+  },
+  nameBadgesRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    flexWrap: 'wrap',
+    flex: 1,
+  },
+  selfBadge: {
+    backgroundColor: '#6c757d',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 10,
+    marginLeft: 6,
+  },
+  selfBadgeText: {
+    color: '#fff',
+    fontSize: 10,
+    fontWeight: '600',
   },
   instructorInfo: {
     flex: 1,

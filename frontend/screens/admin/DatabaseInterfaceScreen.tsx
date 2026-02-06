@@ -899,10 +899,7 @@ const DatabaseInterfaceScreen = ({ navigation }: any) => {
       
       await apiService.resetDatabase();
       
-      if (Platform.OS === 'web') {
-        sessionStorage.removeItem('access_token');
-        sessionStorage.removeItem('user_role');
-      }
+      await apiService.logout();
       
       setShowDbModal(false);
       alert('✅ Database reset successfully! Please create a new admin account.');
@@ -1516,7 +1513,10 @@ const DatabaseInterfaceScreen = ({ navigation }: any) => {
               <Text style={[styles.tableCell, { flex: 1 }]}>Status</Text>
               <Text style={[styles.tableCell, { flex: 1 }]}>Actions</Text>
             </View>
-            {usersTable.data.map((user, idx) => (
+            {usersTable.data.map((user, idx) => {
+              const userStatus = String(user.status || '').toUpperCase();
+
+              return (
               <View key={idx} style={styles.tableRow}>
                 <View style={{ flex: 0.5 }}>
                   <TouchableOpacity
@@ -1542,8 +1542,25 @@ const DatabaseInterfaceScreen = ({ navigation }: any) => {
                   {user.role}
                   {user.id === 1 && user.role === 'admin' && (!user.row_type || user.row_type === 'primary') && ' 🛡️'}
                 </Text>
-                <Text style={[styles.tableCell, { flex: 1, color: user.status === 'SUSPENDED' ? '#dc3545' : '#28a745' }]}>
-                  {user.status === 'SUSPENDED' ? '🚫 SUSPENDED' : '✅ ACTIVE'}
+                <Text
+                  style={[
+                    styles.tableCell,
+                    {
+                      flex: 1,
+                      color:
+                        userStatus === 'SUSPENDED'
+                          ? '#ffc107'
+                          : userStatus === 'INACTIVE'
+                            ? '#6c757d'
+                            : '#28a745',
+                    },
+                  ]}
+                >
+                  {userStatus === 'SUSPENDED'
+                    ? '🚫 SUSPENDED'
+                    : userStatus === 'INACTIVE'
+                      ? '⏸️ INACTIVE'
+                      : '✅ ACTIVE'}
                 </Text>
                 <View style={styles.actionButtons}>
                   <TouchableOpacity
@@ -1557,13 +1574,13 @@ const DatabaseInterfaceScreen = ({ navigation }: any) => {
                     <TouchableOpacity
                       style={[
                         styles.deleteButton,
-                        user.status === 'ACTIVE' && styles.activateButton,
-                        user.status === 'SUSPENDED' && styles.suspendedButton
+                        userStatus === 'ACTIVE' && styles.activateButton,
+                        userStatus === 'SUSPENDED' && styles.suspendedButton
                       ]}
                       onPress={() => openDeleteModal(user.id, user.row_type)}
                     >
                       <Text style={styles.deleteButtonText}>
-                        {user.status === 'SUSPENDED' ? '✅ Unsuspend' : '⛔ Suspend'}
+                        {userStatus === 'SUSPENDED' ? '🟡 Suspended' : '🟢 Active'}
                       </Text>
                     </TouchableOpacity>
                   ) : (
@@ -1571,7 +1588,8 @@ const DatabaseInterfaceScreen = ({ navigation }: any) => {
                   )}
                 </View>
               </View>
-            ))}
+            );
+            })}
           </View>
         )}
 

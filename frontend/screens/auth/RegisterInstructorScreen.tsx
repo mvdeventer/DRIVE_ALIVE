@@ -18,6 +18,7 @@ import InlineMessage from '../../components/InlineMessage';
 import LicenseTypeSelector from '../../components/LicenseTypeSelector';
 import { DEBUG_CONFIG } from '../../config';
 import ApiService from '../../services/api';
+import { formatPhoneNumber } from '../../utils/phoneFormatter';
 
 export default function RegisterInstructorScreen({ navigation }: any) {
   // Pre-fill with test data only when DEBUG_CONFIG is enabled
@@ -140,19 +141,47 @@ export default function RegisterInstructorScreen({ navigation }: any) {
 
       // Capture verification info from response
       const verificationData = response.verification_sent || {
-        email_sent: false,
-        whatsapp_sent: false,
+        emails_sent: 0,
+        whatsapp_sent: 0,
+        total_admins: 0,
       };
 
-      // Navigate to verification pending screen
-      navigation.replace('VerificationPending', {
-        email: formData.email,
-        phone: formData.phone,
-        firstName: formData.first_name,
-        emailSent: verificationData.email_sent,
-        whatsappSent: verificationData.whatsapp_sent,
-        expiryMinutes: verificationData.expires_in_minutes || 30,
+      // Show success message about admin verification
+      const adminCount = verificationData.total_admins || 0;
+      const emailsSent = verificationData.emails_sent || 0;
+      const whatsappSent = verificationData.whatsapp_sent || 0;
+      
+      let successText = '✅ Registration Successful!\n\n';
+      successText += `Admins have been notified to verify your instructor profile.\n\n`;
+      
+      if (adminCount > 0) {
+        successText += `📧 Email sent to ${emailsSent} admin(s)\n`;
+        successText += `💬 WhatsApp sent to ${whatsappSent} admin(s)\n\n`;
+      }
+      
+      successText += 'You can set up your schedule while waiting for verification!';
+
+      setMessage({
+        type: 'success',
+        text: successText,
       });
+      scrollViewRef.current?.scrollTo({ y: 0, animated: true });
+
+      // Wait 3 seconds, then navigate to schedule setup option
+      setTimeout(() => {
+        navigation.replace('InstructorScheduleSetup', {
+          instructorId: null, // Will fetch from backend after login
+          instructorName: `${formData.first_name} ${formData.last_name}`,
+          isInitialSetup: true, // Flag to show "Skip" button
+          verificationData: {
+            email: formData.email,
+            phone: formData.phone,
+            firstName: formData.first_name,
+            adminVerificationPending: true,
+            adminCount: adminCount,
+          },
+        });
+      }, 3000);
     } catch (error: any) {
       console.error('Registration error:', error);
       console.error('Error response:', error.response);
@@ -179,6 +208,10 @@ export default function RegisterInstructorScreen({ navigation }: any) {
   };
 
   const updateFormData = (field: string, value: string) => {
+    // Auto-format phone numbers
+    if (field === 'phone') {
+      value = formatPhoneNumber(value);
+    }
     setFormData(prev => ({ ...prev, [field]: value }));
   };
 
@@ -389,6 +422,7 @@ export default function RegisterInstructorScreen({ navigation }: any) {
         <Text style={styles.sectionTitle}>Security</Text>
 
         <FormFieldWithTip
+          key={`password-${showPassword}`}
           label="Password"
           tooltip="Create a strong password with at least 6 characters. Use a mix of letters, numbers, and symbols for better security. This protects your account and student data."
           required
@@ -399,6 +433,7 @@ export default function RegisterInstructorScreen({ navigation }: any) {
         />
 
         <FormFieldWithTip
+          key={`confirm-password-${showPassword}`}
           label="Confirm Password"
           tooltip="Re-enter your password to ensure it was typed correctly. Both passwords must match exactly."
           required
@@ -461,9 +496,6 @@ export default function RegisterInstructorScreen({ navigation }: any) {
                 
                 <Text style={styles.confirmLabel}>ID Number:</Text>
                 <Text style={styles.confirmValue}>{formData.id_number}</Text>
-                
-                <Text style={styles.confirmLabel}>Location:</Text>
-                <Text style={styles.confirmValue}>{formData.suburb ? `${formData.suburb}, ` : ''}{formData.city}, {formData.province}</Text>
 
                 <Text style={styles.confirmSectionTitle}>License & Vehicle</Text>
                 <Text style={styles.confirmLabel}>License Number:</Text>

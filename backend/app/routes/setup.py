@@ -10,6 +10,7 @@ from ..models.user import User, UserRole, UserStatus
 from ..schemas.admin import AdminCreateRequest
 from ..schemas.user import UserResponse
 from ..utils.auth import get_password_hash
+from ..utils.encryption import EncryptionService  # For SMTP password encryption
 
 router = APIRouter(prefix="/setup", tags=["setup"])
 
@@ -69,7 +70,8 @@ def create_initial_admin(admin_data: AdminCreateRequest, db: Session = Depends(g
         address_latitude=admin_data.address_latitude,
         address_longitude=admin_data.address_longitude,
         smtp_email=admin_data.smtp_email,
-        smtp_password=admin_data.smtp_password,
+        # Encrypt SMTP password before saving to database
+        smtp_password=EncryptionService.encrypt(admin_data.smtp_password) if admin_data.smtp_password else None,
         verification_link_validity_minutes=admin_data.verification_link_validity_minutes or 30,
         twilio_sender_phone_number=admin_data.twilio_sender_phone_number,
         twilio_phone_number=admin_data.twilio_phone_number,

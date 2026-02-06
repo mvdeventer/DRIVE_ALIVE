@@ -11,11 +11,14 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
 
 from .config import settings
 from .database import Base, engine, SessionLocal
 from .models.user import User, UserRole, UserStatus
 from .utils.auth import get_password_hash
+from .utils.rate_limiter import limiter, rate_limit_exceeded_handler
 from .routes import (
     admin,
     auth,
@@ -55,6 +58,12 @@ async def lifespan(app: FastAPI):
         f"WhatsApp Reminders: {'Enabled' if settings.TWILIO_ACCOUNT_SID else 'Disabled'}"
     )
     print("=" * 80)
+
+    # Set ENCRYPTION_KEY in os.environ for EncryptionService
+    import os
+    if settings.ENCRYPTION_KEY:
+        os.environ["ENCRYPTION_KEY"] = settings.ENCRYPTION_KEY
+        print("🔐 Encryption key loaded from settings")
 
     # Create all tables (if they don't exist)
     print("\n📊 Ensuring database tables exist...")
@@ -144,6 +153,12 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+# Add rate limiter to app state
+app.state.limiter = limiter
+
+# Add rate limit exceeded exception handler
+app.add_exception_handler(RateLimitExceeded, rate_limit_exceeded_handler)
+
 # Configure CORS - Allow specific origins with credentials
 origins = [
     "http://localhost:8081",  # Web version on localhost
@@ -172,6 +187,35 @@ app.add_middleware(
     allow_headers=["*"],
     expose_headers=["*"],
 )
+
+
+@app.middleware("http")
+async def add_security_headers(request: Request, call_next):
+    """
+    Add security headers to all responses
+    """
+    response = await call_next(request)
+    is_docs = request.url.path in {"/docs", "/redoc", "/openapi.json"}
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["Referrer-Policy"] = "no-referrer"
+    response.headers["Permissions-Policy"] = "geolocation=(), microphone=(), camera=()"
+    if is_docs:
+        response.headers["Content-Security-Policy"] = (
+            "default-src 'none'; "
+            "style-src 'self' https://cdn.jsdelivr.net 'unsafe-inline'; "
+            "script-src 'self' https://cdn.jsdelivr.net 'unsafe-inline'; "
+            "img-src 'self' https://fastapi.tiangolo.com data:; "
+            "connect-src 'self'; "
+            "frame-ancestors 'none'; base-uri 'none'"
+        )
+    else:
+        response.headers["Content-Security-Policy"] = "default-src 'none'; frame-ancestors 'none'; base-uri 'none'"
+
+    if request.url.scheme == "https":
+        response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+
+    return response
 
 
 @app.exception_handler(RequestValidationError)

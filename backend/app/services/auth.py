@@ -23,13 +23,13 @@ class AuthService:
         """
         Create a new user
         """
-        # Check if user exists
-        existing_user = db.query(User).filter((User.email == user_data.email) | (User.phone == user_data.phone)).first()
+        # Check if email exists (email is unique identifier)
+        existing_user = db.query(User).filter(User.email == user_data.email).first()
 
         if existing_user:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="User with this email or phone already exists",
+                detail="User with this email already exists",
             )
 
         # Create user
@@ -77,15 +77,7 @@ class AuthService:
                 user = existing_user
                 print(f"[DEBUG] Adding instructor role to existing user {user.id} with email {user.email}")
             else:
-                # New user - check if phone/ID belong to another user
-                phone_user = db.query(User).filter(User.phone == instructor_data.phone).first()
-                if phone_user:
-                    raise HTTPException(
-                        status_code=status.HTTP_400_BAD_REQUEST,
-                        detail=f"Phone number '{instructor_data.phone}' is already registered to another account. Please use a different phone number.",
-                    )
-                
-                # Check if ID number belongs to another user
+                # New user - check if ID number belongs to another user
                 existing_instructor_id = db.query(Instructor).filter(Instructor.id_number == instructor_data.id_number).first()
                 if existing_instructor_id:
                     raise HTTPException(
@@ -217,15 +209,7 @@ class AuthService:
                 # Use existing user
                 user = existing_user
             else:
-                # New user - check if phone/ID belong to another user
-                phone_user = db.query(User).filter(User.phone == student_data.phone).first()
-                if phone_user:
-                    raise HTTPException(
-                        status_code=status.HTTP_400_BAD_REQUEST,
-                        detail=f"Phone number '{student_data.phone}' is already registered to another account. Please use a different phone number.",
-                    )
-                
-                # Check if ID number belongs to another user
+                # New user - check if ID number belongs to another user
                 existing_instructor_id = db.query(Instructor).filter(Instructor.id_number == student_data.id_number).first()
                 if existing_instructor_id:
                     raise HTTPException(

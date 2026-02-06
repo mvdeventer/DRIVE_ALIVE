@@ -1316,6 +1316,7 @@ export default function InstructorHomeScreen() {
                   loadAvailableSlots(dateStr);
                   setShowCalendarModal(false);
                 }}
+                onCancel={() => setShowCalendarModal(false)}
                 minDate={new Date()}
                 maxDate={new Date(Date.now() + 90 * 24 * 60 * 60 * 1000)}
                 disabledDates={instructorTimeOff}

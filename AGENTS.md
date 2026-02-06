@@ -226,6 +226,47 @@ const confirmAction = async () => {
 </Modal>
 ```
 
+### Confirmation Modal Styling ✅
+
+**Opaque, Standardized Modals:**
+
+- ✅ **ALWAYS** use fully opaque modal content (white background) for confirmation popups
+- ✅ **ALWAYS** apply standard sizing and padding (see Standardized Modal & Button Sizing below)
+- ✅ Use a dark overlay: `backgroundColor: 'rgba(0, 0, 0, 0.5)'`
+- ✅ Keep modal containers consistent with Database Management confirm popup styling
+- ❌ **NEVER** use see-through/transparent confirmation content areas
+- ❌ **NEVER** rely on default modal styles without explicit container background
+
+**Recommended Pattern:**
+
+```typescript
+<Modal visible={showConfirm} transparent animationType="fade">
+  <View style={styles.modalOverlay}>
+    <View style={styles.confirmModalContainer}>
+      {/* Title + Details + Buttons */}
+    </View>
+  </View>
+</Modal>
+
+const styles = StyleSheet.create({
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: Platform.OS === 'web' ? 20 : 10,
+  },
+  confirmModalContainer: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: Platform.OS === 'web' ? 32 : 24,
+    width: Platform.OS === 'web' ? '45%' : '92%',
+    maxWidth: 550,
+    maxHeight: '85%',
+  },
+});
+```
+
 **Account Creation Confirmation Modals:** ✅
 ALL account registration screens (Student, Instructor, Admin) implement pre-submission confirmation modals:
 
@@ -2421,3 +2462,249 @@ Documentation:
   - GPS display in modal
 
 **Status:** ✅ Enhanced functionality complete (Jan 31, 2026)
+
+## Recent Updates (Feb 6, 2026 - Instructor Verification System)
+
+### Admin-Verified Instructor Registration Flow ✅
+
+**Feature:** Complete instructor verification system where admins verify new instructors via email/WhatsApp links or manually from dashboard. Instructors can set up their schedule immediately (before admin verification).
+
+**Key Requirements Implemented:**
+
+1. ✅ **Instructors can setup schedule BEFORE admin verification** - No blocking on verification status
+2. ✅ **Admin verification via email + WhatsApp** - All admins notified simultaneously
+3. ✅ **Dual verification methods** - Link-based (instant) OR manual from dashboard
+4. ✅ **Multi-admin notification** - Sends to ALL admin users, not just first admin
+
+**Backend Implementation** ✅
+
+**New Files Created:**
+
+1. **`backend/app/models/instructor_verification.py`**
+   - New model: `InstructorVerificationToken`
+   - Fields: `instructor_id`, `token`, `expires_at`, `verified_at`, `verified_by_admin_id`, `is_used`
+   - Relationships: Bidirectional with Instructor model, tracks which admin verified
+   - Token validity: 60 minutes (configurable via admin settings)
+
+2. **`backend/app/services/instructor_verification_service.py`**
+   - `create_verification_token(db, instructor_id, validity_minutes=60)` - Generates secure 32-byte URL-safe token
+   - `send_verification_to_all_admins(db, instructor, token, frontend_url)` - Multi-admin notification
+     - Queries all admins: `db.query(User).filter(User.role == UserRole.ADMIN).all()`
+     - Email HTML with instructor details table + clickable verification button
+     - WhatsApp text with emoji formatting + verification link
+     - Returns: `{emails_sent: int, whatsapp_sent: int, total_admins: int}`
+   - `verify_instructor_token(db, token, admin_id=None)` - Validates token, sets `instructor.is_verified = True`
+   - `delete_expired_tokens(db)` - Cleanup expired verification tokens
+
+3. **`backend/migrations/add_instructor_verification_tokens.py`**
+   - Migration script to create `instructor_verification_tokens` table
+   - **Status:** ✅ Executed successfully (Feb 6, 2026)
+
+**Backend Files Modified:**
+
+1. **`backend/app/routes/auth.py`** (lines 185-245)
+   - Changed from instructor email verification to admin notification system
+   - Import: `InstructorVerificationService` instead of `VerificationService`
+   - Creates instructor verification token (not user verification)
+   - Sends verification to ALL admins (not to instructor)
+   - Returns admin notification counts: `{emails_sent, whatsapp_sent, total_admins}`
+   - Response message: "Admins have been notified to verify your instructor profile. You can start creating your schedule while waiting for verification."
+
+2. **`backend/app/routes/verification.py`** (lines 415-465, new endpoint)
+   - Added `GET /verify/instructor?token=...` endpoint
+   - Rate limited: 10 requests/minute
+   - Calls `InstructorVerificationService.verify_instructor_token()`
+   - Success: `{"status": "success", "message": "Instructor verified successfully"}`
+   - Error: HTTP 400 (invalid/expired/used token) or HTTP 500 (server error)
+
+3. **`backend/app/models/user.py`** (lines 150-162)
+   - Added `verification_tokens` relationship to Instructor model
+   - Cascade delete: Tokens deleted when instructor deleted
+
+4. **`backend/app/models/__init__.py`**
+   - Added import and `__all__` entry for `InstructorVerificationToken`
+
+**Frontend Implementation** ✅
+
+**New Files Created:**
+
+1. **`frontend/screens/verification/InstructorVerifyScreen.tsx`**
+   - Accessed via deep link: `/instructor-verify?token=...`
+   - Extracts token from route params
+   - Calls `GET /verify/instructor?token={token}`
+   - Loading state: Shows spinner with "Verifying instructor..." message
+   - Success state:
+     - ✅ Green checkmark icon
+     - Message: "Instructor Verified!"
+     - Subtext: "The instructor can now receive bookings from students."
+     - Auto-redirect to Login after 4 seconds
+     - Manual redirect button: "Go to Login Now"
+   - Error state:
+     - ❌ Red X icon
+     - Displays error message from backend
+     - Lists possible reasons: expired, already used, invalid token
+     - Alternative text: "You can still verify this instructor manually from the Admin Dashboard."
+     - Manual redirect button: "Go to Login"
+   - Platform-responsive styling (web and mobile)
+
+**Frontend Files Modified:**
+
+1. **`frontend/screens/auth/RegisterInstructorScreen.tsx`** (lines 114-160)
+   - Updated success message after registration:
+     - Old: "Registration successful! You can now set up your schedule..."
+     - New: Multi-line message with admin notification details
+     - Shows: Emails sent count, WhatsApp sent count, admin count
+     - Message: "Admins have been notified to verify your instructor profile. You can set up your schedule while waiting for verification!"
+   - Changed response parsing:
+     - Old: `verification_sent: {email_sent, whatsapp_sent, expires_in_minutes}`
+     - New: `verification_sent: {emails_sent, whatsapp_sent, total_admins}`
+   - Updated navigation params passed to InstructorScheduleSetup:
+     - Added: `adminVerificationPending: true`
+     - Added: `adminCount: adminCount`
+   - Increased redirect delay from 2s to 3s (more time to read message)
+
+2. **`frontend/screens/auth/InstructorScheduleSetupScreen.tsx`** (lines 88-107)
+   - Enhanced header banner to show admin verification status
+   - Conditional rendering:
+     - If `verificationData.adminVerificationPending === true`:
+       - Shows: "✅ Registration Successful! X admin(s) have been notified to verify your account."
+       - Shows: "📅 You can set up your schedule now or skip and do it later."
+     - Else (normal flow):
+       - Shows original message about optional schedule setup
+   - Banner text dynamically shows admin count from registration response
+
+3. **`frontend/App.tsx`**
+   - Added import: `import InstructorVerifyScreen from './screens/verification/InstructorVerifyScreen';`
+   - Added deep link config: `InstructorVerify: 'instructor-verify'`
+   - Added Stack.Screen:
+     ```typescript
+     <Stack.Screen
+       name="InstructorVerify"
+       component={InstructorVerifyScreen}
+       options={{ title: 'Verify Instructor', headerShown: !isAuthenticated }}
+     />
+     ```
+
+**Email/WhatsApp Message Templates:**
+
+**Email Subject:**
+```
+New Instructor Verification Required - [Instructor Name]
+```
+
+**Email Body (HTML):**
+- Header: "New Instructor Registration"
+- Instructor details table:
+  - Name: [Full Name]
+  - Email: [Email]
+  - Phone: [Phone]
+  - License Number: [License]
+  - License Types: [Types]
+  - Vehicle: [Year Make Model]
+  - City: [City]
+  - Hourly Rate: ZAR [Rate]
+- Clickable button: "✅ Verify Instructor"
+- Verification link: `{frontend_url}/instructor-verify?token={token}`
+- Expiry notice: "Link expires in: 60 minutes"
+- Alternative text: "You can also verify instructors from the admin dashboard."
+
+**WhatsApp Message:**
+```
+👤 New Instructor Verification Required
+
+📋 Instructor: [Name]
+📧 Email: [Email]
+📱 Phone: [Phone]
+🎓 License: [License Number]
+🚗 Vehicle: [Year Make Model]
+📍 City: [City]
+💰 Rate: ZAR [Rate]/hour
+
+🔗 Verification Link:
+[Link]
+
+⏰ Expires in: 60 minutes
+
+You can also verify from the admin dashboard.
+```
+
+**User Flow:**
+
+1. **Instructor Registration:**
+   - Instructor submits registration form
+   - Backend creates User (status=INACTIVE) + Instructor (is_verified=False)
+   - Backend creates InstructorVerificationToken (expires in 60 min)
+   - Backend queries all admins and sends email + WhatsApp to each
+   - Response includes: `{emails_sent: 2, whatsapp_sent: 2, total_admins: 2}`
+
+2. **Instructor Post-Registration:**
+   - Frontend shows success message with admin notification details
+   - After 3 seconds, navigates to InstructorScheduleSetup screen
+   - Schedule setup banner shows: "✅ Registration Successful! 2 admin(s) have been notified..."
+   - Instructor can set up schedule OR skip and login later
+
+3. **Admin Verification (Link-Based):**
+   - Admin receives email/WhatsApp notification
+   - Admin clicks verification link → Opens `/instructor-verify?token=...`
+   - InstructorVerifyScreen extracts token from URL
+   - Calls `GET /verify/instructor?token={token}`
+   - Backend validates token (not expired, not used)
+   - Backend updates: `instructor.is_verified = True`, `token.is_used = True`, `token.verified_by_admin_id = admin.id`
+   - Frontend shows success screen
+   - Auto-redirects to Login after 4 seconds
+
+4. **Admin Verification (Manual):**
+   - Admin logs in → Admin Dashboard → Instructor Verification screen
+   - Admins sees list of unverified instructors
+   - Admin clicks "Verify" button
+   - Backend marks instructor as verified
+   - (This existing flow continues to work)
+
+**Security Features:**
+
+✅ **Secure Tokens:** 32-byte URL-safe random tokens (`secrets.token_urlsafe(32)`)  
+✅ **Token Expiration:** 60 minutes validity (configurable via admin settings)  
+✅ **One-Time Use:** Tokens marked as `is_used = True` after verification (prevents replay)  
+✅ **Admin Tracking:** `verified_by_admin_id` records which admin verified  
+✅ **Rate Limiting:** Verification endpoint limited to 10 requests/minute  
+✅ **Automatic Cleanup:** Expired tokens can be deleted via cleanup utility  
+
+**Benefits:**
+
+- ✅ **Faster Onboarding:** Instructors can set up schedule immediately after registration
+- ✅ **Multi-Admin Support:** All admins notified, improves response time
+- ✅ **Flexible Verification:** Admins can verify via email/WhatsApp link OR manually
+- ✅ **Audit Trail:** Tracks which admin verified which instructor and when
+- ✅ **Better UX:** Clear messaging throughout registration and verification flow
+- ✅ **Mobile-Friendly:** Deep links work on mobile web browsers
+
+**Files Modified/Created:**
+
+Backend:
+- ✅ Created: `backend/app/models/instructor_verification.py`
+- ✅ Created: `backend/app/services/instructor_verification_service.py`
+- ✅ Created: `backend/migrations/add_instructor_verification_tokens.py`
+- ✅ Modified: `backend/app/routes/auth.py`
+- ✅ Modified: `backend/app/routes/verification.py`
+- ✅ Modified: `backend/app/models/user.py`
+- ✅ Modified: `backend/app/models/__init__.py`
+
+Frontend:
+- ✅ Created: `frontend/screens/verification/InstructorVerifyScreen.tsx`
+- ✅ Modified: `frontend/screens/auth/RegisterInstructorScreen.tsx`
+- ✅ Modified: `frontend/screens/auth/InstructorScheduleSetupScreen.tsx`
+- ✅ Modified: `frontend/App.tsx`
+
+Documentation:
+- ✅ Created: `INSTRUCTOR_VERIFICATION_SYSTEM.md` - Complete implementation guide
+
+**Testing:**
+
+- ✅ Database migration executed successfully
+- ⏳ End-to-end flow testing pending (register → email/WhatsApp → link click → verification)
+- ⏳ Multi-admin notification testing pending
+- ⏳ Token expiration testing pending
+- ⏳ Manual verification from dashboard testing pending
+
+**Status:** ✅ Backend complete, Frontend complete, Migration executed (Feb 6, 2026)
+

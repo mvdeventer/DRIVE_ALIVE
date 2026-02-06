@@ -12,6 +12,9 @@ const API_BASE_URL = Platform.select({
   default: 'http://localhost:8000',
 });
 
+// Use HTTP-only cookies for auth on web
+axios.defaults.withCredentials = true;
+
 interface ListResponse<T> {
   data: T[];
   meta: {
@@ -68,9 +71,7 @@ export const getDatabaseUsers = async (
   const response = await axios.get(
     `${API_BASE_URL}/admin/database-interface/users?${params.toString()}`,
     {
-      headers: {
-        'Authorization': `Bearer ${sessionStorage.getItem('access_token')}`,
-      },
+      headers: {},
     }
   );
   return response.data;
@@ -80,9 +81,7 @@ export const getUserDetail = async (userId: number): Promise<DetailResponse<any>
   const response = await axios.get(
     `${API_BASE_URL}/admin/database-interface/users/${userId}`,
     {
-      headers: {
-        'Authorization': `Bearer ${sessionStorage.getItem('access_token')}`,
-      },
+      headers: {},
     }
   );
   return response.data;
@@ -94,7 +93,6 @@ export const updateUser = async (
   etag?: string
 ): Promise<UpdateResponse<any>> => {
   const headers: Record<string, string> = {
-    'Authorization': `Bearer ${sessionStorage.getItem('access_token')}`,
     'Content-Type': 'application/json',
   };
 
@@ -116,7 +114,6 @@ export const deleteUser = async (
   roleType?: string  // 'student_profile', 'instructor_profile', or 'primary' (suspends user)
 ): Promise<UpdateResponse<any>> => {
   const headers: Record<string, string> = {
-    'Authorization': `Bearer ${sessionStorage.getItem('access_token')}`,
   };
 
   if (etag) {
@@ -154,9 +151,7 @@ export const getDatabaseInstructors = async (
   const response = await axios.get(
     `${API_BASE_URL}/admin/database-interface/instructors?${params.toString()}`,
     {
-      headers: {
-        'Authorization': `Bearer ${sessionStorage.getItem('access_token')}`,
-      },
+      headers: {},
     }
   );
   return response.data;
@@ -166,9 +161,7 @@ export const getInstructorDetail = async (instructorId: number): Promise<DetailR
   const response = await axios.get(
     `${API_BASE_URL}/admin/database-interface/instructors/${instructorId}`,
     {
-      headers: {
-        'Authorization': `Bearer ${sessionStorage.getItem('access_token')}`,
-      },
+      headers: {},
     }
   );
   return response.data;
@@ -180,7 +173,6 @@ export const updateInstructor = async (
   etag?: string
 ): Promise<UpdateResponse<any>> => {
   const headers: Record<string, string> = {
-    'Authorization': `Bearer ${sessionStorage.getItem('access_token')}`,
     'Content-Type': 'application/json',
   };
 
@@ -201,7 +193,6 @@ export const deleteInstructor = async (
   etag?: string
 ): Promise<UpdateResponse<any>> => {
   const headers: Record<string, string> = {
-    'Authorization': `Bearer ${sessionStorage.getItem('access_token')}`,
   };
 
   if (etag) {
@@ -234,9 +225,7 @@ export const getDatabaseStudents = async (
   const response = await axios.get(
     `${API_BASE_URL}/admin/database-interface/students?${params.toString()}`,
     {
-      headers: {
-        'Authorization': `Bearer ${sessionStorage.getItem('access_token')}`,
-      },
+      headers: {},
     }
   );
   return response.data;
@@ -246,9 +235,7 @@ export const getStudentDetail = async (studentId: number): Promise<DetailRespons
   const response = await axios.get(
     `${API_BASE_URL}/admin/database-interface/students/${studentId}`,
     {
-      headers: {
-        'Authorization': `Bearer ${sessionStorage.getItem('access_token')}`,
-      },
+      headers: {},
     }
   );
   return response.data;
@@ -260,7 +247,6 @@ export const updateStudent = async (
   etag?: string
 ): Promise<UpdateResponse<any>> => {
   const headers: Record<string, string> = {
-    'Authorization': `Bearer ${sessionStorage.getItem('access_token')}`,
     'Content-Type': 'application/json',
   };
 
@@ -281,7 +267,6 @@ export const deleteStudent = async (
   etag?: string
 ): Promise<UpdateResponse<any>> => {
   const headers: Record<string, string> = {
-    'Authorization': `Bearer ${sessionStorage.getItem('access_token')}`,
   };
 
   if (etag) {
@@ -322,9 +307,7 @@ export const getDatabaseBookings = async (
   const response = await axios.get(
     `${API_BASE_URL}/admin/database-interface/bookings?${params.toString()}`,
     {
-      headers: {
-        'Authorization': `Bearer ${sessionStorage.getItem('access_token')}`,
-      },
+        headers: {},
     }
   );
   return response.data;
@@ -334,9 +317,7 @@ export const getBookingDetail = async (bookingId: number): Promise<DetailRespons
   const response = await axios.get(
     `${API_BASE_URL}/admin/database-interface/bookings/${bookingId}`,
     {
-      headers: {
-        'Authorization': `Bearer ${sessionStorage.getItem('access_token')}`,
-      },
+        headers: {},
     }
   );
   return response.data;
@@ -348,7 +329,6 @@ export const updateBooking = async (
   etag?: string
 ): Promise<UpdateResponse<any>> => {
   const headers: Record<string, string> = {
-    'Authorization': `Bearer ${sessionStorage.getItem('access_token')}`,
     'Content-Type': 'application/json',
   };
 
@@ -369,9 +349,7 @@ export const deleteBooking = async (
   etag?: string,
   reason?: string
 ): Promise<UpdateResponse<any>> => {
-  const headers: Record<string, string> = {
-    'Authorization': `Bearer ${sessionStorage.getItem('access_token')}`,
-  };
+  const headers: Record<string, string> = {};
 
   if (etag) {
     headers['If-Match'] = etag;
@@ -404,9 +382,7 @@ export const getDatabaseReviews = async (
   const response = await axios.get(
     `${API_BASE_URL}/admin/database-interface/reviews?${params.toString()}`,
     {
-      headers: {
-        'Authorization': `Bearer ${sessionStorage.getItem('access_token')}`,
-      },
+        headers: {},
     }
   );
   return response.data;
@@ -431,9 +407,7 @@ export const getDatabaseSchedules = async (
   const response = await axios.get(
     `${API_BASE_URL}/admin/database-interface/schedules?${params.toString()}`,
     {
-      headers: {
-        'Authorization': `Bearer ${sessionStorage.getItem('access_token')}`,
-      },
+        headers: {},
     }
   );
   return response.data;
@@ -464,7 +438,6 @@ export const bulkUpdateRecords = async (
     request,
     {
       headers: {
-        'Authorization': `Bearer ${sessionStorage.getItem('access_token')}`,
         'Content-Type': 'application/json',
       },
     }

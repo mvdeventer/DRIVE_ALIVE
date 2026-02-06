@@ -25,7 +25,13 @@ from ..schemas.admin import (
     RevenueStats,
     UserManagementResponse,
 )
+from ..schemas.availability import (
+    InstructorScheduleCreate,
+    InstructorScheduleUpdate,
+    TimeOffExceptionCreate,
+)
 from ..utils.auth import get_password_hash
+from ..utils.encryption import EncryptionService
 
 router = APIRouter(prefix="/admin", tags=["Admin Dashboard"])
 
@@ -82,13 +88,18 @@ async def create_admin(
             validity_minutes=validity_minutes,
         )
 
+        smtp_password = (
+            EncryptionService.decrypt(existing_user.smtp_password)
+            if existing_user.smtp_password
+            else None
+        )
         verification_result = VerificationService.send_verification_messages(
             db=db,
             user=existing_user,
             verification_token=verification_token,
             frontend_url=settings.FRONTEND_URL,
             admin_smtp_email=existing_user.smtp_email,
-            admin_smtp_password=existing_user.smtp_password,
+            admin_smtp_password=smtp_password,
         )
         
         # Trigger backup after successful role addition
@@ -125,7 +136,11 @@ async def create_admin(
         role=UserRole.ADMIN,
         status=UserStatus.INACTIVE,
         smtp_email=admin_data.smtp_email,
-        smtp_password=admin_data.smtp_password,
+        smtp_password=(
+            EncryptionService.encrypt(admin_data.smtp_password)
+            if admin_data.smtp_password
+            else None
+        ),
         verification_link_validity_minutes=admin_data.verification_link_validity_minutes,
         twilio_sender_phone_number=admin_data.twilio_sender_phone_number,  # Twilio sender number
         twilio_phone_number=admin_data.twilio_phone_number,  # Admin's test recipient phone
@@ -143,13 +158,18 @@ async def create_admin(
         validity_minutes=validity_minutes,
     )
 
+    smtp_password = (
+        EncryptionService.decrypt(new_admin.smtp_password)
+        if new_admin.smtp_password
+        else None
+    )
     verification_result = VerificationService.send_verification_messages(
         db=db,
         user=new_admin,
         verification_token=verification_token,
         frontend_url=settings.FRONTEND_URL,
         admin_smtp_email=new_admin.smtp_email,
-        admin_smtp_password=new_admin.smtp_password,
+        admin_smtp_password=smtp_password,
     )
 
     # Trigger backup after successful admin creation
@@ -1208,15 +1228,6 @@ async def update_user_details(
     if last_name is not None:
         user.last_name = last_name
     if phone is not None:
-        # Check if phone is already used by another user
-        existing = (
-            db.query(User).filter(User.phone == phone, User.id != user_id).first()
-        )
-        if existing:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Phone number already in use: {phone}",
-            )
         user.phone = phone
 
     db.commit()
@@ -1358,6 +1369,227 @@ async def get_instructor_time_off(
         }
         for time_off in time_offs
     ]
+
+
+# ==================== Admin Manage Instructor Schedule & Time Off ====================
+
+
+@router.post("/instructors/{instructor_id}/schedule", status_code=status.HTTP_201_CREATED)
+async def admin_create_instructor_schedule(
+    instructor_id: int,
+    schedule_data: InstructorScheduleCreate,
+    current_admin: Annotated[User, Depends(require_admin)],
+    db: Session = Depends(get_db),
+):
+    """
+    Admin creates a schedule entry for an instructor
+    """
+    # Verify instructor exists
+    instructor = db.query(Instructor).filter(Instructor.id == instructor_id).first()
+    if not instructor:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Instructor not found",
+        )
+    
+    # Check if schedule already exists for this day
+    existing = (
+        db.query(InstructorSchedule)
+        .filter(
+            InstructorSchedule.instructor_id == instructor_id,
+            InstructorSchedule.day_of_week == schedule_data.day_of_week,
+        )
+        .first()
+    )
+    
+    if existing:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Schedule already exists for {schedule_data.day_of_week.value}",
+        )
+    
+    # Create new schedule
+    new_schedule = InstructorSchedule(
+        instructor_id=instructor_id,
+        day_of_week=schedule_data.day_of_week,
+        start_time=schedule_data.start_time,
+        end_time=schedule_data.end_time,
+        is_active=schedule_data.is_active,
+    )
+    
+    db.add(new_schedule)
+    db.commit()
+    db.refresh(new_schedule)
+    
+    return {
+        "id": new_schedule.id,
+        "instructor_id": new_schedule.instructor_id,
+        "day_of_week": new_schedule.day_of_week.value,
+        "start_time": new_schedule.start_time.strftime("%H:%M"),
+        "end_time": new_schedule.end_time.strftime("%H:%M"),
+        "is_active": new_schedule.is_active,
+    }
+
+
+@router.put("/instructors/{instructor_id}/schedule/{schedule_id}")
+async def admin_update_instructor_schedule(
+    instructor_id: int,
+    schedule_id: int,
+    schedule_data: InstructorScheduleUpdate,
+    current_admin: Annotated[User, Depends(require_admin)],
+    db: Session = Depends(get_db),
+):
+    """
+    Admin updates an instructor's schedule entry
+    """
+    # Verify schedule exists and belongs to this instructor
+    schedule = (
+        db.query(InstructorSchedule)
+        .filter(
+            InstructorSchedule.id == schedule_id,
+            InstructorSchedule.instructor_id == instructor_id,
+        )
+        .first()
+    )
+    
+    if not schedule:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Schedule entry not found",
+        )
+    
+    # Update fields
+    if schedule_data.start_time is not None:
+        schedule.start_time = schedule_data.start_time
+    if schedule_data.end_time is not None:
+        schedule.end_time = schedule_data.end_time
+    if schedule_data.is_active is not None:
+        schedule.is_active = schedule_data.is_active
+    
+    db.commit()
+    db.refresh(schedule)
+    
+    return {
+        "id": schedule.id,
+        "instructor_id": schedule.instructor_id,
+        "day_of_week": schedule.day_of_week.value,
+        "start_time": schedule.start_time.strftime("%H:%M"),
+        "end_time": schedule.end_time.strftime("%H:%M"),
+        "is_active": schedule.is_active,
+    }
+
+
+@router.delete("/instructors/{instructor_id}/schedule/{schedule_id}")
+async def admin_delete_instructor_schedule(
+    instructor_id: int,
+    schedule_id: int,
+    current_admin: Annotated[User, Depends(require_admin)],
+    db: Session = Depends(get_db),
+):
+    """
+    Admin deletes an instructor's schedule entry
+    """
+    # Verify schedule exists and belongs to this instructor
+    schedule = (
+        db.query(InstructorSchedule)
+        .filter(
+            InstructorSchedule.id == schedule_id,
+            InstructorSchedule.instructor_id == instructor_id,
+        )
+        .first()
+    )
+    
+    if not schedule:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Schedule entry not found",
+        )
+    
+    db.delete(schedule)
+    db.commit()
+    
+    return {"message": "Schedule entry deleted successfully"}
+
+
+@router.post("/instructors/{instructor_id}/time-off", status_code=status.HTTP_201_CREATED)
+async def admin_create_instructor_time_off(
+    instructor_id: int,
+    time_off_data: TimeOffExceptionCreate,
+    current_admin: Annotated[User, Depends(require_admin)],
+    db: Session = Depends(get_db),
+):
+    """
+    Admin creates a time-off entry for an instructor
+    """
+    # Verify instructor exists
+    instructor = db.query(Instructor).filter(Instructor.id == instructor_id).first()
+    if not instructor:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Instructor not found",
+        )
+    
+    # Create new time off
+    new_time_off = TimeOffException(
+        instructor_id=instructor_id,
+        start_date=time_off_data.start_date,
+        end_date=time_off_data.end_date,
+        start_time=time_off_data.start_time,
+        end_time=time_off_data.end_time,
+        reason=time_off_data.reason,
+        notes=time_off_data.notes,
+    )
+    
+    db.add(new_time_off)
+    db.commit()
+    db.refresh(new_time_off)
+    
+    return {
+        "id": new_time_off.id,
+        "instructor_id": new_time_off.instructor_id,
+        "start_date": new_time_off.start_date.strftime("%Y-%m-%d"),
+        "end_date": new_time_off.end_date.strftime("%Y-%m-%d"),
+        "start_time": (
+            new_time_off.start_time.strftime("%H:%M") if new_time_off.start_time else None
+        ),
+        "end_time": (
+            new_time_off.end_time.strftime("%H:%M") if new_time_off.end_time else None
+        ),
+        "reason": new_time_off.reason,
+        "notes": new_time_off.notes,
+    }
+
+
+@router.delete("/instructors/{instructor_id}/time-off/{time_off_id}")
+async def admin_delete_instructor_time_off(
+    instructor_id: int,
+    time_off_id: int,
+    current_admin: Annotated[User, Depends(require_admin)],
+    db: Session = Depends(get_db),
+):
+    """
+    Admin deletes an instructor's time-off entry
+    """
+    # Verify time off exists and belongs to this instructor
+    time_off = (
+        db.query(TimeOffException)
+        .filter(
+            TimeOffException.id == time_off_id,
+            TimeOffException.instructor_id == instructor_id,
+        )
+        .first()
+    )
+    
+    if not time_off:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Time off entry not found",
+        )
+    
+    db.delete(time_off)
+    db.commit()
+    
+    return {"message": "Time off entry deleted successfully"}
 
 
 # ==================== Admin Update Instructor Profile ====================
@@ -1661,11 +1893,17 @@ async def get_admin_settings(
         
         first_admin = admins[0]
         
+        smtp_password = (
+            EncryptionService.decrypt(first_admin.smtp_password)
+            if first_admin.smtp_password
+            else None
+        )
+
         return {
             "user_id": first_admin.id,
             "email": first_admin.email,
             "smtp_email": first_admin.smtp_email,
-            "smtp_password": first_admin.smtp_password,
+            "smtp_password": smtp_password,
             "verification_link_validity_minutes": first_admin.verification_link_validity_minutes or 30,
             "backup_interval_minutes": first_admin.backup_interval_minutes or 10,
             "retention_days": first_admin.retention_days or 30,
@@ -1711,7 +1949,11 @@ async def update_admin_settings(
         if settings_update.smtp_email is not None:
             first_admin.smtp_email = settings_update.smtp_email if settings_update.smtp_email else None
         if settings_update.smtp_password is not None:
-            first_admin.smtp_password = settings_update.smtp_password if settings_update.smtp_password else None
+            # Encrypt SMTP password before saving to database
+            if settings_update.smtp_password:
+                first_admin.smtp_password = EncryptionService.encrypt(settings_update.smtp_password)
+            else:
+                first_admin.smtp_password = None
         if settings_update.verification_link_validity_minutes is not None:
             first_admin.verification_link_validity_minutes = settings_update.verification_link_validity_minutes
         if settings_update.backup_interval_minutes is not None:

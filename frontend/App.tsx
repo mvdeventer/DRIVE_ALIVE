@@ -16,6 +16,7 @@ import GlobalTopBar from './components/GlobalTopBar';
 
 // Auth Screens
 import ForgotPasswordScreen from './screens/auth/ForgotPasswordScreen';
+import InstructorScheduleSetupScreen from './screens/auth/InstructorScheduleSetupScreen';
 import LoginScreen from './screens/auth/LoginScreen';
 import RegisterChoiceScreen from './screens/auth/RegisterChoiceScreen';
 import RegisterInstructorScreen from './screens/auth/RegisterInstructorScreen';
@@ -24,6 +25,9 @@ import ResetPasswordScreen from './screens/auth/ResetPasswordScreen';
 import SetupScreen from './screens/auth/SetupScreen';
 import VerifyAccountScreen from './screens/auth/VerifyAccountScreen';
 import VerificationPendingScreen from './screens/auth/VerificationPendingScreen';
+
+// Verification Screens
+import InstructorVerifyScreen from './screens/verification/InstructorVerifyScreen';
 
 // Student Screens
 import BookingScreen from './screens/booking/BookingScreen';
@@ -54,6 +58,7 @@ import InactivityManager from './utils/inactivityManager';
 
 // Admin Screens
 import AdminDashboardScreen from './screens/admin/AdminDashboardScreen';
+import AdminManageInstructorScheduleScreen from './screens/admin/AdminManageInstructorScheduleScreen';
 import AdminSettingsScreen from './screens/admin/AdminSettingsScreen';
 import BookingOversightScreen from './screens/admin/BookingOversightScreen';
 import CreateAdminScreen from './screens/admin/CreateAdminScreen';
@@ -74,6 +79,7 @@ const linking = {
   config: {
     screens: {
       VerifyAccount: 'verify-account',
+      InstructorVerify: 'instructor-verify',
       ResetPassword: 'reset-password',
       PaymentMock: 'payment/mock',
       PaymentSuccess: 'payment/success',
@@ -83,19 +89,20 @@ const linking = {
 };
 
 // Storage wrapper for web compatibility
-// Using sessionStorage on web (clears when browser/tab closes)
+// Web: HTTP-only cookies (no JS access)
+// Native: SecureStore
 const storage = {
   async getItem(key: string): Promise<string | null> {
     const isWeb = Platform?.OS === 'web';
     if (isWeb) {
-      return sessionStorage.getItem(key); // Changed from localStorage
+      return null;
     }
     return await SecureStore.getItemAsync(key);
   },
   async removeItem(key: string): Promise<void> {
     const isWeb = Platform?.OS === 'web';
     if (isWeb) {
-      sessionStorage.removeItem(key); // Changed from localStorage
+      return;
     } else {
       await SecureStore.deleteItemAsync(key);
     }
@@ -149,6 +156,21 @@ export default function App() {
 
   const checkAuth = async () => {
     try {
+      const isWeb = Platform?.OS === 'web';
+      if (isWeb) {
+        // Web: rely on HTTP-only cookie, verify by calling /auth/me
+        const response = await ApiService.get('/auth/me');
+        const role = response.data.role;
+        const firstName = response.data.first_name || '';
+        const lastName = response.data.last_name || '';
+        const roleName = role ? role.charAt(0).toUpperCase() + role.slice(1) : 'User';
+        setIsAuthenticated(true);
+        setUserRole(role);
+        setUserName(`${firstName} ${lastName} (${roleName})`);
+        return;
+      }
+
+      // Native: use SecureStore + Authorization header fallback
       const token = await storage.getItem('access_token');
       const role = await storage.getItem('user_role');
       setIsAuthenticated(!!token);
@@ -160,6 +182,8 @@ export default function App() {
       }
     } catch (error) {
       console.error('Error checking auth:', error);
+      setIsAuthenticated(false);
+      setUserRole(null);
     } finally {
       setIsLoading(false);
     }
@@ -223,6 +247,7 @@ export default function App() {
   const handleLogout = async () => {
     // IMMEDIATE LOGOUT: Clear auth tokens and redirect to login (per AGENTS.md)
     try {
+      await ApiService.logout();
       await storage.removeItem('access_token');
       await storage.removeItem('user_role');
       setIsAuthenticated(false);
@@ -361,6 +386,16 @@ export default function App() {
             component={VerificationPendingScreen}
             options={{ title: 'Verify Your Account', headerShown: !isAuthenticated }}
           />
+          <Stack.Screen
+            name="InstructorVerify"
+            component={InstructorVerifyScreen}
+            options={{ title: 'Verify Instructor', headerShown: !isAuthenticated }}
+          />
+          <Stack.Screen
+            name="InstructorScheduleSetup"
+            component={InstructorScheduleSetupScreen}
+            options={{ title: 'Set Up Schedule', headerShown: !isAuthenticated }}
+          />
 
           {/* Student Stack */}
           <Stack.Screen
@@ -469,6 +504,11 @@ export default function App() {
             name="CreateAdmin"
             component={CreateAdminScreen}
             options={{ title: 'Create Admin' }}
+          />
+          <Stack.Screen
+            name="AdminManageInstructorSchedule"
+            component={AdminManageInstructorScheduleScreen}
+            options={{ title: 'Manage Instructor Schedule' }}
           />
           <Stack.Screen
             name="DatabaseInterface"

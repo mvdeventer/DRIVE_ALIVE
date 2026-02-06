@@ -148,14 +148,7 @@ export default function AdminDashboardScreen({ navigation }: any) {
       await apiService.resetDatabase();
       
       // STEP 3: Clear authentication tokens and force full logout
-      const storage = Platform.OS === 'web' ? localStorage : SecureStore;
-      if (Platform.OS === 'web') {
-        sessionStorage.removeItem('access_token'); // Changed from storage
-        sessionStorage.removeItem('user_role');
-      } else {
-        await storage.deleteItemAsync('access_token');
-        await storage.deleteItemAsync('user_role');
-      }
+      await apiService.logout();
       
       setShowDbModal(false);
       

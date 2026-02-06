@@ -7,14 +7,20 @@ import { Platform } from 'react-native';
 import { API_CONFIG } from '../../config';
 
 // Storage wrapper to handle web vs native
-// Web: Uses HTTP-only cookies (automatic, more secure)
+// Web: Uses HTTP-only cookies plus in-memory fallback for dev
 // Native: Uses SecureStore (Authorization header fallback)
+let webAccessToken: string | null = null;
+let webUserRole: string | null = null;
 const storage = {
   async getItem(key: string): Promise<string | null> {
     const isWeb = Platform?.OS === 'web';
     if (isWeb) {
-      // On web, cookies are handled automatically by browser
-      // No manual storage needed (HTTP-only cookie protection)
+      if (key === 'access_token') {
+        return webAccessToken;
+      }
+      if (key === 'user_role') {
+        return webUserRole;
+      }
       return null;
     }
     return await SecureStore.getItemAsync(key);
@@ -22,8 +28,14 @@ const storage = {
   async setItem(key: string, value: string): Promise<void> {
     const isWeb = Platform?.OS === 'web';
     if (isWeb) {
-      // On web, cookies are set by server (HTTP-only)
-      // No manual storage needed
+      if (key === 'access_token') {
+        webAccessToken = value;
+        return;
+      }
+      if (key === 'user_role') {
+        webUserRole = value;
+        return;
+      }
       return;
     } else {
       await SecureStore.setItemAsync(key, value);
@@ -32,8 +44,14 @@ const storage = {
   async removeItem(key: string): Promise<void> {
     const isWeb = Platform?.OS === 'web';
     if (isWeb) {
-      // On web, cookies are cleared by server logout endpoint
-      // No manual removal needed
+      if (key === 'access_token') {
+        webAccessToken = null;
+        return;
+      }
+      if (key === 'user_role') {
+        webUserRole = null;
+        return;
+      }
       return;
     } else {
       await SecureStore.deleteItemAsync(key);

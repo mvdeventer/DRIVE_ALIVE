@@ -18,19 +18,20 @@ import { API_CONFIG } from '../../config';
 import ApiService from '../../services/api';
 
 // Storage wrapper for web compatibility
-// Using sessionStorage on web (clears when browser/tab closes)
+// Web: HTTP-only cookies (no JS access)
+// Native: SecureStore
 const storage = {
   async getItem(key: string): Promise<string | null> {
     const isWeb = Platform?.OS === 'web';
     if (isWeb) {
-      return sessionStorage.getItem(key); // Changed from localStorage
+      return null;
     }
     return await SecureStore.getItemAsync(key);
   },
   async setItem(key: string, value: string): Promise<void> {
     const isWeb = Platform?.OS === 'web';
     if (isWeb) {
-      sessionStorage.setItem(key, value); // Changed from localStorage
+      return;
     } else {
       await SecureStore.setItemAsync(key, value);
     }
@@ -77,6 +78,7 @@ export default function LoginScreen({ navigation, onAuthChange }: any) {
   const fetchLoginResponse = async (body: string) => {
     const fetchResponse = await fetch(`${API_CONFIG.BASE_URL}/auth/login`, {
       method: 'POST',
+      credentials: 'include',
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded',
       },
@@ -283,6 +285,7 @@ export default function LoginScreen({ navigation, onAuthChange }: any) {
       />
 
       <TextInput
+        key={`password-${showPassword}`}
         style={styles.input}
         placeholder="Password"
         value={password}

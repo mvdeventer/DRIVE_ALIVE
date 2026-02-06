@@ -44,6 +44,9 @@ class Settings(BaseSettings):
     SMTP_PASSWORD: str = ""
     FROM_EMAIL: str = "noreply@drivealive.com"
 
+    # Encryption (for sensitive data like SMTP passwords)
+    ENCRYPTION_KEY: str = ""
+
     # Frontend URL (for password reset links and payment redirects)
     FRONTEND_URL: str = "http://10.0.0.121:8081"
 
@@ -78,7 +81,6 @@ class Settings(BaseSettings):
 
 
 # Load settings
-import os
 from pathlib import Path
 
 # Try multiple paths for .env file

@@ -421,6 +421,22 @@ export default function ManageAvailabilityScreen({ navigation: navProp }: any) {
     }
   };
 
+  const handleDatePickerConfirm = (date: Date) => {
+    if (!showDatePicker.field) return;
+
+    const year = date.getFullYear();
+    const month = (date.getMonth() + 1).toString().padStart(2, '0');
+    const day = date.getDate().toString().padStart(2, '0');
+    const dateString = `${year}-${month}-${day}`;
+
+    setNewTimeOff({
+      ...newTimeOff,
+      [showDatePicker.field]: dateString,
+    });
+    setShowDatePicker({});
+    setTempSelectedDate(null);
+  };
+
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
@@ -705,6 +721,7 @@ export default function ManageAvailabilityScreen({ navigation: navProp }: any) {
                       : new Date()
                   }
                   disabledDates={getDisabledDates()}
+                  showActions={false}
                 />
                 <View style={styles.modalFooter}>
                   <TouchableOpacity
@@ -720,18 +737,8 @@ export default function ManageAvailabilityScreen({ navigation: navProp }: any) {
                     style={styles.modalButton}
                     onPress={() => {
                       if (tempSelectedDate) {
-                        const year = tempSelectedDate.getFullYear();
-                        const month = (tempSelectedDate.getMonth() + 1).toString().padStart(2, '0');
-                        const day = tempSelectedDate.getDate().toString().padStart(2, '0');
-                        const dateString = `${year}-${month}-${day}`;
-
-                        setNewTimeOff({
-                          ...newTimeOff,
-                          [showDatePicker.field!]: dateString,
-                        });
+                        handleDatePickerConfirm(tempSelectedDate);
                       }
-                      setShowDatePicker({});
-                      setTempSelectedDate(null);
                     }}
                   >
                     <Text style={styles.modalButtonText}>Confirm</Text>
@@ -1105,11 +1112,6 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 22,
   },
-  modalFooter: {
-    marginTop: 16,
-    flexDirection: 'row',
-    gap: 8,
-  },
   selectedCountText: {
     fontSize: 14,
     color: '#007bff',
@@ -1182,6 +1184,11 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 16,
     fontWeight: 'bold',
+  },
+  modalFooter: {
+    marginTop: 16,
+    flexDirection: 'row',
+    gap: 8,
   },
   confirmModalContent: {
     backgroundColor: '#fff',

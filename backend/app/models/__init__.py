@@ -14,6 +14,7 @@ from .payment import Transaction, TransactionStatus, TransactionType
 from .payment_session import PaymentSession, PaymentSessionStatus
 from .user import Instructor, Student, User, UserRole, UserStatus
 from .verification_token import VerificationToken
+from .instructor_verification import InstructorVerificationToken
 
 __all__ = [
     "User",
@@ -32,6 +33,7 @@ __all__ = [
     "PaymentSessionStatus",
     "PasswordResetToken",
     "VerificationToken",
+    "InstructorVerificationToken",
     "InstructorSchedule",
     "TimeOffException",
     "CustomAvailability",

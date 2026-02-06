@@ -9,7 +9,7 @@ import {
   StyleSheet,
 } from 'react-native';
 import {
-  deleteUser,
+  updateUser,
   deleteInstructor,
   deleteStudent,
   deleteBooking,
@@ -38,10 +38,13 @@ const DatabaseDeleteConfirm: React.FC<DatabaseDeleteConfirmProps> = ({
   const [loading, setLoading] = useState(false);
   const [reason, setReason] = useState('');
 
+  const isUserSuspended =
+    tableType === 'users' && String(record?.status || '').toUpperCase() === 'SUSPENDED';
+
   const deleteLabel = useMemo(() => {
     switch (tableType) {
       case 'users':
-        return 'Suspend User';
+        return 'Change User Status';
       case 'instructors':
         return 'Disable Instructor Verification';
       case 'students':
@@ -56,7 +59,7 @@ const DatabaseDeleteConfirm: React.FC<DatabaseDeleteConfirmProps> = ({
   const confirmButtonText = useMemo(() => {
     switch (tableType) {
       case 'users':
-        return 'Suspend';
+        return isUserSuspended ? 'Set Active' : 'Set Suspended';
       case 'instructors':
         return 'Disable';
       case 'students':
@@ -71,7 +74,9 @@ const DatabaseDeleteConfirm: React.FC<DatabaseDeleteConfirmProps> = ({
   const deleteDescription = useMemo(() => {
     switch (tableType) {
       case 'users':
-        return 'This will set the user status to SUSPENDED. The record will remain in the database.';
+        return isUserSuspended
+          ? 'This will set the user status to ACTIVE. The record will remain in the database.'
+          : 'This will set the user status to SUSPENDED. The record will remain in the database.';
       case 'instructors':
         return 'This will set instructor verification to false. The record will remain in the database.';
       case 'students':
@@ -89,9 +94,17 @@ const DatabaseDeleteConfirm: React.FC<DatabaseDeleteConfirmProps> = ({
 
       switch (tableType) {
         case 'users':
-          // Pass row_type to determine which profile/role to delete
-          await deleteUser(record.id, etag, record.row_type);
-          onDeleted('User suspended successfully');
+          const newStatus = isUserSuspended ? 'ACTIVE' : 'SUSPENDED';
+          console.log('[TEMP] Updating user status:', record.id, newStatus);
+          const updateResponse = await updateUser(
+            record.id,
+            { status: newStatus },
+            etag
+          );
+          console.log('[TEMP] Status update response:', updateResponse);
+          onDeleted(
+            `User status set to ${newStatus}`
+          );
           break;
         case 'instructors':
           await deleteInstructor(record.id, etag);
@@ -121,7 +134,14 @@ const DatabaseDeleteConfirm: React.FC<DatabaseDeleteConfirmProps> = ({
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <View style={styles.modalOverlay}>
         <View style={styles.modalContent}>
-          <Text style={styles.modalTitle}>⚠️ Confirm Action</Text>
+          <Text
+            style={[
+              styles.modalTitle,
+              tableType === 'users' && (isUserSuspended ? styles.modalTitleSuspended : styles.modalTitleActive),
+            ]}
+          >
+            ⚠️ Confirm Action
+          </Text>
           <Text style={styles.modalSubtitle}>{deleteLabel}</Text>
 
           <View style={styles.confirmDetails}>
@@ -171,7 +191,15 @@ const DatabaseDeleteConfirm: React.FC<DatabaseDeleteConfirmProps> = ({
               <Text style={styles.modalButtonTextSecondary}>Cancel</Text>
             </TouchableOpacity>
             <TouchableOpacity
-              style={[styles.modalButton, styles.modalButtonPrimary, loading && styles.buttonDisabled]}
+              style={[
+                styles.modalButton,
+                tableType === 'users'
+                  ? isUserSuspended
+                    ? styles.modalButtonSuspended
+                    : styles.modalButtonActive
+                  : styles.modalButtonPrimary,
+                loading && styles.buttonDisabled,
+              ]}
               onPress={handleDelete}
               disabled={loading}
             >
@@ -206,6 +234,12 @@ const styles = StyleSheet.create({
     color: '#dc3545',
     marginBottom: 8,
     textAlign: 'center',
+  },
+  modalTitleActive: {
+    color: '#28a745',
+  },
+  modalTitleSuspended: {
+    color: '#ffc107',
   },
   modalSubtitle: {
     fontSize: Platform.OS === 'web' ? 15 : 13,
@@ -260,6 +294,12 @@ const styles = StyleSheet.create({
   },
   modalButtonPrimary: {
     backgroundColor: '#28a745',
+  },
+  modalButtonActive: {
+    backgroundColor: '#28a745',
+  },
+  modalButtonSuspended: {
+    backgroundColor: '#ffc107',
   },
   modalButtonSecondary: {
     backgroundColor: '#fff',

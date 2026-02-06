@@ -75,9 +75,9 @@ class User(Base):
 
     # Relationships
     instructor_profile = relationship(
-        "Instructor", back_populates="user", uselist=False
+        "Instructor", back_populates="user", uselist=False, cascade="all, delete-orphan"
     )
-    student_profile = relationship("Student", back_populates="user", uselist=False)
+    student_profile = relationship("Student", back_populates="user", uselist=False, cascade="all, delete-orphan")
     password_reset_tokens = relationship(
         "PasswordResetToken", back_populates="user", cascade="all, delete-orphan"
     )
@@ -156,6 +156,9 @@ class Instructor(Base):
     )
     custom_availability = relationship(
         "CustomAvailability", back_populates="instructor", cascade="all, delete-orphan"
+    )
+    verification_tokens = relationship(
+        "InstructorVerificationToken", back_populates="instructor", cascade="all, delete-orphan"
     )
 
 

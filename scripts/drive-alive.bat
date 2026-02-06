@@ -30,7 +30,8 @@
 ::   --backend-only, -b      Only affect backend
 ::   --frontend-only, -f     Only affect frontend
 ::   --no-browser, -n        Don't open browser windows
-::   --debug, -d             Show detailed debug information
+::   -d                      Dev mode - open Edge with developer tools (start command only)
+::   --debug                 Show detailed debug information
 ::   --clear-db, -c          Clear database before starting (in debug mode only)
 ::   --port [PORT]           Custom backend port (default: 8000)
 ::   --message [MSG], -m     Commit message (for commit command)
@@ -89,6 +90,7 @@ set "BACKEND_ONLY=0"
 set "FRONTEND_ONLY=0"
 set "NO_BROWSER=0"
 set "DEBUG=0"
+set "DEV_MODE=0"
 set "CLEAR_DB=0"
 set "COMMIT_MESSAGE="
 set "RELEASE_VERSION="
@@ -140,7 +142,11 @@ if /i "%~1"=="--debug" (
     goto :parse_args
 )
 if /i "%~1"=="-d" (
-    set "DEBUG=1"
+    if /i "%COMMAND%"=="start" (
+        set "DEV_MODE=1"
+    ) else (
+        set "DEBUG=1"
+    )
     shift
     goto :parse_args
 )
@@ -517,7 +523,15 @@ timeout /t 10 /nobreak >nul
 echo %COLOR_YELLOW%Opening browser windows...%COLOR_RESET%
 start "" "%API_DOCS_URL%"
 timeout /t 2 /nobreak >nul
-start "" "%FRONTEND_URL%"
+
+REM Open browser - Edge with dev tools if -d flag, otherwise default browser
+if "%DEV_MODE%"=="1" (
+    echo %COLOR_CYAN%Opening Edge with developer tools...%COLOR_RESET%
+    powershell -Command "Start-Process msedge -ArgumentList '%FRONTEND_URL%' -WindowStyle Maximized; Start-Sleep -Seconds 2; (New-Object -ComObject WScript.Shell).SendKeys('{F12}')"
+) else (
+    echo %COLOR_CYAN%Opening Frontend in default browser...%COLOR_RESET%
+    start "" "%FRONTEND_URL%"
+)
 
 :start_done
 echo.
@@ -590,6 +604,15 @@ echo %COLOR_YELLOW%Starting Frontend Server only (localhost mode)...%COLOR_RESET
 powershell -Command "$process = Start-Process cmd -ArgumentList '/k', 'cd /d \"%FRONTEND_DIR%\" && npx expo start --localhost' -WindowStyle Normal -PassThru; $process.Id | Out-File -FilePath '%FRONTEND_PID_FILE%' -Encoding ASCII -NoNewline; Write-Host \"Frontend started with PID: $($process.Id)\" -ForegroundColor Green"
 echo.
 echo %COLOR_GREEN%Frontend server started: %FRONTEND_URL%%COLOR_RESET%
+
+timeout /t 5 /nobreak >nul
+if "%DEV_MODE%"=="1" (
+    echo %COLOR_CYAN%Opening Edge with developer tools...%COLOR_RESET%
+    powershell -Command "Start-Process msedge -ArgumentList '%FRONTEND_URL%' -WindowStyle Maximized; Start-Sleep -Seconds 2; (New-Object -ComObject WScript.Shell).SendKeys('{F12}')"
+) else (
+    echo %COLOR_CYAN%Opening Frontend in default browser...%COLOR_RESET%
+    start "" "%FRONTEND_URL%"
+)
 goto :eof
 
 :: ==============================================================================
@@ -1481,7 +1504,8 @@ echo OPTIONS:
 echo   --backend-only, -b      Only affect backend
 echo   --frontend-only, -f     Only affect frontend
 echo   --no-browser, -n        Don't open browser windows
-echo   --debug, -d             Show detailed debug information
+echo   -d                      Dev mode - open Edge with developer tools (start command only)
+echo   --debug                 Show detailed debug information
 echo   --port [PORT]           Custom backend port (default: 8000)
 echo   --message [MSG], -m     Commit message (for commit command)
 echo   --version [VER], -v     Version tag (for release/update-version command)
@@ -1490,7 +1514,10 @@ echo   --minor                 Increment minor version (0.x.0)
 echo   --patch                 Increment patch version (0.0.x)
 echo.
 echo EXAMPLES:
-echo   drive-alive.bat start
+echo   drive-alive.bat                           # Start servers - open default browser
+echo   drive-alive.bat -d                        # Start servers - open Edge with dev tools
+echo   drive-alive.bat start -f -d               # Start frontend only - open Edge with dev tools
+echo   drive-alive.bat start -b                  # Start backend only (no dev mode)
 echo   drive-alive.bat start --backend-only --port 8080
 echo   drive-alive.bat check
 echo   drive-alive.bat install

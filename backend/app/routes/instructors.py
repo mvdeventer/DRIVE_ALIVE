@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 
 from ..database import get_db
 from ..middleware.admin import require_admin
+from ..middleware.admin import require_admin
 from ..models.booking import Booking, BookingStatus
 from ..models.user import Instructor as InstructorModel
 from ..models.user import User, UserRole
@@ -646,6 +647,7 @@ async def update_availability(
 async def verify_instructor(
     instructor_id: int,
     current_admin: Annotated[User, Depends(require_admin)],
+    current_user: Annotated[User, Depends(require_admin)],
     db: Session = Depends(get_db),
 ):
     """
@@ -679,6 +681,7 @@ async def verify_instructor(
 async def unverify_instructor(
     instructor_id: int,
     current_admin: Annotated[User, Depends(require_admin)],
+    current_user: Annotated[User, Depends(require_admin)],
     db: Session = Depends(get_db),
 ):
     """
@@ -710,6 +713,7 @@ async def unverify_instructor(
 @router.get("/unverified/list", response_model=List[InstructorResponse])
 async def get_unverified_instructors(
     current_admin: Annotated[User, Depends(require_admin)],
+    current_user: Annotated[User, Depends(require_admin)],
     db: Session = Depends(get_db),
 ):
     """

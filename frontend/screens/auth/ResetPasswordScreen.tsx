@@ -108,6 +108,7 @@ export default function ResetPasswordScreen() {
         <View style={styles.formGroup}>
           <Text style={styles.label}>New Password</Text>
           <TextInput
+            key={`password-${showPassword}`}
             style={styles.input}
             placeholder="Enter new password (min. 6 characters)"
             value={newPassword}
@@ -122,6 +123,7 @@ export default function ResetPasswordScreen() {
         <View style={styles.formGroup}>
           <Text style={styles.label}>Confirm Password</Text>
           <TextInput
+            key={`confirm-password-${showPassword}`}
             style={styles.input}
             placeholder="Re-enter new password"
             value={confirmPassword}

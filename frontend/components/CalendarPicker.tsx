@@ -8,23 +8,27 @@ import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 interface CalendarPickerProps {
   value: Date;
   onChange: (date: Date) => void;
+  onCancel?: () => void;
   minDate?: Date;
   maxDate?: Date;
   disabledDates?: Date[]; // Deprecated - kept for backward compatibility
   timeOffDates?: Date[]; // Orange - instructor time-off
   noScheduleDates?: Date[]; // Grey - days instructor doesn't work
   fullyBookedDates?: Date[]; // Red - all slots booked
+  showActions?: boolean;
 }
 
 export default function CalendarPicker({
   value,
   onChange,
+  onCancel,
   minDate,
   maxDate,
   disabledDates,
   timeOffDates,
   noScheduleDates,
   fullyBookedDates,
+  showActions = true,
 }: CalendarPickerProps) {
   const [currentMonth, setCurrentMonth] = useState(
     new Date(value.getFullYear(), value.getMonth(), 1)
@@ -80,6 +84,9 @@ export default function CalendarPicker({
 
   const handleCancel = () => {
     setTempSelectedDate(value);
+    if (onCancel) {
+      onCancel();
+    }
   };
 
   const isDateDisabled = (day: number) => {
@@ -296,17 +303,22 @@ export default function CalendarPicker({
       <View style={styles.calendarGrid}>{renderCalendar()}</View>
 
       {/* Action Buttons */}
-      <View style={styles.actionButtons}>
-        <TouchableOpacity onPress={handleCancel} style={[styles.actionButton, styles.cancelButton]}>
-          <Text style={styles.cancelButtonText}>Cancel</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          onPress={handleConfirm}
-          style={[styles.actionButton, styles.confirmButton]}
-        >
-          <Text style={styles.confirmButtonText}>OK</Text>
-        </TouchableOpacity>
-      </View>
+      {showActions && (
+        <View style={styles.actionButtons}>
+          <TouchableOpacity
+            onPress={handleCancel}
+            style={[styles.actionButton, styles.cancelButton]}
+          >
+            <Text style={styles.cancelButtonText}>Cancel</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={handleConfirm}
+            style={[styles.actionButton, styles.confirmButton]}
+          >
+            <Text style={styles.confirmButtonText}>OK</Text>
+          </TouchableOpacity>
+        </View>
+      )}
     </View>
   );
 }
@@ -382,10 +394,10 @@ const styles = StyleSheet.create({
     opacity: 1,
   },
   timeOffCell: {
-    backgroundColor: '#fff3e0',
+    backgroundColor: '#fff3cd',
     borderRadius: 8,
     borderWidth: 2,
-    borderColor: '#ff9800',
+    borderColor: '#ffc107',
     opacity: 1,
   },
   fullyBookedCell: {
@@ -415,7 +427,7 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   timeOffText: {
-    color: '#ff9800',
+    color: '#856404',
     fontWeight: 'bold',
     textDecorationLine: 'line-through',
   },

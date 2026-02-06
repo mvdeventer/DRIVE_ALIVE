@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import AddressAutocomplete from '../../components/AddressAutocomplete';
+import { formatPhoneNumber } from '../../utils/phoneFormatter';
 
 interface FormData {
   firstName: string;
@@ -275,6 +276,10 @@ export default function SetupScreen({ navigation }: SetupScreenProps) {
   };
 
   const handleChange = (field: keyof FormData, value: string) => {
+    // Auto-format phone numbers
+    if (field === 'phone' || field === 'twilioSenderPhoneNumber' || field === 'twilioPhoneNumber') {
+      value = formatPhoneNumber(value);
+    }
     setFormData((prev) => ({
       ...prev,
       [field]: value,
@@ -414,6 +419,7 @@ export default function SetupScreen({ navigation }: SetupScreenProps) {
           <View style={styles.formGroup}>
             <Text style={styles.label}>Password *</Text>
             <TextInput
+              key={`password-${showPassword}`}
               style={[styles.input, errors.password && styles.inputError]}
               placeholder="Enter a strong password"
               value={formData.password}
@@ -431,6 +437,7 @@ export default function SetupScreen({ navigation }: SetupScreenProps) {
           <View style={styles.formGroup}>
             <Text style={styles.label}>Confirm Password *</Text>
             <TextInput
+              key={`confirm-password-${showPassword}`}
               style={[styles.input, errors.confirmPassword && styles.inputError]}
               placeholder="Confirm password"
               value={formData.confirmPassword}
@@ -480,6 +487,7 @@ export default function SetupScreen({ navigation }: SetupScreenProps) {
           <View style={styles.formGroup}>
             <Text style={styles.label}>Gmail App Password</Text>
             <TextInput
+              key={`smtp-password-${showSmtpPassword}`}
               style={styles.input}
               placeholder="16-character app password (no spaces)"
               value={formData.smtpPassword}

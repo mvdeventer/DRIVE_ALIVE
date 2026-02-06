@@ -18,6 +18,7 @@ import FormFieldWithTip from '../../components/FormFieldWithTip';
 import InlineMessage from '../../components/InlineMessage';
 import { DEBUG_CONFIG } from '../../config';
 import ApiService from '../../services/api';
+import { formatPhoneNumber } from '../../utils/phoneFormatter';
 
 export default function RegisterStudentScreen({ navigation }: any) {
   // Create refs for all input fields
@@ -127,6 +128,10 @@ export default function RegisterStudentScreen({ navigation }: any) {
   };
 
   const updateField = (field: string, value: string) => {
+    // Auto-format phone numbers
+    if (field === 'phone' || field === 'emergency_contact_phone') {
+      value = formatPhoneNumber(value);
+    }
     setFormData({ ...formData, [field]: value });
   };
 
@@ -279,6 +284,7 @@ export default function RegisterStudentScreen({ navigation }: any) {
 
       <Text style={styles.sectionTitle}>Security</Text>
       <FormFieldWithTip
+        key={`password-${showPassword}`}
         ref={passwordRef}
         label="Password"
         placeholder="At least 6 characters"
@@ -291,6 +297,7 @@ export default function RegisterStudentScreen({ navigation }: any) {
         blurOnSubmit={false}
       />
       <FormFieldWithTip
+        key={`confirm-password-${showPassword}`}
         ref={confirmPasswordRef}
         label="Confirm Password"
         placeholder="Re-enter password"
@@ -353,9 +360,9 @@ export default function RegisterStudentScreen({ navigation }: any) {
             
             <Text style={styles.confirmLabel}>Address:</Text>
             <Text style={styles.confirmValue}>
-              {formData.address_line1}
-              {formData.address_line2 ? `, ${formData.address_line2}` : ''}
-              {formData.postal_code ? `, ${formData.postal_code}` : ''}
+              {`${formData.address_line1}${
+                formData.address_line2 ? `, ${formData.address_line2}` : ''
+              }${formData.postal_code ? `, ${formData.postal_code}` : ''}`}
             </Text>
           </View>
 

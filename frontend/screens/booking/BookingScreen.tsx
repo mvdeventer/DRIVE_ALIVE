@@ -1218,6 +1218,7 @@ export default function BookingScreen({ navigation: navProp }: any) {
                 handleDateSelect(date);
                 setShowCalendarModal(false);
               }}
+              onCancel={() => setShowCalendarModal(false)}
               minDate={new Date(new Date().setHours(0, 0, 0, 0))}
               maxDate={new Date(Date.now() + 90 * 24 * 60 * 60 * 1000)}
               timeOffDates={instructorTimeOff}

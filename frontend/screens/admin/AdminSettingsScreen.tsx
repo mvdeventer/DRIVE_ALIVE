@@ -33,6 +33,7 @@ export default function AdminSettingsScreen({ navigation }: any) {
   const [testingEmail, setTestingEmail] = useState(false);
   const [testingWhatsApp, setTestingWhatsApp] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [actualPassword, setActualPassword] = useState('');  // Store actual password for masking
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [showUnsavedModal, setShowUnsavedModal] = useState(false);
 
@@ -68,7 +69,7 @@ export default function AdminSettingsScreen({ navigation }: any) {
       
       const settingsData = {
         smtpEmail: data.smtp_email || '',
-        smtpPassword: data.smtp_password || '',
+        smtpPassword: data.smtp_password || '',  // Store actual password
         linkValidity: data.verification_link_validity_minutes?.toString() || '30',
         backupIntervalMinutes: data.backup_interval_minutes?.toString() || '10',
         retentionDays: data.retention_days?.toString() || '30',
@@ -80,6 +81,7 @@ export default function AdminSettingsScreen({ navigation }: any) {
       };
 
       setFormData(settingsData);
+      setActualPassword(data.smtp_password || '');  // Store decrypted password
       setOriginalData({
         smtpEmail: settingsData.smtpEmail,
         smtpPassword: settingsData.smtpPassword,
@@ -119,9 +121,14 @@ export default function AdminSettingsScreen({ navigation }: any) {
   };
 
   const hasUnsavedChanges = () => {
+    // Ignore password field if it's the placeholder or empty
+    const passwordChanged = formData.smtpPassword !== originalData.smtpPassword &&
+                           formData.smtpPassword !== '••••••••••••••••' &&
+                           formData.smtpPassword !== '';
+    
     return (
       formData.smtpEmail !== originalData.smtpEmail ||
-      formData.smtpPassword !== originalData.smtpPassword ||
+      passwordChanged ||
       formData.linkValidity !== originalData.linkValidity ||
       formData.inactivityTimeout !== originalData.inactivityTimeout ||
       formData.backupIntervalMinutes !== originalData.backupIntervalMinutes ||
@@ -149,9 +156,12 @@ export default function AdminSettingsScreen({ navigation }: any) {
     setSuccessMessage('');
 
     try {
+      // Send actual password or null if empty
+      const passwordToSend = formData.smtpPassword ? formData.smtpPassword : null;
+      
       const response = await apiService.updateAdminSettings({
         smtp_email: formData.smtpEmail || null,
-        smtp_password: formData.smtpPassword || null,
+        smtp_password: passwordToSend || null,
         verification_link_validity_minutes: parseInt(formData.linkValidity) || 30,
         backup_interval_minutes: parseInt(formData.backupIntervalMinutes) || 10,
         retention_days: parseInt(formData.retentionDays) || 30,
@@ -210,6 +220,7 @@ export default function AdminSettingsScreen({ navigation }: any) {
           smtp_email: formData.smtpEmail,
           smtp_password: formData.smtpPassword,
           test_recipient: formData.testRecipient,
+          verification_link_validity_minutes: parseInt(formData.linkValidity) || 30,
         }),
       });
 
@@ -218,6 +229,9 @@ export default function AdminSettingsScreen({ navigation }: any) {
         scrollViewRef.current?.scrollTo({ y: 0, animated: true });
         setSuccessMessage(`✅ ${data.message || 'Test email sent successfully! Check your inbox.'}`);
         setTimeout(() => setSuccessMessage(''), 4000);
+        
+        // Reload settings to get the saved values from database
+        await loadSettings();
       } else {
         const errorData = await response.json();
         scrollViewRef.current?.scrollTo({ y: 0, animated: true });
@@ -262,8 +276,9 @@ export default function AdminSettingsScreen({ navigation }: any) {
         const data = await response.json();
         scrollViewRef.current?.scrollTo({ y: 0, animated: true });
         setSuccessMessage(`✅ ${data.message || 'Test WhatsApp sent successfully! Check your phone.'}`);
-        setTimeout(() => setSuccessMessage(''), 4000);
-      } else {
+        setTimeout(() => setSuccessMessage(''), 4000);        
+        // Reload settings to get the saved values from database
+        await loadSettings();      } else {
         const errorData = await response.json();
         scrollViewRef.current?.scrollTo({ y: 0, animated: true });
         setErrorMessage(`❌ Test failed: ${errorData.detail || 'Unknown error'}`);
@@ -345,21 +360,32 @@ export default function AdminSettingsScreen({ navigation }: any) {
                 <TextInput
                   style={styles.passwordInput}
                   placeholder="xxxx xxxx xxxx xxxx"
-                  value={formData.smtpPassword}
-                  onChangeText={(value) => handleChange('smtpPassword', value)}
-                  secureTextEntry={!showPassword}
+                  value={showPassword ? formData.smtpPassword : formData.smtpPassword.replace(/./g, '•')}
+                  onChangeText={(value) => {
+                    // Only allow editing when password is visible
+                    if (showPassword) {
+                      handleChange('smtpPassword', value);
+                      setActualPassword(value);
+                    }
+                  }}
+                  secureTextEntry={false}
                   autoCapitalize="none"
-                  editable={!saving}
+                  editable={!saving && showPassword}  // Only editable when visible
+                  selectTextOnFocus={showPassword}
                 />
                 <TouchableOpacity
                   style={styles.eyeButton}
+                  activeOpacity={0.6}
                   onPress={() => setShowPassword(!showPassword)}
                 >
                   <Text style={styles.eyeIcon}>{showPassword ? '🙈' : '👁️'}</Text>
                 </TouchableOpacity>
               </View>
               <Text style={styles.hint}>
-                Generate at: myaccount.google.com/apppasswords
+                {showPassword 
+                  ? 'Generate at: myaccount.google.com/apppasswords'
+                  : '👁️ Click the eye icon to view or edit the password'
+                }
               </Text>
             </View>
 
@@ -401,7 +427,7 @@ export default function AdminSettingsScreen({ navigation }: any) {
             <View style={styles.testEmailSection}>
               <Text style={styles.testEmailTitle}>🧪 Test Email Configuration</Text>
               <Text style={styles.testEmailSubtitle}>
-                Send a test email to verify your SMTP settings work correctly
+                Send a test email to verify your SMTP settings. Settings will be saved to database for all admin roles.
               </Text>
 
               <View style={styles.formGroup}>
@@ -425,9 +451,13 @@ export default function AdminSettingsScreen({ navigation }: any) {
                 {testingEmail ? (
                   <ActivityIndicator color="#fff" />
                 ) : (
-                  <Text style={styles.testButtonText}>📧 Send Test Email</Text>
+                  <Text style={styles.testButtonText}>📧 Send Test Email & Save Settings</Text>
                 )}
               </TouchableOpacity>
+              
+              <Text style={[styles.hint, { marginTop: 10, fontStyle: 'italic', color: '#666' }]}>
+                💾 Email credentials will be saved to database when test succeeds
+              </Text>
             </View>
           </View>
 
@@ -488,7 +518,7 @@ export default function AdminSettingsScreen({ navigation }: any) {
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>💬 WhatsApp Configuration</Text>
             <Text style={styles.sectionSubtitle}>
-              Configure Twilio sender number (🌍 Global) and your phone for testing
+              Configure Twilio sender number (🌍 Global for all admins) and test WhatsApp delivery
             </Text>
 
             <View style={styles.formGroup}>
@@ -533,9 +563,13 @@ export default function AdminSettingsScreen({ navigation }: any) {
               disabled={!formData.twilioPhoneNumber || !formData.adminPhoneNumber || testingWhatsApp}
             >
               <Text style={styles.testWhatsAppButtonText}>
-                {testingWhatsApp ? '⏳ Sending WhatsApp...' : '💬 Send Test WhatsApp'}
+                {testingWhatsApp ? '⏳ Sending WhatsApp...' : '💬 Send Test WhatsApp & Save Settings'}
               </Text>
             </TouchableOpacity>
+            
+            <Text style={[styles.hint, { marginTop: 10, fontStyle: 'italic', color: '#666' }]}>
+              💾 Twilio credentials will be saved to database when test succeeds
+            </Text>
           </View>
 
           {/* Info Box */}

@@ -6,10 +6,11 @@ from datetime import datetime, timezone
 from typing import Annotated, Optional
 
 from fastapi import APIRouter, Cookie, Depends, Form, HTTPException, Request, Response, status
-from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
+from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 from sqlalchemy.sql import func
 
+from ..config import settings
 from ..database import get_db
 from ..models.password_reset import PasswordResetToken
 from ..models.user import Instructor, Student, User, UserRole
@@ -26,9 +27,34 @@ from ..services.auth import AuthService
 from ..services.email_service import email_service
 from ..utils.auth import decode_access_token, get_password_hash, verify_password
 from ..utils.rate_limiter import limiter
+from ..utils.encryption import EncryptionService  # For SMTP password decryption
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/login")
+
+
+# Handle CORS preflight requests for registration endpoints
+@router.options("/register/student")
+async def options_register_student():
+    """Handle OPTIONS preflight requests for CORS"""
+    return {"ok": True}
+
+
+@router.options("/register/instructor")
+async def options_register_instructor():
+    """Handle OPTIONS preflight requests for CORS"""
+    return {"ok": True}
+
+
+@router.options("/login")
+async def options_login():
+    """Handle OPTIONS preflight requests for CORS"""
+    return {"ok": True}
+
+
+@router.options("/me")
+async def options_me():
+    """Handle OPTIONS preflight requests for CORS"""
+    return {"ok": True}
 
 
 async def get_current_user(
@@ -93,6 +119,7 @@ def get_active_role(user: User) -> str:
 @limiter.limit("3/hour")  # Max 3 student registrations per hour per IP
 async def register_student(
     request: Request,  # Required for rate limiter
+    response: Response,  # Required for rate limiter to inject headers
     student_data: StudentCreate,
     db: Session = Depends(get_db)
 ):
@@ -128,13 +155,16 @@ async def register_student(
     )
     
     # Send verification messages (WhatsApp always attempted, email only if SMTP configured)
+    # Decrypt admin's SMTP password before passing to email service
+    smtp_password = EncryptionService.decrypt(admin.smtp_password) if admin and admin.smtp_password else None
+    
     result = VerificationService.send_verification_messages(
         db=db,
         user=user,
         verification_token=verification_token,
         frontend_url=settings.FRONTEND_URL,
         admin_smtp_email=admin.smtp_email if admin else None,
-        admin_smtp_password=admin.smtp_password if admin else None,
+        admin_smtp_password=smtp_password,
     )
     verification_result = {
         "email_sent": result.get("email_sent", False),
@@ -157,16 +187,19 @@ async def register_student(
 @limiter.limit("3/hour")  # Max 3 instructor registrations per hour per IP
 async def register_instructor(
     request: Request,  # Required for rate limiter
+    response: Response,  # Required for rate limiter to inject headers
     instructor_data: InstructorCreate,
     db: Session = Depends(get_db)
 ):
     """
     Register a new instructor
-    Note: Admin user must exist before instructors can register
-    Creates user as inactive and sends email/WhatsApp verification
+    - Creates instructor with pending verification status
+    - Sends verification link to all admins (email + WhatsApp)
+    - Instructor can setup schedule immediately (before admin verification)
+    - Admin can verify via link or manually from dashboard
     """
     from ..services.initialization import InitializationService
-    from ..services.verification_service import VerificationService
+    from ..services.instructor_verification_service import InstructorVerificationService
     from ..config import settings
     
     # Check if admin exists
@@ -179,41 +212,39 @@ async def register_instructor(
     try:
         print(f"[DEBUG] Received instructor registration data: {instructor_data}")
         
-        # Create instructor (user will be inactive)
+        # Create instructor (user will be INACTIVE, instructor not verified)
         user, instructor = AuthService.create_instructor(db, instructor_data)
         
-        # Get admin SMTP settings
+        # Get admin settings for token validity
         admin = db.query(User).filter(User.role == UserRole.ADMIN).first()
-        validity_minutes = admin.verification_link_validity_minutes if admin else 30
+        validity_minutes = admin.verification_link_validity_minutes if admin else 60
         
-        # Create verification token
-        verification_token = VerificationService.create_verification_token(
+        # Create instructor verification token
+        verification_token = InstructorVerificationService.create_verification_token(
             db=db,
-            user_id=user.id,
-            token_type="email",
+            instructor_id=instructor.id,
             validity_minutes=validity_minutes
         )
         
-        # Send verification messages (WhatsApp always attempted, email only if SMTP configured)
-        result = VerificationService.send_verification_messages(
+        # Send verification to ALL admins (not to instructor)
+        verification_result = InstructorVerificationService.send_verification_to_all_admins(
             db=db,
-            user=user,
+            instructor=instructor,
             verification_token=verification_token,
             frontend_url=settings.FRONTEND_URL,
-            admin_smtp_email=admin.smtp_email if admin else None,
-            admin_smtp_password=admin.smtp_password if admin else None,
         )
-        verification_result = {
-            "email_sent": result.get("email_sent", False),
-            "whatsapp_sent": result.get("whatsapp_sent", False),
-            "expires_in_minutes": validity_minutes,
-        }
         
         return {
-            "message": "Registration successful! Please check your email and WhatsApp to verify your account.",
+            "message": "Registration successful! Admins have been notified to verify your instructor profile. You can start creating your schedule while waiting for verification.",
             "user_id": user.id,
             "instructor_id": instructor.id,
-            "verification_sent": verification_result,
+            "verification_sent": {
+                "emails_sent": verification_result["emails_sent"],
+                "whatsapp_sent": verification_result["whatsapp_sent"],
+                "total_admins": verification_result["total_admins"],
+            },
+            "note": f"Verification link sent to {verification_result['total_admins']} admin(s). You can start setting up your schedule immediately.",
+        }
             "note": "Account will be activated after verification. The verification link is valid for {} minutes.".format(validity_minutes)
         }
     except Exception as e:
@@ -275,11 +306,12 @@ async def login(
     access_token = AuthService.create_user_token(user, selected_role)
     
     # Set HTTP-only cookie for web security (prevents XSS token theft)
+    is_secure_cookie = settings.ENVIRONMENT.lower() == "production"
     response.set_cookie(
         key="access_token",
         value=access_token,
         httponly=True,  # JavaScript cannot access (XSS protection)
-        secure=False,  # Set to True in production with HTTPS
+        secure=is_secure_cookie,  # True in production with HTTPS
         samesite="lax",  # CSRF protection
         max_age=3600 * 24 * 7,  # 7 days
     )
