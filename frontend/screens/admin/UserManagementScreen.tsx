@@ -183,6 +183,23 @@ export default function UserManagementScreen({ navigation }: any) {
     try {
       console.log('Calling updateUserStatus API:', user.id, newStatus);
       setError('');
+      
+      // FRONTEND PROTECTION: Prevent current admin from suspending their own admin profile
+      const adminUsers = users.filter(u => u.role === 'admin');
+      const firstAdminId = adminUsers.length > 0 ? Math.min(...adminUsers.map(u => u.id)) : null;
+      
+      if (user.id === currentUserId && user.role === 'admin' && user.id === firstAdminId) {
+        showMessage(
+          setError,
+          'You cannot suspend your own admin profile. Use Database Interface to manage your other profiles.',
+          SCREEN_NAME,
+          'statusChange',
+          'error'
+        );
+        setConfirmAction(null);
+        return;
+      }
+      
       await apiService.updateUserStatus(user.id, newStatus);
       console.log('Status updated successfully');
 
@@ -1066,7 +1083,7 @@ export default function UserManagementScreen({ navigation }: any) {
 
               {confirmAction?.newStatus.toUpperCase() === 'SUSPENDED' && (
                 <Text style={styles.warningText}>
-                  ⚠️ User will be blocked from all access until unsuspended.
+                  This will set the user status to SUSPENDED. The record will remain in the database.
                 </Text>
               )}
             </View>

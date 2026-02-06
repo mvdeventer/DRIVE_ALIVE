@@ -53,6 +53,21 @@ const DatabaseDeleteConfirm: React.FC<DatabaseDeleteConfirmProps> = ({
     }
   }, [tableType]);
 
+  const confirmButtonText = useMemo(() => {
+    switch (tableType) {
+      case 'users':
+        return 'Suspend';
+      case 'instructors':
+        return 'Disable';
+      case 'students':
+        return 'Deactivate';
+      case 'bookings':
+        return 'Delete';
+      default:
+        return 'Confirm';
+    }
+  }, [tableType]);
+
   const deleteDescription = useMemo(() => {
     switch (tableType) {
       case 'users':
@@ -74,7 +89,8 @@ const DatabaseDeleteConfirm: React.FC<DatabaseDeleteConfirmProps> = ({
 
       switch (tableType) {
         case 'users':
-          await deleteUser(record.id, etag);
+          // Pass row_type to determine which profile/role to delete
+          await deleteUser(record.id, etag, record.row_type);
           onDeleted('User suspended successfully');
           break;
         case 'instructors':
@@ -159,7 +175,7 @@ const DatabaseDeleteConfirm: React.FC<DatabaseDeleteConfirmProps> = ({
               onPress={handleDelete}
               disabled={loading}
             >
-              <Text style={styles.modalButtonText}>{loading ? 'Processing...' : 'Confirm'}</Text>
+              <Text style={styles.modalButtonText}>{loading ? 'Processing...' : confirmButtonText}</Text>
             </TouchableOpacity>
           </View>
         </View>

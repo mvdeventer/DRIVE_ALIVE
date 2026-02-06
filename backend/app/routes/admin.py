@@ -438,6 +438,8 @@ async def update_user_status(
 ):
     """
     Activate, deactivate, or suspend a user account
+    Admins can suspend their own Student/Instructor profiles.
+    Only the main admin cannot suspend their own Admin profile.
     """
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
@@ -446,7 +448,7 @@ async def update_user_status(
             detail="User not found",
         )
 
-    # Only the first/original admin can change status of other admins
+    # PROTECTION: Only the main admin can change any admin's status, and main admin cannot suspend own admin profile
     if user.role == UserRole.ADMIN:
         admins = db.query(User).filter(User.role == UserRole.ADMIN).order_by(User.id.asc()).all()
         if not admins:
@@ -455,18 +457,20 @@ async def update_user_status(
                 detail="No admin user found in system",
             )
         first_admin = admins[0]
+        
+        # Check if trying to change the main admin's own admin profile
+        if user.id == current_admin.id and current_admin.id == first_admin.id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="The main admin cannot suspend their own admin profile. You can suspend your own student/instructor profiles via Database Interface.",
+            )
+        
+        # Only the main admin can change other admins' status
         if current_admin.id != first_admin.id:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Only the original admin can change another admin's status",
             )
-
-    # Prevent admin from deactivating themselves
-    if user.id == current_admin.id:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Cannot change your own account status",
-        )
 
     old_status = user.status
     user.status = new_status

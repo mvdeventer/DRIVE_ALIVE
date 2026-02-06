@@ -41,6 +41,7 @@ import {
   handleApiError,
   bulkUpdateRecords,
 } from '../../services/database-interface';
+import apiService from '../../services/api';
 
 type TabType = 'users' | 'instructors' | 'students' | 'bookings' | 'reviews' | 'schedules';
 type DeletableTab = 'users' | 'instructors' | 'students' | 'bookings';
@@ -218,6 +219,10 @@ const DatabaseInterfaceScreen = ({ navigation }: any) => {
   // Phase 4.4: Search history (last 10 searches)
   const [searchHistory, setSearchHistory] = useState<string[]>([]);
   const [showSearchHistory, setShowSearchHistory] = useState(false);
+
+  // Database Management Modal
+  const [showDbModal, setShowDbModal] = useState(false);
+  const [dbAction, setDbAction] = useState<'backup' | 'reset' | 'restore' | null>(null);
 
   // Debounced search handler (300ms delay)
   const handleSearchChange = useCallback((text: string, table: TabType) => {
@@ -414,12 +419,16 @@ const DatabaseInterfaceScreen = ({ navigation }: any) => {
   };
 
   // Open delete modal with ETag
-  const openDeleteModal = async (recordId: number) => {
+  const openDeleteModal = async (recordId: number, rowType?: string) => {
     try {
       let detail;
       switch (activeTab) {
         case 'users':
           detail = await getUserDetail(recordId);
+          // Preserve row_type from the expanded row
+          if (rowType) {
+            detail.data.row_type = rowType;
+          }
           break;
         case 'instructors':
           detail = await getInstructorDetail(recordId);
@@ -854,6 +863,104 @@ const DatabaseInterfaceScreen = ({ navigation }: any) => {
   };
 
   // ======================================
+  // DATABASE MANAGEMENT FUNCTIONS
+  // ======================================
+
+  const handleBackupDatabase = async () => {
+    try {
+      setDbAction('backup');
+      setErrorMessage('');
+      
+      const response = await apiService.backupDatabase();
+      
+      if (Platform.OS === 'web') {
+        const url = window.URL.createObjectURL(new Blob([response.data]));
+        const link = document.createElement('a');
+        link.href = url;
+        link.setAttribute('download', `drive_alive_backup_${new Date().toISOString().split('T')[0]}.json`);
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        setSuccessMessage('✅ Database backup downloaded successfully!');
+      }
+      
+      setShowDbModal(false);
+    } catch (err: any) {
+      setErrorMessage(err.response?.data?.detail || 'Backup failed');
+    } finally {
+      setDbAction(null);
+    }
+  };
+
+  const handleResetDatabase = async () => {
+    try {
+      setDbAction('reset');
+      setErrorMessage('');
+      
+      await apiService.resetDatabase();
+      
+      if (Platform.OS === 'web') {
+        sessionStorage.removeItem('access_token');
+        sessionStorage.removeItem('user_role');
+      }
+      
+      setShowDbModal(false);
+      alert('✅ Database reset successfully! Please create a new admin account.');
+      
+      if (Platform.OS === 'web') {
+        window.location.href = '/';
+      }
+    } catch (err: any) {
+      setErrorMessage(err.response?.data?.detail || 'Reset failed');
+    } finally {
+      setDbAction(null);
+    }
+  };
+
+  const handleRestoreFromPC = async () => {
+    try {
+      setDbAction('restore');
+      setErrorMessage('');
+      
+      if (Platform.OS === 'web') {
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = 'application/json';
+        input.onchange = async (e: any) => {
+          const file = e.target.files[0];
+          if (!file) return;
+          
+          const reader = new FileReader();
+          reader.onload = async (event) => {
+            try {
+              const fileContent = event.target?.result as string;
+              const blob = new Blob([fileContent], { type: 'application/json' });
+              await apiService.restoreDatabase(blob);
+              setSuccessMessage('✅ Database restored successfully!');
+              setShowDbModal(false);
+              // Refresh current table
+              if (activeTab === 'users') fetchUsers(1);
+              else if (activeTab === 'instructors') fetchInstructors(1);
+              else if (activeTab === 'students') fetchStudents(1);
+              else if (activeTab === 'bookings') fetchBookings(1);
+            } catch (err: any) {
+              setErrorMessage(err.response?.data?.detail || 'Restore failed');
+            } finally {
+              setDbAction(null);
+            }
+          };
+          reader.readAsText(file);
+        };
+        input.click();
+      }
+    } catch (err: any) {
+      setErrorMessage(err.response?.data?.detail || 'Restore from local file failed');
+    } finally {
+      setDbAction(null);
+    }
+  };
+
+  // ======================================
   // PHASE 4.4: ENHANCED SEARCH
   // ======================================
 
@@ -1065,6 +1172,16 @@ const DatabaseInterfaceScreen = ({ navigation }: any) => {
           </View>
         )}
 
+        {/* Main Admin Protection Info (Users tab only) */}
+        {activeTab === 'users' && (
+          <View style={styles.infoMessage}>
+            <Text style={styles.messageText}>
+              ℹ️ The original admin account (ID: 1, marked with 🛡️) cannot be suspended. 
+              You can still delete Student/Instructor profiles but the Admin role is protected.
+            </Text>
+          </View>
+        )}
+
         {/* Tab Navigation */}
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.tabNavigation}>
           {(['users', 'instructors', 'students', 'bookings', 'reviews', 'schedules'] as TabType[]).map((tab) => (
@@ -1247,6 +1364,54 @@ const DatabaseInterfaceScreen = ({ navigation }: any) => {
             </TouchableOpacity>
           </View>
 
+          {/* Database Management Buttons */}
+          <View style={styles.exportButtons}>
+            <Text style={styles.toolbarTitle}>💾 Database:</Text>
+            <TouchableOpacity
+              style={[styles.exportButton, styles.dbBackupButton]}
+              onPress={handleBackupDatabase}
+              disabled={!!dbAction}
+              accessibilityRole="button"
+              accessibilityLabel="Backup Database"
+            >
+              {dbAction === 'backup' ? (
+                <ActivityIndicator color="#fff" size="small" />
+              ) : (
+                <Text style={styles.exportButtonText}>📥 Backup to PC</Text>
+              )}
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.exportButton, styles.dbRestoreButton]}
+              onPress={handleRestoreFromPC}
+              disabled={!!dbAction}
+              accessibilityRole="button"
+              accessibilityLabel="Restore Database"
+            >
+              {dbAction === 'restore' ? (
+                <ActivityIndicator color="#fff" size="small" />
+              ) : (
+                <Text style={styles.exportButtonText}>📤 Restore from Backup</Text>
+              )}
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.exportButton, styles.dbResetButton]}
+              onPress={() => {
+                if (confirm('⚠️ This will DELETE ALL DATA! Are you absolutely sure?')) {
+                  handleResetDatabase();
+                }
+              }}
+              disabled={!!dbAction}
+              accessibilityRole="button"
+              accessibilityLabel="Reset Database"
+            >
+              {dbAction === 'reset' ? (
+                <ActivityIndicator color="#fff" size="small" />
+              ) : (
+                <Text style={styles.exportButtonText}>🗑️ Reset Database</Text>
+              )}
+            </TouchableOpacity>
+          </View>
+
           {/* Column Visibility Toggle */}
           <View style={styles.columnControls}>
             <TouchableOpacity
@@ -1348,6 +1513,7 @@ const DatabaseInterfaceScreen = ({ navigation }: any) => {
               <Text style={[styles.tableCell, { flex: 3 }]}>Name</Text>
               <Text style={[styles.tableCell, { flex: 2 }]}>Email</Text>
               <Text style={[styles.tableCell, { flex: 1 }]}>Role</Text>
+              <Text style={[styles.tableCell, { flex: 1 }]}>Status</Text>
               <Text style={[styles.tableCell, { flex: 1 }]}>Actions</Text>
             </View>
             {usersTable.data.map((user, idx) => (
@@ -1372,7 +1538,13 @@ const DatabaseInterfaceScreen = ({ navigation }: any) => {
                 <Text style={[styles.tableCell, { flex: 1 }]}>{user.id}</Text>
                 <Text style={[styles.tableCell, { flex: 3 }]}>{user.first_name} {user.last_name}</Text>
                 <Text style={[styles.tableCell, { flex: 2 }]} numberOfLines={1}>{user.email}</Text>
-                <Text style={[styles.tableCell, { flex: 1 }]}>{user.role}</Text>
+                <Text style={[styles.tableCell, { flex: 1 }]}>
+                  {user.role}
+                  {user.id === 1 && user.role === 'admin' && (!user.row_type || user.row_type === 'primary') && ' 🛡️'}
+                </Text>
+                <Text style={[styles.tableCell, { flex: 1, color: user.status === 'SUSPENDED' ? '#dc3545' : '#28a745' }]}>
+                  {user.status === 'SUSPENDED' ? '🚫 SUSPENDED' : '✅ ACTIVE'}
+                </Text>
                 <View style={styles.actionButtons}>
                   <TouchableOpacity
                     style={styles.editButton}
@@ -1380,12 +1552,22 @@ const DatabaseInterfaceScreen = ({ navigation }: any) => {
                   >
                     <Text style={styles.editButtonText}>✏️ Edit</Text>
                   </TouchableOpacity>
-                  <TouchableOpacity
-                    style={styles.deleteButton}
-                    onPress={() => openDeleteModal(user.id)}
-                  >
-                    <Text style={styles.deleteButtonText}>🗑️ Delete</Text>
-                  </TouchableOpacity>
+                  {/* Hide suspend button for main admin (ID=1, role=admin, primary row) */}
+                  {!(user.id === 1 && user.role === 'admin' && (!user.row_type || user.row_type === 'primary')) ? (
+                    <TouchableOpacity
+                      style={[
+                        styles.deleteButton,
+                        user.status === 'SUSPENDED' && styles.activateButton
+                      ]}
+                      onPress={() => openDeleteModal(user.id, user.row_type)}
+                    >
+                      <Text style={styles.deleteButtonText}>
+                        {user.status === 'SUSPENDED' ? '✅ Activate' : '⛔ Suspend'}
+                      </Text>
+                    </TouchableOpacity>
+                  ) : (
+                    <View style={{ minWidth: 80 }} />
+                  )}
                 </View>
               </View>
             ))}
@@ -1679,6 +1861,14 @@ const styles = StyleSheet.create({
     padding: 12,
     marginBottom: 12,
   },
+  infoMessage: {
+    backgroundColor: '#d1ecf1',
+    borderColor: '#0c5460',
+    borderWidth: 1,
+    borderRadius: 4,
+    padding: 12,
+    marginBottom: 12,
+  },
   messageText: {
     fontSize: 14,
     color: '#333',
@@ -1839,6 +2029,8 @@ const styles = StyleSheet.create({
   actionButtons: {
     flexDirection: 'row',
     gap: Platform.OS === 'web' ? 8 : 6,
+    justifyContent: 'flex-start',
+    minWidth: 180, // Fixed width to maintain consistent spacing
   },
   deleteButton: {
     backgroundColor: '#dc3545',
@@ -1846,6 +2038,9 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     borderRadius: 4,
     minWidth: 80,
+  },
+  activateButton: {
+    backgroundColor: '#28a745',
   },
   editButtonText: {
     color: '#fff',
@@ -1858,6 +2053,11 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
     textAlign: 'center',
+  },
+  protectedBadge: {
+    fontSize: 14,
+    color: '#28a745',
+    marginLeft: 4,
   },
   emptyState: {
     justifyContent: 'center',
@@ -1963,6 +2163,15 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 12,
     fontWeight: '600',
+  },
+  dbBackupButton: {
+    backgroundColor: '#0066CC',
+  },
+  dbRestoreButton: {
+    backgroundColor: '#28a745',
+  },
+  dbResetButton: {
+    backgroundColor: '#dc3545',
   },
   bulkActions: {
     flexDirection: 'row',

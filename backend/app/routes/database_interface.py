@@ -83,18 +83,23 @@ async def list_users(
     """
     List all users with pagination, search, and filtering
     
+    Shows each user's roles/profiles as SEPARATE ROWS:
+    - If user has Admin role → shows as ADMIN
+    - If user has Student profile → shows as STUDENT
+    - If user has Instructor profile → shows as INSTRUCTOR
+    
+    Example: Martin (Admin + Student + Instructor) appears 3 times
+    
     Query Parameters:
     - search: Search in first_name, last_name, email, phone
-    - filter_role: STUDENT, INSTRUCTOR, ADMIN
+    - filter_role: STUDENT, INSTRUCTOR, ADMIN (shows only that role)
     - filter_status: ACTIVE, INACTIVE, SUSPENDED
     - sort: Field name (e.g., 'email', '-created_at' for descending)
-    
-    Response includes Link header (RFC 5988) for pagination
     """
-    # Build query
+    # Fetch all users with eager loading of profiles
     query = db.query(User)
     
-    # Apply search filter
+    # Apply search filter to base query
     if search:
         search_term = f"%{search}%"
         query = query.filter(
@@ -106,33 +111,7 @@ async def list_users(
             )
         )
     
-    # Apply role filter (checks both user.role AND related profiles)
-    if filter_role:
-        filter_role_upper = filter_role.upper()
-        
-        if filter_role_upper == "STUDENT":
-            # Show users who have a student profile OR whose role is STUDENT
-            query = query.outerjoin(Student).filter(
-                or_(
-                    User.role == UserRole.STUDENT,
-                    Student.id.isnot(None)
-                )
-            )
-        elif filter_role_upper == "INSTRUCTOR":
-            # Show users who have an instructor profile OR whose role is INSTRUCTOR
-            query = query.outerjoin(Instructor).filter(
-                or_(
-                    User.role == UserRole.INSTRUCTOR,
-                    Instructor.id.isnot(None)
-                )
-            )
-        elif filter_role_upper == "ADMIN":
-            # Show users whose role is ADMIN
-            query = query.filter(User.role == UserRole.ADMIN)
-        else:
-            raise HTTPException(400, detail=f"Invalid role: {filter_role}")
-    
-    # Apply status filter
+    # Apply status filter to base query
     if filter_status:
         try:
             status_enum = UserStatus[filter_status.upper()]
@@ -140,28 +119,14 @@ async def list_users(
         except KeyError:
             raise HTTPException(400, detail=f"Invalid status: {filter_status}")
     
-    # Apply sorting
-    if sort:
-        descending = sort.startswith('-')
-        field_name = sort[1:] if descending else sort
-        
-        if not hasattr(User, field_name):
-            raise HTTPException(400, detail=f"Invalid sort field: {field_name}")
-        
-        field = getattr(User, field_name)
-        query = query.order_by(field.desc() if descending else field.asc())
+    # Fetch users
+    users = query.all()
     
-    # Get total count
-    total = query.count()
-    total_pages = (total + page_size - 1) // page_size
-    
-    # Apply pagination
-    offset = (page - 1) * page_size
-    users = query.offset(offset).limit(page_size).all()
-    
-    # Convert to response format (exclude sensitive fields)
-    data = [
-        {
+    # Expand users into multiple rows (one per role/profile)
+    expanded_rows = []
+    for user in users:
+        # Always include user's primary role
+        expanded_rows.append({
             "id": user.id,
             "email": user.email,
             "phone": user.phone,
@@ -173,9 +138,66 @@ async def list_users(
             "address": user.address,
             "created_at": user.created_at.isoformat() if user.created_at else None,
             "updated_at": user.updated_at.isoformat() if user.updated_at else None,
-        }
-        for user in users
-    ]
+            "row_type": "primary"  # Mark as primary role row
+        })
+        
+        # If user has Student profile AND primary role is not STUDENT, add student row
+        if user.student_profile and user.role != UserRole.STUDENT:
+            expanded_rows.append({
+                "id": user.id,
+                "email": user.email,
+                "phone": user.phone,
+                "first_name": user.first_name,
+                "last_name": user.last_name,
+                "id_number": user.id_number,
+                "role": "student",  # Show as student
+                "status": user.status.value if user.status else None,
+                "address": user.address,
+                "created_at": user.created_at.isoformat() if user.created_at else None,
+                "updated_at": user.updated_at.isoformat() if user.updated_at else None,
+                "row_type": "student_profile"
+            })
+        
+        # If user has Instructor profile AND primary role is not INSTRUCTOR, add instructor row
+        if user.instructor_profile and user.role != UserRole.INSTRUCTOR:
+            expanded_rows.append({
+                "id": user.id,
+                "email": user.email,
+                "phone": user.phone,
+                "first_name": user.first_name,
+                "last_name": user.last_name,
+                "id_number": user.id_number,
+                "role": "instructor",  # Show as instructor
+                "status": user.status.value if user.status else None,
+                "address": user.address,
+                "created_at": user.created_at.isoformat() if user.created_at else None,
+                "updated_at": user.updated_at.isoformat() if user.updated_at else None,
+                "row_type": "instructor_profile"
+            })
+    
+    # Apply role filter to expanded rows
+    if filter_role:
+        filter_role_lower = filter_role.lower()
+        expanded_rows = [row for row in expanded_rows if row["role"] == filter_role_lower]
+    
+    # Apply sorting to expanded rows
+    if sort:
+        descending = sort.startswith('-')
+        field_name = sort[1:] if descending else sort
+        
+        # Sort by the field
+        expanded_rows.sort(
+            key=lambda x: x.get(field_name, ''),
+            reverse=descending
+        )
+    
+    # Calculate pagination
+    total = len(expanded_rows)
+    total_pages = (total + page_size - 1) // page_size
+    
+    # Apply pagination
+    offset = (page - 1) * page_size
+    data = expanded_rows[offset:offset + page_size]
     
     return {
         "data": data,
@@ -289,6 +311,14 @@ async def update_user(
     if "status" in update_data:
         update_data["status"] = UserStatus[update_data["status"].upper()]
     
+    # PROTECTION: Prevent suspending/inactivating the first admin (ID = 1)
+    if user_id == 1 and user.role == UserRole.ADMIN:
+        if "status" in update_data and update_data["status"] != UserStatus.ACTIVE:
+            raise HTTPException(
+                status_code=403,
+                detail="Cannot change the status of the original admin account (ID: 1). This account must remain ACTIVE."
+            )
+    
     for key, value in update_data.items():
         setattr(user, key, value)
     
@@ -325,10 +355,20 @@ async def update_user(
 @router.delete("/users/{user_id}")
 async def delete_user(
     user_id: int,
+    role_type: Optional[str] = Query(None, description="Which role to delete: student_profile, instructor_profile, or primary (suspends user)"),
     if_match: Optional[str] = Header(None, description="ETag for optimistic locking"),
     db: Session = Depends(get_db)
 ):
-    """Soft delete a user by setting status to SUSPENDED"""
+    """
+    Delete a user's role/profile
+    
+    - role_type=student_profile: Deletes Student profile only (keeps User record)
+    - role_type=instructor_profile: Deletes Instructor profile only (keeps User record)
+    - role_type=primary or None: Suspends the entire User record
+    
+    Multi-role users (e.g., Martin with Admin + Student + Instructor) can have
+    individual profiles deleted without affecting other roles.
+    """
     user = db.query(User).filter(User.id == user_id).first()
 
     if not user:
@@ -348,15 +388,70 @@ async def delete_user(
                 }
             )
 
-    user.status = UserStatus.SUSPENDED
-    user.updated_at = datetime.now(timezone.utc)
-
+    message = ""
+    
+    # PROTECTION: Prevent suspending the first admin (ID = 1)
+    if user_id == 1 and user.role == UserRole.ADMIN and not role_type:
+        raise HTTPException(
+            status_code=403,
+            detail="Cannot suspend the original admin account (ID: 1). This account is protected."
+        )
+    
     try:
+        # Handle deletion based on role_type
+        if role_type == "student_profile":
+            # Delete student profile only
+            student = db.query(Student).filter(Student.user_id == user_id).first()
+            if not student:
+                raise HTTPException(404, detail=f"Student profile not found for user {user_id}")
+            
+            # Cancel and delete bookings to avoid FK null constraints on profile deletion
+            from ..models.booking import Booking, BookingStatus
+            bookings = db.query(Booking).filter(Booking.student_id == student.id).all()
+            for booking in bookings:
+                booking.status = BookingStatus.CANCELLED
+                booking.updated_at = datetime.now(timezone.utc)
+                db.delete(booking)
+            
+            # Now delete the student profile
+            db.delete(student)
+            message = "Student profile deleted successfully"
+            
+        elif role_type == "instructor_profile":
+            # Delete instructor profile only
+            instructor = db.query(Instructor).filter(Instructor.user_id == user_id).first()
+            if not instructor:
+                raise HTTPException(404, detail=f"Instructor profile not found for user {user_id}")
+            
+            # Cancel and delete bookings to avoid FK null constraints on profile deletion
+            from ..models.booking import Booking, BookingStatus
+            bookings = db.query(Booking).filter(Booking.instructor_id == instructor.id).all()
+            for booking in bookings:
+                booking.status = BookingStatus.CANCELLED
+                booking.updated_at = datetime.now(timezone.utc)
+                db.delete(booking)
+            
+            # Now delete the instructor profile
+            db.delete(instructor)
+            message = "Instructor profile deleted successfully"
+            
+        else:
+            # Suspend the user (soft delete)
+            user.status = UserStatus.SUSPENDED
+            message = "User suspended successfully"
+        
+        user.updated_at = datetime.now(timezone.utc)
         db.commit()
         db.refresh(user)
+        
+    except HTTPException:
+        raise
     except Exception as e:
         db.rollback()
-        raise HTTPException(500, detail=f"Database error: {str(e)}")
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.error(f"Error deleting user {user_id} with role_type {role_type}: {str(e)}")
+        raise HTTPException(500, detail=f"Failed to delete: {str(e)}")
 
     new_etag = generate_etag(user)
 
@@ -368,7 +463,7 @@ async def delete_user(
         },
         "meta": {
             "etag": new_etag,
-            "message": "User suspended successfully"
+            "message": message
         }
     }
 
