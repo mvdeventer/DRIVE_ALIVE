@@ -645,7 +645,7 @@ async def update_availability(
 @router.post("/{instructor_id}/verify", response_model=dict)
 async def verify_instructor(
     instructor_id: int,
-    current_user: Annotated[User, Depends(require_admin)],
+    current_admin: Annotated[User, Depends(require_admin)],
     db: Session = Depends(get_db),
 ):
     """
@@ -678,7 +678,7 @@ async def verify_instructor(
 @router.post("/{instructor_id}/unverify", response_model=dict)
 async def unverify_instructor(
     instructor_id: int,
-    current_user: Annotated[User, Depends(require_admin)],
+    current_admin: Annotated[User, Depends(require_admin)],
     db: Session = Depends(get_db),
 ):
     """
@@ -709,7 +709,7 @@ async def unverify_instructor(
 
 @router.get("/unverified/list", response_model=List[InstructorResponse])
 async def get_unverified_instructors(
-    current_user: Annotated[User, Depends(require_admin)],
+    current_admin: Annotated[User, Depends(require_admin)],
     db: Session = Depends(get_db),
 ):
     """
@@ -760,6 +760,4 @@ async def get_unverified_instructors(
             )
             responses.append(response)
 
-    return responses
-    return responses
     return responses
