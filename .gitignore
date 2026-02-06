@@ -51,7 +51,13 @@ web-build/
 .env.local
 .env.development
 .env.production
+.env.*.local
 config/.env
+backend/.env
+backend/.env.local
+frontend/.env
+frontend/.env.local
+**/.env
 
 # IDE
 .vscode/

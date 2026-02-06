@@ -26,14 +26,15 @@ export const API_BASE_URL = getApiUrl();
 // Debug configuration
 // Set ENABLED to true to pre-fill registration forms for faster testing
 // Set to false for production-like behavior (empty forms with placeholders only)
+// Configure via environment variables in .env file (NOT committed to git)
 export const DEBUG_CONFIG = {
-  ENABLED: true, // Change to true to enable auto-fill in registration forms
-  DEFAULT_EMAIL: 'mvdeventer123@gmail.com',
-  DEFAULT_PHONE: '+27611154598',
-  DEFAULT_PASSWORD: 'Test1234',
+  ENABLED: process.env.EXPO_PUBLIC_DEBUG_MODE === 'true' && __DEV__, // Only in development
+  DEFAULT_EMAIL: process.env.EXPO_PUBLIC_DEBUG_EMAIL || '',
+  DEFAULT_PHONE: process.env.EXPO_PUBLIC_DEBUG_PHONE || '',
+  DEFAULT_PASSWORD: process.env.EXPO_PUBLIC_DEBUG_PASSWORD || '',
   // Student-specific debug values
-  STUDENT_EMAIL: 'mvdeventer@lhar.co.za',
-  STUDENT_PHONE: '+27611154599',
+  STUDENT_EMAIL: process.env.EXPO_PUBLIC_DEBUG_STUDENT_EMAIL || '',
+  STUDENT_PHONE: process.env.EXPO_PUBLIC_DEBUG_STUDENT_PHONE || '',
 };
 
 export const API_CONFIG = {
