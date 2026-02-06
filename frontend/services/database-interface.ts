@@ -112,7 +112,8 @@ export const updateUser = async (
 
 export const deleteUser = async (
   userId: number,
-  etag?: string
+  etag?: string,
+  roleType?: string  // 'student_profile', 'instructor_profile', or 'primary' (suspends user)
 ): Promise<UpdateResponse<any>> => {
   const headers: Record<string, string> = {
     'Authorization': `Bearer ${sessionStorage.getItem('access_token')}`,
@@ -122,10 +123,13 @@ export const deleteUser = async (
     headers['If-Match'] = etag;
   }
 
-  const response = await axios.delete(
-    `${API_BASE_URL}/admin/database-interface/users/${userId}`,
-    { headers }
-  );
+  // Build URL with role_type query parameter if provided
+  let url = `${API_BASE_URL}/admin/database-interface/users/${userId}`;
+  if (roleType) {
+    url += `?role_type=${roleType}`;
+  }
+
+  const response = await axios.delete(url, { headers });
   return response.data;
 };
 
@@ -502,7 +506,7 @@ export const handleApiError = (error: AxiosError): string => {
     case 429:
       return 'Too many requests. Please wait a moment and try again.';
     case 500:
-      return 'Server error. Please try again later.';
+      return data?.detail || 'Server error. Please try again later.';
     case 503:
       return 'Service unavailable. Please try again later.';
     default:
