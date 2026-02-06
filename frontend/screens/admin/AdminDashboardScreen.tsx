@@ -17,8 +17,13 @@ import {
   View,
 } from 'react-native';
 import * as DocumentPicker from 'expo-document-picker';
-import * as FileSystem from 'expo-file-system';
+import * as FileSystemModule from 'expo-file-system';
 import * as SecureStore from 'expo-secure-store';
+
+// Type-safe FileSystem access
+const FileSystem = FileSystemModule as typeof FileSystemModule & {
+  documentDirectory: string | null;
+};
 import InlineMessage from '../../components/InlineMessage';
 import WebNavigationHeader from '../../components/WebNavigationHeader';
 import apiService from '../../services/api';
@@ -95,7 +100,7 @@ export default function AdminDashboardScreen({ navigation }: any) {
         alert('✅ Database backup downloaded successfully!');
       } else {
         // Mobile: Save to device storage
-        const fileUri = FileSystem.documentDirectory + `drive_alive_backup_${new Date().toISOString().split('T')[0]}.json`;
+        const fileUri = (FileSystem.documentDirectory || '') + `drive_alive_backup_${new Date().toISOString().split('T')[0]}.json`;
         await FileSystem.writeAsStringAsync(fileUri, JSON.stringify(response.data));
         alert(`✅ Database backed up to: ${fileUri}`);
       }
@@ -128,7 +133,7 @@ export default function AdminDashboardScreen({ navigation }: any) {
           link.remove();
         } else {
           // Mobile: Save to device storage
-          const fileUri = FileSystem.documentDirectory + `drive_alive_backup_before_reset_${new Date().toISOString().split('T')[0]}.json`;
+          const fileUri = (FileSystem.documentDirectory || '') + `drive_alive_backup_before_reset_${new Date().toISOString().split('T')[0]}.json`;
           await FileSystem.writeAsStringAsync(fileUri, JSON.stringify(backupResponse.data));
         }
       } catch (backupErr) {
@@ -255,8 +260,8 @@ export default function AdminDashboardScreen({ navigation }: any) {
           type: 'application/json',
         });
         
-        if (result.type === 'success') {
-          const fileContent = await FileSystem.readAsStringAsync(result.uri);
+        if (!result.canceled && result.assets && result.assets.length > 0) {
+          const fileContent = await FileSystem.readAsStringAsync(result.assets[0].uri);
           const blob = new Blob([fileContent], { type: 'application/json' });
           await apiService.restoreDatabase(blob);
           alert('✅ Database restored successfully from local file!');
