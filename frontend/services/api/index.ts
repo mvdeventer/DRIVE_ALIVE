@@ -7,19 +7,24 @@ import { Platform } from 'react-native';
 import { API_CONFIG } from '../../config';
 
 // Storage wrapper to handle web vs native
-// Using getter functions to ensure Platform is available when methods are called
+// Web: Uses HTTP-only cookies (automatic, more secure)
+// Native: Uses SecureStore (Authorization header fallback)
 const storage = {
   async getItem(key: string): Promise<string | null> {
     const isWeb = Platform?.OS === 'web';
     if (isWeb) {
-      return sessionStorage.getItem(key); // Changed from localStorage
+      // On web, cookies are handled automatically by browser
+      // No manual storage needed (HTTP-only cookie protection)
+      return null;
     }
     return await SecureStore.getItemAsync(key);
   },
   async setItem(key: string, value: string): Promise<void> {
     const isWeb = Platform?.OS === 'web';
     if (isWeb) {
-      sessionStorage.setItem(key, value); // Changed from localStorage
+      // On web, cookies are set by server (HTTP-only)
+      // No manual storage needed
+      return;
     } else {
       await SecureStore.setItemAsync(key, value);
     }
@@ -27,7 +32,9 @@ const storage = {
   async removeItem(key: string): Promise<void> {
     const isWeb = Platform?.OS === 'web';
     if (isWeb) {
-      sessionStorage.removeItem(key); // Changed from localStorage
+      // On web, cookies are cleared by server logout endpoint
+      // No manual removal needed
+      return;
     } else {
       await SecureStore.deleteItemAsync(key);
     }
@@ -53,12 +60,10 @@ class ApiService {
       headers: {
         'Content-Type': 'application/json',
       },
-      // Only use withCredentials for same-origin requests
-      // For cross-origin (IP-based), we rely on Authorization header instead
-      withCredentials:
-        isWeb && typeof window !== 'undefined'
-          ? window.location.hostname === '10.0.0.121' || window.location.hostname === '127.0.0.1'
-          : false,
+      // Enable credentials for cookie support (HTTP-only cookies)
+      // Web: Allows browser to send/receive cookies automatically
+      // Native: Authorization header used as fallback
+      withCredentials: true,
     });
 
     // Request interceptor to add auth token
@@ -171,6 +176,14 @@ class ApiService {
   }
 
   async logout() {
+    // Call backend logout endpoint to clear HTTP-only cookie
+    try {
+      await this.api.post('/auth/logout');
+    } catch (error) {
+      console.warn('Logout endpoint failed, clearing local tokens anyway:', error);
+    }
+    
+    // Clear mobile tokens (web cookies are cleared by server)
     await storage.removeItem('access_token');
     await storage.removeItem('user_role');
   }

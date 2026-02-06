@@ -3,9 +3,9 @@ Authentication routes
 """
 
 from datetime import datetime, timezone
-from typing import Annotated
+from typing import Annotated, Optional
 
-from fastapi import APIRouter, Depends, Form, HTTPException, Request, status
+from fastapi import APIRouter, Cookie, Depends, Form, HTTPException, Request, Response, status
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 from sqlalchemy.sql import func
@@ -32,16 +32,30 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/login")
 
 
 async def get_current_user(
-    token: Annotated[str, Depends(oauth2_scheme)], db: Session = Depends(get_db)
+    request: Request,
+    db: Session = Depends(get_db),
+    access_token: Optional[str] = Cookie(None)
 ) -> User:
     """
-    Get current authenticated user
+    Get current authenticated user from HTTP-only cookie (preferred) or Authorization header (fallback)
     """
+    # Try cookie first (HTTP-only, more secure)
+    token = access_token
+    
+    # Fallback to Authorization header for mobile/API clients
+    if not token:
+        authorization = request.headers.get("Authorization")
+        if authorization and authorization.startswith("Bearer "):
+            token = authorization.replace("Bearer ", "")
+    
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials",
         headers={"WWW-Authenticate": "Bearer"},
     )
+    
+    if not token:
+        raise credentials_exception
 
     payload = decode_access_token(token)
     if payload is None:
@@ -213,6 +227,7 @@ async def register_instructor(
 @router.post("/login", response_model=dict)
 @limiter.limit("5/minute")  # Max 5 login attempts per minute per IP
 async def login(
+    response: Response,  # Required for setting cookies
     request: Request,  # Required for rate limiter
     form_data: Annotated[OAuth2PasswordRequestForm, Depends()],
     role: str | None = Form(None),
@@ -258,13 +273,32 @@ async def login(
 
     print(f"🔐 [LOGIN] Creating token with selected_role: {selected_role}")
     access_token = AuthService.create_user_token(user, selected_role)
+    
+    # Set HTTP-only cookie for web security (prevents XSS token theft)
+    response.set_cookie(
+        key="access_token",
+        value=access_token,
+        httponly=True,  # JavaScript cannot access (XSS protection)
+        secure=False,  # Set to True in production with HTTPS
+        samesite="lax",  # CSRF protection
+        max_age=3600 * 24 * 7,  # 7 days
+    )
 
     print(f"🔐 [LOGIN] Returning role: {selected_role}")
     return {
-        "access_token": access_token,
+        "access_token": access_token,  # Still return for mobile/API clients
         "token_type": "bearer",
         "role": selected_role,
     }
+
+
+@router.post("/logout")
+async def logout(response: Response):
+    """
+    Logout user by clearing HTTP-only cookie
+    """
+    response.delete_cookie(key="access_token")
+    return {"message": "Successfully logged out"}
 
 
 @router.get("/me")
