@@ -325,6 +325,129 @@ If you didn't create an account with us, please ignore this email.
             logger.error("Failed to send test email to %s: %s", to_email, e)
             return False
 
+    def send_admin_student_registration_notification(
+        self,
+        admin_email: str,
+        admin_name: str,
+        student_name: str,
+        student_email: str,
+        student_phone: str,
+        verification_link: str
+    ) -> bool:
+        """
+        Send notification to admin about new student registration
+        
+        Args:
+            admin_email: Admin's email address
+            admin_name: Admin's first name
+            student_name: Student's full name
+            student_email: Student's email
+            student_phone: Student's phone
+            verification_link: Link for student verification
+            
+        Returns:
+            bool: True if sent successfully
+        """
+        if not self.smtp_username or not self.smtp_password:
+            logger.warning("SMTP not configured. Cannot send admin notification.")
+            return False
+
+        subject = f"New Student Registration - {student_name}"
+
+        html_body = f"""
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
+        .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
+        .header {{ background-color: #007bff; color: white; padding: 20px; text-align: center; }}
+        .content {{ background-color: #f9f9f9; padding: 20px; }}
+        .info-box {{ background-color: #fff; border: 1px solid #ddd; border-radius: 5px; padding: 15px; margin: 15px 0; }}
+        .info-row {{ display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #eee; }}
+        .info-label {{ font-weight: bold; color: #555; }}
+        .info-value {{ color: #333; }}
+        .footer {{ text-align: center; padding: 20px; font-size: 12px; color: #666; }}
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🎓 New Student Registration</h1>
+        </div>
+        <div class="content">
+            <p>Hello {admin_name},</p>
+            <p>A new student has registered on the Drive Alive platform:</p>
+            
+            <div class="info-box">
+                <div class="info-row">
+                    <span class="info-label">Student Name:</span>
+                    <span class="info-value">{student_name}</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Email:</span>
+                    <span class="info-value">{student_email}</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Phone:</span>
+                    <span class="info-value">{student_phone}</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Status:</span>
+                    <span class="info-value">Awaiting Verification</span>
+                </div>
+            </div>
+            
+            <p><strong>Note:</strong> The student has been sent a verification link. Once verified, they will be able to access the platform and book lessons.</p>
+            
+            <p style="font-size: 12px; color: #666;">This is an automated notification. You do not need to take any action unless the student contacts you directly.</p>
+        </div>
+        <div class="footer">
+            <p>&copy; 2026 Drive Alive. All rights reserved.</p>
+        </div>
+    </div>
+</body>
+</html>
+"""
+
+        plain_body = f"""
+New Student Registration
+
+Hello {admin_name},
+
+A new student has registered:
+- Name: {student_name}
+- Email: {student_email}
+- Phone: {student_phone}
+- Status: Awaiting Verification
+
+The student has been sent a verification link. Once verified, they will be able to book lessons.
+"""
+
+        try:
+            msg = MIMEMultipart("alternative")
+            msg["Subject"] = subject
+            msg["From"] = self.from_email
+            msg["To"] = admin_email
+
+            part1 = MIMEText(plain_body, "plain")
+            part2 = MIMEText(html_body, "html")
+            msg.attach(part1)
+            msg.attach(part2)
+
+            with smtplib.SMTP(self.smtp_server, self.smtp_port) as server:
+                server.starttls()
+                server.login(self.smtp_username, self.smtp_password)
+                server.send_message(msg)
+
+            logger.info("Admin notification email sent to %s", admin_email)
+            return True
+
+        except Exception as e:
+            logger.error("Failed to send admin notification to %s: %s", admin_email, e)
+            return False
+
 
 # Global email service instance
 email_service = EmailService()
+

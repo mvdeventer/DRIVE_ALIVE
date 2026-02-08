@@ -206,8 +206,11 @@ class AuthService:
                         detail=f"Email is already registered with a different password. Please use the correct password or log in to add student role.",
                     )
                 
-                # Use existing user
+                # Use existing user; do not force INACTIVE if already active
+                # This avoids blocking admin/instructor login when adding a student profile
                 user = existing_user
+                if user.status != UserStatus.ACTIVE:
+                    user.status = UserStatus.INACTIVE
             else:
                 # New user - check if ID number belongs to another user
                 existing_instructor_id = db.query(Instructor).filter(Instructor.id_number == student_data.id_number).first()

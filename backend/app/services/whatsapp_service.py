@@ -467,6 +467,63 @@ Drive Safe! 🚗
             logger.error(f"Failed to send WhatsApp verification message to {phone}: {str(e)}")
             return False
 
+    def send_admin_student_registration_notification(
+        self,
+        admin_phone: str,
+        admin_name: str,
+        student_name: str,
+        student_email: str,
+        student_phone: str
+    ) -> bool:
+        """
+        Send notification to admin about new student registration
+        
+        Args:
+            admin_phone: Admin's phone number
+            admin_name: Admin's first name
+            student_name: Student's full name
+            student_email: Student's email
+            student_phone: Student's phone
+            
+        Returns:
+            bool: True if successful, False otherwise
+        """
+        if not self.client:
+            logger.warning("Twilio client not initialized. Skipping admin notification.")
+            return False
+
+        try:
+            to_number = self._format_phone_number(admin_phone)
+            from_number = self.get_admin_twilio_sender_phone()
+            
+            # Admin notification message (different from student verification)
+            message_body = (
+                f"👋 Hi {admin_name}!\n\n"
+                f"🎓 New Student Registration:\n\n"
+                f"📝 Name: {student_name}\n"
+                f"📧 Email: {student_email}\n"
+                f"📱 Phone: {student_phone}\n\n"
+                f"⏳ Status: Awaiting verification\n\n"
+                f"The student has been sent a verification link. "
+                f"They will be able to book lessons once verified.\n\n"
+                f"This is an automated notification from Drive Alive."
+            )
+            
+            # Send message
+            msg = self.client.messages.create(
+                body=message_body,
+                from_=from_number,
+                to=to_number
+            )
+            
+            logger.info(f"Admin notification sent to {admin_phone}: {msg.sid}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Failed to send admin notification to {admin_phone}: {str(e)}")
+            return False
+
 
 # Global service instance
 whatsapp_service = WhatsAppService()
+

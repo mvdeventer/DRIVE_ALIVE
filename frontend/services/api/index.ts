@@ -206,6 +206,12 @@ class ApiService {
     await storage.removeItem('user_role');
   }
 
+  // Verification methods
+  async verifyAccount(token: string) {
+    const response = await this.api.post('/verify/account', { token });
+    return response.data;
+  }
+
   // Instructor methods
   async getInstructors(params?: {
     latitude?: number;

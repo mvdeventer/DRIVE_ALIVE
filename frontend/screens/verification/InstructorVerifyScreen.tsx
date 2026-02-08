@@ -164,11 +164,16 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     padding: Platform.OS === 'web' ? 40 : 30,
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 3,
+    ...Platform.select({
+      web: { boxShadow: '0 2px 8px rgba(0,0,0,0.1)' },
+      default: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 8,
+        elevation: 3,
+      },
+    }),
   },
   successIcon: {
     fontSize: Platform.OS === 'web' ? 80 : 64,

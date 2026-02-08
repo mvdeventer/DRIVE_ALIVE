@@ -251,7 +251,7 @@ def backup_database_internal(db: Session) -> Dict[str, List[Dict[str, Any]]]:
             'day_of_week': s.day_of_week,
             'start_time': s.start_time.isoformat() if s.start_time else None,
             'end_time': s.end_time.isoformat() if s.end_time else None,
-            'is_available': s.is_available,
+            'is_active': s.is_active,
         }
         for s in schedules
     ]
@@ -262,8 +262,12 @@ def backup_database_internal(db: Session) -> Dict[str, List[Dict[str, Any]]]:
         {
             'id': t.id,
             'instructor_id': t.instructor_id,
-            'date': t.date.isoformat() if t.date else None,
+            'start_date': t.start_date.isoformat() if t.start_date else None,
+            'end_date': t.end_date.isoformat() if t.end_date else None,
+            'start_time': t.start_time.isoformat() if t.start_time else None,
+            'end_time': t.end_time.isoformat() if t.end_time else None,
             'reason': t.reason,
+            'notes': t.notes,
         }
         for t in time_offs
     ]
@@ -617,8 +621,8 @@ async def restore_database(file: UploadFile = File(...), db: Session = Depends(g
         # Restore time off
         for timeoff_data in backup_data.get('time_off_exceptions', []):
             db.execute(text("""
-                INSERT INTO time_off_exceptions (id, instructor_id, date, reason)
-                VALUES (:id, :instructor_id, :date, :reason)
+                INSERT INTO time_off_exceptions (id, instructor_id, start_date, end_date, start_time, end_time, reason, notes)
+                VALUES (:id, :instructor_id, :start_date, :end_date, :start_time, :end_time, :reason, :notes)
             """), timeoff_data)
         
         # Restore custom availability

@@ -47,14 +47,17 @@ class Settings(BaseSettings):
     # Encryption (for sensitive data like SMTP passwords)
     ENCRYPTION_KEY: str = ""
 
-    # Frontend URL (for password reset links and payment redirects)
-    FRONTEND_URL: str = "http://10.0.0.121:8081"
+    # Frontend URL (for verification links, password reset, payment redirects)
+    # Development: http://localhost:8081
+    # Home Network: http://<your-computer-ip>:8081 (for mobile testing)
+    # Production: https://<your-render-app>.onrender.com
+    FRONTEND_URL: str = "http://localhost:8081"
 
     # App
     ENVIRONMENT: str = "development"
     DEBUG: bool = True
     ALLOWED_ORIGINS: str = (
-        "http://10.0.0.121:3000,http://10.0.0.121:8081,http://10.0.0.121:19000"
+        "http://localhost:3000,http://localhost:8081,http://localhost:19000"
     )
     AUTO_VERIFY_INSTRUCTORS: bool = (
         False  # Only True in debug mode (controlled by DEBUG)

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, ActivityIndicator, TouchableOpacity, ScrollView, Platform } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
+import apiService from '../../services/api';
 
 type Props = NativeStackScreenProps<any, 'VerifyAccount'>;
 
@@ -37,27 +38,17 @@ export default function VerifyAccountScreen({ route, navigation }: Props) {
 
   const verifyAccount = async (verificationToken: string) => {
     try {
-      const response = await fetch('http://localhost:8000/verify/account', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token: verificationToken }),
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        setSuccess(true);
-        setUserName(data.user_name || 'User');
-        
-        // Redirect to login after 3 seconds
-        setTimeout(() => {
-          navigation.replace('Login');
-        }, 3000);
-      } else {
-        const error = await response.json();
-        setErrorMessage(error.detail || 'Verification failed. Please try again.');
-      }
-    } catch (error) {
-      setErrorMessage('Network error. Please check your connection and try again.');
+      const data = await apiService.verifyAccount(verificationToken);
+      setSuccess(true);
+      setUserName(data.user_name || 'User');
+      
+      // Redirect to login after 3 seconds
+      setTimeout(() => {
+        navigation.replace('Login');
+      }, 3000);
+    } catch (error: any) {
+      const errorMsg = error.response?.data?.detail || 'Verification failed. Please try again.';
+      setErrorMessage(errorMsg);
       console.error('Verification error:', error);
     } finally {
       setVerifying(false);

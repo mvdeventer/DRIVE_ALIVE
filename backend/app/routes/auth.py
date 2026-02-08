@@ -165,11 +165,16 @@ async def register_student(
         frontend_url=settings.FRONTEND_URL,
         admin_smtp_email=admin.smtp_email if admin else None,
         admin_smtp_password=smtp_password,
+        notify_admins=True,  # Enable admin notifications for student registrations
+        user_type="student"
     )
     verification_result = {
         "email_sent": result.get("email_sent", False),
         "whatsapp_sent": result.get("whatsapp_sent", False),
         "expires_in_minutes": validity_minutes,
+        "admins_notified": result.get("total_admins_notified", 0),
+        "admin_emails_sent": result.get("admin_emails_sent", 0),
+        "admin_whatsapp_sent": result.get("admin_whatsapp_sent", 0),
     }
     
     return {
@@ -244,8 +249,6 @@ async def register_instructor(
                 "total_admins": verification_result["total_admins"],
             },
             "note": f"Verification link sent to {verification_result['total_admins']} admin(s). You can start setting up your schedule immediately.",
-        }
-            "note": "Account will be activated after verification. The verification link is valid for {} minutes.".format(validity_minutes)
         }
     except Exception as e:
         print(f"[ERROR] Registration failed: {type(e).__name__}: {str(e)}")

@@ -737,10 +737,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     borderRadius: 12,
     padding: Platform.OS === 'web' ? 40 : 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
+    boxShadow: Platform.OS === 'web' ? '0 2px 8px rgba(0, 0, 0, 0.1)' : undefined,
     elevation: 3,
   },
   formGroup: {

@@ -299,7 +299,7 @@ echo %COLOR_GREEN%Frontend will use port: %FRONTEND_PORT%%COLOR_RESET%
 :: Set URLs based on ports
 set "BACKEND_URL=http://localhost:%BACKEND_PORT%"
 set "API_DOCS_URL=http://localhost:%BACKEND_PORT%/docs"
-set "FRONTEND_URL=http://localhost:%FRONTEND_PORT%"
+set "FRONTEND_URL_DISPLAY=http://localhost:%FRONTEND_PORT%"
 echo.
 
 :: Always stop any existing servers first with graceful shutdown
@@ -475,6 +475,7 @@ if "%BACKEND_ONLY%"=="1" goto :start_backend_only
 
 :: Start both servers
 echo %COLOR_YELLOW%Starting Backend Server on port %BACKEND_PORT%...%COLOR_RESET%
+set "FRONTEND_URL="
 powershell -Command "$process = Start-Process cmd -ArgumentList '/k', 'cd /d \"%BACKEND_DIR%\" && call venv\Scripts\activate.bat && python -m uvicorn app.main:app --reload --host 0.0.0.0 --port %BACKEND_PORT%' -WindowStyle Normal -PassThru; $process.Id | Out-File -FilePath '%BACKEND_PID_FILE%' -Encoding ASCII -NoNewline; Write-Host \"Backend started with PID: $($process.Id)\" -ForegroundColor Green"
 
 echo %COLOR_YELLOW%Waiting for backend to initialize...%COLOR_RESET%
@@ -504,15 +505,54 @@ if "%CLEAR_DB%"=="1" (
     )
 )
 
-echo %COLOR_YELLOW%Starting Frontend Server (localhost mode)...%COLOR_RESET%
-powershell -Command "$process = Start-Process cmd -ArgumentList '/k', 'cd /d \"%FRONTEND_DIR%\" && npx expo start --localhost' -WindowStyle Normal -PassThru; $process.Id | Out-File -FilePath '%FRONTEND_PID_FILE%' -Encoding ASCII -NoNewline; Write-Host \"Frontend started with PID: $($process.Id)\" -ForegroundColor Green"
+:: Auto-detect environment mode from .env file
+echo %COLOR_CYAN%Detecting environment mode from .env...%COLOR_RESET%
+
+set "EXPO_HOST_FLAG=--localhost"
+set "ENV_MODE=local"
+
+for /f "tokens=1,* delims==" %%a in ('findstr /B /I "FRONTEND_URL=" "%BACKEND_DIR%\.env" 2^>nul') do set "FRONTEND_URL_VALUE=%%b"
+
+if "%DEBUG%"=="1" (
+    echo [DEBUG] FRONTEND_URL_VALUE=!FRONTEND_URL_VALUE!
+)
+
+findstr /I /C:"FRONTEND_URL=http://localhost" "%BACKEND_DIR%\.env" >nul
+if "%DEBUG%"=="1" (
+    echo [DEBUG] localhost findstr errorlevel=!errorlevel!
+)
+if errorlevel 1 (
+    if defined FRONTEND_URL_VALUE (
+        :: Network mode - extract IP from FRONTEND_URL
+        for /f "tokens=2 delims=/:" %%i in ("%FRONTEND_URL_VALUE%") do set "DETECTED_IP=%%i"
+        if defined DETECTED_IP (
+            set "EXPO_HOST_FLAG=--host lan"
+            set "ENV_MODE=network"
+            echo %COLOR_GREEN%  Mode: Network - LAN !DETECTED_IP!%COLOR_RESET%
+            if "%DEBUG%"=="1" (
+                echo [DEBUG] DETECTED_IP=!DETECTED_IP!
+            )
+        ) else (
+            echo %COLOR_YELLOW%  FRONTEND_URL found, but IP could not be parsed%COLOR_RESET%
+        )
+    ) else (
+        echo %COLOR_YELLOW%  FRONTEND_URL not found in .env, using localhost mode%COLOR_RESET%
+    )
+) else (
+    echo %COLOR_GREEN%  Mode: Localhost%COLOR_RESET%
+)
+
+if defined FRONTEND_URL_VALUE set "FRONTEND_URL_DISPLAY=%FRONTEND_URL_VALUE%"
+
+echo %COLOR_YELLOW%Starting Frontend Server ^(!ENV_MODE! mode^)...%COLOR_RESET%
+powershell -Command "$process = Start-Process cmd -ArgumentList '/k', 'cd /d \"%FRONTEND_DIR%\" && npx expo start %EXPO_HOST_FLAG%' -WindowStyle Normal -PassThru; $process.Id | Out-File -FilePath '%FRONTEND_PID_FILE%' -Encoding ASCII -NoNewline; Write-Host \"Frontend started with PID: $($process.Id)\" -ForegroundColor Green"
 
 echo.
 echo %COLOR_GREEN%Servers are starting...%COLOR_RESET%
 echo.
 echo   Backend:  %BACKEND_URL%
 echo   API Docs: %API_DOCS_URL%
-echo   Frontend: %FRONTEND_URL%
+echo   Frontend: %FRONTEND_URL_DISPLAY%
 echo.
 
 if "%NO_BROWSER%"=="1" goto :start_done
@@ -527,10 +567,10 @@ timeout /t 2 /nobreak >nul
 REM Open browser - Edge with dev tools if -d flag, otherwise default browser
 if "%DEV_MODE%"=="1" (
     echo %COLOR_CYAN%Opening Edge with developer tools...%COLOR_RESET%
-    powershell -Command "Start-Process msedge -ArgumentList '%FRONTEND_URL%' -WindowStyle Maximized; Start-Sleep -Seconds 2; (New-Object -ComObject WScript.Shell).SendKeys('{F12}')"
+    powershell -Command "Start-Process msedge -ArgumentList '%FRONTEND_URL_DISPLAY%' -WindowStyle Maximized; Start-Sleep -Seconds 2; (New-Object -ComObject WScript.Shell).SendKeys('{F12}')"
 ) else (
     echo %COLOR_CYAN%Opening Frontend in default browser...%COLOR_RESET%
-    start "" "%FRONTEND_URL%"
+    start "" "%FRONTEND_URL_DISPLAY%"
 )
 
 :start_done
@@ -565,6 +605,7 @@ taskkill /FI "ImageName eq uvicorn.exe" >nul 2>&1
 timeout /t 1 /nobreak >nul
 taskkill /FI "ImageName eq uvicorn.exe" /F >nul 2>&1
 echo %COLOR_YELLOW%Starting Backend Server only...%COLOR_RESET%
+set "FRONTEND_URL="
 powershell -Command "$process = Start-Process cmd -ArgumentList '/k', 'cd /d \"%BACKEND_DIR%\" && call venv\Scripts\activate.bat && python -m uvicorn app.main:app --reload --host 0.0.0.0 --port %BACKEND_PORT%' -WindowStyle Normal -PassThru; $process.Id | Out-File -FilePath '%BACKEND_PID_FILE%' -Encoding ASCII -NoNewline; Write-Host \"Backend started with PID: $($process.Id)\" -ForegroundColor Green"
 echo.
 echo %COLOR_GREEN%Backend server started: %BACKEND_URL%%COLOR_RESET%
@@ -581,7 +622,7 @@ if "%FRONTEND_PORT%"=="" (
     call :find_available_port 8081 FRONTEND_PORT
     echo %COLOR_GREEN%Frontend will use port: %FRONTEND_PORT%%COLOR_RESET%
 )
-set "FRONTEND_URL=http://localhost:%FRONTEND_PORT%"
+set "FRONTEND_URL_DISPLAY=http://localhost:%FRONTEND_PORT%"
 
 echo %COLOR_YELLOW%Stopping any existing frontend servers...%COLOR_RESET%
 :: Try graceful shutdown first
@@ -600,18 +641,58 @@ for /f "tokens=5" %%a in ('netstat -ano ^| findstr ":19000" ^| findstr "LISTENIN
 taskkill /FI "WINDOWTITLE eq Drive Alive - Frontend*" /T >nul 2>&1
 timeout /t 1 /nobreak >nul
 taskkill /FI "WINDOWTITLE eq Drive Alive - Frontend*" /T /F >nul 2>&1
-echo %COLOR_YELLOW%Starting Frontend Server only (localhost mode)...%COLOR_RESET%
-powershell -Command "$process = Start-Process cmd -ArgumentList '/k', 'cd /d \"%FRONTEND_DIR%\" && npx expo start --localhost' -WindowStyle Normal -PassThru; $process.Id | Out-File -FilePath '%FRONTEND_PID_FILE%' -Encoding ASCII -NoNewline; Write-Host \"Frontend started with PID: $($process.Id)\" -ForegroundColor Green"
+
+:: Auto-detect environment mode from .env file
+echo %COLOR_CYAN%Detecting environment mode from .env...%COLOR_RESET%
+
+set "EXPO_HOST_FLAG=--localhost"
+set "ENV_MODE=local"
+
+for /f "tokens=1,* delims==" %%a in ('findstr /B /I "FRONTEND_URL=" "%BACKEND_DIR%\.env" 2^>nul') do set "FRONTEND_URL_VALUE=%%b"
+
+if "%DEBUG%"=="1" (
+    echo [DEBUG] FRONTEND_URL_VALUE=!FRONTEND_URL_VALUE!
+)
+
+findstr /I /C:"FRONTEND_URL=http://localhost" "%BACKEND_DIR%\.env" >nul
+if "%DEBUG%"=="1" (
+    echo [DEBUG] localhost findstr errorlevel=!errorlevel!
+)
+if errorlevel 1 (
+    if defined FRONTEND_URL_VALUE (
+        :: Network mode - extract IP from FRONTEND_URL
+        for /f "tokens=2 delims=/:" %%i in ("%FRONTEND_URL_VALUE%") do set "DETECTED_IP=%%i"
+        if defined DETECTED_IP (
+            set "EXPO_HOST_FLAG=--host lan"
+            set "ENV_MODE=network"
+            echo %COLOR_GREEN%  Mode: Network - LAN !DETECTED_IP!%COLOR_RESET%
+            if "%DEBUG%"=="1" (
+                echo [DEBUG] DETECTED_IP=!DETECTED_IP!
+            )
+        ) else (
+            echo %COLOR_YELLOW%  FRONTEND_URL found, but IP could not be parsed%COLOR_RESET%
+        )
+    ) else (
+        echo %COLOR_YELLOW%  FRONTEND_URL not found in .env, using localhost mode%COLOR_RESET%
+    )
+) else (
+    echo %COLOR_GREEN%  Mode: Localhost%COLOR_RESET%
+)
+
+if defined FRONTEND_URL_VALUE set "FRONTEND_URL_DISPLAY=%FRONTEND_URL_VALUE%"
+
+echo %COLOR_YELLOW%Starting Frontend Server only ^(!ENV_MODE! mode^)...%COLOR_RESET%
+powershell -Command "$process = Start-Process cmd -ArgumentList '/k', 'cd /d \"%FRONTEND_DIR%\" && npx expo start %EXPO_HOST_FLAG%' -WindowStyle Normal -PassThru; $process.Id | Out-File -FilePath '%FRONTEND_PID_FILE%' -Encoding ASCII -NoNewline; Write-Host \"Frontend started with PID: $($process.Id)\" -ForegroundColor Green"
 echo.
-echo %COLOR_GREEN%Frontend server started: %FRONTEND_URL%%COLOR_RESET%
+echo %COLOR_GREEN%Frontend server started: %FRONTEND_URL_DISPLAY%%COLOR_RESET%
 
 timeout /t 5 /nobreak >nul
 if "%DEV_MODE%"=="1" (
     echo %COLOR_CYAN%Opening Edge with developer tools...%COLOR_RESET%
-    powershell -Command "Start-Process msedge -ArgumentList '%FRONTEND_URL%' -WindowStyle Maximized; Start-Sleep -Seconds 2; (New-Object -ComObject WScript.Shell).SendKeys('{F12}')"
+    powershell -Command "Start-Process msedge -ArgumentList '%FRONTEND_URL_DISPLAY%' -WindowStyle Maximized; Start-Sleep -Seconds 2; (New-Object -ComObject WScript.Shell).SendKeys('{F12}')"
 ) else (
     echo %COLOR_CYAN%Opening Frontend in default browser...%COLOR_RESET%
-    start "" "%FRONTEND_URL%"
+    start "" "%FRONTEND_URL_DISPLAY%"
 )
 goto :eof
 

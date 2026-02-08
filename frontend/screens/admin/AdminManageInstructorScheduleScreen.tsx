@@ -629,10 +629,7 @@ const styles = StyleSheet.create({
     marginHorizontal: Platform.OS === 'web' ? 20 : 10,
     padding: Platform.OS === 'web' ? 20 : 15,
     borderRadius: 8,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
+    boxShadow: Platform.OS === 'web' ? '0 2px 4px rgba(0, 0, 0, 0.1)' : undefined,
     elevation: 3,
   },
   sectionTitle: {

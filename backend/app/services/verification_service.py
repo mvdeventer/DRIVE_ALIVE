@@ -7,6 +7,7 @@ from typing import Optional
 from sqlalchemy.orm import Session
 from app.models.verification_token import VerificationToken
 from app.models.user import User
+from app.models.booking import Booking
 from app.services.email_service import EmailService
 from app.services.whatsapp_service import WhatsAppService
 import logging
@@ -144,10 +145,12 @@ class VerificationService:
         verification_token: VerificationToken,
         frontend_url: str,
         admin_smtp_email: str = None,
-        admin_smtp_password: str = None
+        admin_smtp_password: str = None,
+        notify_admins: bool = False,
+        user_type: str = "user"
     ) -> dict:
         """
-        Send verification email and WhatsApp message
+        Send verification email and WhatsApp message to user and optionally notify admins
 
         Args:
             db: Database session
@@ -156,17 +159,21 @@ class VerificationService:
             frontend_url: Frontend base URL
             admin_smtp_email: Admin's Gmail address
             admin_smtp_password: Admin's Gmail app password
+            notify_admins: Whether to notify all admins about new registration
+            user_type: Type of user ("student", "instructor", "admin")
 
         Returns:
-            dict with email_sent and whatsapp_sent status
+            dict with email_sent, whatsapp_sent, and admin_notifications_sent status
         """
         verification_link = f"{frontend_url}/verify-account?token={verification_token.token}"
+        logger.info("Verification link base URL: %s", frontend_url)
+        logger.info("Verification link generated: %s", verification_link)
         
         # Get admin settings from first admin user
         admin = db.query(User).filter(User.role == "admin").first()
         validity_minutes = admin.verification_link_validity_minutes if admin else 30
 
-        # Send email
+        # Send email to user
         email_sent = False
         if admin_smtp_email and admin_smtp_password:
             email_service = EmailService(admin_smtp_email, admin_smtp_password)
@@ -179,11 +186,10 @@ class VerificationService:
         else:
             logger.warning(f"Admin SMTP credentials not configured. Email not sent to {user.email}")
 
-        # Send WhatsApp (using Twilio sandbox with button)
+        # Send WhatsApp to user
         whatsapp_sent = False
         try:
             whatsapp_service = WhatsAppService()
-            # Send message with verification button instead of full URL
             whatsapp_sent = whatsapp_service.send_verification_message(
                 phone=user.phone,
                 first_name=user.first_name,
@@ -193,11 +199,53 @@ class VerificationService:
         except Exception as e:
             logger.error(f"Failed to send WhatsApp verification to {user.phone}: {str(e)}")
 
+        # Notify admins if requested (for student registrations)
+        admin_emails_sent = 0
+        admin_whatsapp_sent = 0
+        if notify_admins:
+            all_admins = db.query(User).filter(User.role == "admin").all()
+            
+            for admin_user in all_admins:
+                # Send email notification to admin
+                if admin_smtp_email and admin_smtp_password:
+                    try:
+                        email_service = EmailService(admin_smtp_email, admin_smtp_password)
+                        admin_email_sent = email_service.send_admin_student_registration_notification(
+                            admin_email=admin_user.email,
+                            admin_name=admin_user.first_name,
+                            student_name=f"{user.first_name} {user.last_name}",
+                            student_email=user.email,
+                            student_phone=user.phone,
+                            verification_link=verification_link
+                        )
+                        if admin_email_sent:
+                            admin_emails_sent += 1
+                    except Exception as e:
+                        logger.error(f"Failed to send admin email notification to {admin_user.email}: {str(e)}")
+                
+                # Send WhatsApp notification to admin
+                try:
+                    whatsapp_service = WhatsAppService()
+                    admin_wa_sent = whatsapp_service.send_admin_student_registration_notification(
+                        admin_phone=admin_user.phone,
+                        admin_name=admin_user.first_name,
+                        student_name=f"{user.first_name} {user.last_name}",
+                        student_email=user.email,
+                        student_phone=user.phone
+                    )
+                    if admin_wa_sent:
+                        admin_whatsapp_sent += 1
+                except Exception as e:
+                    logger.error(f"Failed to send admin WhatsApp notification to {admin_user.phone}: {str(e)}")
+
         return {
             "email_sent": email_sent,
             "whatsapp_sent": whatsapp_sent,
             "verification_link": verification_link,
-            "expires_in_minutes": validity_minutes
+            "expires_in_minutes": validity_minutes,
+            "admin_emails_sent": admin_emails_sent if notify_admins else 0,
+            "admin_whatsapp_sent": admin_whatsapp_sent if notify_admins else 0,
+            "total_admins_notified": len(all_admins) if notify_admins else 0
         }
 
     @staticmethod
@@ -231,6 +279,27 @@ class VerificationService:
             # Delete users (cascades to tokens, profiles, etc.)
             deleted_count = 0
             for user in users_to_delete:
+                # Skip deletion if there are related bookings (FKs are NOT NULL)
+                has_instructor_bookings = False
+                if user.instructor_profile:
+                    has_instructor_bookings = db.query(Booking.id).filter(
+                        Booking.instructor_id == user.instructor_profile.id
+                    ).first() is not None
+
+                has_student_bookings = False
+                if user.student_profile:
+                    has_student_bookings = db.query(Booking.id).filter(
+                        Booking.student_id == user.student_profile.id
+                    ).first() is not None
+
+                if has_instructor_bookings or has_student_bookings:
+                    logger.warning(
+                        "Skipping deletion of unverified user %s (%s) due to related bookings",
+                        user.id,
+                        user.email
+                    )
+                    continue
+
                 logger.info(f"Deleting unverified user {user.id} ({user.email}) - verification expired")
                 db.delete(user)
                 deleted_count += 1

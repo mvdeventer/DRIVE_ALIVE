@@ -3,6 +3,7 @@ Main FastAPI application
 """
 
 import asyncio
+import os
 import sys
 from contextlib import asynccontextmanager
 
@@ -10,14 +11,11 @@ from fastapi import FastAPI, Request, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from sqlalchemy.orm import Session
-from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 
 from .config import settings
 from .database import Base, engine, SessionLocal
-from .models.user import User, UserRole, UserStatus
-from .utils.auth import get_password_hash
+from .models.user import User, UserRole
 from .utils.rate_limiter import limiter, rate_limit_exceeded_handler
 from .routes import (
     admin,
@@ -57,10 +55,13 @@ async def lifespan(app: FastAPI):
     print(
         f"WhatsApp Reminders: {'Enabled' if settings.TWILIO_ACCOUNT_SID else 'Disabled'}"
     )
+    print(f"Frontend URL (settings): {settings.FRONTEND_URL}")
+    env_frontend_url = os.environ.get("FRONTEND_URL")
+    if env_frontend_url:
+        print(f"Frontend URL (env var): {env_frontend_url}")
     print("=" * 80)
 
     # Set ENCRYPTION_KEY in os.environ for EncryptionService
-    import os
     if settings.ENCRYPTION_KEY:
         os.environ["ENCRYPTION_KEY"] = settings.ENCRYPTION_KEY
         print("🔐 Encryption key loaded from settings")

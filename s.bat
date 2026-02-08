@@ -30,18 +30,26 @@ echo USAGE:
 echo   s.bat [OPTIONS]
 echo.
 echo OPTIONS:
-echo   (no args)        Start servers - open default browser (default)
+echo   (no args)        Start servers - auto-detect mode from .env (default)
 echo   -d               Open frontend in Edge with developer tools
 echo   -h, --help, /?   Show this help message
 echo.
 echo EXAMPLES:
-echo   s.bat                 # Start servers - open default browser (default)
-echo   s.bat -d              # Start servers - open Edge with dev tools
-echo   s.bat -n              # Start servers - don't open browser
+echo   s.bat                 # Auto-detect localhost/network mode from .env
+echo   s.bat -d              # Start with dev tools (auto-detects mode)
+echo   s.bat -n              # Start without opening browser
 echo   s.bat -b              # Start backend only
-echo   s.bat -f              # Start frontend only
-echo   s.bat start -f -d     # Start frontend only with dev tools
-echo   s.bat start -b -n     # Start backend only without opening browser
+echo   s.bat -f              # Start frontend only (auto-detects mode)
+echo.
+echo ENVIRONMENT MODE:
+echo   The script automatically reads backend\.env to determine:
+echo   - If FRONTEND_URL=http://localhost:8081    ^=^> localhost mode
+echo   - If FRONTEND_URL=http://10.0.0.121:8081   ^=^> network mode (mobile)
+echo.
+echo   To switch modes, use:
+echo   cd backend
+echo   .\switch-env.ps1 -Env loc    # Switch to localhost
+echo   .\switch-env.ps1 -Env net    # Switch to network (mobile)
 echo.
 echo For more options, see:
 echo   scripts\drive-alive.bat -h
