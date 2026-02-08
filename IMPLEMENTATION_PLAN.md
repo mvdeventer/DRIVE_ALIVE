@@ -138,9 +138,7 @@ EOF
 # Generate new secure secret (32+ bytes)
 python3 -c "import secrets; print(secrets.token_urlsafe(32))"
 
-# Update backend/.env
-# OLD: SECRET_KEY=your-secret-key-here
-# NEW: SECRET_KEY=<generated-token>
+# Update backend/.env with the newly generated token
 ```
 
 **3b. Stripe API Keys**
@@ -167,9 +165,9 @@ python3 -c "import secrets; print(secrets.token_urlsafe(32))"
 ```bash
 # Create passwords.txt with patterns to remove
 cat > passwords.txt << 'EOF'
-SECRET_KEY==>SECRET_KEY=REDACTED
-sk_test_*==>sk_test_REDACTED
-TWILIO_AUTH_TOKEN==>TWILIO_AUTH_TOKEN=REDACTED
+SENSITIVE_KEY==>SENSITIVE_KEY_REDACTED
+STRIPE_KEY_*==>STRIPE_KEY_REDACTED
+TWILIO_TOKEN==>TWILIO_TOKEN_REDACTED
 EOF
 
 # Use BFG to clean
@@ -199,7 +197,7 @@ if git diff --cached --name-only | grep -E "\.env$|\.env\.local"; then
 fi
 
 # Prevent committing secrets
-if git diff --cached -U0 | grep -E "SECRET_KEY=|sk_(test|live)_|TWILIO_AUTH_TOKEN="; then
+if git diff --cached -U0 | grep -E "SENSITIVE_KEY=|STRIPE_KEY_|TWILIO_TOKEN="; then
   echo "❌ ERROR: Attempting to commit secrets!"
   exit 1
 fi
