@@ -103,6 +103,12 @@ tmp/
 temp/
 *.tmp
 
+# Application runtime files
+backend/.backend.pid
+frontend/.frontend.pid
+backend/backups/
+backend/backups/*.json
+
 # Coverage
 coverage/
 .nyc_output/
