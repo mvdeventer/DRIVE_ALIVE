@@ -4,12 +4,25 @@
 // Import polyfills first (CRITICAL: Must be before any other imports)
 import './utils/textEncodingPolyfill';
 
+// NativeWind global styles
+import './global.css';
+
 import { CommonActions, NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import * as SecureStore from 'expo-secure-store';
 import { StatusBar } from 'expo-status-bar';
 import React, { useEffect, useRef, useState } from 'react';
-import { Platform, StyleSheet, Text, TouchableOpacity } from 'react-native';
+import { Platform, StyleSheet } from 'react-native';
+import {
+  useFonts,
+  Inter_400Regular,
+  Inter_500Medium,
+  Inter_600SemiBold,
+  Inter_700Bold,
+} from '@expo-google-fonts/inter';
+
+// Theme
+import { ThemeProvider, useTheme } from './theme/ThemeContext';
 
 // Global Top Bar
 import GlobalTopBar from './components/GlobalTopBar';
@@ -29,53 +42,29 @@ import VerificationPendingScreen from './screens/auth/VerificationPendingScreen'
 // Verification Screens
 import InstructorVerifyScreen from './screens/verification/InstructorVerifyScreen';
 
-// Student Screens
-import BookingScreen from './screens/booking/BookingScreen';
-import EditStudentProfileScreen from './screens/student/EditStudentProfileScreen';
-import InstructorListScreen from './screens/student/InstructorListScreen';
-import StudentHomeScreen from './screens/student/StudentHomeScreen';
-
-// Instructor Screens
-import EarningsReportScreen from './screens/instructor/EarningsReportScreen';
-import EditInstructorProfileScreen from './screens/instructor/EditInstructorProfileScreen';
-import InstructorHomeScreen from './screens/instructor/InstructorHomeScreen';
-import ManageAvailabilityScreen from './screens/instructor/ManageAvailabilityScreen';
-
-// Payment Screens
+// Payment Screens (root stack — shared across flows, deep-linked)
 import MockPaymentScreen from './screens/payment/MockPaymentScreen';
 import PaymentCancelScreen from './screens/payment/PaymentCancelScreen';
 import PaymentScreen from './screens/payment/PaymentScreen';
 import PaymentSuccessScreen from './screens/payment/PaymentSuccessScreen';
 
-// API Service
+// Services
 import ApiService from './services/api';
-
-// Setup Service
 import SetupService from './services/setup';
 
-// Inactivity Manager
+// Utilities
 import InactivityManager from './utils/inactivityManager';
 
-// Admin Screens
-import AdminDashboardScreen from './screens/admin/AdminDashboardScreen';
-import AdminManageInstructorScheduleScreen from './screens/admin/AdminManageInstructorScheduleScreen';
-import AdminSettingsScreen from './screens/admin/AdminSettingsScreen';
-import BookingOversightScreen from './screens/admin/BookingOversightScreen';
-import CreateAdminScreen from './screens/admin/CreateAdminScreen';
-// Lazy-loaded for code splitting (large component)
-const DatabaseInterfaceScreen = React.lazy(() => import('./screens/admin/DatabaseInterfaceScreen'));
-import EditAdminProfileScreen from './screens/admin/EditAdminProfileScreen';
-import InstructorEarningsOverviewScreen from './screens/admin/InstructorEarningsOverviewScreen';
-import InstructorVerificationScreen from './screens/admin/InstructorVerificationScreen';
-import RevenueAnalyticsScreen from './screens/admin/RevenueAnalyticsScreen';
-import UserManagementScreen from './screens/admin/UserManagementScreen';
+// Navigation — role-based bottom tabs
+import { AuthActionsContext } from './navigation/AuthContext';
+import MainTabs from './navigation/MainTabs';
 
 
 const Stack = createNativeStackNavigator();
 
 // Deep linking configuration
 const linking = {
-  prefixes: ['http://10.0.0.121:3000', 'http://10.0.0.121:8081', 'https://drivealive.co.za'],
+  prefixes: ['http://10.0.0.121:3000', 'http://10.0.0.121:8081', 'https://roadready.co.za'],
   config: {
     screens: {
       VerifyAccount: 'verify-account',
@@ -110,6 +99,25 @@ const storage = {
 };
 
 export default function App() {
+  const [fontsLoaded] = useFonts({
+    Inter_400Regular,
+    Inter_500Medium,
+    Inter_600SemiBold,
+    Inter_700Bold,
+  });
+
+  if (!fontsLoaded) {
+    return null; // Expo will show splash screen until fonts load
+  }
+
+  return (
+    <ThemeProvider>
+      <AppContent />
+    </ThemeProvider>
+  );
+}
+
+function AppContent() {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [userRole, setUserRole] = useState<string | null>(null);
@@ -230,6 +238,9 @@ export default function App() {
     }
   };
 
+  // useTheme must be called before any conditional return (Rules of Hooks)
+  const { colors } = useTheme();
+
   if (isLoading) {
     return null; // Or a loading screen
   }
@@ -271,17 +282,8 @@ export default function App() {
     }
   };
 
-  const UserNameDisplay = () => <Text style={styles.userNameText}>{userName}</Text>;
-
-  const LogoutButton = () => (
-    <TouchableOpacity onPress={handleLogout} style={styles.logoutButton}>
-      <Text style={styles.logoutText}>Logout</Text>
-    </TouchableOpacity>
-  );
-
-
   return (
-    <>
+    <AuthActionsContext.Provider value={{ onLogout: handleLogout, userName, userRole }}>
       <StatusBar style="auto" />
       {isAuthenticated && Platform.OS === 'web' && (
         <GlobalTopBar userName={userName} userRole={userRole} onLogout={handleLogout} />
@@ -292,50 +294,23 @@ export default function App() {
         style={isAuthenticated && Platform.OS === 'web' ? styles.navigationWithTopBar : {}}
       >
         <Stack.Navigator
-          initialRouteName={
-            requiresSetup
-              ? 'Setup'
-              : !isAuthenticated
-                ? 'Login'
-                : userRole === 'admin'
-                  ? 'AdminDashboard'
-                  : userRole === 'instructor'
-                    ? 'InstructorHome'
-                    : 'StudentHome'
-          }
-          screenOptions={({ navigation, route }) => ({
-            headerStyle: {
-              backgroundColor: '#007AFF',
-              height: 60,
-            },
-            headerTintColor: '#fff',
-            headerTitleStyle: {
-              fontWeight: 'bold',
-            },
-            // Use React Navigation built-in back button
-            headerBackVisible: navigation.canGoBack(),
+          initialRouteName={requiresSetup ? 'Setup' : isAuthenticated ? 'Main' : 'Login'}
+          screenOptions={{
+            headerStyle: { backgroundColor: colors.headerBackground },
+            headerTintColor: colors.headerText,
+            headerTitleStyle: { fontWeight: 'bold' as const, fontFamily: 'Inter_700Bold' },
             headerBackTitle: 'Back',
-            headerLeft: navigation.canGoBack()
-              ? undefined // Let React Navigation handle back button
-              : isAuthenticated && userName && Platform.OS !== 'web'
-                ? () => <UserNameDisplay />
-                : undefined,
-            // Show logout button on mobile only (web has GlobalTopBar)
-            headerRight:
-              isAuthenticated && Platform.OS !== 'web' ? () => <LogoutButton /> : undefined,
-            // Ensure header is visible on all authenticated screens
             headerShown: true,
-          })}
+          }}
         >
-          {/* Setup Stack - Shown when admin doesn't exist */}
+          {/* Setup — shown only when no admin exists */}
           {requiresSetup && (
             <Stack.Screen
               name="Setup"
               component={SetupScreen}
-              options={{ title: 'Initial Setup', headerShown: true }}
+              options={{ title: 'Initial Setup' }}
               listeners={{
                 focus: () => {
-                  // Refresh setup status when returning to Setup screen
                   SetupService.checkSetupStatus().then(status => {
                     if (!status.requires_setup) {
                       setRequiresSetup(false);
@@ -347,206 +322,55 @@ export default function App() {
             />
           )}
 
-          {/* Auth Stack - Always available */}
-          <Stack.Screen name="Login" options={{ title: 'Login', headerShown: !isAuthenticated }}>
-            {props => <LoginScreen {...props} onAuthChange={handleAuthChange} />}
-          </Stack.Screen>
-          <Stack.Screen
-            name="ForgotPassword"
-            component={ForgotPasswordScreen}
-            options={{ title: 'Forgot Password', headerShown: !isAuthenticated }}
-          />
-          <Stack.Screen
-            name="VerifyAccount"
-            component={VerifyAccountScreen}
-            options={{ title: 'Verify Account', headerShown: !isAuthenticated }}
-          />
-          <Stack.Screen
-            name="ResetPassword"
-            component={ResetPasswordScreen}
-            options={{ title: 'Reset Password', headerShown: !isAuthenticated }}
-          />
-          <Stack.Screen
-            name="RegisterChoice"
-            component={RegisterChoiceScreen}
-            options={{ title: 'Choose Account Type', headerShown: !isAuthenticated }}
-          />
-          <Stack.Screen
-            name="RegisterStudent"
-            component={RegisterStudentScreen}
-            options={{ title: 'Register as Student', headerShown: !isAuthenticated }}
-          />
-          <Stack.Screen
-            name="RegisterInstructor"
-            component={RegisterInstructorScreen}
-            options={{ title: 'Register as Instructor', headerShown: !isAuthenticated }}
-          />
-          <Stack.Screen
-            name="VerificationPending"
-            component={VerificationPendingScreen}
-            options={{ title: 'Verify Your Account', headerShown: !isAuthenticated }}
-          />
-          <Stack.Screen
-            name="InstructorVerify"
-            component={InstructorVerifyScreen}
-            options={{ title: 'Verify Instructor', headerShown: !isAuthenticated }}
-          />
-          <Stack.Screen
-            name="InstructorScheduleSetup"
-            component={InstructorScheduleSetupScreen}
-            options={{ title: 'Set Up Schedule', headerShown: !isAuthenticated }}
-          />
+          {isAuthenticated ? (
+            <Stack.Group screenOptions={{ headerShown: false }}>
+              {/* Tab navigator — handles its own headers via nested stacks */}
+              <Stack.Screen name="Main" component={MainTabs} />
 
-          {/* Student Stack */}
-          <Stack.Screen
-            name="StudentHome"
-            component={StudentHomeScreen}
-            options={{ title: 'Home' }}
-          />
-          <Stack.Screen
-            name="InstructorList"
-            component={InstructorListScreen}
-            options={{ title: 'Find Instructors' }}
-          />
-          <Stack.Screen
-            name="Booking"
-            component={BookingScreen}
-            options={{ title: 'Book Lesson' }}
-          />
-          <Stack.Screen
-            name="EditStudentProfile"
-            component={EditStudentProfileScreen}
-            options={{ title: 'Edit Profile' }}
-          />
+              {/* Payment screens — root level for cross-navigator access */}
+              <Stack.Screen
+                name="Payment"
+                component={PaymentScreen}
+                options={{
+                  headerShown: true,
+                  title: 'Payment',
+                  headerStyle: { backgroundColor: colors.headerBackground },
+                  headerTintColor: colors.headerText,
+                  headerTitleStyle: { fontWeight: 'bold' as const, fontFamily: 'Inter_700Bold' },
+                }}
+              />
+              <Stack.Screen name="PaymentMock" component={MockPaymentScreen} />
+              <Stack.Screen name="PaymentSuccess" component={PaymentSuccessScreen} />
+              <Stack.Screen name="PaymentCancel" component={PaymentCancelScreen} />
+            </Stack.Group>
+          ) : (
+            <Stack.Group>
+              <Stack.Screen name="Login" options={{ title: 'Login' }}>
+                {props => <LoginScreen {...props} onAuthChange={handleAuthChange} />}
+              </Stack.Screen>
+              <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} options={{ title: 'Forgot Password' }} />
+              <Stack.Screen name="RegisterChoice" component={RegisterChoiceScreen} options={{ title: 'Choose Account Type' }} />
+              <Stack.Screen name="RegisterStudent" component={RegisterStudentScreen} options={{ title: 'Register as Student' }} />
+              <Stack.Screen name="RegisterInstructor" component={RegisterInstructorScreen} options={{ title: 'Register as Instructor' }} />
+              <Stack.Screen name="VerificationPending" component={VerificationPendingScreen} options={{ title: 'Verify Your Account' }} />
+              <Stack.Screen name="InstructorScheduleSetup" component={InstructorScheduleSetupScreen} options={{ title: 'Set Up Schedule' }} />
+            </Stack.Group>
+          )}
 
-          {/* Instructor Stack */}
-          <Stack.Screen
-            name="InstructorHome"
-            component={InstructorHomeScreen}
-            options={{ title: 'Instructor Dashboard' }}
-          />
-          <Stack.Screen
-            name="EditInstructorProfile"
-            component={EditInstructorProfileScreen}
-            options={{ title: 'Edit Profile' }}
-          />
-          <Stack.Screen
-            name="ManageAvailability"
-            component={ManageAvailabilityScreen}
-            options={{ title: 'Manage Availability' }}
-          />
-          <Stack.Screen
-            name="EarningsReport"
-            component={EarningsReportScreen}
-            options={{ title: 'Earnings Report' }}
-          />
-
-          {/* Payment */}
-          <Stack.Screen name="Payment" component={PaymentScreen} options={{ title: 'Payment' }} />
-          <Stack.Screen
-            name="PaymentMock"
-            component={MockPaymentScreen}
-            options={{ title: 'Mock Payment (Dev)', headerShown: false }}
-          />
-          <Stack.Screen
-            name="PaymentSuccess"
-            component={PaymentSuccessScreen}
-            options={{ title: 'Payment Successful', headerShown: false }}
-          />
-          <Stack.Screen
-            name="PaymentCancel"
-            component={PaymentCancelScreen}
-            options={{ title: 'Payment Cancelled', headerShown: false }}
-          />
-
-          {/* Admin Stack */}
-          <Stack.Screen
-            name="AdminDashboard"
-            component={AdminDashboardScreen}
-            options={{ title: 'Admin Dashboard' }}
-          />
-          <Stack.Screen
-            name="EditAdminProfile"
-            component={EditAdminProfileScreen}
-            options={{ title: 'Edit Admin Profile' }}
-          />
-          <Stack.Screen
-            name="InstructorVerification"
-            component={InstructorVerificationScreen}
-            options={{ title: 'Verify Instructors' }}
-          />
-          <Stack.Screen
-            name="UserManagement"
-            component={UserManagementScreen}
-            options={{ title: 'User Management' }}
-          />
-          <Stack.Screen
-            name="BookingOversight"
-            component={BookingOversightScreen}
-            options={{ title: 'Booking Oversight' }}
-          />
-          <Stack.Screen
-            name="RevenueAnalytics"
-            component={RevenueAnalyticsScreen}
-            options={{ title: 'Revenue Analytics' }}
-          />
-          <Stack.Screen
-            name="InstructorEarningsOverview"
-            component={InstructorEarningsOverviewScreen}
-            options={{ title: 'Instructor Earnings' }}
-          />
-          <Stack.Screen
-            name="AdminSettings"
-            component={AdminSettingsScreen}
-            options={{ title: 'Admin Settings' }}
-          />
-          <Stack.Screen
-            name="CreateAdmin"
-            component={CreateAdminScreen}
-            options={{ title: 'Create Admin' }}
-          />
-          <Stack.Screen
-            name="AdminManageInstructorSchedule"
-            component={AdminManageInstructorScheduleScreen}
-            options={{ title: 'Manage Instructor Schedule' }}
-          />
-          <Stack.Screen
-            name="DatabaseInterface"
-            options={{ title: 'Database Interface' }}
-          >
-            {(props) => (
-              <React.Suspense fallback={<Text style={{ padding: 20, textAlign: 'center' }}>Loading Database Interface...</Text>}>
-                <DatabaseInterfaceScreen {...props} />
-              </React.Suspense>
-            )}
-          </Stack.Screen>
+          {/* Deep-linked screens — always available regardless of auth state */}
+          <Stack.Group>
+            <Stack.Screen name="VerifyAccount" component={VerifyAccountScreen} options={{ title: 'Verify Account' }} />
+            <Stack.Screen name="InstructorVerify" component={InstructorVerifyScreen} options={{ title: 'Verify Instructor' }} />
+            <Stack.Screen name="ResetPassword" component={ResetPasswordScreen} options={{ title: 'Reset Password' }} />
+          </Stack.Group>
         </Stack.Navigator>
       </NavigationContainer>
-    </>
+    </AuthActionsContext.Provider>
   );
 }
 
 const styles = StyleSheet.create({
-  userNameText: {
-    color: '#fff',
-    fontWeight: '600',
-    fontSize: 14,
-    marginLeft: 15,
-    maxWidth: Platform.OS === 'web' ? 250 : 180,
-  },
-  logoutButton: {
-    marginRight: 15,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    borderRadius: 5,
-  },
-  logoutText: {
-    color: '#fff',
-    fontWeight: '600',
-    fontSize: 14,
-  },
   navigationWithTopBar: {
-    marginTop: Platform.OS === 'web' ? 70 : 0,
+    marginTop: Platform.OS === 'web' ? 56 : 0,
   },
 });

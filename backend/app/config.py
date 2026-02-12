@@ -42,7 +42,7 @@ class Settings(BaseSettings):
     SMTP_PORT: int = 587
     SMTP_USERNAME: str = ""
     SMTP_PASSWORD: str = ""
-    FROM_EMAIL: str = "noreply@drivealive.com"
+    FROM_EMAIL: str = "noreply@roadready.co.za"
 
     # Encryption (for sensitive data like SMTP passwords)
     ENCRYPTION_KEY: str = ""

@@ -1,35 +1,35 @@
 /**
- * Forgot Password Screen - Request password reset
+ * Forgot Password Screen — Request password reset
  */
 import { useNavigation } from '@react-navigation/native';
 import React, { useState } from 'react';
 import {
-  ActivityIndicator,
+  Platform,
+  Pressable,
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
-  TouchableOpacity,
   View,
 } from 'react-native';
 import InlineMessage from '../../components/InlineMessage';
+import { Button, Card, Input } from '../../components/ui';
 import ApiService from '../../services/api';
+import { useTheme } from '../../theme/ThemeContext';
 
 export default function ForgotPasswordScreen() {
   const navigation = useNavigation();
+  const { colors } = useTheme();
   const [email, setEmail] = useState('');
   const [loading, setLoading] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
 
   const handleSubmit = async () => {
-    // Validate email
     if (!email.trim()) {
       setErrorMessage('Please enter your email address');
       setTimeout(() => setErrorMessage(''), 3000);
       return;
     }
-
     if (!email.includes('@')) {
       setErrorMessage('Please enter a valid email address');
       setTimeout(() => setErrorMessage(''), 3000);
@@ -39,18 +39,12 @@ export default function ForgotPasswordScreen() {
     try {
       setLoading(true);
       setErrorMessage('');
-
       await ApiService.post('/auth/forgot-password', { email: email.trim() });
-
       setSuccessMessage(
-        '✅ Password reset link sent! Check your email inbox (and spam folder) for instructions.'
+        'Password reset link sent! Check your email inbox (and spam folder) for instructions.'
       );
       setEmail('');
-
-      // Navigate back to login after 5 seconds
-      setTimeout(() => {
-        navigation.goBack();
-      }, 5000);
+      setTimeout(() => { navigation.goBack(); }, 5000);
     } catch (error: any) {
       console.error('Forgot password error:', error);
       setErrorMessage(
@@ -63,46 +57,49 @@ export default function ForgotPasswordScreen() {
   };
 
   return (
-    <ScrollView contentContainerStyle={styles.container}>
-      <View style={styles.card}>
-        <Text style={styles.title}>🔐 Forgot Password</Text>
-        <Text style={styles.subtitle}>
+    <ScrollView
+      contentContainerStyle={[styles.container, { backgroundColor: colors.background }]}
+      keyboardShouldPersistTaps="handled"
+    >
+      <Card variant="elevated" padding="lg" style={styles.card}>
+        {/* Icon */}
+        <View style={[styles.iconCircle, { backgroundColor: colors.primary + '15' }]}>
+          <Text style={styles.icon}>🔐</Text>
+        </View>
+
+        <Text style={[styles.title, { color: colors.text }]}>Forgot Password</Text>
+        <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
           Enter your email address and we'll send you a link to reset your password.
         </Text>
 
         {successMessage && <InlineMessage type="success" message={successMessage} />}
         {errorMessage && <InlineMessage type="error" message={errorMessage} />}
 
-        <View style={styles.formGroup}>
-          <Text style={styles.label}>Email Address</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="your.email@example.com"
-            value={email}
-            onChangeText={setEmail}
-            keyboardType="email-address"
-            autoCapitalize="none"
-            autoCorrect={false}
-            editable={!loading}
-          />
-        </View>
+        <Input
+          label="Email Address"
+          placeholder="your.email@example.com"
+          value={email}
+          onChangeText={setEmail}
+          keyboardType="email-address"
+          autoCapitalize="none"
+          autoCorrect={false}
+          editable={!loading}
+        />
 
-        <TouchableOpacity
-          style={[styles.submitButton, loading && styles.submitButtonDisabled]}
+        <Button
+          label="Send Reset Link"
           onPress={handleSubmit}
+          loading={loading}
           disabled={loading}
-        >
-          {loading ? (
-            <ActivityIndicator color="#fff" />
-          ) : (
-            <Text style={styles.submitButtonText}>Send Reset Link</Text>
-          )}
-        </TouchableOpacity>
+          fullWidth
+          size="lg"
+          style={{ marginTop: 8 }}
+        />
 
-        <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
-          <Text style={styles.backButtonText}>← Back to Login</Text>
-        </TouchableOpacity>
-      </View>
+        <Pressable style={styles.backLink} onPress={() => navigation.goBack()}>
+          <Text style={[styles.backText, { color: colors.primary }]}>← Back to Login</Text>
+        </Pressable>
+      </Card>
     </ScrollView>
   );
 }
@@ -110,73 +107,44 @@ export default function ForgotPasswordScreen() {
 const styles = StyleSheet.create({
   container: {
     flexGrow: 1,
-    backgroundColor: '#f5f5f5',
-    padding: 20,
+    padding: Platform.OS === 'web' ? 40 : 20,
     justifyContent: 'center',
   },
   card: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 24,
-    maxWidth: 400,
+    maxWidth: 440,
     width: '100%',
     alignSelf: 'center',
-    boxShadow: '0px 4px 12px rgba(0, 0, 0, 0.1)',
-    elevation: 4,
+    alignItems: 'center',
+  },
+  iconCircle: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 16,
+  },
+  icon: {
+    fontSize: 32,
   },
   title: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: '#333',
-    textAlign: 'center',
+    fontSize: Platform.OS === 'web' ? 26 : 22,
+    fontWeight: '800',
     marginBottom: 8,
+    letterSpacing: -0.3,
   },
   subtitle: {
-    fontSize: 14,
-    color: '#666',
+    fontSize: Platform.OS === 'web' ? 14 : 13,
     textAlign: 'center',
     marginBottom: 24,
     lineHeight: 20,
+    paddingHorizontal: 8,
   },
-  formGroup: {
-    marginBottom: 20,
-  },
-  label: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#333',
-    marginBottom: 8,
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 8,
+  backLink: {
+    marginTop: 20,
     padding: 12,
-    fontSize: 16,
-    backgroundColor: '#fff',
   },
-  submitButton: {
-    backgroundColor: '#007bff',
-    padding: 16,
-    borderRadius: 8,
-    alignItems: 'center',
-    marginTop: 8,
-  },
-  submitButtonDisabled: {
-    backgroundColor: '#ccc',
-  },
-  submitButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  backButton: {
-    marginTop: 16,
-    padding: 12,
-    alignItems: 'center',
-  },
-  backButtonText: {
-    color: '#007bff',
+  backText: {
     fontSize: 14,
     fontWeight: '600',
   },

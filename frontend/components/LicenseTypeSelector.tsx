@@ -1,8 +1,11 @@
-/**
+﻿/**
  * License Type Selector Component
+ * Modernized: Pressable, Ionicons, useTheme, Inter fonts
  */
 import React, { useState } from 'react';
-import { Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Modal, Pressable, ScrollView, Text, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { useTheme } from '../theme/ThemeContext';
 
 interface LicenseTypeSelectorProps {
   label?: string;
@@ -62,6 +65,7 @@ export default function LicenseTypeSelector({
   selectedTypes,
   onSelectionChange,
 }: LicenseTypeSelectorProps) {
+  const { colors } = useTheme();
   const [showSelector, setShowSelector] = useState(false);
   const [showTooltip, setShowTooltip] = useState(false);
 
@@ -74,49 +78,137 @@ export default function LicenseTypeSelector({
   };
 
   return (
-    <View style={styles.container}>
+    <View style={{ marginBottom: 15 }}>
       {label && (
-        <View style={styles.labelContainer}>
-          <Text style={styles.label}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+          <Text
+            style={{
+              fontSize: 14,
+              fontFamily: 'Inter_600SemiBold',
+              color: colors.text,
+              flex: 1,
+            }}
+          >
             {label}
-            {required && <Text style={styles.required}> *</Text>}
+            {required && (
+              <Text style={{ color: colors.danger }}> *</Text>
+            )}
           </Text>
-          <TouchableOpacity
-            style={styles.infoButton}
+          <Pressable
             onPress={() => setShowTooltip(true)}
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
             accessible={false}
             importantForAccessibility="no-hide-descendants"
             tabIndex={-1}
+            style={({ pressed }) => ({
+              marginLeft: 8,
+              opacity: pressed ? 0.7 : 1,
+            })}
           >
-            <View style={styles.infoIcon}>
-              <Text style={styles.infoIconText}>i</Text>
+            <View
+              style={{
+                width: 22,
+                height: 22,
+                borderRadius: 11,
+                backgroundColor: colors.primary,
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              <Ionicons name="information" size={14} color={colors.textInverse} />
             </View>
-          </TouchableOpacity>
+          </Pressable>
         </View>
       )}
 
-      <TouchableOpacity style={styles.selectorButton} onPress={() => setShowSelector(true)}>
-        <Text style={selectedTypes.length > 0 ? styles.selectedText : styles.placeholderText}>
+      <Pressable
+        onPress={() => setShowSelector(true)}
+        style={({ pressed }) => ({
+          backgroundColor: colors.inputBackground,
+          padding: 15,
+          borderRadius: 10,
+          borderWidth: 1,
+          borderColor: colors.inputBorder,
+          flexDirection: 'row',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          opacity: pressed ? 0.85 : 1,
+        })}
+      >
+        <Text
+          style={{
+            color: selectedTypes.length > 0 ? colors.inputText : colors.inputPlaceholder,
+            fontSize: 16,
+            fontFamily: 'Inter_400Regular',
+            flex: 1,
+          }}
+        >
           {selectedTypes.length > 0
             ? selectedTypes.join(', ')
             : 'Select license types you can teach'}
         </Text>
-        <Text style={styles.chevron}>›</Text>
-      </TouchableOpacity>
+        <Ionicons name="chevron-down" size={20} color={colors.textTertiary} />
+      </Pressable>
 
       {/* Selected License Types Details */}
       {selectedTypes.length > 0 && (
-        <View style={styles.selectedDetailsContainer}>
-          {selectedTypes.map(code => {
+        <View
+          style={{
+            marginTop: 12,
+            backgroundColor: colors.backgroundSecondary,
+            borderRadius: 10,
+            padding: 12,
+            borderWidth: 1,
+            borderColor: colors.border,
+          }}
+        >
+          {selectedTypes.map((code, index) => {
             const licenseType = LICENSE_TYPES.find(lt => lt.code === code);
             if (!licenseType) return null;
+            const isLast = index === selectedTypes.length - 1;
             return (
-              <View key={code} style={styles.selectedDetailItem}>
-                <Text style={styles.selectedDetailCode}>{licenseType.code}</Text>
-                <View style={styles.selectedDetailInfo}>
-                  <Text style={styles.selectedDetailName}>{licenseType.name}</Text>
-                  <Text style={styles.selectedDetailDescription}>{licenseType.description}</Text>
+              <View
+                key={code}
+                style={{
+                  flexDirection: 'row',
+                  marginBottom: isLast ? 0 : 12,
+                  paddingBottom: isLast ? 0 : 12,
+                  borderBottomWidth: isLast ? 0 : 1,
+                  borderBottomColor: colors.divider,
+                }}
+              >
+                <Text
+                  style={{
+                    fontSize: 16,
+                    fontFamily: 'Inter_700Bold',
+                    color: colors.primary,
+                    width: 60,
+                    marginRight: 12,
+                  }}
+                >
+                  {licenseType.code}
+                </Text>
+                <View style={{ flex: 1 }}>
+                  <Text
+                    style={{
+                      fontSize: 15,
+                      fontFamily: 'Inter_600SemiBold',
+                      color: colors.text,
+                      marginBottom: 4,
+                    }}
+                  >
+                    {licenseType.name}
+                  </Text>
+                  <Text
+                    style={{
+                      fontSize: 13,
+                      fontFamily: 'Inter_400Regular',
+                      color: colors.textSecondary,
+                      lineHeight: 18,
+                    }}
+                  >
+                    {licenseType.description}
+                  </Text>
                 </View>
               </View>
             );
@@ -131,40 +223,132 @@ export default function LicenseTypeSelector({
         transparent
         onRequestClose={() => setShowSelector(false)}
       >
-        <View style={styles.modalOverlay}>
-          <View style={styles.selectorContainer}>
-            <View style={styles.header}>
-              <Text style={styles.headerTitle}>Select License Types</Text>
-              <TouchableOpacity onPress={() => setShowSelector(false)}>
-                <Text style={styles.doneButton}>Done</Text>
-              </TouchableOpacity>
+        <View
+          style={{
+            flex: 1,
+            backgroundColor: 'rgba(0, 0, 0, 0.5)',
+            justifyContent: 'flex-end',
+          }}
+        >
+          <View
+            style={{
+              backgroundColor: colors.card,
+              borderTopLeftRadius: 20,
+              borderTopRightRadius: 20,
+              maxHeight: '80%',
+              paddingBottom: 20,
+            }}
+          >
+            <View
+              style={{
+                flexDirection: 'row',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                padding: 20,
+                borderBottomWidth: 1,
+                borderBottomColor: colors.divider,
+              }}
+            >
+              <Text
+                style={{
+                  fontSize: 18,
+                  fontFamily: 'Inter_700Bold',
+                  color: colors.text,
+                }}
+              >
+                Select License Types
+              </Text>
+              <Pressable
+                onPress={() => setShowSelector(false)}
+                style={({ pressed }) => ({
+                  opacity: pressed ? 0.7 : 1,
+                })}
+              >
+                <Text
+                  style={{
+                    fontSize: 16,
+                    fontFamily: 'Inter_600SemiBold',
+                    color: colors.primary,
+                  }}
+                >
+                  Done
+                </Text>
+              </Pressable>
             </View>
 
-            <ScrollView style={styles.scrollView}>
-              {LICENSE_TYPES.map(type => (
-                <TouchableOpacity
-                  key={type.code}
-                  style={styles.licenseItem}
-                  onPress={() => toggleLicenseType(type.code)}
-                >
-                  <View style={styles.licenseInfo}>
-                    <Text style={styles.licenseName}>{type.name}</Text>
-                    <Text style={styles.licenseDescription}>{type.description}</Text>
-                  </View>
-                  <View
-                    style={[
-                      styles.checkbox,
-                      selectedTypes.includes(type.code) && styles.checkboxSelected,
-                    ]}
+            <ScrollView style={{ padding: 15 }}>
+              {LICENSE_TYPES.map(type => {
+                const isSelected = selectedTypes.includes(type.code);
+                return (
+                  <Pressable
+                    key={type.code}
+                    onPress={() => toggleLicenseType(type.code)}
+                    style={({ pressed }) => ({
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      padding: 15,
+                      backgroundColor: pressed
+                        ? colors.primary + '10'
+                        : isSelected
+                          ? colors.primary + '08'
+                          : colors.backgroundSecondary,
+                      borderRadius: 10,
+                      marginBottom: 10,
+                    })}
                   >
-                    {selectedTypes.includes(type.code) && <Text style={styles.checkmark}>✓</Text>}
-                  </View>
-                </TouchableOpacity>
-              ))}
+                    <View style={{ flex: 1, marginRight: 10 }}>
+                      <Text
+                        style={{
+                          fontSize: 16,
+                          fontFamily: 'Inter_600SemiBold',
+                          color: colors.text,
+                          marginBottom: 4,
+                        }}
+                      >
+                        {type.name}
+                      </Text>
+                      <Text
+                        style={{
+                          fontSize: 13,
+                          fontFamily: 'Inter_400Regular',
+                          color: colors.textSecondary,
+                        }}
+                      >
+                        {type.description}
+                      </Text>
+                    </View>
+                    <View
+                      style={{
+                        width: 24,
+                        height: 24,
+                        borderRadius: 12,
+                        borderWidth: 2,
+                        borderColor: colors.primary,
+                        backgroundColor: isSelected ? colors.primary : 'transparent',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                      }}
+                    >
+                      {isSelected && (
+                        <Ionicons name="checkmark" size={16} color={colors.textInverse} />
+                      )}
+                    </View>
+                  </Pressable>
+                );
+              })}
             </ScrollView>
 
-            <Text style={styles.hint}>
-              Selected: {selectedTypes.length} {selectedTypes.length === 1 ? 'type' : 'types'}
+            <Text
+              style={{
+                textAlign: 'center',
+                fontFamily: 'Inter_500Medium',
+                color: colors.textSecondary,
+                fontSize: 14,
+                marginTop: 10,
+              }}
+            >
+              Selected: {selectedTypes.length}{' '}
+              {selectedTypes.length === 1 ? 'type' : 'types'}
             </Text>
           </View>
         </View>
@@ -177,234 +361,70 @@ export default function LicenseTypeSelector({
         animationType="fade"
         onRequestClose={() => setShowTooltip(false)}
       >
-        <TouchableOpacity
-          style={styles.tooltipOverlay}
-          activeOpacity={1}
+        <Pressable
+          style={{
+            flex: 1,
+            backgroundColor: 'rgba(0, 0, 0, 0.5)',
+            justifyContent: 'center',
+            alignItems: 'center',
+            padding: 20,
+          }}
           onPress={() => setShowTooltip(false)}
         >
-          <View style={styles.tooltipContainer}>
-            <Text style={styles.tooltipTitle}>{label}</Text>
-            <Text style={styles.tooltipText}>{tooltip}</Text>
-            <TouchableOpacity style={styles.closeButton} onPress={() => setShowTooltip(false)}>
-              <Text style={styles.closeButtonText}>Got it!</Text>
-            </TouchableOpacity>
+          <View
+            style={{
+              backgroundColor: colors.card,
+              borderRadius: 16,
+              padding: 20,
+              maxWidth: 350,
+              width: '100%',
+              boxShadow: '0px 2px 8px rgba(0, 0, 0, 0.15)',
+              elevation: 5,
+            }}
+          >
+            <Text
+              style={{
+                fontSize: 18,
+                fontFamily: 'Inter_700Bold',
+                color: colors.text,
+                marginBottom: 10,
+              }}
+            >
+              {label}
+            </Text>
+            <Text
+              style={{
+                fontSize: 15,
+                fontFamily: 'Inter_400Regular',
+                color: colors.textSecondary,
+                lineHeight: 22,
+                marginBottom: 15,
+              }}
+            >
+              {tooltip}
+            </Text>
+            <Pressable
+              onPress={() => setShowTooltip(false)}
+              style={({ pressed }) => ({
+                backgroundColor: pressed ? colors.primaryDark : colors.primary,
+                padding: 12,
+                borderRadius: 8,
+                alignItems: 'center',
+              })}
+            >
+              <Text
+                style={{
+                  color: colors.textInverse,
+                  fontSize: 16,
+                  fontFamily: 'Inter_600SemiBold',
+                }}
+              >
+                Got it!
+              </Text>
+            </Pressable>
           </View>
-        </TouchableOpacity>
+        </Pressable>
       </Modal>
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    marginBottom: 15,
-  },
-  labelContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  label: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#333',
-    flex: 1,
-  },
-  required: {
-    color: '#FF3B30',
-  },
-  infoButton: {
-    marginLeft: 8,
-  },
-  infoIcon: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    backgroundColor: '#007AFF',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  infoIconText: {
-    color: '#fff',
-    fontSize: 12,
-    fontWeight: 'bold',
-  },
-  selectorButton: {
-    backgroundColor: '#fff',
-    padding: 15,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: '#ddd',
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  placeholderText: {
-    color: '#999',
-    fontSize: 16,
-    flex: 1,
-  },
-  selectedText: {
-    color: '#333',
-    fontSize: 16,
-    flex: 1,
-  },
-  chevron: {
-    fontSize: 24,
-    color: '#999',
-    transform: [{ rotate: '90deg' }],
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'flex-end',
-  },
-  selectorContainer: {
-    backgroundColor: '#fff',
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    maxHeight: '80%',
-    paddingBottom: 20,
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: '#eee',
-  },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#333',
-  },
-  doneButton: {
-    fontSize: 16,
-    color: '#007AFF',
-    fontWeight: '600',
-  },
-  scrollView: {
-    padding: 15,
-  },
-  licenseItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 15,
-    backgroundColor: '#f9f9f9',
-    borderRadius: 10,
-    marginBottom: 10,
-  },
-  licenseInfo: {
-    flex: 1,
-    marginRight: 10,
-  },
-  licenseName: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#333',
-    marginBottom: 4,
-  },
-  licenseDescription: {
-    fontSize: 13,
-    color: '#666',
-  },
-  checkbox: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    borderWidth: 2,
-    borderColor: '#007AFF',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  checkboxSelected: {
-    backgroundColor: '#007AFF',
-  },
-  checkmark: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  hint: {
-    textAlign: 'center',
-    color: '#666',
-    fontSize: 14,
-    marginTop: 10,
-  },
-  selectedDetailsContainer: {
-    marginTop: 12,
-    backgroundColor: '#f9f9f9',
-    borderRadius: 10,
-    padding: 12,
-    borderWidth: 1,
-    borderColor: '#e0e0e0',
-  },
-  selectedDetailItem: {
-    flexDirection: 'row',
-    marginBottom: 12,
-    paddingBottom: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
-  },
-  selectedDetailCode: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#007AFF',
-    width: 60,
-    marginRight: 12,
-  },
-  selectedDetailInfo: {
-    flex: 1,
-  },
-  selectedDetailName: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: '#333',
-    marginBottom: 4,
-  },
-  selectedDetailDescription: {
-    fontSize: 13,
-    color: '#666',
-    lineHeight: 18,
-  },
-  tooltipOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
-  },
-  tooltipContainer: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 20,
-    maxWidth: 350,
-    width: '100%',
-    boxShadow: '0px 2px 4px rgba(0, 0, 0, 0.25)',
-    elevation: 5,
-  },
-  tooltipTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#333',
-    marginBottom: 10,
-  },
-  tooltipText: {
-    fontSize: 15,
-    color: '#666',
-    lineHeight: 22,
-    marginBottom: 15,
-  },
-  closeButton: {
-    backgroundColor: '#007AFF',
-    padding: 12,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  closeButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-});

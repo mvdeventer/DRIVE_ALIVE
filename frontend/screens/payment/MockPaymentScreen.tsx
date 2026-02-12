@@ -9,15 +9,17 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  TouchableOpacity,
   View,
 } from 'react-native';
+import { Button, Card } from '../../components/ui';
+import { useTheme } from '../../theme/ThemeContext';
 import WebNavigationHeader from '../../components/WebNavigationHeader';
 import ApiService from '../../services/api';
 
 export default function MockPaymentScreen() {
   const navigation = useNavigation();
   const route = useRoute();
+  const { colors } = useTheme();
   const params = route.params as any;
   const queryParams = new URLSearchParams(Platform.OS === 'web' ? window.location.search : '');
   const sessionId = params?.session_id || queryParams.get('session_id');
@@ -69,49 +71,52 @@ export default function MockPaymentScreen() {
   };
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
       {Platform.OS === 'web' && <WebNavigationHeader />}
 
       <ScrollView contentContainerStyle={styles.content}>
-        <View style={styles.card}>
-          <Text style={styles.title}>⚠️ Mock Payment Mode</Text>
-          <Text style={styles.subtitle}>Development mode - No real payment will be processed</Text>
+        <Card variant="elevated" style={styles.card}>
+          <Text style={[styles.title, { color: colors.warning }]}>⚠️ Mock Payment Mode</Text>
+          <Text style={[styles.subtitle, { color: colors.textSecondary }]}>Development mode - No real payment will be processed</Text>
 
           {message ? (
-            <View style={styles.messageBox}>
-              <Text style={styles.messageText}>{message}</Text>
+            <View style={[styles.messageBox, { backgroundColor: colors.primaryLight }]}>
+              <Text style={[styles.messageText, { color: colors.primary }]}>{message}</Text>
             </View>
           ) : null}
 
           {!processing && !message && (
             <>
-              <Text style={styles.infoText}>
+              <Text style={[styles.infoText, { color: colors.text }]}>
                 This is a simulated payment screen for development.{'\n\n'}
                 Click "Pay Now" to simulate a successful payment, or "Cancel" to simulate a failed
                 payment.
               </Text>
 
               <View style={styles.buttonContainer}>
-                <TouchableOpacity
-                  style={[styles.button, styles.successButton]}
+                <Button
+                  variant="primary"
                   onPress={() => handleMockPayment(true)}
                   disabled={processing}
+                  fullWidth
+                  style={{ backgroundColor: colors.success }}
                 >
-                  <Text style={styles.buttonText}>✅ Pay Now (Mock)</Text>
-                </TouchableOpacity>
+                  ✅ Pay Now (Mock)
+                </Button>
 
-                <TouchableOpacity
-                  style={[styles.button, styles.cancelButton]}
+                <Button
+                  variant="danger"
                   onPress={() => handleMockPayment(false)}
                   disabled={processing}
+                  fullWidth
                 >
-                  <Text style={styles.buttonText}>❌ Cancel Payment</Text>
-                </TouchableOpacity>
+                  ❌ Cancel Payment
+                </Button>
               </View>
 
-              <View style={styles.noteBox}>
-                <Text style={styles.noteTitle}>📝 For Production:</Text>
-                <Text style={styles.noteText}>
+              <View style={[styles.noteBox, { backgroundColor: colors.backgroundSecondary, borderLeftColor: colors.warning }]}>
+                <Text style={[styles.noteTitle, { color: colors.warning }]}>📝 For Production:</Text>
+                <Text style={[styles.noteText, { color: colors.textSecondary }]}>
                   Set STRIPE_SECRET_KEY in backend/.env to use real Stripe payments
                 </Text>
               </View>
@@ -120,11 +125,11 @@ export default function MockPaymentScreen() {
 
           {processing && (
             <View style={styles.loadingContainer}>
-              <ActivityIndicator size="large" color="#0066cc" />
-              <Text style={styles.loadingText}>Processing...</Text>
+              <ActivityIndicator size="large" color={colors.primary} />
+              <Text style={[styles.loadingText, { color: colors.textSecondary }]}>Processing...</Text>
             </View>
           )}
-        </View>
+        </Card>
       </ScrollView>
     </View>
   );
@@ -133,52 +138,30 @@ export default function MockPaymentScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
   },
   content: {
     padding: 20,
     alignItems: 'center',
   },
   card: {
-    backgroundColor: 'white',
-    borderRadius: 10,
-    padding: Platform.OS === 'web' ? 24 : 16,
     maxWidth: 500,
     width: '100%',
-    ...Platform.select({
-      web: {
-        boxShadow: '0 2px 10px rgba(0,0,0,0.1)',
-      },
-      default: {
-        ...Platform.select({
-          web: { boxShadow: '0 2px 10px rgba(0,0,0,0.1)' },
-          default: {
-            shadowColor: '#000',
-            shadowOffset: { width: 0, height: 2 },
-            shadowOpacity: 0.1,
-            shadowRadius: 10,
-          },
-        }),
-        elevation: 3,
-      },
-    }),
   },
   title: {
     fontSize: Platform.OS === 'web' ? 24 : 20,
-    fontWeight: 'bold',
-    color: '#ff9800',
+    fontFamily: 'Inter_700Bold',
     marginBottom: Platform.OS === 'web' ? 8 : 6,
     textAlign: 'center',
   },
   subtitle: {
     fontSize: 14,
-    color: '#666',
+    fontFamily: 'Inter_400Regular',
     marginBottom: 24,
     textAlign: 'center',
   },
   infoText: {
     fontSize: Platform.OS === 'web' ? 16 : 14,
-    color: '#333',
+    fontFamily: 'Inter_400Regular',
     lineHeight: Platform.OS === 'web' ? 24 : 20,
     marginBottom: Platform.OS === 'web' ? 24 : 16,
     textAlign: 'center',
@@ -187,49 +170,29 @@ const styles = StyleSheet.create({
     gap: 12,
     marginBottom: 24,
   },
-  button: {
-    padding: 16,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  successButton: {
-    backgroundColor: '#4caf50',
-  },
-  cancelButton: {
-    backgroundColor: '#f44336',
-  },
-  buttonText: {
-    color: 'white',
-    fontSize: 18,
-    fontWeight: 'bold',
-  },
   messageBox: {
-    backgroundColor: '#e3f2fd',
     padding: 16,
     borderRadius: 8,
     marginBottom: 16,
   },
   messageText: {
     fontSize: 16,
-    color: '#1976d2',
+    fontFamily: 'Inter_500Medium',
     textAlign: 'center',
   },
   noteBox: {
-    backgroundColor: '#fff3e0',
     padding: 16,
     borderRadius: 8,
     borderLeftWidth: 4,
-    borderLeftColor: '#ff9800',
   },
   noteTitle: {
     fontSize: 16,
-    fontWeight: 'bold',
-    color: '#f57c00',
+    fontFamily: 'Inter_700Bold',
     marginBottom: 8,
   },
   noteText: {
     fontSize: 14,
-    color: '#666',
+    fontFamily: 'Inter_400Regular',
     lineHeight: 20,
   },
   loadingContainer: {
@@ -239,6 +202,6 @@ const styles = StyleSheet.create({
   loadingText: {
     marginTop: 16,
     fontSize: 16,
-    color: '#666',
+    fontFamily: 'Inter_400Regular',
   },
 });

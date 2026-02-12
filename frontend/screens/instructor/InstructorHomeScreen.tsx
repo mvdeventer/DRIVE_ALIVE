@@ -1,26 +1,25 @@
 /**
  * Instructor Dashboard - Main hub for instructors to manage their lessons and availability
  */
-import { CommonActions, useFocusEffect, useNavigation } from '@react-navigation/native';
-import * as SecureStore from 'expo-secure-store';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
-  Modal,
   Platform,
+  Pressable,
   RefreshControl,
   ScrollView,
   StyleSheet,
   Switch,
   Text,
   TextInput,
-  TouchableOpacity,
   View,
 } from 'react-native';
 import CalendarPicker from '../../components/CalendarPicker';
 import InlineMessage from '../../components/InlineMessage';
 import WebNavigationHeader from '../../components/WebNavigationHeader';
+import { Badge, Button, Card, Input, ThemedModal } from '../../components/ui';
+import { useTheme } from '../../theme/ThemeContext';
 import ApiService from '../../services/api';
 import { showMessage } from '../../utils/messageConfig';
 
@@ -70,6 +69,7 @@ interface InstructorProfile {
 
 export default function InstructorHomeScreen() {
   const navigation = useNavigation();
+  const { colors } = useTheme();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [profile, setProfile] = useState<InstructorProfile | null>(null);
@@ -230,26 +230,6 @@ export default function InstructorHomeScreen() {
       console.error('Error toggling availability:', error);
       scrollViewRef.current?.scrollTo({ y: 0, animated: true });
       showMessage(setErrorMessage, 'Failed to update availability', SCREEN_NAME, 'error', 'error');
-    }
-  };
-
-  const handleLogout = async () => {
-    try {
-      if (Platform.OS === 'web') {
-        sessionStorage.clear(); // Changed from localStorage
-        window.location.reload();
-      } else {
-        await SecureStore.deleteItemAsync('access_token');
-        await SecureStore.deleteItemAsync('user_role');
-        navigation.dispatch(
-          CommonActions.reset({
-            index: 0,
-            routes: [{ name: 'Login' }],
-          })
-        );
-      }
-    } catch (error) {
-      console.error('Logout error:', error);
     }
   };
 
@@ -599,29 +579,29 @@ export default function InstructorHomeScreen() {
   const getStatusColor = (status: string) => {
     switch (status.toLowerCase()) {
       case 'confirmed':
-        return '#28a745';
+        return colors.success;
       case 'pending':
-        return '#ffc107';
+        return colors.warning;
       case 'cancelled':
-        return '#dc3545';
+        return colors.danger;
       case 'completed':
-        return '#007bff';
+        return colors.primary;
       default:
-        return '#6c757d';
+        return colors.textSecondary;
     }
   };
 
   if (loading) {
     return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#007bff" />
-        <Text style={styles.loadingText}>Loading dashboard...</Text>
+      <View style={[styles.loadingContainer, { backgroundColor: colors.background }]}>
+        <ActivityIndicator size="large" color={colors.primary} />
+        <Text style={[styles.loadingText, { color: colors.textSecondary }]}>Loading dashboard...</Text>
       </View>
     );
   }
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
       <WebNavigationHeader
         title="Instructor Dashboard"
         onBack={() => navigation.goBack()}
@@ -630,84 +610,59 @@ export default function InstructorHomeScreen() {
       <ScrollView
         ref={scrollViewRef}
         style={styles.scrollView}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} colors={[colors.primary]} />}
       >
         {/* Inline Messages */}
         {successMessage && <InlineMessage message={successMessage} type="success" />}
         {errorMessage && <InlineMessage message={errorMessage} type="error" />}
 
         {/* Header */}
-        <View style={styles.header}>
+        <View style={[styles.header, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
           <View style={{ flex: 1 }}>
-            <Text style={styles.greeting}>Instructor Dashboard</Text>
-            <Text style={styles.name}>
+            <Text style={[styles.greeting, { color: colors.textSecondary }]}>Instructor Dashboard</Text>
+            <Text style={[styles.name, { color: colors.text }]}>
               {profile?.first_name} {profile?.last_name}
             </Text>
           </View>
-          <View style={styles.headerRate}>
-            <Text style={styles.headerRateLabel}>Hourly Rate</Text>
-            <Text style={styles.headerRateAmount}>R{profile?.hourly_rate || 0}/hour</Text>
+          <View style={[styles.headerRate, { backgroundColor: colors.primaryLight }]}>
+            <Text style={[styles.headerRateLabel, { color: colors.primary }]}>Hourly Rate</Text>
+            <Text style={[styles.headerRateAmount, { color: colors.primary }]}>R{profile?.hourly_rate || 0}/hour</Text>
           </View>
         </View>
 
         {/* Tab Navigation */}
-        <View style={styles.tabContainer}>
-          <TouchableOpacity
-            style={[styles.tab, activeTab === 'pending' && styles.activeTab]}
-            onPress={() => setActiveTab('pending')}
-          >
-            <Text style={[styles.tabText, activeTab === 'pending' && styles.activeTabText]}>
-              ⏳ Pending
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.tab, activeTab === 'completed' && styles.activeTab]}
-            onPress={() => setActiveTab('completed')}
-          >
-            <Text style={[styles.tabText, activeTab === 'completed' && styles.activeTabText]}>
-              ✅ Completed
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.tab, activeTab === 'cancelled' && styles.activeTab]}
-            onPress={() => setActiveTab('cancelled')}
-          >
-            <Text style={[styles.tabText, activeTab === 'cancelled' && styles.activeTabText]}>
-              ❌ Cancelled
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.tab, activeTab === 'all' && styles.activeTab]}
-            onPress={() => setActiveTab('all')}
-          >
-            <Text style={[styles.tabText, activeTab === 'all' && styles.activeTabText]}>
-              📋 All
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.tab, activeTab === 'profile' && styles.activeTab]}
-            onPress={() => setActiveTab('profile')}
-          >
-            <Text style={[styles.tabText, activeTab === 'profile' && styles.activeTabText]}>
-              👤 Profile
-            </Text>
-          </TouchableOpacity>
+        <View style={[styles.tabContainer, { backgroundColor: colors.backgroundSecondary }]}>
+          {(['pending', 'completed', 'cancelled', 'all', 'profile'] as const).map(tab => {
+            const icons = { pending: '⏳', completed: '✅', cancelled: '❌', all: '📋', profile: '👤' };
+            const labels = { pending: 'Pending', completed: 'Completed', cancelled: 'Cancelled', all: 'All', profile: 'Profile' };
+            return (
+              <Pressable
+                key={tab}
+                style={[styles.tab, activeTab === tab && { backgroundColor: colors.primary }]}
+                onPress={() => setActiveTab(tab)}
+              >
+                <Text style={[styles.tabText, { color: colors.textSecondary }, activeTab === tab && { color: '#fff' }]}>
+                  {icons[tab]} {labels[tab]}
+                </Text>
+              </Pressable>
+            );
+          })}
         </View>
 
         {/* Tab Content */}
         {activeTab !== 'profile' ? (
           <>
-            {/* Bookings by Status Tabs */}
             {/* Search Bar */}
-            <View style={styles.searchContainer}>
+            <View style={[styles.searchContainer, { backgroundColor: colors.card }]}>
               <TextInput
-                style={styles.searchInput}
+                style={[styles.searchInput, { color: colors.text }]}
                 placeholder="🔍 Search by student name..."
+                placeholderTextColor={colors.textMuted}
                 value={searchQuery}
                 onChangeText={text => {
                   setSearchQuery(text);
-                  setSelectedStudent(null); // Clear selected student when typing
-                  setShowAllBookings(false); // Reset to normal view when searching
+                  setSelectedStudent(null);
+                  setShowAllBookings(false);
                   if (text.length > 0) {
                     setShowSearchDropdown(true);
                   }
@@ -715,27 +670,27 @@ export default function InstructorHomeScreen() {
                 onFocus={() => setShowSearchDropdown(true)}
               />
               {searchQuery.length > 0 && (
-                <TouchableOpacity
+                <Pressable
                   onPress={() => {
                     setSearchQuery('');
                     setShowSearchDropdown(false);
-                    setSelectedStudent(null); // Clear selected student
-                    setShowAllBookings(false); // Reset to normal view
+                    setSelectedStudent(null);
+                    setShowAllBookings(false);
                   }}
                   style={styles.clearButton}
                 >
-                  <Text style={styles.clearButtonText}>✕</Text>
-                </TouchableOpacity>
+                  <Text style={[styles.clearButtonText, { color: colors.textMuted }]}>✕</Text>
+                </Pressable>
               )}
 
               {/* Student Dropdown */}
               {showSearchDropdown && uniqueStudents.length > 0 && (
-                <View style={styles.searchDropdown}>
-                  <View style={styles.dropdownHeader}>
-                    <Text style={styles.dropdownTitle}>Students ({uniqueStudents.length})</Text>
-                    <TouchableOpacity onPress={() => setShowSearchDropdown(false)}>
-                      <Text style={styles.dropdownClose}>✕</Text>
-                    </TouchableOpacity>
+                <View style={[styles.searchDropdown, { backgroundColor: colors.card }]}>
+                  <View style={[styles.dropdownHeader, { borderBottomColor: colors.border }]}>
+                    <Text style={[styles.dropdownTitle, { color: colors.text }]}>Students ({uniqueStudents.length})</Text>
+                    <Pressable onPress={() => setShowSearchDropdown(false)} style={{ padding: 8 }}>
+                      <Text style={[styles.dropdownClose, { color: colors.textMuted }]}>✕</Text>
+                    </Pressable>
                   </View>
                   <ScrollView style={styles.dropdownList} nestedScrollEnabled={true}>
                     {uniqueStudents
@@ -749,11 +704,10 @@ export default function InstructorHomeScreen() {
                           b => b.student_id === student.student_id
                         ).length;
                         return (
-                          <TouchableOpacity
+                          <Pressable
                             key={student.student_id || index}
-                            style={styles.dropdownItem}
+                            style={[styles.dropdownItem, { borderBottomColor: colors.border }]}
                             onPress={() => {
-                              // Set the selected student and update search query with full details
                               setSelectedStudent(student);
                               const displayText = student.student_id_number
                                 ? `${student.student_name} (ID: ${student.student_id_number})`
@@ -763,31 +717,31 @@ export default function InstructorHomeScreen() {
                             }}
                           >
                             <View style={styles.dropdownItemLeft}>
-                              <Text style={styles.dropdownItemText}>👤 {student.student_name}</Text>
+                              <Text style={[styles.dropdownItemText, { color: colors.text }]}>👤 {student.student_name}</Text>
                               <View style={styles.dropdownItemDetails}>
                                 {student.student_id_number && (
-                                  <Text style={styles.dropdownItemSubtext}>
+                                  <Text style={[styles.dropdownItemSubtext, { color: colors.textSecondary }]}>
                                     🆔 ID: {student.student_id_number}
                                   </Text>
                                 )}
                                 {student.student_phone && (
-                                  <Text style={styles.dropdownItemSubtext}>
+                                  <Text style={[styles.dropdownItemSubtext, { color: colors.textSecondary }]}>
                                     📞 {student.student_phone}
                                   </Text>
                                 )}
                               </View>
                             </View>
-                            <Text style={styles.dropdownItemCount}>
+                            <Text style={[styles.dropdownItemCount, { color: colors.textSecondary, backgroundColor: colors.backgroundSecondary }]}>
                               {bookingCount} booking{bookingCount !== 1 ? 's' : ''}
                             </Text>
-                          </TouchableOpacity>
+                          </Pressable>
                         );
                       })}
                     {uniqueStudents.filter(
                       student =>
                         !searchQuery ||
                         student.student_name.toLowerCase().includes(searchQuery.toLowerCase())
-                    ).length === 0 && <Text style={styles.noResultsText}>No students found</Text>}
+                    ).length === 0 && <Text style={[styles.noResultsText, { color: colors.textMuted }]}>No students found</Text>}
                   </ScrollView>
                 </View>
               )}
@@ -795,7 +749,7 @@ export default function InstructorHomeScreen() {
 
             {/* Bookings by Status */}
             <View style={styles.section}>
-              <Text style={styles.sectionTitle}>
+              <Text style={[styles.sectionTitle, { color: colors.text }]}>
                 {activeTab === 'pending' && 'Pending Bookings'}
                 {activeTab === 'completed' && 'Completed Bookings'}
                 {activeTab === 'cancelled' && 'Cancelled Bookings'}
@@ -822,14 +776,14 @@ export default function InstructorHomeScreen() {
                       ? allBookings.filter(b => b.status.toLowerCase() === 'cancelled')
                       : allBookings
               ).length === 0 ? (
-                <View style={styles.emptyState}>
-                  <Text style={styles.emptyStateText}>
+                <Card variant="default" style={{ padding: 40, alignItems: 'center' }}>
+                  <Text style={[styles.emptyStateText, { color: colors.text }]}>
                     {activeTab === 'pending' && 'No pending bookings'}
                     {activeTab === 'completed' && 'No completed bookings'}
                     {activeTab === 'cancelled' && 'No cancelled bookings'}
                     {activeTab === 'all' && 'No bookings'}
                   </Text>
-                </View>
+                </Card>
               ) : (
                 <View style={styles.lessonsGrid}>
                   {filterBookings(
@@ -841,61 +795,61 @@ export default function InstructorHomeScreen() {
                           ? allBookings.filter(b => b.status.toLowerCase() === 'cancelled')
                           : allBookings
                   ).map(lesson => (
-                    <View key={lesson.id} style={styles.lessonCard}>
+                    <Card key={lesson.id} variant="default" style={styles.lessonCard}>
                       <View style={styles.lessonHeader}>
                         <View style={{ flex: 1 }}>
-                          <Text style={styles.studentName}>👤 {lesson.student_name}</Text>
+                          <Text style={[styles.studentName, { color: colors.text }]}>👤 {lesson.student_name}</Text>
                           {lesson.booking_reference && (
-                            <Text style={styles.bookingReference}>
+                            <Text style={[styles.bookingReference, { color: colors.primary }]}>
                               🎫 {lesson.booking_reference}
                             </Text>
                           )}
                           {lesson.student_id_number && (
-                            <Text style={styles.studentId}>
+                            <Text style={[styles.studentId, { color: colors.primary }]}>
                               🆔 ID Number: {lesson.student_id_number}
                             </Text>
                           )}
-                          <Text style={styles.lessonDate}>
+                          <Text style={[styles.lessonDate, { color: colors.textSecondary }]}>
                             📅 {formatDate(lesson.scheduled_time)}
                           </Text>
-                          <Text style={styles.lessonTime}>
+                          <Text style={[styles.lessonTime, { color: colors.textSecondary }]}>
                             🕒 {formatTime(lesson.scheduled_time)}
                           </Text>
-                          <Text style={styles.lessonDuration}>
+                          <Text style={[styles.lessonDuration, { color: colors.textSecondary }]}>
                             ⏱️ {lesson.duration_minutes} minutes
                           </Text>
                           {lesson.rebooking_count > 0 && (
-                            <Text style={styles.rebookingBadge}>
+                            <Text style={[styles.rebookingBadge, { color: colors.warning }]}>
                               🔄 Rescheduled {lesson.rebooking_count}x
                             </Text>
                           )}
                           {lesson.cancellation_fee > 0 && (
-                            <Text style={styles.cancellationFee}>
+                            <Text style={[styles.cancellationFee, { color: colors.danger }]}>
                               ⚠️ Fee: R{lesson.cancellation_fee.toFixed(2)}
                             </Text>
                           )}
                         </View>
-                        <View
-                          style={[
-                            styles.statusBadge,
-                            { backgroundColor: getStatusColor(lesson.status) },
-                          ]}
-                        >
-                          <Text style={styles.statusText}>{lesson.status}</Text>
-                        </View>
+                        <Badge variant={
+                          lesson.status.toLowerCase() === 'confirmed' ? 'success' :
+                          lesson.status.toLowerCase() === 'pending' ? 'warning' :
+                          lesson.status.toLowerCase() === 'cancelled' ? 'danger' :
+                          lesson.status.toLowerCase() === 'completed' ? 'info' : 'default'
+                        } size="sm">
+                          {lesson.status}
+                        </Badge>
                       </View>
 
                       {/* Student Contact Info */}
                       {lesson.student_phone && (
-                        <Text style={styles.lessonDetail}>📞 {lesson.student_phone}</Text>
+                        <Text style={[styles.lessonDetail, { color: colors.textSecondary }]}>📞 {lesson.student_phone}</Text>
                       )}
                       {lesson.student_email && (
-                        <Text style={styles.lessonDetail}>✉️ {lesson.student_email}</Text>
+                        <Text style={[styles.lessonDetail, { color: colors.textSecondary }]}>✉️ {lesson.student_email}</Text>
                       )}
 
                       {/* Student Location */}
                       {(lesson.student_city || lesson.student_suburb) && (
-                        <Text style={styles.lessonDetail}>
+                        <Text style={[styles.lessonDetail, { color: colors.textSecondary }]}>
                           🗺️ {lesson.student_suburb ? `${lesson.student_suburb}, ` : ''}
                           {lesson.student_city || ''}
                         </Text>
@@ -903,37 +857,31 @@ export default function InstructorHomeScreen() {
 
                       {/* Pickup Location */}
                       {lesson.pickup_location && (
-                        <Text style={styles.lessonDetail}>📌 Pickup: {lesson.pickup_location}</Text>
+                        <Text style={[styles.lessonDetail, { color: colors.textSecondary }]}>📌 Pickup: {lesson.pickup_location}</Text>
                       )}
 
                       {/* Student Comments */}
-                      <View style={styles.notesContainer}>
-                        <Text style={styles.notesLabel}>💬 Student Comments:</Text>
-                        <Text style={styles.notesText}>
+                      <View style={[styles.notesContainer, { backgroundColor: colors.backgroundSecondary, borderLeftColor: colors.primary }]}>
+                        <Text style={[styles.notesLabel, { color: colors.text }]}>💬 Student Comments:</Text>
+                        <Text style={[styles.notesText, { color: colors.textSecondary }]}>
                           {lesson.student_notes || 'No special requests'}
                         </Text>
                       </View>
 
-                      <View style={styles.lessonFooter}>
-                        <Text style={styles.lessonPrice}>R{lesson.total_price.toFixed(2)}</Text>
+                      <View style={[styles.lessonFooter, { borderTopColor: colors.border }]}>
+                        <Text style={[styles.lessonPrice, { color: colors.success }]}>R{lesson.total_price.toFixed(2)}</Text>
                         <View style={styles.lessonActions}>
                           {lesson.status.toLowerCase() === 'pending' && (
-                            <TouchableOpacity
-                              style={styles.rescheduleButton}
-                              onPress={() => openRescheduleModal(lesson)}
-                            >
-                              <Text style={styles.rescheduleButtonText}>🔄 Reschedule</Text>
-                            </TouchableOpacity>
+                            <Button variant="accent" size="sm" onPress={() => openRescheduleModal(lesson)}>
+                              🔄 Reschedule
+                            </Button>
                           )}
-                          <TouchableOpacity
-                            style={styles.deleteButton}
-                            onPress={() => handleDeleteLesson(lesson)}
-                          >
-                            <Text style={styles.deleteButtonText}>🗑️ Delete</Text>
-                          </TouchableOpacity>
+                          <Button variant="danger" size="sm" onPress={() => handleDeleteLesson(lesson)}>
+                            🗑️ Delete
+                          </Button>
                         </View>
                       </View>
-                    </View>
+                    </Card>
                   ))}
                 </View>
               )}
@@ -943,49 +891,55 @@ export default function InstructorHomeScreen() {
           <>
             {/* My Profile Tab Content */}
             {/* Availability Toggle */}
-            <View style={styles.availabilityCard}>
-              <Text style={styles.availabilityLabel}>Availability Status</Text>
+            <Card variant="default" style={styles.availabilityCard}>
+              <Text style={[styles.availabilityLabel, { color: colors.textSecondary }]}>Availability Status</Text>
               <Switch
                 value={profile?.is_available || false}
                 onValueChange={toggleAvailability}
-                trackColor={{ false: '#ccc', true: '#28a745' }}
+                trackColor={{ false: colors.border, true: colors.success }}
                 thumbColor={Platform.OS === 'android' ? '#fff' : undefined}
               />
-            </View>
+            </Card>
 
             {/* Booking Fee Display */}
             {profile?.booking_fee !== undefined && (
-              <View style={styles.bookingFeeCard}>
-                <Text style={styles.bookingFeeLabel}>💰 Your Booking Fee</Text>
-                <Text style={styles.bookingFeeValue}>R{profile.booking_fee.toFixed(2)}</Text>
-                <Text style={styles.bookingFeeNote}>
+              <Card variant="outlined" style={[styles.bookingFeeCard, { borderColor: colors.accent }]}>
+                <Text style={[styles.bookingFeeLabel, { color: colors.accent }]}>💰 Your Booking Fee</Text>
+                <Text style={[styles.bookingFeeValue, { color: colors.accent }]}>R{profile.booking_fee.toFixed(2)}</Text>
+                <Text style={[styles.bookingFeeNote, { color: colors.textSecondary }]}>
                   This fee is added to your hourly rate when students book lessons.
                 </Text>
-                <Text style={styles.bookingFeeExample}>
+                <Text style={[styles.bookingFeeExample, { color: colors.text, borderTopColor: colors.accent }]}>
                   Students pay: R{profile.hourly_rate.toFixed(2)} + R
                   {profile.booking_fee.toFixed(2)} = R
                   {(profile.hourly_rate + profile.booking_fee).toFixed(2)}/hr
                 </Text>
-              </View>
+              </Card>
             )}
 
             {/* Quick Actions */}
             <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Quick Actions</Text>
-              <TouchableOpacity
-                style={styles.actionButton}
+              <Text style={[styles.sectionTitle, { color: colors.text }]}>Quick Actions</Text>
+              <Button
+                variant="primary"
+                fullWidth
                 onPress={() => (navigation as any).navigate('ManageAvailability')}
+                icon="📅"
+                style={{ marginBottom: 12 }}
               >
-                <Text style={styles.actionButtonText}>📅 Schedule</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.actionButton, styles.secondaryButton]}
+                Schedule
+              </Button>
+              <Button
+                variant="secondary"
+                fullWidth
                 onPress={handleEditProfile}
+                icon="👤"
+                style={{ marginBottom: 12 }}
               >
-                <Text style={styles.actionButtonText}>👤 Edit Profile</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.actionButton, styles.earningsButton]}
+                Edit Profile
+              </Button>
+              <Pressable
+                style={[styles.earningsButton, { backgroundColor: colors.success }]}
                 onPress={handleViewEarnings}
               >
                 <View style={styles.earningsButtonContent}>
@@ -994,7 +948,7 @@ export default function InstructorHomeScreen() {
                     R{profile?.total_earnings?.toFixed(2) || '0.00'}
                   </Text>
                 </View>
-              </TouchableOpacity>
+              </Pressable>
             </View>
           </>
         )}
@@ -1002,329 +956,250 @@ export default function InstructorHomeScreen() {
         <View style={{ height: 40 }} />
 
         {/* Edit Profile Modal */}
-        <Modal
+        <ThemedModal
           visible={showEditProfileModal}
-          animationType="slide"
-          transparent={true}
-          onRequestClose={() => setShowEditProfileModal(false)}
-        >
-          <View style={styles.modalOverlay}>
-            <View style={styles.modalContent}>
-              <View style={styles.modalHeader}>
-                <Text style={styles.modalTitle}>👤 Edit Profile</Text>
-                <TouchableOpacity onPress={() => setShowEditProfileModal(false)}>
-                  <Text style={styles.modalClose}>✕</Text>
-                </TouchableOpacity>
-              </View>
-
-              <View style={styles.profileInfoCard}>
-                <Text style={styles.profileInfoLabel}>Name:</Text>
-                <Text style={styles.profileInfoValue}>
-                  {profile?.first_name} {profile?.last_name}
-                </Text>
-              </View>
-
-              <View style={styles.profileInfoCard}>
-                <Text style={styles.profileInfoLabel}>Email:</Text>
-                <Text style={styles.profileInfoValue}>{profile?.email}</Text>
-              </View>
-
-              <View style={styles.profileInfoCard}>
-                <Text style={styles.profileInfoLabel}>Phone:</Text>
-                <Text style={styles.profileInfoValue}>{profile?.phone}</Text>
-              </View>
-
-              <View style={styles.profileInfoCard}>
-                <Text style={styles.profileInfoLabel}>License:</Text>
-                <Text style={styles.profileInfoValue}>{profile?.license_type}</Text>
-              </View>
-
-              <View style={styles.modalFormGroup}>
-                <Text style={styles.modalLabel}>
-                  Hourly Rate (ZAR) <Text style={styles.requiredStar}>*</Text>
-                </Text>
-                <TextInput
-                  style={styles.modalInput}
-                  value={editFormData.hourly_rate}
-                  onChangeText={value => setEditFormData(prev => ({ ...prev, hourly_rate: value }))}
-                  keyboardType="decimal-pad"
-                  placeholder="e.g., 350"
-                />
-              </View>
-
-              <View style={styles.modalFormGroup}>
-                <View style={styles.switchRow}>
-                  <Text style={styles.modalLabel}>Available for Bookings</Text>
-                  <Switch
-                    value={editFormData.is_available}
-                    onValueChange={value =>
-                      setEditFormData(prev => ({ ...prev, is_available: value }))
-                    }
-                    trackColor={{ false: '#ccc', true: '#28a745' }}
-                    thumbColor={Platform.OS === 'android' ? '#fff' : undefined}
-                  />
-                </View>
-              </View>
-
-              <View style={styles.modalButtons}>
-                <TouchableOpacity
-                  style={[styles.modalButton, styles.modalCancelButton]}
-                  onPress={() => setShowEditProfileModal(false)}
-                >
-                  <Text style={styles.modalCancelButtonText}>Cancel</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.modalButton, styles.modalSaveButton]}
-                  onPress={handleSaveProfile}
-                >
-                  <Text style={styles.modalSaveButtonText}>Save Changes</Text>
-                </TouchableOpacity>
-              </View>
+          onClose={() => setShowEditProfileModal(false)}
+          title="👤 Edit Profile"
+          size="md"
+          footer={
+            <View style={styles.modalButtons}>
+              <Button variant="outline" onPress={() => setShowEditProfileModal(false)} style={{ flex: 1 }}>
+                Cancel
+              </Button>
+              <Button variant="primary" onPress={handleSaveProfile} style={{ flex: 1 }}>
+                Save Changes
+              </Button>
             </View>
+          }
+        >
+          <View style={[styles.profileInfoCard, { backgroundColor: colors.backgroundSecondary }]}>
+            <Text style={[styles.profileInfoLabel, { color: colors.textSecondary }]}>Name:</Text>
+            <Text style={[styles.profileInfoValue, { color: colors.text }]}>
+              {profile?.first_name} {profile?.last_name}
+            </Text>
           </View>
-        </Modal>
+          <View style={[styles.profileInfoCard, { backgroundColor: colors.backgroundSecondary }]}>
+            <Text style={[styles.profileInfoLabel, { color: colors.textSecondary }]}>Email:</Text>
+            <Text style={[styles.profileInfoValue, { color: colors.text }]}>{profile?.email}</Text>
+          </View>
+          <View style={[styles.profileInfoCard, { backgroundColor: colors.backgroundSecondary }]}>
+            <Text style={[styles.profileInfoLabel, { color: colors.textSecondary }]}>Phone:</Text>
+            <Text style={[styles.profileInfoValue, { color: colors.text }]}>{profile?.phone}</Text>
+          </View>
+          <View style={[styles.profileInfoCard, { backgroundColor: colors.backgroundSecondary }]}>
+            <Text style={[styles.profileInfoLabel, { color: colors.textSecondary }]}>License:</Text>
+            <Text style={[styles.profileInfoValue, { color: colors.text }]}>{profile?.license_type}</Text>
+          </View>
+          <Input
+            label="Hourly Rate (ZAR)"
+            value={editFormData.hourly_rate}
+            onChangeText={value => setEditFormData(prev => ({ ...prev, hourly_rate: value }))}
+            keyboardType="decimal-pad"
+            placeholder="e.g., 350"
+          />
+          <View style={styles.switchRow}>
+            <Text style={[styles.modalLabel, { color: colors.text }]}>Available for Bookings</Text>
+            <Switch
+              value={editFormData.is_available}
+              onValueChange={value => setEditFormData(prev => ({ ...prev, is_available: value }))}
+              trackColor={{ false: colors.border, true: colors.success }}
+              thumbColor={Platform.OS === 'android' ? '#fff' : undefined}
+            />
+          </View>
+        </ThemedModal>
 
         {/* Manage Availability Modal */}
-        <Modal
+        <ThemedModal
           visible={showAvailabilityModal}
-          animationType="slide"
-          transparent={true}
-          onRequestClose={() => setShowAvailabilityModal(false)}
-        >
-          <View style={styles.modalOverlay}>
-            <View style={styles.modalContent}>
-              <View style={styles.modalHeader}>
-                <Text style={styles.modalTitle}>📅 Manage Availability</Text>
-                <TouchableOpacity onPress={() => setShowAvailabilityModal(false)}>
-                  <Text style={styles.modalClose}>✕</Text>
-                </TouchableOpacity>
-              </View>
-
-              <View style={styles.availabilityStatusCard}>
-                <Text style={styles.availabilityCurrentLabel}>Current Status</Text>
-                <Text
-                  style={[
-                    styles.availabilityCurrentStatus,
-                    { color: profile?.is_available ? '#28a745' : '#dc3545' },
-                  ]}
-                >
-                  {profile?.is_available ? '🟢 Available' : '🔴 Unavailable'}
-                </Text>
-              </View>
-
-              <View style={styles.modalFormGroup}>
-                <View style={styles.switchRow}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.modalLabel}>Available for New Bookings</Text>
-                    <Text style={styles.modalHint}>
-                      Toggle this to control whether students can book lessons with you
-                    </Text>
-                  </View>
-                  <Switch
-                    value={editFormData.is_available}
-                    onValueChange={value =>
-                      setEditFormData(prev => ({ ...prev, is_available: value }))
-                    }
-                    trackColor={{ false: '#ccc', true: '#28a745' }}
-                    thumbColor={Platform.OS === 'android' ? '#fff' : undefined}
-                  />
-                </View>
-              </View>
-
-              <View style={styles.modalInfoBox}>
-                <Text style={styles.modalInfoText}>
-                  💡 Tip: You can quickly toggle your availability using the switch on the main
-                  dashboard
-                </Text>
-              </View>
-
-              <View style={styles.modalButtons}>
-                <TouchableOpacity
-                  style={[styles.modalButton, styles.modalCancelButton]}
-                  onPress={() => setShowAvailabilityModal(false)}
-                >
-                  <Text style={styles.modalCancelButtonText}>Cancel</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.modalButton, styles.modalSaveButton]}
-                  onPress={async () => {
-                    await toggleAvailability(editFormData.is_available);
-                    setShowAvailabilityModal(false);
-                  }}
-                >
-                  <Text style={styles.modalSaveButtonText}>Update Status</Text>
-                </TouchableOpacity>
-              </View>
+          onClose={() => setShowAvailabilityModal(false)}
+          title="📅 Manage Availability"
+          size="sm"
+          footer={
+            <View style={styles.modalButtons}>
+              <Button variant="outline" onPress={() => setShowAvailabilityModal(false)} style={{ flex: 1 }}>
+                Cancel
+              </Button>
+              <Button
+                variant="primary"
+                onPress={async () => {
+                  await toggleAvailability(editFormData.is_available);
+                  setShowAvailabilityModal(false);
+                }}
+                style={{ flex: 1 }}
+              >
+                Update Status
+              </Button>
             </View>
+          }
+        >
+          <View style={[styles.availabilityStatusCard, { backgroundColor: colors.backgroundSecondary }]}>
+            <Text style={[styles.availabilityCurrentLabel, { color: colors.textSecondary }]}>Current Status</Text>
+            <Text
+              style={[
+                styles.availabilityCurrentStatus,
+                { color: profile?.is_available ? colors.success : colors.danger },
+              ]}
+            >
+              {profile?.is_available ? '🟢 Available' : '🔴 Unavailable'}
+            </Text>
           </View>
-        </Modal>
+          <View style={styles.switchRow}>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.modalLabel, { color: colors.text }]}>Available for New Bookings</Text>
+              <Text style={[styles.modalHint, { color: colors.textSecondary }]}>
+                Toggle this to control whether students can book lessons with you
+              </Text>
+            </View>
+            <Switch
+              value={editFormData.is_available}
+              onValueChange={value => setEditFormData(prev => ({ ...prev, is_available: value }))}
+              trackColor={{ false: colors.border, true: colors.success }}
+              thumbColor={Platform.OS === 'android' ? '#fff' : undefined}
+            />
+          </View>
+          <View style={[styles.modalInfoBox, { backgroundColor: colors.primaryLight }]}>
+            <Text style={[styles.modalInfoText, { color: colors.primary }]}>
+              💡 Tip: You can quickly toggle your availability using the switch on the main dashboard
+            </Text>
+          </View>
+        </ThemedModal>
 
         {/* Reschedule Modal */}
-        <Modal
+        <ThemedModal
           visible={showRescheduleModal}
-          transparent={true}
-          animationType="slide"
-          onRequestClose={() => setShowRescheduleModal(false)}
+          onClose={() => setShowRescheduleModal(false)}
+          title="Reschedule Lesson"
+          size="md"
+          footer={
+            <View style={styles.modalButtons}>
+              <Button
+                variant="outline"
+                onPress={() => {
+                  setShowRescheduleModal(false);
+                  setSelectedBooking(null);
+                  setRescheduleDate('');
+                  setRescheduleTime('');
+                }}
+                style={{ flex: 1 }}
+              >
+                Cancel
+              </Button>
+              <Button variant="primary" onPress={handleReschedule} style={{ flex: 1 }}>
+                Confirm Reschedule
+              </Button>
+            </View>
+          }
         >
-          <View style={styles.modalOverlay}>
-            <View style={styles.modalContent}>
-              <View style={styles.modalHeader}>
-                <Text style={styles.modalTitle}>Reschedule Lesson</Text>
-                <TouchableOpacity onPress={() => setShowRescheduleModal(false)}>
-                  <Text style={styles.modalClose}>✕</Text>
-                </TouchableOpacity>
-              </View>
+          {selectedBooking && (
+            <View style={[styles.bookingInfoCard, { backgroundColor: colors.backgroundSecondary }]}>
+              <Text style={[styles.bookingInfoText, { color: colors.text }]}>
+                👤 Student: {selectedBooking.student_name}
+              </Text>
+              <Text style={[styles.bookingInfoText, { color: colors.text }]}>
+                📅 Current Time: {formatDate(selectedBooking.scheduled_time)} at{' '}
+                {formatTime(selectedBooking.scheduled_time)}
+              </Text>
+              <Text style={[styles.bookingInfoText, { color: colors.text }]}>
+                ⏱️ Duration: {selectedBooking.duration_minutes} minutes
+              </Text>
+            </View>
+          )}
 
-              {selectedBooking && (
-                <View style={styles.bookingInfoCard}>
-                  <Text style={styles.bookingInfoText}>
-                    👤 Student: {selectedBooking.student_name}
-                  </Text>
-                  <Text style={styles.bookingInfoText}>
-                    📅 Current Time: {formatDate(selectedBooking.scheduled_time)} at{' '}
-                    {formatTime(selectedBooking.scheduled_time)}
-                  </Text>
-                  <Text style={styles.bookingInfoText}>
-                    ⏱️ Duration: {selectedBooking.duration_minutes} minutes
-                  </Text>
-                </View>
-              )}
+          <Text style={[styles.modalLabel, { color: colors.text, marginBottom: 8 }]}>Select New Date</Text>
+          <Pressable
+            style={[styles.datePickerButton, { backgroundColor: colors.backgroundSecondary, borderColor: colors.border }]}
+            onPress={() => setShowCalendarModal(true)}
+          >
+            <Text style={styles.datePickerIcon}>📅</Text>
+            <Text style={[styles.datePickerText, { color: colors.text }]}>
+              {rescheduleDate
+                ? new Date(rescheduleDate + 'T00:00:00').toLocaleDateString('en-ZA', {
+                    weekday: 'short',
+                    year: 'numeric',
+                    month: 'short',
+                    day: 'numeric',
+                  })
+                : 'Click to Select Date'}
+            </Text>
+          </Pressable>
 
-              <View style={styles.modalFormGroup}>
-                <Text style={styles.modalLabel}>Select New Date</Text>
-
-                {/* Calendar Button */}
-                <TouchableOpacity
-                  style={styles.datePickerButton}
-                  onPress={() => setShowCalendarModal(true)}
-                >
-                  <Text style={styles.datePickerIcon}>📅</Text>
-                  <Text style={styles.datePickerText}>
-                    {rescheduleDate
-                      ? new Date(rescheduleDate + 'T00:00:00').toLocaleDateString('en-ZA', {
-                          weekday: 'short',
-                          year: 'numeric',
-                          month: 'short',
-                          day: 'numeric',
-                        })
-                      : 'Click to Select Date'}
-                  </Text>
-                </TouchableOpacity>
-              </View>
-
-              <View style={styles.modalFormGroup}>
-                <Text style={styles.modalLabel}>Available Time Slots</Text>
-                <ScrollView style={styles.timeSlotsContainer}>
-                  {availableSlots.length === 0 ? (
-                    <Text style={styles.noSlotsText}>
-                      {rescheduleDate
-                        ? 'No available slots for this date'
-                        : 'Select a date to see available slots'}
-                    </Text>
-                  ) : (
-                    availableSlots.map((slot, index) => (
-                      <TouchableOpacity
-                        key={index}
-                        style={[
-                          styles.timeSlotButton,
-                          rescheduleTime === slot && styles.timeSlotButtonSelected,
-                        ]}
-                        onPress={() => setRescheduleTime(slot)}
-                      >
-                        <Text
-                          style={[
-                            styles.timeSlotText,
-                            rescheduleTime === slot && styles.timeSlotTextSelected,
-                          ]}
-                        >
-                          {slot}
-                        </Text>
-                      </TouchableOpacity>
-                    ))
-                  )}
-                </ScrollView>
-              </View>
-
-              {rescheduleMessage && (
-                <View
+          <Text style={[styles.modalLabel, { color: colors.text, marginTop: 16, marginBottom: 8 }]}>Available Time Slots</Text>
+          <ScrollView style={styles.timeSlotsContainer}>
+            {availableSlots.length === 0 ? (
+              <Text style={[styles.noSlotsText, { color: colors.textMuted }]}>
+                {rescheduleDate
+                  ? 'No available slots for this date'
+                  : 'Select a date to see available slots'}
+              </Text>
+            ) : (
+              availableSlots.map((slot, index) => (
+                <Pressable
+                  key={index}
                   style={[
-                    styles.messageBox,
-                    rescheduleMessage.type === 'success' ? styles.successBox : styles.errorBox,
+                    styles.timeSlotButton,
+                    { backgroundColor: colors.backgroundSecondary },
+                    rescheduleTime === slot && { backgroundColor: colors.primary, borderColor: colors.primary },
                   ]}
+                  onPress={() => setRescheduleTime(slot)}
                 >
                   <Text
                     style={[
-                      styles.messageText,
-                      rescheduleMessage.type === 'success' ? styles.successText : styles.errorText,
+                      styles.timeSlotText,
+                      { color: colors.text },
+                      rescheduleTime === slot && { color: '#fff', fontWeight: 'bold' },
                     ]}
                   >
-                    {rescheduleMessage.text}
+                    {slot}
                   </Text>
-                </View>
-              )}
+                </Pressable>
+              ))
+            )}
+          </ScrollView>
 
-              <View style={styles.modalButtons}>
-                <TouchableOpacity
-                  style={[styles.modalButton, styles.modalCancelButton]}
-                  onPress={() => {
-                    setShowRescheduleModal(false);
-                    setSelectedBooking(null);
-                    setRescheduleDate('');
-                    setRescheduleTime('');
-                  }}
-                >
-                  <Text style={styles.modalCancelButtonText}>Cancel</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.modalButton, styles.modalSaveButton]}
-                  onPress={handleReschedule}
-                >
-                  <Text style={styles.modalSaveButtonText}>Confirm Reschedule</Text>
-                </TouchableOpacity>
-              </View>
+          {rescheduleMessage && (
+            <View
+              style={[
+                styles.messageBox,
+                { backgroundColor: rescheduleMessage.type === 'success' ? colors.successLight : colors.dangerLight },
+              ]}
+            >
+              <Text
+                style={[
+                  styles.messageText,
+                  { color: rescheduleMessage.type === 'success' ? colors.success : colors.danger },
+                ]}
+              >
+                {rescheduleMessage.text}
+              </Text>
             </View>
-          </View>
-        </Modal>
+          )}
+        </ThemedModal>
 
         {/* Calendar Modal for Reschedule */}
-        <Modal
+        <ThemedModal
           visible={showCalendarModal}
-          transparent={true}
-          animationType="slide"
-          onRequestClose={() => setShowCalendarModal(false)}
+          onClose={() => setShowCalendarModal(false)}
+          title="📅 Select Date"
+          size="sm"
         >
-          <View style={styles.modalOverlay}>
-            <View style={styles.calendarModalContent}>
-              <View style={styles.calendarModalHeader}>
-                <Text style={styles.calendarModalTitle}>📅 Select Date</Text>
-                <TouchableOpacity
-                  onPress={() => setShowCalendarModal(false)}
-                  style={styles.calendarModalClose}
-                >
-                  <Text style={styles.calendarModalCloseText}>✕</Text>
-                </TouchableOpacity>
-              </View>
-              <CalendarPicker
-                value={rescheduleDate ? new Date(rescheduleDate + 'T00:00:00') : new Date()}
-                onChange={date => {
-                  // Use local date to avoid timezone shifts
-                  const year = date.getFullYear();
-                  const month = String(date.getMonth() + 1).padStart(2, '0');
-                  const day = String(date.getDate()).padStart(2, '0');
-                  const dateStr = `${year}-${month}-${day}`;
-                  setRescheduleDate(dateStr);
-                  loadAvailableSlots(dateStr);
-                  setShowCalendarModal(false);
-                }}
-                onCancel={() => setShowCalendarModal(false)}
-                minDate={new Date()}
-                maxDate={new Date(Date.now() + 90 * 24 * 60 * 60 * 1000)}
-                disabledDates={instructorTimeOff}
-              />
-              <Text style={styles.timeOffLegend}>🟧 Orange dates = Instructor unavailable</Text>
-            </View>
-          </View>
-        </Modal>
+          <CalendarPicker
+            value={rescheduleDate ? new Date(rescheduleDate + 'T00:00:00') : new Date()}
+            onChange={date => {
+              const year = date.getFullYear();
+              const month = String(date.getMonth() + 1).padStart(2, '0');
+              const day = String(date.getDate()).padStart(2, '0');
+              const dateStr = `${year}-${month}-${day}`;
+              setRescheduleDate(dateStr);
+              loadAvailableSlots(dateStr);
+              setShowCalendarModal(false);
+            }}
+            onCancel={() => setShowCalendarModal(false)}
+            minDate={new Date()}
+            maxDate={new Date(Date.now() + 90 * 24 * 60 * 60 * 1000)}
+            disabledDates={instructorTimeOff}
+          />
+          <Text style={[styles.timeOffLegend, { color: colors.textSecondary }]}>🟧 Orange dates = Instructor unavailable</Text>
+        </ThemedModal>
       </ScrollView>
     </View>
   );
@@ -1333,7 +1208,6 @@ export default function InstructorHomeScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
   },
   scrollView: {
     flex: 1,
@@ -1342,69 +1216,33 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#f5f5f5',
   },
   loadingText: {
     marginTop: 16,
     fontSize: 16,
-    color: '#666',
+    fontFamily: 'Inter_400Regular',
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     padding: Platform.OS === 'web' ? 20 : 12,
-    backgroundColor: '#fff',
     borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
   },
   greeting: {
     fontSize: Platform.OS === 'web' ? 14 : 12,
-    color: '#666',
+    fontFamily: 'Inter_400Regular',
   },
   name: {
     fontSize: Platform.OS === 'web' ? 24 : 18,
-    fontWeight: 'bold',
-    color: '#333',
+    fontFamily: 'Inter_700Bold',
     marginTop: 4,
-  },
-  logoutButton: {
-    backgroundColor: '#dc3545',
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderRadius: 8,
-  },
-  logoutButtonText: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  availabilityCard: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    margin: 20,
-    marginBottom: 0,
-    padding: 16,
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    ...Platform.select({
-      web: { boxShadow: '0 2px 4px rgba(0,0,0,0.1)' },
-      default: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 4,
-        elevation: 3,
-      },
-    }),
   },
   tabContainer: {
     flexDirection: 'row',
     marginHorizontal: Platform.OS === 'web' ? 20 : 8,
     marginTop: Platform.OS === 'web' ? 16 : 8,
     marginBottom: Platform.OS === 'web' ? 16 : 8,
-    backgroundColor: '#f0f0f0',
     borderRadius: 12,
     padding: Platform.OS === 'web' ? 4 : 3,
   },
@@ -1416,123 +1254,14 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderRadius: 10,
   },
-  activeTab: {
-    backgroundColor: '#007bff',
-  },
   tabText: {
     fontSize: Platform.OS === 'web' ? 14 : 12,
-    fontWeight: '600',
-    color: '#666',
-  },
-  activeTabText: {
-    color: '#fff',
-  },
-  availabilityInfo: {
-    flex: 1,
+    fontFamily: 'Inter_600SemiBold',
   },
   availabilityLabel: {
     fontSize: 14,
-    color: '#666',
+    fontFamily: 'Inter_400Regular',
     marginBottom: 4,
-  },
-  availabilityStatus: {
-    fontSize: 18,
-    fontWeight: 'bold',
-  },
-  quickActionsRow: {
-    flexDirection: 'row',
-    marginHorizontal: 20,
-    marginTop: 12,
-    marginBottom: 12,
-    gap: 8,
-  },
-  quickActionButton: {
-    flex: 1,
-    backgroundColor: '#fff',
-    paddingVertical: 12,
-    paddingHorizontal: 8,
-    borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-    ...Platform.select({
-      web: { boxShadow: '0 1px 3px rgba(0,0,0,0.08)' },
-      default: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.08,
-        shadowRadius: 3,
-        elevation: 2,
-      },
-    }),
-    borderWidth: 1,
-    borderColor: '#e0e0e0',
-  },
-  quickActionIcon: {
-    fontSize: 20,
-    marginBottom: 4,
-  },
-  quickActionText: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: '#333',
-    textAlign: 'center',
-  },
-  statsContainer: {
-    flexDirection: 'row',
-    padding: 20,
-  },
-  statCard: {
-    flex: 1,
-    backgroundColor: '#fff',
-    padding: 16,
-    borderRadius: 12,
-    alignItems: 'center',
-    marginHorizontal: 6,
-    ...Platform.select({
-      web: { boxShadow: '0 2px 4px rgba(0,0,0,0.1)' },
-      default: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 4,
-        elevation: 3,
-      },
-    }),
-  },
-  statNumber: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#007bff',
-  },
-  statLabel: {
-    fontSize: 12,
-    color: '#666',
-    marginTop: 4,
-    textAlign: 'center',
-  },
-  rateCard: {
-    margin: 20,
-    marginTop: 0,
-    padding: 16,
-    backgroundColor: '#007bff',
-    borderRadius: 12,
-    alignItems: 'center',
-  },
-  rateLabel: {
-    fontSize: 14,
-    color: '#fff',
-    opacity: 0.9,
-  },
-  rateAmount: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: '#fff',
-    marginVertical: 4,
-  },
-  licenseType: {
-    fontSize: 12,
-    color: '#fff',
-    opacity: 0.8,
   },
   section: {
     padding: Platform.OS === 'web' ? 20 : 12,
@@ -1540,27 +1269,14 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     fontSize: Platform.OS === 'web' ? 20 : 17,
-    fontWeight: 'bold',
-    color: '#333',
+    fontFamily: 'Inter_700Bold',
     marginBottom: Platform.OS === 'web' ? 16 : 12,
     marginTop: Platform.OS === 'web' ? 20 : 15,
   },
-  emptyState: {
-    backgroundColor: '#fff',
-    padding: 40,
-    borderRadius: 12,
-    alignItems: 'center',
-  },
   emptyStateText: {
     fontSize: 16,
-    fontWeight: '600',
-    color: '#333',
+    fontFamily: 'Inter_600SemiBold',
     marginBottom: 8,
-  },
-  emptyStateSubtext: {
-    fontSize: 14,
-    color: '#666',
-    textAlign: 'center',
   },
   lessonsGrid: {
     flexDirection: 'row',
@@ -1568,21 +1284,10 @@ const styles = StyleSheet.create({
     marginHorizontal: -6,
   },
   lessonCard: {
-    backgroundColor: '#fff',
     padding: Platform.OS === 'web' ? 10 : 8,
     borderRadius: 8,
     marginBottom: 8,
     marginHorizontal: Platform.OS === 'web' ? 6 : 4,
-    ...Platform.select({
-      web: { boxShadow: '0 1px 3px rgba(0,0,0,0.08)' },
-      default: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.08,
-        shadowRadius: 3,
-        elevation: 2,
-      },
-    }),
     flexBasis: Platform.OS === 'web' ? '30%' : '100%',
     minWidth: Platform.OS === 'web' ? 200 : '100%',
     maxWidth: '100%',
@@ -1596,44 +1301,26 @@ const styles = StyleSheet.create({
   },
   studentName: {
     fontSize: 12,
-    fontWeight: '600',
-    color: '#333',
+    fontFamily: 'Inter_600SemiBold',
     marginBottom: 2,
   },
   studentId: {
     fontSize: 10,
-    color: '#007bff',
-    fontWeight: '500',
+    fontFamily: 'Inter_500Medium',
     marginBottom: 2,
   },
   lessonTime: {
     fontSize: 11,
-    color: '#666',
+    fontFamily: 'Inter_400Regular',
   },
   lessonDate: {
     fontSize: 11,
-    color: '#666',
-  },
-  statusBadge: {
-    paddingHorizontal: 10,
-    paddingVertical: 3,
-    borderRadius: 10,
-  },
-  statusText: {
-    color: '#fff',
-    fontSize: 10,
-    fontWeight: '600',
-    textTransform: 'capitalize',
+    fontFamily: 'Inter_400Regular',
   },
   lessonDuration: {
     fontSize: 11,
-    color: '#666',
+    fontFamily: 'Inter_400Regular',
     marginBottom: 2,
-  },
-  pickupLocation: {
-    fontSize: 11,
-    color: '#666',
-    marginBottom: 3,
   },
   lessonFooter: {
     flexDirection: 'row',
@@ -1642,56 +1329,15 @@ const styles = StyleSheet.create({
     marginTop: 5,
     paddingTop: 6,
     borderTopWidth: 1,
-    borderTopColor: '#e0e0e0',
   },
   lessonPrice: {
     fontSize: 14,
-    fontWeight: 'bold',
-    color: '#28a745',
+    fontFamily: 'Inter_700Bold',
   },
   lessonActions: {
     flexDirection: 'row',
     gap: 6,
     alignItems: 'center',
-  },
-  deleteButton: {
-    backgroundColor: '#dc3545',
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 5,
-  },
-  deleteButtonText: {
-    color: '#fff',
-    fontSize: 11,
-    fontWeight: '600',
-  },
-  viewButton: {
-    backgroundColor: '#007bff',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 5,
-  },
-  viewButtonText: {
-    color: '#fff',
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  actionButton: {
-    backgroundColor: '#007bff',
-    padding: 16,
-    borderRadius: 12,
-    marginBottom: 12,
-    alignItems: 'center',
-  },
-  secondaryButton: {
-    backgroundColor: '#6c757d',
-  },
-  infoButton: {
-    backgroundColor: '#17a2b8',
-  },
-  earningsButton: {
-    backgroundColor: '#28a745',
-    padding: 20,
   },
   earningsButtonContent: {
     flexDirection: 'row',
@@ -1702,160 +1348,69 @@ const styles = StyleSheet.create({
   earningsButtonText: {
     color: '#fff',
     fontSize: 18,
-    fontWeight: 'bold',
+    fontFamily: 'Inter_700Bold',
   },
   earningsAmount: {
     color: '#fff',
     fontSize: 22,
-    fontWeight: 'bold',
-  },
-  actionButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
+    fontFamily: 'Inter_700Bold',
   },
   lessonDetail: {
     fontSize: 11,
-    color: '#666',
+    fontFamily: 'Inter_400Regular',
     marginBottom: 2,
   },
   notesContainer: {
     marginTop: 5,
     padding: 6,
-    backgroundColor: '#f8f9fa',
     borderRadius: 5,
     borderLeftWidth: 2,
-    borderLeftColor: '#007bff',
   },
   notesLabel: {
     fontSize: 10,
-    fontWeight: '600',
-    color: '#333',
+    fontFamily: 'Inter_600SemiBold',
     marginBottom: 2,
   },
   notesText: {
     fontSize: 11,
-    color: '#555',
+    fontFamily: 'Inter_400Regular',
     lineHeight: 14,
   },
-  // Modal Styles
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: Platform.OS === 'web' ? 20 : 10,
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
-  },
-  modalContent: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: Platform.OS === 'web' ? 32 : 24,
-    width: Platform.OS === 'web' ? '45%' : '92%',
-    maxWidth: 550,
-    maxHeight: '85%',
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 20,
-    paddingBottom: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
-  },
-  modalTitle: {
-    fontSize: 22,
-    fontWeight: 'bold',
-    color: '#333',
-  },
-  modalClose: {
-    fontSize: 28,
-    color: '#666',
-    fontWeight: 'bold',
-    padding: 4,
-  },
+  // Modal-related styles (used inside ThemedModal)
   profileInfoCard: {
-    backgroundColor: '#f8f9fa',
     padding: 12,
     borderRadius: 8,
     marginBottom: 12,
   },
   profileInfoLabel: {
     fontSize: 12,
-    color: '#666',
+    fontFamily: 'Inter_400Regular',
     marginBottom: 4,
   },
   profileInfoValue: {
     fontSize: 16,
-    fontWeight: '600',
-    color: '#333',
-  },
-  modalFormGroup: {
-    marginBottom: 20,
+    fontFamily: 'Inter_600SemiBold',
   },
   modalLabel: {
     fontSize: 16,
-    fontWeight: '600',
-    color: '#333',
-    marginBottom: 8,
-  },
-  requiredStar: {
-    color: '#dc3545',
-  },
-  modalInput: {
-    backgroundColor: '#f8f9fa',
-    padding: 12,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#dee2e6',
-    fontSize: 16,
+    fontFamily: 'Inter_600SemiBold',
   },
   switchRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    marginTop: 12,
   },
   modalHint: {
     fontSize: 13,
-    color: '#666',
+    fontFamily: 'Inter_400Regular',
     marginTop: 4,
   },
   modalButtons: {
     flexDirection: 'row',
-    marginTop: 20,
-  },
-  modalButton: {
-    flex: 1,
-    padding: 14,
-    borderRadius: 8,
-    alignItems: 'center',
-    marginHorizontal: 6,
-  },
-  modalCancelButton: {
-    backgroundColor: '#f8f9fa',
-    borderWidth: 1,
-    borderColor: '#dee2e6',
-  },
-  modalCancelButtonText: {
-    color: '#495057',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  modalSaveButton: {
-    backgroundColor: '#007bff',
-  },
-  modalSaveButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
+    gap: 12,
   },
   availabilityStatusCard: {
-    backgroundColor: '#f8f9fa',
     padding: 20,
     borderRadius: 12,
     alignItems: 'center',
@@ -1863,73 +1418,31 @@ const styles = StyleSheet.create({
   },
   availabilityCurrentLabel: {
     fontSize: 14,
-    color: '#666',
+    fontFamily: 'Inter_400Regular',
     marginBottom: 8,
   },
   availabilityCurrentStatus: {
     fontSize: 24,
-    fontWeight: 'bold',
+    fontFamily: 'Inter_700Bold',
   },
   modalInfoBox: {
-    backgroundColor: '#e7f3ff',
     padding: 12,
     borderRadius: 8,
     marginTop: 16,
   },
   modalInfoText: {
     fontSize: 13,
-    color: '#0056b3',
+    fontFamily: 'Inter_400Regular',
     lineHeight: 18,
-  },
-  manageScheduleButton: {
-    backgroundColor: '#007bff',
-    marginHorizontal: 16,
-    marginTop: 12,
-    marginBottom: 8,
-    padding: 16,
-    borderRadius: 12,
-    ...Platform.select({
-      web: { boxShadow: '0 2px 4px rgba(0,0,0,0.1)' },
-      default: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 4,
-        elevation: 3,
-      },
-    }),
-  },
-  manageScheduleButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: 'bold',
-    textAlign: 'center',
-  },
-  manageScheduleButtonSubtext: {
-    color: '#e3f2fd',
-    fontSize: 12,
-    textAlign: 'center',
-    marginTop: 4,
   },
   searchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#fff',
     marginHorizontal: 16,
     marginTop: 12,
     marginBottom: 8,
     paddingHorizontal: 16,
     borderRadius: 12,
-    ...Platform.select({
-      web: { boxShadow: '0 1px 2px rgba(0,0,0,0.1)' },
-      default: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.1,
-        shadowRadius: 2,
-        elevation: 2,
-      },
-    }),
     position: 'relative',
     zIndex: 1000,
   },
@@ -1937,21 +1450,19 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingVertical: 12,
     fontSize: 16,
-    color: '#333',
+    fontFamily: 'Inter_400Regular',
   },
   clearButton: {
     padding: 8,
   },
   clearButtonText: {
     fontSize: 18,
-    color: '#999',
   },
   searchDropdown: {
     position: 'absolute',
     top: '100%',
     left: 0,
     right: 0,
-    backgroundColor: '#fff',
     borderRadius: 12,
     marginTop: 4,
     ...Platform.select({
@@ -1973,16 +1484,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
   },
   dropdownTitle: {
     fontSize: 14,
-    fontWeight: '600',
-    color: '#333',
+    fontFamily: 'Inter_600SemiBold',
   },
   dropdownClose: {
     fontSize: 18,
-    color: '#999',
     padding: 4,
   },
   dropdownList: {
@@ -1994,7 +1502,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
   },
   dropdownItemLeft: {
     flex: 1,
@@ -2002,8 +1509,7 @@ const styles = StyleSheet.create({
   },
   dropdownItemText: {
     fontSize: 16,
-    color: '#333',
-    fontWeight: '500',
+    fontFamily: 'Inter_500Medium',
     marginBottom: 4,
   },
   dropdownItemDetails: {
@@ -2013,151 +1519,65 @@ const styles = StyleSheet.create({
   },
   dropdownItemSubtext: {
     fontSize: 12,
-    color: '#666',
+    fontFamily: 'Inter_400Regular',
   },
   dropdownItemCount: {
     fontSize: 12,
-    color: '#666',
-    backgroundColor: '#f0f0f0',
+    fontFamily: 'Inter_400Regular',
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 12,
   },
   noResultsText: {
     fontSize: 14,
-    color: '#999',
+    fontFamily: 'Inter_400Regular',
     textAlign: 'center',
     padding: 20,
   },
-  calendarModalContent: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 20,
-    maxWidth: 400,
-    width: '90%',
-  },
-  calendarModalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  calendarModalTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#333',
-  },
-  calendarModalClose: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: '#f0f0f0',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  calendarModalCloseText: {
-    fontSize: 20,
-    color: '#666',
-    fontWeight: 'bold',
-  },
   timeOffLegend: {
     fontSize: 12,
-    color: '#666',
+    fontFamily: 'Inter_400Regular',
     textAlign: 'center',
     marginTop: 12,
     fontStyle: 'italic',
   },
-  rescheduleButton: {
-    backgroundColor: '#ffc107',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 6,
-  },
-  rescheduleButtonText: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: '600',
-  },
   bookingInfoCard: {
-    backgroundColor: '#f8f9fa',
     padding: 16,
     borderRadius: 8,
     marginBottom: 16,
   },
   bookingInfoText: {
     fontSize: 14,
-    color: '#333',
+    fontFamily: 'Inter_400Regular',
     marginBottom: 8,
   },
   timeSlotsContainer: {
     maxHeight: 200,
   },
   timeSlotButton: {
-    backgroundColor: '#f8f9fa',
     padding: 12,
     borderRadius: 8,
     marginBottom: 8,
     borderWidth: 2,
     borderColor: 'transparent',
   },
-  timeSlotButtonSelected: {
-    backgroundColor: '#007bff',
-    borderColor: '#0056b3',
-  },
   timeSlotText: {
     fontSize: 16,
-    color: '#333',
+    fontFamily: 'Inter_400Regular',
     textAlign: 'center',
-  },
-  timeSlotTextSelected: {
-    color: '#fff',
-    fontWeight: 'bold',
   },
   noSlotsText: {
     fontSize: 14,
-    color: '#999',
+    fontFamily: 'Inter_400Regular',
     textAlign: 'center',
     padding: 20,
-  },
-  bigCalendarButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#007bff',
-    padding: 18,
-    borderRadius: 12,
-    borderWidth: 2,
-    borderColor: '#0056b3',
-    ...Platform.select({
-      web: { boxShadow: '0 2px 4px rgba(0,0,0,0.1)' },
-      default: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 4,
-        elevation: 3,
-      },
-    }),
-  },
-  calendarButtonIcon: {
-    fontSize: 32,
-    marginRight: 12,
-  },
-  calendarButtonText: {
-    fontSize: 18,
-    color: '#fff',
-    fontWeight: '600',
-    flex: 1,
-    textAlign: 'center',
   },
   datePickerButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#f8f9fa',
     padding: 14,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#e0e0e0',
   },
   datePickerIcon: {
     fontSize: 24,
@@ -2165,7 +1585,7 @@ const styles = StyleSheet.create({
   },
   datePickerText: {
     fontSize: 16,
-    color: '#333',
+    fontFamily: 'Inter_400Regular',
     flex: 1,
   },
   messageBox: {
@@ -2173,88 +1593,24 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     marginBottom: 16,
   },
-  successBox: {
-    backgroundColor: '#d4edda',
-    borderWidth: 1,
-    borderColor: '#c3e6cb',
-  },
-  errorBox: {
-    backgroundColor: '#f8d7da',
-    borderWidth: 1,
-    borderColor: '#f5c6cb',
-  },
   messageText: {
     fontSize: 14,
+    fontFamily: 'Inter_500Medium',
     textAlign: 'center',
-    fontWeight: '500',
-  },
-  successText: {
-    color: '#155724',
-  },
-  errorText: {
-    color: '#721c24',
   },
   bookingReference: {
     fontSize: 11,
-    fontWeight: '600',
-    color: '#007bff',
+    fontFamily: 'Inter_600SemiBold',
     marginBottom: 2,
   },
   rebookingBadge: {
     fontSize: 11,
-    color: '#ffc107',
-    fontWeight: '600',
+    fontFamily: 'Inter_600SemiBold',
     marginTop: 2,
   },
   cancellationFee: {
     fontSize: 11,
-    color: '#dc3545',
-    fontWeight: '600',
+    fontFamily: 'Inter_600SemiBold',
     marginTop: 2,
-  },
-  bookingFeeCard: {
-    backgroundColor: '#fff3cd',
-    padding: 16,
-    marginHorizontal: 16,
-    marginTop: 16,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#ffc107',
-    ...Platform.select({
-      web: { boxShadow: '0 1px 2px rgba(0,0,0,0.1)' },
-      default: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.1,
-        shadowRadius: 2,
-        elevation: 2,
-      },
-    }),
-  },
-  bookingFeeLabel: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#856404',
-    marginBottom: 8,
-  },
-  bookingFeeValue: {
-    fontSize: 32,
-    fontWeight: 'bold',
-    color: '#856404',
-    marginBottom: 8,
-  },
-  bookingFeeNote: {
-    fontSize: 13,
-    color: '#856404',
-    marginBottom: 8,
-    fontStyle: 'italic',
-  },
-  bookingFeeExample: {
-    fontSize: 14,
-    color: '#856404',
-    fontWeight: '600',
-    paddingTop: 8,
-    borderTopWidth: 1,
-    borderTopColor: '#ffc107',
   },
 });

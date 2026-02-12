@@ -1,0 +1,81 @@
+/* RoadReady Global Stylesheet */
+/* NativeWind v4 + Tailwind CSS */
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ── CSS Variables for Light/Dark Mode ── */
+
+:root {
+  /* Primary - Deep Teal */
+  --color-primary: #0D9488;
+  --color-primary-light: #14B8A6;
+  --color-primary-dark: #0F766E;
+
+  /* Accent - Amber */
+  --color-accent: #F59E0B;
+  --color-accent-light: #FBBF24;
+  --color-accent-dark: #D97706;
+
+  /* Backgrounds */
+  --color-bg: #FFFFFF;
+  --color-bg-secondary: #F5F5F5;
+  --color-bg-card: #FFFFFF;
+
+  /* Text */
+  --color-text: #171717;
+  --color-text-secondary: #525252;
+  --color-text-tertiary: #A3A3A3;
+  --color-text-inverse: #FFFFFF;
+
+  /* Borders */
+  --color-border: #E5E5E5;
+  --color-border-focus: #0D9488;
+
+  /* Semantic */
+  --color-success: #22C55E;
+  --color-danger: #EF4444;
+  --color-warning: #F59E0B;
+  --color-info: #3B82F6;
+
+  /* Shadows */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.07);
+  --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.1);
+
+  /* Role colors */
+  --color-role-admin: #EF4444;
+  --color-role-instructor: #0D9488;
+  --color-role-student: #3B82F6;
+}
+
+/* ── Dark Mode Variables ── */
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-primary: #14B8A6;
+    --color-primary-light: #2DD4BF;
+    --color-primary-dark: #0D9488;
+
+    --color-accent: #FBBF24;
+    --color-accent-light: #FCD34D;
+    --color-accent-dark: #F59E0B;
+
+    --color-bg: #0A0A0A;
+    --color-bg-secondary: #171717;
+    --color-bg-card: #262626;
+
+    --color-text: #FAFAFA;
+    --color-text-secondary: #A3A3A3;
+    --color-text-tertiary: #737373;
+    --color-text-inverse: #171717;
+
+    --color-border: #404040;
+    --color-border-focus: #14B8A6;
+
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+    --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.4);
+    --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.5);
+  }
+}

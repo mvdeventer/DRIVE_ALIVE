@@ -3,12 +3,10 @@
  */
 import React, { useRef, useState } from 'react';
 import {
-  ActivityIndicator,
-  Modal,
+  Pressable,
   ScrollView,
   StyleSheet,
   Text,
-  TouchableOpacity,
   View,
   Platform,
 } from 'react-native';
@@ -16,11 +14,14 @@ import AddressAutocomplete from '../../components/AddressAutocomplete';
 import FormFieldWithTip from '../../components/FormFieldWithTip';
 import InlineMessage from '../../components/InlineMessage';
 import LicenseTypeSelector from '../../components/LicenseTypeSelector';
+import { Button, Card, ThemedModal } from '../../components/ui';
+import { useTheme } from '../../theme/ThemeContext';
 import { DEBUG_CONFIG } from '../../config';
 import ApiService from '../../services/api';
 import { formatPhoneNumber } from '../../utils/phoneFormatter';
 
 export default function RegisterInstructorScreen({ navigation }: any) {
+  const { colors } = useTheme();
   // Pre-fill with test data only when DEBUG_CONFIG is enabled
   // Use debug email and phone when in debug mode
   const timestamp = DEBUG_CONFIG.ENABLED ? Date.now().toString().slice(-6) : '';
@@ -141,25 +142,23 @@ export default function RegisterInstructorScreen({ navigation }: any) {
 
       // Capture verification info from response
       const verificationData = response.verification_sent || {
+        email_sent: false,
+        whatsapp_sent: false,
+        expires_in_minutes: 30,
         emails_sent: 0,
-        whatsapp_sent: 0,
+        whatsapp_sent_to_admins: 0,
         total_admins: 0,
       };
 
-      // Show success message about admin verification
+      // Show success message about both user and admin verification
       const adminCount = verificationData.total_admins || 0;
-      const emailsSent = verificationData.emails_sent || 0;
-      const whatsappSent = verificationData.whatsapp_sent || 0;
       
       let successText = '✅ Registration Successful!\n\n';
-      successText += `Admins have been notified to verify your instructor profile.\n\n`;
-      
+      successText += 'Please check your email and WhatsApp to verify your account.\n\n';
       if (adminCount > 0) {
-        successText += `📧 Email sent to ${emailsSent} admin(s)\n`;
-        successText += `💬 WhatsApp sent to ${whatsappSent} admin(s)\n\n`;
+        successText += `Admins (${adminCount}) have also been notified to verify your instructor credentials.\n\n`;
       }
-      
-      successText += 'You can set up your schedule while waiting for verification!';
+      successText += 'You must verify your account before you can log in.';
 
       setMessage({
         type: 'success',
@@ -167,19 +166,15 @@ export default function RegisterInstructorScreen({ navigation }: any) {
       });
       scrollViewRef.current?.scrollTo({ y: 0, animated: true });
 
-      // Wait 3 seconds, then navigate to schedule setup option
+      // Navigate to verification pending screen
       setTimeout(() => {
-        navigation.replace('InstructorScheduleSetup', {
-          instructorId: null, // Will fetch from backend after login
-          instructorName: `${formData.first_name} ${formData.last_name}`,
-          isInitialSetup: true, // Flag to show "Skip" button
-          verificationData: {
-            email: formData.email,
-            phone: formData.phone,
-            firstName: formData.first_name,
-            adminVerificationPending: true,
-            adminCount: adminCount,
-          },
+        navigation.replace('VerificationPending', {
+          email: formData.email,
+          phone: formData.phone,
+          firstName: formData.first_name,
+          emailSent: verificationData.email_sent || false,
+          whatsappSent: verificationData.whatsapp_sent || false,
+          expiryMinutes: verificationData.expires_in_minutes || 30,
         });
       }, 3000);
     } catch (error: any) {
@@ -224,10 +219,22 @@ export default function RegisterInstructorScreen({ navigation }: any) {
   };
 
   return (
-    <View style={styles.container}>
-      <ScrollView ref={scrollViewRef} contentContainerStyle={styles.scrollContent}>
-        <Text style={styles.title}>Register as Instructor</Text>
-        <Text style={styles.subtitle}>Join our driving school network</Text>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
+      <ScrollView
+        ref={scrollViewRef}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Header */}
+        <View style={styles.header}>
+          <View style={[styles.headerIcon, { backgroundColor: colors.accent + '15' }]}>
+            <Text style={styles.headerEmoji}>🚗</Text>
+          </View>
+          <Text style={[styles.title, { color: colors.text }]}>Register as Instructor</Text>
+          <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
+            Join our driving school network
+          </Text>
+        </View>
 
         {/* Message Display */}
         {message && (
@@ -240,547 +247,411 @@ export default function RegisterInstructorScreen({ navigation }: any) {
         )}
 
         {/* Personal Information */}
-        <Text style={styles.sectionTitle}>Personal Information</Text>
+        <Card variant="outlined" padding="md" style={styles.section}>
+          <Text style={[styles.sectionTitle, { color: colors.primary }]}>Personal Information</Text>
 
-        <FormFieldWithTip
-          label="First Name"
-          tooltip="Enter your legal first name as it appears on your ID document. This will be displayed to students."
-          required
-          placeholder="e.g., John"
-          value={formData.first_name}
-          onChangeText={text => updateFormData('first_name', text)}
-          autoCapitalize="words"
-        />
+          <FormFieldWithTip
+            label="First Name"
+            tooltip="Enter your legal first name as it appears on your ID document."
+            required
+            placeholder="e.g., John"
+            value={formData.first_name}
+            onChangeText={text => updateFormData('first_name', text)}
+            autoCapitalize="words"
+          />
+          <FormFieldWithTip
+            label="Last Name"
+            tooltip="Enter your legal surname as it appears on your ID document."
+            required
+            placeholder="e.g., Smith"
+            value={formData.last_name}
+            onChangeText={text => updateFormData('last_name', text)}
+            autoCapitalize="words"
+          />
+          <FormFieldWithTip
+            label="Email Address"
+            tooltip="You'll receive booking confirmations and payment notifications here."
+            required
+            placeholder="e.g., john.smith@example.com"
+            value={formData.email}
+            onChangeText={text => updateFormData('email', text)}
+            keyboardType="email-address"
+            autoCapitalize="none"
+          />
+          <FormFieldWithTip
+            label="Phone Number"
+            tooltip="South African format: +27 followed by 9 digits."
+            required
+            placeholder="e.g., +27821234567"
+            value={formData.phone}
+            onChangeText={text => updateFormData('phone', text)}
+            keyboardType="phone-pad"
+            maxLength={12}
+          />
+          <FormFieldWithTip
+            label="ID Number"
+            tooltip="Your 13-digit South African ID number for verification."
+            required
+            placeholder="e.g., 8001015009087"
+            value={formData.id_number}
+            onChangeText={text => updateFormData('id_number', text)}
+            keyboardType="numeric"
+            maxLength={13}
+          />
+        </Card>
 
-        <FormFieldWithTip
-          label="Last Name"
-          tooltip="Enter your legal surname as it appears on your ID document. This helps students identify you professionally."
-          required
-          placeholder="e.g., Smith"
-          value={formData.last_name}
-          onChangeText={text => updateFormData('last_name', text)}
-          autoCapitalize="words"
-        />
+        {/* Professional Details */}
+        <Card variant="outlined" padding="md" style={styles.section}>
+          <Text style={[styles.sectionTitle, { color: colors.primary }]}>Professional Details</Text>
 
-        <FormFieldWithTip
-          label="Email Address"
-          tooltip="Use a valid email address. You'll receive booking confirmations, payment notifications, and important updates here."
-          required
-          placeholder="e.g., john.smith@example.com"
-          value={formData.email}
-          onChangeText={text => updateFormData('email', text)}
-          keyboardType="email-address"
-          autoCapitalize="none"
-        />
-
-        <FormFieldWithTip
-          label="Phone Number"
-          tooltip="Enter your mobile number in South African format (+27 followed by 9 digits). Students may contact you for urgent matters or directions."
-          required
-          placeholder="e.g., +27821234567"
-          value={formData.phone}
-          onChangeText={text => updateFormData('phone', text)}
-          keyboardType="phone-pad"
-          maxLength={12}
-        />
-
-        <FormFieldWithTip
-          label="ID Number"
-          tooltip="Your South African ID number is required for verification and POPIA compliance. This information is kept secure and private."
-          required
-          placeholder="e.g., 8001015009087"
-          value={formData.id_number}
-          onChangeText={text => updateFormData('id_number', text)}
-          keyboardType="numeric"
-          maxLength={13}
-        />
-
-        {/* Professional Information */}
-        <Text style={styles.sectionTitle}>Professional Details</Text>
-
-        <FormFieldWithTip
-          label="Driving License Number"
-          tooltip="Enter your valid South African driving license number. This must be a professional driving permit (PrDP) to legally offer driving instruction services."
-          required
-          placeholder="e.g., A12345678"
-          value={formData.license_number}
-          onChangeText={text => updateFormData('license_number', text)}
-          autoCapitalize="characters"
-        />
-
-        <LicenseTypeSelector
-          label="License Types You Can Teach"
-          tooltip="Select all the license types/codes you are qualified to teach. This includes CODE8 (light vehicles/cars), CODE10 (heavy vehicles), CODE14 (extra heavy vehicles), etc. Students will filter instructors based on the license type they need."
-          required
-          selectedTypes={formData.license_types}
-          onSelectionChange={types => setFormData(prev => ({ ...prev, license_types: types }))}
-        />
+          <FormFieldWithTip
+            label="Driving License Number"
+            tooltip="Your valid South African PrDP number."
+            required
+            placeholder="e.g., A12345678"
+            value={formData.license_number}
+            onChangeText={text => updateFormData('license_number', text)}
+            autoCapitalize="characters"
+          />
+          <LicenseTypeSelector
+            label="License Types You Can Teach"
+            tooltip="Select all codes you are qualified to teach."
+            required
+            selectedTypes={formData.license_types}
+            onSelectionChange={types => setFormData(prev => ({ ...prev, license_types: types }))}
+          />
+        </Card>
 
         {/* Vehicle Information */}
-        <Text style={styles.sectionTitle}>Vehicle Information</Text>
+        <Card variant="outlined" padding="md" style={styles.section}>
+          <Text style={[styles.sectionTitle, { color: colors.primary }]}>Vehicle Information</Text>
 
-        <FormFieldWithTip
-          label="Vehicle Registration"
-          tooltip="Enter your vehicle's registration number (license plate). Students will use this to identify your car during pickup."
-          required
-          placeholder="e.g., CA 123-456 or ABC 123 GP"
-          value={formData.vehicle_registration}
-          onChangeText={text => updateFormData('vehicle_registration', text)}
-          autoCapitalize="characters"
-        />
-
-        <FormFieldWithTip
-          label="Vehicle Make"
-          tooltip="The manufacturer of your vehicle. This helps students recognize your car."
-          placeholder="e.g., Toyota, Volkswagen, Ford"
-          value={formData.vehicle_make}
-          onChangeText={text => updateFormData('vehicle_make', text)}
-          autoCapitalize="words"
-        />
-
-        <FormFieldWithTip
-          label="Vehicle Model"
-          tooltip="Your vehicle's model name. Combined with make, this helps students easily spot your car."
-          placeholder="e.g., Corolla, Polo, Ranger"
-          value={formData.vehicle_model}
-          onChangeText={text => updateFormData('vehicle_model', text)}
-          autoCapitalize="words"
-        />
-
-        <FormFieldWithTip
-          label="Vehicle Year"
-          tooltip="The year your vehicle was manufactured. This is optional but provides additional identification details."
-          placeholder="e.g., 2020"
-          value={formData.vehicle_year}
-          onChangeText={text => updateFormData('vehicle_year', text)}
-          keyboardType="numeric"
-        />
-
-        <View style={styles.addressGpsContainer}>
-          <Text style={styles.addressGpsLabel}>Operating Address (GPS)</Text>
-          <AddressAutocomplete
-            value={instructorAddressValue}
-            onChangeText={handleInstructorAddressChange}
+          <FormFieldWithTip
+            label="Vehicle Registration"
+            tooltip="Your license plate number."
+            required
+            placeholder="e.g., CA 123-456 or ABC 123 GP"
+            value={formData.vehicle_registration}
+            onChangeText={text => updateFormData('vehicle_registration', text)}
+            autoCapitalize="characters"
           />
-          <Text style={styles.addressGpsHint}>
-            📍 Use GPS to capture your operating location address.
-          </Text>
-        </View>
+          <FormFieldWithTip
+            label="Vehicle Make"
+            tooltip="The manufacturer of your vehicle."
+            placeholder="e.g., Toyota, Volkswagen"
+            value={formData.vehicle_make}
+            onChangeText={text => updateFormData('vehicle_make', text)}
+            autoCapitalize="words"
+          />
+          <FormFieldWithTip
+            label="Vehicle Model"
+            tooltip="Your vehicle's model name."
+            placeholder="e.g., Corolla, Polo"
+            value={formData.vehicle_model}
+            onChangeText={text => updateFormData('vehicle_model', text)}
+            autoCapitalize="words"
+          />
+          <FormFieldWithTip
+            label="Vehicle Year"
+            placeholder="e.g., 2020"
+            value={formData.vehicle_year}
+            onChangeText={text => updateFormData('vehicle_year', text)}
+            keyboardType="numeric"
+          />
 
-        {/* Service Information */}
-        <Text style={styles.sectionTitle}>Service Details</Text>
+          <View style={[styles.addressGpsContainer, { backgroundColor: colors.backgroundSecondary }]}>
+            <Text style={[styles.addressGpsLabel, { color: colors.text }]}>Operating Address (GPS)</Text>
+            <AddressAutocomplete
+              value={instructorAddressValue}
+              onChangeText={handleInstructorAddressChange}
+            />
+            <Text style={[styles.addressGpsHint, { color: colors.textSecondary }]}>
+              📍 Use GPS to capture your operating location address.
+            </Text>
+          </View>
+        </Card>
 
-        <FormFieldWithTip
-          label="Hourly Rate (ZAR)"
-          tooltip="Set your hourly rate in South African Rands. The typical range is R250-R500 per hour. Students will see this rate when booking lessons with you."
-          required
-          placeholder="e.g., 350"
-          value={formData.hourly_rate}
-          onChangeText={text => updateFormData('hourly_rate', text)}
-          keyboardType="decimal-pad"
-        />
+        {/* Service Details */}
+        <Card variant="outlined" padding="md" style={styles.section}>
+          <Text style={[styles.sectionTitle, { color: colors.primary }]}>Service Details</Text>
 
-        <FormFieldWithTip
-          label="Service Radius (km)"
-          tooltip="The maximum distance you're willing to travel to pick up students from their location. Default is 20km. A larger radius means more potential students, but consider fuel costs and travel time."
-          placeholder="e.g., 20 (recommended: 10-30km)"
-          value={formData.service_radius_km}
-          onChangeText={text => updateFormData('service_radius_km', text)}
-          keyboardType="decimal-pad"
-        />
+          <FormFieldWithTip
+            label="Hourly Rate (ZAR)"
+            tooltip="Typical range: R250-R500 per hour."
+            required
+            placeholder="e.g., 350"
+            value={formData.hourly_rate}
+            onChangeText={text => updateFormData('hourly_rate', text)}
+            keyboardType="decimal-pad"
+          />
+          <FormFieldWithTip
+            label="Service Radius (km)"
+            tooltip="Max distance to pick up students (recommended: 10-30km)."
+            placeholder="e.g., 20"
+            value={formData.service_radius_km}
+            onChangeText={text => updateFormData('service_radius_km', text)}
+            keyboardType="decimal-pad"
+          />
+          <FormFieldWithTip
+            label="Maximum Travel Distance (km)"
+            tooltip="Absolute max distance, even with extra charges."
+            placeholder="e.g., 50"
+            value={formData.max_travel_distance_km}
+            onChangeText={text => updateFormData('max_travel_distance_km', text)}
+            keyboardType="decimal-pad"
+          />
+          <FormFieldWithTip
+            label="Rate per Extra Kilometer (ZAR)"
+            tooltip="Charge per km beyond your service radius (R3-R10 typical)."
+            placeholder="e.g., 5"
+            value={formData.rate_per_km_beyond_radius}
+            onChangeText={text => updateFormData('rate_per_km_beyond_radius', text)}
+            keyboardType="decimal-pad"
+          />
+          <FormFieldWithTip
+            label="Bio (Optional)"
+            tooltip="Tell students about your experience, specialties, and teaching style."
+            placeholder="e.g., Professional instructor with 10 years experience..."
+            value={formData.bio}
+            onChangeText={text => updateFormData('bio', text)}
+            multiline
+            numberOfLines={4}
+            style={styles.textArea}
+          />
+        </Card>
 
-        <FormFieldWithTip
-          label="Maximum Travel Distance (km)"
-          tooltip="The absolute maximum distance you'll travel for a student, even with extra charges. Example: If service radius is 20km and max travel is 50km, you'll accept students up to 50km away but charge extra for the 30km beyond your service radius."
-          placeholder="e.g., 50 (must be ≥ service radius)"
-          value={formData.max_travel_distance_km}
-          onChangeText={text => updateFormData('max_travel_distance_km', text)}
-          keyboardType="decimal-pad"
-        />
+        {/* Security */}
+        <Card variant="outlined" padding="md" style={styles.section}>
+          <Text style={[styles.sectionTitle, { color: colors.primary }]}>Security</Text>
 
-        <FormFieldWithTip
-          label="Rate per Extra Kilometer (ZAR)"
-          tooltip="How much you charge per kilometer when students are outside your service radius. Example: If a student is 25km away and your service radius is 20km, you'll charge this rate × 5km extra. Typical range: R3-R10 per km."
-          placeholder="e.g., 5 (recommended: R3-R10)"
-          value={formData.rate_per_km_beyond_radius}
-          onChangeText={text => updateFormData('rate_per_km_beyond_radius', text)}
-          keyboardType="decimal-pad"
-        />
+          <FormFieldWithTip
+            key={`password-${showPassword}`}
+            label="Password"
+            tooltip="Minimum 6 characters. Mix letters, numbers, and symbols."
+            required
+            placeholder="Minimum 6 characters"
+            value={formData.password}
+            onChangeText={text => updateFormData('password', text)}
+            secureTextEntry={!showPassword}
+          />
+          <FormFieldWithTip
+            key={`confirm-password-${showPassword}`}
+            label="Confirm Password"
+            tooltip="Re-enter your password to confirm."
+            required
+            placeholder="Re-enter your password"
+            value={formData.confirmPassword}
+            onChangeText={text => updateFormData('confirmPassword', text)}
+            secureTextEntry={!showPassword}
+          />
+          <Pressable
+            style={styles.showPasswordButton}
+            onPress={() => setShowPassword(!showPassword)}
+          >
+            <Text style={[styles.showPasswordText, { color: colors.primary }]}>
+              {showPassword ? '🙈 Hide Password' : '👁️ Show Password'}
+            </Text>
+          </Pressable>
+        </Card>
 
-        <FormFieldWithTip
-          label="Bio (Optional)"
-          tooltip="Tell students about yourself! Mention your teaching experience, specialties (e.g., nervous learners, test preparation), languages spoken, and what makes you a great instructor. A compelling bio helps attract more students."
-          placeholder="e.g., 'Professional driving instructor with 10 years experience. Patient and friendly approach, specializing in helping nervous learners gain confidence...'"
-          value={formData.bio}
-          onChangeText={text => updateFormData('bio', text)}
-          multiline
-          numberOfLines={4}
-          style={styles.textArea}
-        />
-
-        {/* Password */}
-        <Text style={styles.sectionTitle}>Security</Text>
-
-        <FormFieldWithTip
-          key={`password-${showPassword}`}
-          label="Password"
-          tooltip="Create a strong password with at least 6 characters. Use a mix of letters, numbers, and symbols for better security. This protects your account and student data."
-          required
-          placeholder="Minimum 6 characters"
-          value={formData.password}
-          onChangeText={text => updateFormData('password', text)}
-          secureTextEntry={!showPassword}
-        />
-
-        <FormFieldWithTip
-          key={`confirm-password-${showPassword}`}
-          label="Confirm Password"
-          tooltip="Re-enter your password to ensure it was typed correctly. Both passwords must match exactly."
-          required
-          placeholder="Re-enter your password"
-          value={formData.confirmPassword}
-          onChangeText={text => updateFormData('confirmPassword', text)}
-          secureTextEntry={!showPassword}
-        />
-
-        <TouchableOpacity
-          style={styles.showPasswordButton}
-          onPress={() => setShowPassword(!showPassword)}
-        >
-          <Text style={styles.showPasswordText}>
-            {showPassword ? '🙈 Hide Password' : '👁️ Show Password'}
-          </Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[styles.button, loading && styles.buttonDisabled]}
+        {/* Register Button */}
+        <Button
+          label="Register"
           onPress={handleRegister}
+          loading={loading}
           disabled={loading}
-          activeOpacity={0.7}
-        >
-          {loading ? (
-            <ActivityIndicator color="#fff" />
-          ) : (
-            <Text style={styles.buttonText}>Register</Text>
-          )}
-        </TouchableOpacity>
+          fullWidth
+          size="lg"
+        />
 
-        <TouchableOpacity onPress={() => navigation.goBack()}>
-          <Text style={styles.linkText}>Already have an account? Login</Text>
-        </TouchableOpacity>
+        <Pressable onPress={() => navigation.goBack()} style={[styles.linkButton, { padding: 12 }]}>
+          <Text style={[styles.linkText, { color: colors.primary }]}>
+            Already have an account? <Text style={{ fontWeight: '600' }}>Login</Text>
+          </Text>
+        </Pressable>
+
+        <View style={{ height: 40 }} />
       </ScrollView>
 
       {/* Confirmation Modal */}
-      <Modal
+      <ThemedModal
         visible={showConfirmModal}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setShowConfirmModal(false)}
+        onClose={() => setShowConfirmModal(false)}
+        title="Confirm Registration"
+        size="lg"
+        footer={
+          <View style={styles.modalButtons}>
+            <Button
+              label="✏️ Edit"
+              onPress={() => setShowConfirmModal(false)}
+              variant="outline"
+              style={{ flex: 1 }}
+            />
+            <Button
+              label="✓ Confirm & Register"
+              onPress={confirmAndSubmit}
+              variant="primary"
+              style={{ flex: 1 }}
+            />
+          </View>
+        }
       >
-        <View style={styles.modalOverlay}>
-          <ScrollView contentContainerStyle={styles.modalScrollContent}>
-            <View style={styles.modalContent}>
-              <Text style={styles.modalTitle}>✓ Confirm Registration Details</Text>
-              <Text style={styles.modalSubtitle}>Please review your instructor information</Text>
-              
-              <View style={styles.confirmDetails}>
-                <Text style={styles.confirmSectionTitle}>Personal Information</Text>
-                <Text style={styles.confirmLabel}>Name:</Text>
-                <Text style={styles.confirmValue}>{formData.first_name} {formData.last_name}</Text>
-                
-                <Text style={styles.confirmLabel}>Email:</Text>
-                <Text style={styles.confirmValue}>{formData.email}</Text>
-                
-                <Text style={styles.confirmLabel}>Phone:</Text>
-                <Text style={styles.confirmValue}>{formData.phone}</Text>
-                
-                <Text style={styles.confirmLabel}>ID Number:</Text>
-                <Text style={styles.confirmValue}>{formData.id_number}</Text>
+        <Text style={[styles.modalSubtitle, { color: colors.textSecondary }]}>
+          Please review your instructor information
+        </Text>
+        <View style={[styles.confirmDetails, { backgroundColor: colors.backgroundSecondary }]}>
+          <Text style={[styles.confirmSectionTitle, { color: colors.primary, borderBottomColor: colors.divider }]}>
+            Personal Information
+          </Text>
+          <Text style={[styles.confirmLabel, { color: colors.textSecondary }]}>Name:</Text>
+          <Text style={[styles.confirmValue, { color: colors.text }]}>
+            {formData.first_name} {formData.last_name}
+          </Text>
+          <Text style={[styles.confirmLabel, { color: colors.textSecondary }]}>Email:</Text>
+          <Text style={[styles.confirmValue, { color: colors.text }]}>{formData.email}</Text>
+          <Text style={[styles.confirmLabel, { color: colors.textSecondary }]}>Phone:</Text>
+          <Text style={[styles.confirmValue, { color: colors.text }]}>{formData.phone}</Text>
+          <Text style={[styles.confirmLabel, { color: colors.textSecondary }]}>ID Number:</Text>
+          <Text style={[styles.confirmValue, { color: colors.text }]}>{formData.id_number}</Text>
 
-                <Text style={styles.confirmSectionTitle}>License & Vehicle</Text>
-                <Text style={styles.confirmLabel}>License Number:</Text>
-                <Text style={styles.confirmValue}>{formData.license_number}</Text>
-                
-                <Text style={styles.confirmLabel}>License Types:</Text>
-                <Text style={styles.confirmValue}>{formData.license_types.join(', ')}</Text>
-                
-                <Text style={styles.confirmLabel}>Vehicle:</Text>
-                <Text style={styles.confirmValue}>{formData.vehicle_make} {formData.vehicle_model} ({formData.vehicle_year})</Text>
-                
-                <Text style={styles.confirmLabel}>Registration:</Text>
-                <Text style={styles.confirmValue}>{formData.vehicle_registration}</Text>
+          <Text style={[styles.confirmSectionTitle, { color: colors.primary, borderBottomColor: colors.divider }]}>
+            License & Vehicle
+          </Text>
+          <Text style={[styles.confirmLabel, { color: colors.textSecondary }]}>License Number:</Text>
+          <Text style={[styles.confirmValue, { color: colors.text }]}>{formData.license_number}</Text>
+          <Text style={[styles.confirmLabel, { color: colors.textSecondary }]}>License Types:</Text>
+          <Text style={[styles.confirmValue, { color: colors.text }]}>{formData.license_types.join(', ')}</Text>
+          <Text style={[styles.confirmLabel, { color: colors.textSecondary }]}>Vehicle:</Text>
+          <Text style={[styles.confirmValue, { color: colors.text }]}>
+            {formData.vehicle_make} {formData.vehicle_model} ({formData.vehicle_year})
+          </Text>
+          <Text style={[styles.confirmLabel, { color: colors.textSecondary }]}>Registration:</Text>
+          <Text style={[styles.confirmValue, { color: colors.text }]}>{formData.vehicle_registration}</Text>
 
-                <Text style={styles.confirmSectionTitle}>Rates & Service</Text>
-                <Text style={styles.confirmLabel}>Hourly Rate:</Text>
-                <Text style={styles.confirmValue}>R{formData.hourly_rate}/hour</Text>
-                
-                <Text style={styles.confirmLabel}>Service Radius:</Text>
-                <Text style={styles.confirmValue}>{formData.service_radius_km}km</Text>
-                
-                <Text style={styles.confirmLabel}>Max Travel Distance:</Text>
-                <Text style={styles.confirmValue}>{formData.max_travel_distance_km}km (R{formData.rate_per_km_beyond_radius}/km beyond)</Text>
-                
-                {formData.bio && (
-                  <>
-                    <Text style={styles.confirmLabel}>Bio:</Text>
-                    <Text style={styles.confirmValue}>{formData.bio}</Text>
-                  </>
-                )}
-              </View>
-
-              <View style={styles.modalButtons}>
-                <TouchableOpacity
-                  style={[styles.modalButton, styles.modalButtonSecondary]}
-                  onPress={() => setShowConfirmModal(false)}
-                >
-                  <Text style={styles.modalButtonTextSecondary}>✏️ Edit</Text>
-                </TouchableOpacity>
-                
-                <TouchableOpacity
-                  style={[styles.modalButton, styles.modalButtonPrimary]}
-                  onPress={confirmAndSubmit}
-                >
-                  <Text style={styles.modalButtonText}>✓ Confirm & Register</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          </ScrollView>
+          <Text style={[styles.confirmSectionTitle, { color: colors.primary, borderBottomColor: colors.divider }]}>
+            Rates & Service
+          </Text>
+          <Text style={[styles.confirmLabel, { color: colors.textSecondary }]}>Hourly Rate:</Text>
+          <Text style={[styles.confirmValue, { color: colors.text }]}>R{formData.hourly_rate}/hour</Text>
+          <Text style={[styles.confirmLabel, { color: colors.textSecondary }]}>Service Radius:</Text>
+          <Text style={[styles.confirmValue, { color: colors.text }]}>{formData.service_radius_km}km</Text>
+          <Text style={[styles.confirmLabel, { color: colors.textSecondary }]}>Max Travel Distance:</Text>
+          <Text style={[styles.confirmValue, { color: colors.text }]}>
+            {formData.max_travel_distance_km}km (R{formData.rate_per_km_beyond_radius}/km beyond)
+          </Text>
+          {formData.bio ? (
+            <>
+              <Text style={[styles.confirmLabel, { color: colors.textSecondary }]}>Bio:</Text>
+              <Text style={[styles.confirmValue, { color: colors.text }]}>{formData.bio}</Text>
+            </>
+          ) : null}
         </View>
-      </Modal>
+      </ThemedModal>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#f5f5f5',
-  },
+  container: { flex: 1 },
   scrollContent: {
-    padding: 20,
+    padding: Platform.OS === 'web' ? 40 : 20,
+    maxWidth: 600,
+    alignSelf: 'center',
+    width: '100%',
   },
+  header: {
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+  headerIcon: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 14,
+  },
+  headerEmoji: { fontSize: 36 },
   title: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    marginBottom: 10,
-    color: '#333',
+    fontSize: Platform.OS === 'web' ? 28 : 24,
+    fontWeight: '800',
+    letterSpacing: -0.3,
+    marginBottom: 6,
+  },
+  subtitle: {
+    fontSize: Platform.OS === 'web' ? 15 : 13,
+    textAlign: 'center',
+  },
+  section: { marginBottom: 20 },
+  sectionTitle: {
+    fontSize: Platform.OS === 'web' ? 17 : 15,
+    fontWeight: '600',
+    marginBottom: 12,
   },
   addressGpsContainer: {
-    backgroundColor: '#F8F9FA',
     borderRadius: 8,
     padding: Platform.OS === 'web' ? 16 : 12,
-    marginBottom: 16,
+    marginTop: 8,
   },
   addressGpsLabel: {
-    fontSize: Platform.OS === 'web' ? 16 : 14,
+    fontSize: Platform.OS === 'web' ? 15 : 13,
     fontWeight: '600',
     marginBottom: 8,
-    color: '#333',
   },
   addressGpsHint: {
     marginTop: 8,
-    fontSize: Platform.OS === 'web' ? 12 : 11,
-    color: '#666',
-  },
-  subtitle: {
-    fontSize: 16,
-    color: '#666',
-    marginBottom: 30,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#007AFF',
-    marginTop: 20,
-    marginBottom: 15,
-  },
-  input: {
-    backgroundColor: '#fff',
-    padding: 15,
-    borderRadius: 10,
-    marginBottom: 15,
-    borderWidth: 1,
-    borderColor: '#ddd',
-    fontSize: 16,
+    fontSize: 12,
+    lineHeight: 17,
   },
   textArea: {
     height: 100,
     textAlignVertical: 'top',
   },
-  button: {
-    backgroundColor: '#007AFF',
-    paddingVertical: Platform.OS === 'web' ? 16 : 14,
-    paddingHorizontal: Platform.OS === 'web' ? 32 : 24,
-    borderRadius: 8,
-    alignItems: 'center',
-    marginTop: 20,
-    marginBottom: 15,
-  },
   showPasswordButton: {
-    marginBottom: 15,
+    marginTop: 4,
     padding: 8,
     alignItems: 'center',
   },
   showPasswordText: {
-    color: '#007bff',
-    fontSize: Platform.OS === 'web' ? 15 : 14,
-    fontWeight: '600',
-  },
-  buttonDisabled: {
-    backgroundColor: '#ccc',
-    opacity: 0.7,
-  },
-  buttonText: {
-    color: '#fff',
-    fontSize: Platform.OS === 'web' ? 18 : 16,
-    fontWeight: 'bold',
-  },
-  linkText: {
-    color: '#007AFF',
-    textAlign: 'center',
-    marginTop: 10,
-    fontSize: Platform.OS === 'web' ? 16 : 14,
-  },
-  pickerOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    zIndex: 1000,
-  },
-  pickerContainer: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 20,
-    width: '90%',
-    maxWidth: 400,
-    maxHeight: '80%',
-  },
-  pickerTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    marginBottom: 16,
-    textAlign: 'center',
-  },
-  cityList: {
-    maxHeight: 400,
-  },
-  cityItem: {
-    padding: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
-  },
-  cityText: {
-    fontSize: 16,
-    color: '#333',
-  },
-  pickerCloseButton: {
-    marginTop: 16,
-    padding: 12,
-    backgroundColor: '#6c757d',
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  pickerCloseButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: Platform.OS === 'web' ? 20 : 10,
-  },
-  modalScrollContent: {
-    flexGrow: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: Platform.OS === 'web' ? 20 : 10,
-  },
-  modalContent: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: Platform.OS === 'web' ? 32 : 24,
-    width: Platform.OS === 'web' ? '50%' : '92%',
-    maxWidth: 650,
-    maxHeight: '90%',
-  },
-  modalTitle: {
-    fontSize: Platform.OS === 'web' ? 24 : 20,
-    fontWeight: 'bold',
-    color: '#28a745',
-    marginBottom: 10,
-    textAlign: 'center',
-  },
-  modalSubtitle: {
-    fontSize: Platform.OS === 'web' ? 15 : 13,
-    color: '#666',
-    marginBottom: 20,
-    textAlign: 'center',
-    lineHeight: 22,
-  },
-  confirmDetails: {
-    backgroundColor: '#f8f9fa',
-    borderRadius: 8,
-    padding: Platform.OS === 'web' ? 24 : 18,
-    marginBottom: 24,
-  },
-  confirmSectionTitle: {
-    fontSize: Platform.OS === 'web' ? 17 : 15,
-    fontWeight: 'bold',
-    color: '#007AFF',
-    marginTop: 14,
-    marginBottom: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: '#ddd',
-    paddingBottom: 6,
-  },
-  confirmLabel: {
     fontSize: Platform.OS === 'web' ? 14 : 13,
     fontWeight: '600',
-    color: '#666',
-    marginTop: 10,
   },
-  confirmValue: {
-    fontSize: Platform.OS === 'web' ? 16 : 15,
-    color: '#333',
-    marginBottom: 10,
-    fontWeight: '500',
+  linkButton: {
+    marginTop: 16,
+    alignItems: 'center',
+  },
+  linkText: {
+    fontSize: Platform.OS === 'web' ? 15 : 13,
   },
   modalButtons: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: Platform.OS === 'web' ? 16 : 12,
+    gap: 12,
   },
-  modalButton: {
-    flex: 1,
-    paddingVertical: Platform.OS === 'web' ? 14 : 12,
-    paddingHorizontal: Platform.OS === 'web' ? 20 : 16,
+  modalSubtitle: {
+    fontSize: 14,
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  confirmDetails: {
     borderRadius: 8,
-    alignItems: 'center',
+    padding: Platform.OS === 'web' ? 20 : 14,
   },
-  modalButtonPrimary: {
-    backgroundColor: '#28a745',
+  confirmSectionTitle: {
+    fontSize: Platform.OS === 'web' ? 16 : 14,
+    fontWeight: 'bold',
+    marginTop: 14,
+    marginBottom: 10,
+    borderBottomWidth: 1,
+    paddingBottom: 6,
   },
-  modalButtonSecondary: {
-    backgroundColor: '#fff',
-    borderWidth: 2,
-    borderColor: '#dc3545',
-  },
-  modalButtonText: {
-    color: '#fff',
-    fontSize: Platform.OS === 'web' ? 16 : 15,
+  confirmLabel: {
+    fontSize: 13,
     fontWeight: '600',
+    marginTop: 8,
   },
-  modalButtonTextSecondary: {
-    color: '#dc3545',
-    fontSize: Platform.OS === 'web' ? 16 : 15,
-    fontWeight: '600',
+  confirmValue: {
+    fontSize: 15,
+    fontWeight: '500',
+    marginBottom: 8,
   },
 });

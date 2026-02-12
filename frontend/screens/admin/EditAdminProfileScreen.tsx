@@ -5,20 +5,22 @@ import { useNavigation, useRoute } from '@react-navigation/native';
 import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
-  Modal,
   Platform,
+  Pressable,
   ScrollView,
   StyleSheet,
   Text,
-  TouchableOpacity,
   View,
 } from 'react-native';
+import { Button, Card, ThemedModal } from '../../components';
+import { useTheme } from '../../theme/ThemeContext';
 import FormFieldWithTip from '../../components/FormFieldWithTip';
 import InlineMessage from '../../components/InlineMessage';
 import WebNavigationHeader from '../../components/WebNavigationHeader';
 import ApiService from '../../services/api';
 
 export default function EditAdminProfileScreen({ navigation: navProp }: any) {
+  const { colors } = useTheme();
   const navigation = navProp || useNavigation();
   const route = useRoute();
   const params = route.params as { userId?: number } | undefined;
@@ -212,14 +214,14 @@ export default function EditAdminProfileScreen({ navigation: navProp }: any) {
 
   if (loading) {
     return (
-      <View style={styles.container}>
-        <ActivityIndicator size="large" color="#007AFF" />
+      <View style={[styles.container, { backgroundColor: colors.background, justifyContent: 'center', alignItems: 'center' }]}>
+        <ActivityIndicator size="large" color={colors.primary} />
       </View>
     );
   }
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
       <WebNavigationHeader
         title="Edit Admin Profile"
         onBack={() => navigation.goBack()}
@@ -231,16 +233,16 @@ export default function EditAdminProfileScreen({ navigation: navProp }: any) {
 
         {/* User ID Display */}
         {userId !== null && (
-          <View style={styles.userIdCard}>
-            <Text style={styles.userIdLabel}>
-              User ID: <Text style={styles.userIdValue}>#{userId}</Text>
+          <View style={[styles.userIdCard, { backgroundColor: colors.primaryLight, borderLeftColor: colors.primary }]}>
+            <Text style={[styles.userIdLabel, { color: colors.primary }]}>
+              User ID: <Text style={[styles.userIdValue, { color: colors.primary }]}>#{userId}</Text>
             </Text>
-            <Text style={styles.userIdHint}>Use this ID to search for this user</Text>
+            <Text style={[styles.userIdHint, { color: colors.primary }]}>Use this ID to search for this user</Text>
           </View>
         )}
 
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Personal Information</Text>
+        <Card variant="elevated" style={{ marginBottom: 20 }}>
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>Personal Information</Text>
 
           <FormFieldWithTip
             label="First Name"
@@ -298,128 +300,113 @@ export default function EditAdminProfileScreen({ navigation: navProp }: any) {
             numberOfLines={3}
             tooltip="Full residential or office address"
           />
-        </View>
+        </Card>
 
         <View style={styles.buttonContainer}>
-          <TouchableOpacity
-            style={[styles.saveButton, saving && styles.saveButtonDisabled]}
+          <Button
+            variant="primary"
+            fullWidth
+            style={{ backgroundColor: colors.success }}
             onPress={handleSaveProfile}
             disabled={saving || !hasUnsavedChanges}
+            loading={saving}
           >
-            <Text style={styles.saveButtonText}>{saving ? 'Saving...' : 'Save Changes'}</Text>
-          </TouchableOpacity>
+            Save Changes
+          </Button>
 
           {!isEditingOtherAdmin && (
-            <TouchableOpacity
-              style={styles.passwordButton}
+            <Button
+              variant="outline"
+              fullWidth
+              style={{ borderColor: colors.warning }}
               onPress={() => setShowPasswordModal(true)}
             >
-              <Text style={styles.passwordButtonText}>Change Password</Text>
-            </TouchableOpacity>
+              Change Password
+            </Button>
           )}
 
-          <TouchableOpacity style={styles.cancelButton} onPress={() => navigation.goBack()}>
-            <Text style={styles.cancelButtonText}>Cancel</Text>
-          </TouchableOpacity>
+          <Button variant="secondary" fullWidth onPress={() => navigation.goBack()}>
+            Cancel
+          </Button>
         </View>
       </ScrollView>
 
       {/* Password Change Modal */}
-      <Modal
+      <ThemedModal
         visible={showPasswordModal}
-        transparent={true}
-        animationType="fade"
-        onRequestClose={() => setShowPasswordModal(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Change Password</Text>
-
-            <FormFieldWithTip
-              label="Current Password"
-              value={passwordData.currentPassword}
-              onChangeText={text => setPasswordData({ ...passwordData, currentPassword: text })}
-              placeholder="Enter current password"
-              secureTextEntry={!showPassword}
-              required
-            />
-
-            <FormFieldWithTip
-              label="New Password"
-              value={passwordData.newPassword}
-              onChangeText={text => setPasswordData({ ...passwordData, newPassword: text })}
-              placeholder="Enter new password"
-              secureTextEntry={!showPassword}
-              tooltip="Minimum 8 characters"
-              required
-            />
-
-            <FormFieldWithTip
-              label="Confirm New Password"
-              value={passwordData.confirmPassword}
-              onChangeText={text => setPasswordData({ ...passwordData, confirmPassword: text })}
-              placeholder="Re-enter new password"
-              secureTextEntry={!showPassword}
-              required
-            />
-
-            <TouchableOpacity
-              style={styles.showPasswordButton}
-              onPress={() => setShowPassword(!showPassword)}
-            >
-              <Text style={styles.showPasswordText}>
-                {showPassword ? '🙈 Hide Password' : '👁️ Show Password'}
-              </Text>
-            </TouchableOpacity>
-
-            <View style={styles.modalButtons}>
-              <TouchableOpacity
-                style={styles.modalSaveButton}
-                onPress={handlePasswordChange}
-                disabled={saving}
-              >
-                <Text style={styles.modalSaveButtonText}>
-                  {saving ? 'Saving...' : 'Change Password'}
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.modalCancelButton}
-                onPress={() => setShowPasswordModal(false)}
-              >
-                <Text style={styles.modalCancelButtonText}>Cancel</Text>
-              </TouchableOpacity>
-            </View>
+        onClose={() => setShowPasswordModal(false)}
+        title="Change Password"
+        size="sm"
+        footer={
+          <View style={styles.modalButtons}>
+            <Button variant="secondary" style={{ flex: 1 }} onPress={() => setShowPasswordModal(false)}>
+              Cancel
+            </Button>
+            <Button variant="primary" style={{ flex: 1 }} onPress={handlePasswordChange} disabled={saving} loading={saving}>
+              Change Password
+            </Button>
           </View>
-        </View>
-      </Modal>
+        }
+      >
+        <FormFieldWithTip
+          label="Current Password"
+          value={passwordData.currentPassword}
+          onChangeText={text => setPasswordData({ ...passwordData, currentPassword: text })}
+          placeholder="Enter current password"
+          secureTextEntry={!showPassword}
+          required
+        />
+
+        <FormFieldWithTip
+          label="New Password"
+          value={passwordData.newPassword}
+          onChangeText={text => setPasswordData({ ...passwordData, newPassword: text })}
+          placeholder="Enter new password"
+          secureTextEntry={!showPassword}
+          tooltip="Minimum 8 characters"
+          required
+        />
+
+        <FormFieldWithTip
+          label="Confirm New Password"
+          value={passwordData.confirmPassword}
+          onChangeText={text => setPasswordData({ ...passwordData, confirmPassword: text })}
+          placeholder="Re-enter new password"
+          secureTextEntry={!showPassword}
+          required
+        />
+
+        <Pressable
+          style={styles.showPasswordButton}
+          onPress={() => setShowPassword(!showPassword)}
+        >
+          <Text style={[styles.showPasswordText, { color: colors.primary }]}>
+            {showPassword ? 'Hide Password' : 'Show Password'}
+          </Text>
+        </Pressable>
+      </ThemedModal>
 
       {/* Discard Changes Modal */}
-      <Modal
+      <ThemedModal
         visible={showDiscardModal}
-        transparent={true}
-        animationType="fade"
-        onRequestClose={() => setShowDiscardModal(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Unsaved Changes</Text>
-            <Text style={styles.modalMessage}>
-              You have unsaved changes. Are you sure you want to discard them?
-            </Text>
-            <View style={styles.modalButtons}>
-              <TouchableOpacity
-                style={styles.modalCancelButton}
-                onPress={() => setShowDiscardModal(false)}
-              >
-                <Text style={styles.modalCancelButtonText}>Stay</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.modalDiscardButton} onPress={handleDiscardChanges}>
-                <Text style={styles.modalDiscardButtonText}>Discard Changes</Text>
-              </TouchableOpacity>
-            </View>
+        onClose={() => setShowDiscardModal(false)}
+        title="Unsaved Changes"
+        size="sm"
+        footer={
+          <View style={styles.modalButtons}>
+            <Button variant="secondary" style={{ flex: 1 }} onPress={() => setShowDiscardModal(false)}>
+              Stay
+            </Button>
+            <Button variant="danger" style={{ flex: 1 }} onPress={handleDiscardChanges}>
+              Discard Changes
+            </Button>
           </View>
-        </View>
-      </Modal>
+        }
+      >
+        <Text style={[styles.modalMessage, { color: colors.textSecondary }]}>
+          You have unsaved changes. Are you sure you want to discard them?
+        </Text>
+      </ThemedModal>
     </View>
   );
 }
@@ -427,7 +414,6 @@ export default function EditAdminProfileScreen({ navigation: navProp }: any) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F5F5F5',
   },
   scrollView: {
     flex: 1,
@@ -436,9 +422,7 @@ const styles = StyleSheet.create({
     padding: 20,
   },
   userIdCard: {
-    backgroundColor: '#E3F2FD',
     borderLeftWidth: 4,
-    borderLeftColor: '#2196F3',
     borderRadius: 8,
     padding: 16,
     marginBottom: 20,
@@ -449,128 +433,27 @@ const styles = StyleSheet.create({
   },
   userIdLabel: {
     fontSize: 14,
-    color: '#1976D2',
-    fontWeight: '600',
+    fontFamily: 'Inter_600SemiBold',
     marginRight: 8,
   },
   userIdValue: {
     fontSize: 18,
-    color: '#0D47A1',
-    fontWeight: 'bold',
-    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+    fontFamily: 'Inter_700Bold',
   },
   userIdHint: {
     fontSize: 12,
-    color: '#1976D2',
+    fontFamily: 'Inter_400Regular',
     fontStyle: 'italic',
     width: '100%',
     marginTop: 4,
   },
-  section: {
-    backgroundColor: '#FFF',
-    borderRadius: 8,
-    padding: 20,
-    marginBottom: 20,
-    ...Platform.select({
-      web: {
-        boxShadow: '0px 2px 4px rgba(0,0,0,0.1)',
-      },
-      default: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 4,
-        elevation: 3,
-      },
-    }),
-  },
   sectionTitle: {
     fontSize: 18,
-    fontWeight: 'bold',
-    color: '#333',
+    fontFamily: 'Inter_700Bold',
     marginBottom: 15,
   },
   buttonContainer: {
     gap: 10,
-  },
-  saveButton: {
-    backgroundColor: '#28A745',
-    padding: 15,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  saveButtonDisabled: {
-    backgroundColor: '#CCC',
-  },
-  saveButtonText: {
-    color: '#FFF',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  passwordButton: {
-    backgroundColor: '#FFC107',
-    padding: 15,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  passwordButtonText: {
-    color: '#333',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  cancelButton: {
-    backgroundColor: '#6C757D',
-    padding: 15,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  cancelButtonText: {
-    color: '#FFF',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: Platform.OS === 'web' ? 20 : 10,
-  },
-  modalContent: {
-    backgroundColor: '#FFF',
-    borderRadius: 12,
-    padding: Platform.OS === 'web' ? 32 : 24,
-    width: Platform.OS === 'web' ? '45%' : '92%',
-    maxWidth: 550,
-  },
-  modalTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#333',
-    marginBottom: 15,
-  },
-  modalMessage: {
-    fontSize: 16,
-    color: '#666',
-    marginBottom: 20,
-    textAlign: 'center',
-  },
-  modalButtons: {
-    flexDirection: 'row',
-    gap: 10,
-    marginTop: 20,
-  },
-  modalSaveButton: {
-    flex: 1,
-    backgroundColor: '#007AFF',
-    padding: 12,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  modalSaveButtonText: {
-    color: '#FFF',
-    fontSize: 14,
-    fontWeight: '600',
   },
   showPasswordButton: {
     marginBottom: 15,
@@ -578,79 +461,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   showPasswordText: {
-    color: '#007bff',
     fontSize: 14,
-    fontWeight: '600',
+    fontFamily: 'Inter_600SemiBold',
   },
-  modalCancelButton: {
-    flex: 1,
-    backgroundColor: '#6C757D',
-    padding: 12,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  modalCancelButtonText: {
-    color: '#FFF',
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  modalDiscardButton: {
-    flex: 1,
-    backgroundColor: '#DC3545',
-    padding: 12,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  modalDiscardButtonText: {
-    color: '#FFF',
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  confirmModalButtons: {
+  modalButtons: {
     flexDirection: 'row',
-    gap: 12,
+    gap: 10,
   },
-  confirmModalButton: {
-    flex: 1,
-    padding: 14,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  confirmModalContent: {
-    backgroundColor: '#FFF',
-    borderRadius: 12,
-    padding: 20,
-    width: '100%',
-    maxWidth: 500,
-  },
-  confirmModalTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#333',
-    marginBottom: 12,
+  modalMessage: {
+    fontSize: 16,
+    fontFamily: 'Inter_400Regular',
+    marginBottom: 20,
     textAlign: 'center',
-  },
-  confirmModalText: {
-    fontSize: 16,
-    color: '#555',
-    marginBottom: 24,
-    textAlign: 'center',
-    lineHeight: 22,
-  },
-  saveAndContinueButton: {
-    backgroundColor: '#28a745',
-  },
-  saveAndContinueButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  deleteConfirmButton: {
-    backgroundColor: '#dc3545',
-  },
-  deleteConfirmButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: 'bold',
   },
 });

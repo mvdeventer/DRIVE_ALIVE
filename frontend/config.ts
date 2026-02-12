@@ -13,9 +13,9 @@ const getApiUrl = () => {
   }
 
   // Development: Use localhost for web, network IP for mobile
-  if (isWeb) {
-    return 'http://localhost:8000';
-  }
+  //if (isWeb) {
+  //  return 'http://localhost:8000';
+  //}
   
   // Mobile development: Use local network IP (update if needed)
   return 'http://10.0.0.121:8000';

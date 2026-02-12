@@ -1,23 +1,23 @@
 {
     "expo":  {
-                 "name":  "Driving School",
-                 "slug":  "driving-school-app",
-                 "version":  "2.0.5",
+                 "name":  "RoadReady",
+                 "slug":  "roadready",
+                 "version":  "3.0.0",
                  "orientation":  "portrait",
                  "icon":  "./assets/icons/icon.png",
-                 "userInterfaceStyle":  "light",
+                 "userInterfaceStyle":  "automatic",
                  "newArchEnabled":  true,
                  "splash":  {
                                 "image":  "./assets/images/splash.png",
                                 "resizeMode":  "contain",
-                                "backgroundColor":  "#ffffff"
+                                "backgroundColor":  "#0D9488"
                             },
                  "assetBundlePatterns":  [
                                              "**/*"
                                          ],
                  "ios":  {
                              "supportsTablet":  true,
-                             "bundleIdentifier":  "com.drivingschool.app",
+                             "bundleIdentifier":  "com.roadready.app",
                              "infoPlist":  {
                                                "NSLocationWhenInUseUsageDescription":  "This app needs access to your location to find nearby instructors and set pickup locations.",
                                                "NSLocationAlwaysUsageDescription":  "This app needs access to your location for live lesson tracking."
@@ -26,9 +26,9 @@
                  "android":  {
                                  "adaptiveIcon":  {
                                                       "foregroundImage":  "./assets/icons/adaptive-icon.png",
-                                                      "backgroundColor":  "#ffffff"
+                                                      "backgroundColor":  "#0D9488"
                                                   },
-                                 "package":  "com.drivingschool.app",
+                                 "package":  "com.roadready.app",
                                  "permissions":  [
                                                      "ACCESS_FINE_LOCATION",
                                                      "ACCESS_COARSE_LOCATION"

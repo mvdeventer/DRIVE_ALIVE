@@ -24,6 +24,7 @@
 ::   version         Manage versions (get/major/minor/patch/set)
 ::   status          Show Git and server status
 ::   update-version  Update version in all project files
+::   clear-db        Clear/reset the database (stops servers, deletes DB)
 ::   help            Show this help message
 ::
 :: OPTIONS:
@@ -32,7 +33,7 @@
 ::   --no-browser, -n        Don't open browser windows
 ::   -d                      Dev mode - open Edge with developer tools (start command only)
 ::   --debug                 Show detailed debug information
-::   --clear-db, -c          Clear database before starting (in debug mode only)
+::   --clear-db, -c          Clear database before starting (start command with --debug)
 ::   --port [PORT]           Custom backend port (default: 8000)
 ::   --message [MSG], -m     Commit message (for commit command)
 ::   --version [VER], -v     Version tag (for release command)
@@ -252,6 +253,9 @@ if /i "%COMMAND%"=="commit" goto :cmd_commit
 if /i "%COMMAND%"=="release" goto :cmd_release
 if /i "%COMMAND%"=="status" goto :cmd_status
 if /i "%COMMAND%"=="update-version" goto :cmd_update_version
+if /i "%COMMAND%"=="clear-db" goto :cmd_clear_db
+if /i "%COMMAND%"=="reset-db" goto :cmd_clear_db
+if /i "%COMMAND%"=="-c" goto :cmd_clear_db
 if /i "%COMMAND%"=="help" goto :cmd_help
 if /i "%COMMAND%"=="--help" goto :cmd_help
 if /i "%COMMAND%"=="-h" goto :cmd_help
@@ -545,7 +549,7 @@ if errorlevel 1 (
 if defined FRONTEND_URL_VALUE set "FRONTEND_URL_DISPLAY=%FRONTEND_URL_VALUE%"
 
 echo %COLOR_YELLOW%Starting Frontend Server ^(!ENV_MODE! mode^)...%COLOR_RESET%
-powershell -Command "$process = Start-Process cmd -ArgumentList '/k', 'cd /d \"%FRONTEND_DIR%\" && npx expo start %EXPO_HOST_FLAG%' -WindowStyle Normal -PassThru; $process.Id | Out-File -FilePath '%FRONTEND_PID_FILE%' -Encoding ASCII -NoNewline; Write-Host \"Frontend started with PID: $($process.Id)\" -ForegroundColor Green"
+powershell -Command "$process = Start-Process cmd -ArgumentList '/k', 'cd /d \"%FRONTEND_DIR%\" && set \"EXPO_OFFLINE=true\" && npx expo start %EXPO_HOST_FLAG%' -WindowStyle Normal -PassThru; $process.Id | Out-File -FilePath '%FRONTEND_PID_FILE%' -Encoding ASCII -NoNewline; Write-Host \"Frontend started with PID: $($process.Id)\" -ForegroundColor Green"
 
 echo.
 echo %COLOR_GREEN%Servers are starting...%COLOR_RESET%
@@ -682,7 +686,7 @@ if errorlevel 1 (
 if defined FRONTEND_URL_VALUE set "FRONTEND_URL_DISPLAY=%FRONTEND_URL_VALUE%"
 
 echo %COLOR_YELLOW%Starting Frontend Server only ^(!ENV_MODE! mode^)...%COLOR_RESET%
-powershell -Command "$process = Start-Process cmd -ArgumentList '/k', 'cd /d \"%FRONTEND_DIR%\" && npx expo start %EXPO_HOST_FLAG%' -WindowStyle Normal -PassThru; $process.Id | Out-File -FilePath '%FRONTEND_PID_FILE%' -Encoding ASCII -NoNewline; Write-Host \"Frontend started with PID: $($process.Id)\" -ForegroundColor Green"
+powershell -Command "$process = Start-Process cmd -ArgumentList '/k', 'cd /d \"%FRONTEND_DIR%\" && set \"EXPO_OFFLINE=true\" && npx expo start %EXPO_HOST_FLAG%' -WindowStyle Normal -PassThru; $process.Id | Out-File -FilePath '%FRONTEND_PID_FILE%' -Encoding ASCII -NoNewline; Write-Host \"Frontend started with PID: $($process.Id)\" -ForegroundColor Green"
 echo.
 echo %COLOR_GREEN%Frontend server started: %FRONTEND_URL_DISPLAY%%COLOR_RESET%
 
@@ -1559,6 +1563,84 @@ echo.
 goto :eof
 
 :: ==============================================================================
+:: COMMAND: CLEAR-DB
+:: ==============================================================================
+:cmd_clear_db
+echo %COLOR_CYAN%==============================================================================
+echo   DATABASE RESET OPERATION
+echo ==============================================================================%COLOR_RESET%
+echo.
+
+:: Stop backend server first to release database locks
+echo %COLOR_YELLOW%Stopping backend server to release database locks...%COLOR_RESET%
+
+:: Stop backend using PID file
+if exist "%BACKEND_PID_FILE%" (
+    set /p BACKEND_PID=<"%BACKEND_PID_FILE%"
+    echo   Found backend PID: !BACKEND_PID!
+    tasklist /FI "PID eq !BACKEND_PID!" 2>nul | findstr /I "!BACKEND_PID!" >nul
+    if !errorlevel! equ 0 (
+        taskkill /T /PID !BACKEND_PID! >nul 2>&1
+        timeout /t 2 /nobreak >nul
+        taskkill /F /T /PID !BACKEND_PID! >nul 2>&1
+    )
+    del "%BACKEND_PID_FILE%" >nul 2>&1
+)
+
+:: Kill CMD windows with backend title
+for /f "skip=3 tokens=2" %%a in ('tasklist /V /FI "WINDOWTITLE eq Drive Alive - Backend*" /FO CSV ^| findstr /v "INFO:"') do (
+    set "PID=%%a"
+    set PID=!PID:"=!
+    if defined PID taskkill /F /PID !PID! >nul 2>&1
+)
+
+:: Kill uvicorn processes
+taskkill /FI "ImageName eq uvicorn.exe" /F >nul 2>&1
+
+:: Kill Python processes holding database
+powershell -Command "$processes = Get-Process python -ErrorAction SilentlyContinue | Where-Object {$_.Path -like '*DRIVE_ALIVE*' -and $_.CommandLine -like '*uvicorn*'}; if ($processes) { $processes | Stop-Process -Force }"
+
+:: Kill processes on backend port
+for /f "tokens=5" %%a in ('netstat -ano 2^>nul ^| findstr ":8000" ^| findstr "LISTENING"') do (
+    taskkill /F /PID %%a >nul 2>&1
+)
+
+timeout /t 3 /nobreak >nul
+echo %COLOR_GREEN%  Backend stopped.%COLOR_RESET%
+echo.
+
+if exist "%BACKEND_DIR%\drive_alive.db" (
+    echo %COLOR_YELLOW%[BEFORE] Database file found%COLOR_RESET%
+    for %%A in ("%BACKEND_DIR%\drive_alive.db") do set "DB_SIZE=%%~zA"
+    echo   - Database file: drive_alive.db
+    echo   - File size: !DB_SIZE! bytes
+    echo.
+    echo %COLOR_RED%[ACTION] Deleting database file...%COLOR_RESET%
+
+    powershell -Command "Remove-Item '%BACKEND_DIR%\drive_alive.db' -Force -ErrorAction SilentlyContinue"
+
+    if exist "%BACKEND_DIR%\drive_alive.db" (
+        echo %COLOR_RED%  X Failed to delete database file ^(file may be locked^)%COLOR_RESET%
+        echo %COLOR_YELLOW%  Try closing VSCode and running again%COLOR_RESET%
+        exit /b 1
+    ) else (
+        echo %COLOR_GREEN%  Database file deleted successfully%COLOR_RESET%
+    )
+) else (
+    echo %COLOR_YELLOW%[INFO] No existing database file found - nothing to delete%COLOR_RESET%
+)
+
+echo.
+echo %COLOR_GREEN%[RESULT] Database has been cleared.%COLOR_RESET%
+echo   - A fresh database will be created when the backend starts
+echo   - All tables will be initialized automatically
+echo   - No users will exist ^(setup/registration required^)
+echo.
+echo %COLOR_CYAN%To start servers: drive-alive.bat start%COLOR_RESET%
+echo.
+goto :eof
+
+:: ==============================================================================
 :: COMMAND: HELP
 :: ==============================================================================
 :cmd_help
@@ -1579,6 +1661,7 @@ echo   commit          Commit changes with auto-version detection
 echo   release         Create a release with GitHub CLI (auto-updates versions)
 echo   status          Show Git and server status
 echo   update-version  Update version in all project files
+echo   clear-db        Clear/reset the database (stops servers, deletes DB)
 echo   help            Show this help message
 echo.
 echo OPTIONS:
@@ -1587,6 +1670,7 @@ echo   --frontend-only, -f     Only affect frontend
 echo   --no-browser, -n        Don't open browser windows
 echo   -d                      Dev mode - open Edge with developer tools (start command only)
 echo   --debug                 Show detailed debug information
+echo   --clear-db, -c          Clear database on start (requires --debug)
 echo   --port [PORT]           Custom backend port (default: 8000)
 echo   --message [MSG], -m     Commit message (for commit command)
 echo   --version [VER], -v     Version tag (for release/update-version command)
@@ -1610,6 +1694,8 @@ echo   drive-alive.bat commit -m "feat: new feature" --minor
 echo   drive-alive.bat build-installer
 echo   drive-alive.bat release -v v1.0.0
 echo   drive-alive.bat stop
+echo   drive-alive.bat clear-db                       # Delete database and start fresh
+echo   drive-alive.bat start -d -c                    # Debug mode: clear DB then start servers
 echo.
 echo VERSION MANAGEMENT:
 echo   'version' command - Manage version numbers:

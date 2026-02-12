@@ -9,13 +9,15 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  TouchableOpacity,
   View,
 } from 'react-native';
+import { Button } from '../../components/ui';
+import { useTheme } from '../../theme/ThemeContext';
 import ApiService from '../../services/api';
 
 export default function PaymentSuccessScreen() {
   const navigation = useNavigation();
+  const { colors } = useTheme();
   const [loading, setLoading] = useState(true);
   const [status, setStatus] = useState<'checking' | 'success' | 'failed'>('checking');
   const [bookingsCount, setBookingsCount] = useState(0);
@@ -83,50 +85,52 @@ export default function PaymentSuccessScreen() {
   };
 
   const handleGoHome = () => {
+    // Navigate to the Main tabs — React Navigation will resolve to the
+    // user's role-specific home tab automatically.
     navigation.dispatch(
       CommonActions.reset({
         index: 0,
-        routes: [{ name: 'StudentHome' }],
+        routes: [{ name: 'Main' }],
       })
     );
   };
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
       <ScrollView contentContainerStyle={styles.content}>
         {loading || status === 'checking' ? (
           <>
-            <ActivityIndicator size="large" color="#007AFF" />
-            <Text style={styles.checkingText}>Confirming payment...</Text>
-            <Text style={styles.subText}>Please wait while we verify your transaction</Text>
+            <ActivityIndicator size="large" color={colors.primary} />
+            <Text style={[styles.checkingText, { color: colors.text }]}>Confirming payment...</Text>
+            <Text style={[styles.subText, { color: colors.textSecondary }]}>Please wait while we verify your transaction</Text>
           </>
         ) : status === 'success' ? (
           <>
-            <Text style={styles.successIcon}>✅</Text>
-            <Text style={styles.successTitle}>Payment Successful!</Text>
-            <Text style={styles.successText}>
+            <Text style={styles.statusIcon}>✅</Text>
+            <Text style={[styles.statusTitle, { color: colors.success }]}>Payment Successful!</Text>
+            <Text style={[styles.statusText, { color: colors.text }]}>
               {bookingsCount > 0
                 ? `Your ${bookingsCount} lesson${bookingsCount > 1 ? 's have' : ' has'} been booked successfully.`
                 : 'Your lesson has been booked successfully.'}
             </Text>
-            <Text style={styles.infoText}>
+            <Text style={[styles.infoText, { color: colors.textSecondary }]}>
               WhatsApp confirmations have been sent to you and your instructor.
             </Text>
-            <TouchableOpacity style={styles.homeButton} onPress={handleGoHome}>
-              <Text style={styles.homeButtonText}>Go to My Bookings</Text>
-            </TouchableOpacity>
+            <Button variant="primary" onPress={handleGoHome}>
+              Go to My Bookings
+            </Button>
           </>
         ) : (
           <>
-            <Text style={styles.errorIcon}>⚠️</Text>
-            <Text style={styles.errorTitle}>Payment Status Unknown</Text>
-            <Text style={styles.errorText}>
+            <Text style={styles.statusIcon}>⚠️</Text>
+            <Text style={[styles.statusTitle, { color: colors.warning }]}>Payment Status Unknown</Text>
+            <Text style={[styles.statusText, { color: colors.textSecondary }]}>
               We couldn't verify your payment at this time. Please check your bookings or contact
               support if you were charged.
             </Text>
-            <TouchableOpacity style={styles.homeButton} onPress={handleGoHome}>
-              <Text style={styles.homeButtonText}>Go to My Bookings</Text>
-            </TouchableOpacity>
+            <Button variant="primary" onPress={handleGoHome}>
+              Go to My Bookings
+            </Button>
           </>
         )}
       </ScrollView>
@@ -135,69 +139,45 @@ export default function PaymentSuccessScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f5f5f5' },
+  container: { flex: 1 },
   content: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
     padding: 24,
+    maxWidth: 480,
+    alignSelf: 'center',
+    width: '100%',
   },
   checkingText: {
     fontSize: 20,
-    fontWeight: '600',
-    color: '#333',
+    fontFamily: 'Inter_600SemiBold',
     marginTop: 24,
     textAlign: 'center',
   },
   subText: {
     fontSize: 14,
-    color: '#666',
+    fontFamily: 'Inter_400Regular',
     marginTop: 8,
     textAlign: 'center',
   },
-  successIcon: { fontSize: 80, marginBottom: 16 },
-  successTitle: {
+  statusIcon: { fontSize: 80, marginBottom: 16 },
+  statusTitle: {
     fontSize: 24,
-    fontWeight: 'bold',
-    color: '#28a745',
+    fontFamily: 'Inter_700Bold',
     marginBottom: 16,
     textAlign: 'center',
   },
-  successText: {
+  statusText: {
     fontSize: 16,
-    color: '#333',
+    fontFamily: 'Inter_400Regular',
     textAlign: 'center',
     marginBottom: 12,
   },
   infoText: {
     fontSize: 14,
-    color: '#666',
+    fontFamily: 'Inter_400Regular',
     textAlign: 'center',
     marginBottom: 32,
-  },
-  errorIcon: { fontSize: 80, marginBottom: 16 },
-  errorTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#dc3545',
-    marginBottom: 16,
-    textAlign: 'center',
-  },
-  errorText: {
-    fontSize: 16,
-    color: '#666',
-    textAlign: 'center',
-    marginBottom: 32,
-  },
-  homeButton: {
-    backgroundColor: '#007AFF',
-    borderRadius: 8,
-    paddingVertical: 16,
-    paddingHorizontal: 32,
-  },
-  homeButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: 'bold',
   },
 });

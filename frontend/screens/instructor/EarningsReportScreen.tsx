@@ -8,18 +8,19 @@ import jsPDF from 'jspdf';
 import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
-  Modal,
   Platform,
+  Pressable,
   RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
-  TouchableOpacity,
   View,
 } from 'react-native';
 import InlineMessage from '../../components/InlineMessage';
+import { Badge, Button, Card, ThemedModal } from '../../components/ui';
 import WebNavigationHeader from '../../components/WebNavigationHeader';
 import ApiService from '../../services/api';
+import { useTheme } from '../../theme/ThemeContext';
 import { showMessage } from '../../utils/messageConfig';
 
 interface EarningsData {
@@ -57,6 +58,7 @@ interface InstructorProfile {
 }
 
 export default function EarningsReportScreen({ navigation }: any) {
+  const { colors } = useTheme();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [profile, setProfile] = useState<InstructorProfile | null>(null);
@@ -374,7 +376,7 @@ export default function EarningsReportScreen({ navigation }: any) {
       doc.setDrawColor(200, 200, 200);
       doc.line(15, yPosition, 195, yPosition);
       yPosition += 5;
-      doc.text('Drive Alive - Professional Driving School Management', 15, yPosition);
+      doc.text('RoadReady - Professional Driving School Management', 15, yPosition);
       doc.text(`Generated: ${new Date().toLocaleString('en-ZA')}`, 195, yPosition, {
         align: 'right',
       });
@@ -392,7 +394,7 @@ export default function EarningsReportScreen({ navigation }: any) {
 
     try {
       const workbook = new ExcelJS.Workbook();
-      workbook.creator = 'Drive Alive';
+      workbook.creator = 'RoadReady';
       workbook.created = new Date();
 
       // ===== Summary Sheet =====
@@ -657,25 +659,40 @@ export default function EarningsReportScreen({ navigation }: any) {
     });
   };
 
+  const getStatusColor = (status: string) => {
+    switch (status.toLowerCase()) {
+      case 'completed':
+        return colors.success;
+      case 'pending':
+        return colors.warning;
+      case 'confirmed':
+        return colors.primary;
+      case 'cancelled':
+        return colors.danger;
+      default:
+        return colors.textMuted;
+    }
+  };
+
   if (loading) {
     return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#007bff" />
-        <Text style={styles.loadingText}>Loading earnings report...</Text>
+      <View style={[styles.loadingContainer, { backgroundColor: colors.background }]}>
+        <ActivityIndicator size="large" color={colors.primary} />
+        <Text style={[styles.loadingText, { color: colors.textSecondary }]}>Loading earnings report...</Text>
       </View>
     );
   }
 
   return (
-    <View style={styles.outerContainer}>
+    <View style={[styles.outerContainer, { backgroundColor: colors.background }]}>
       <WebNavigationHeader
         title="Earnings Report"
         onBack={() => navigation.goBack()}
         showBackButton={true}
       />
       <ScrollView
-        style={styles.container}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+        style={[styles.container, { backgroundColor: colors.background }]}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
       >
         {/* Inline Messages */}
         {successMessage && (
@@ -696,74 +713,74 @@ export default function EarningsReportScreen({ navigation }: any) {
         )}
 
         {/* Header */}
-        <View style={styles.header}>
+        <View style={[styles.header, { backgroundColor: colors.primary }]}>
           <Text style={styles.headerTitle}>📊 Earnings Report</Text>
-          <TouchableOpacity style={styles.exportButton} onPress={exportReport}>
+          <Pressable style={styles.exportButton} onPress={exportReport}>
             <Text style={styles.exportButtonText}>📥 Export</Text>
-          </TouchableOpacity>
+          </Pressable>
         </View>
 
         {/* Summary Cards */}
         <View style={styles.summarySection}>
-          <Text style={styles.sectionTitle}>Overview</Text>
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>Overview</Text>
           <View style={styles.summaryGrid}>
-            <View style={[styles.summaryCard, styles.primaryCard]}>
-              <Text style={styles.summaryLabel}>Total Earnings</Text>
-              <Text style={styles.summaryValue}>
+            <Card variant="elevated" style={[styles.summaryCard, { backgroundColor: colors.primary }]}>
+              <Text style={[styles.summaryLabel, { color: 'rgba(255,255,255,0.8)' }]}>Total Earnings</Text>
+              <Text style={[styles.summaryValue, { color: '#fff' }]}>
                 {formatCurrency(earningsData?.total_earnings || 0)}
               </Text>
-              <Text style={styles.summarySubtext}>All time</Text>
-            </View>
+              <Text style={[styles.summarySubtext, { color: 'rgba(255,255,255,0.6)' }]}>All time</Text>
+            </Card>
 
-            <View style={styles.summaryCard}>
-              <Text style={styles.summaryLabel}>Hourly Rate</Text>
-              <Text style={styles.summaryValue}>{formatCurrency(profile?.hourly_rate || 0)}</Text>
-              <Text style={styles.summarySubtext}>per hour</Text>
-            </View>
+            <Card variant="elevated" style={styles.summaryCard}>
+              <Text style={[styles.summaryLabel, { color: colors.textSecondary }]}>Hourly Rate</Text>
+              <Text style={[styles.summaryValue, { color: colors.text }]}>{formatCurrency(profile?.hourly_rate || 0)}</Text>
+              <Text style={[styles.summarySubtext, { color: colors.textMuted }]}>per hour</Text>
+            </Card>
 
-            <View style={styles.summaryCard}>
-              <Text style={styles.summaryLabel}>Completed Lessons</Text>
-              <Text style={styles.summaryValue}>{earningsData?.completed_lessons || 0}</Text>
-              <Text style={styles.summarySubtext}>paid lessons</Text>
-            </View>
+            <Card variant="elevated" style={styles.summaryCard}>
+              <Text style={[styles.summaryLabel, { color: colors.textSecondary }]}>Completed Lessons</Text>
+              <Text style={[styles.summaryValue, { color: colors.text }]}>{earningsData?.completed_lessons || 0}</Text>
+              <Text style={[styles.summarySubtext, { color: colors.textMuted }]}>paid lessons</Text>
+            </Card>
 
-            <View style={styles.summaryCard}>
-              <Text style={styles.summaryLabel}>Avg. per Lesson</Text>
-              <Text style={styles.summaryValue}>
+            <Card variant="elevated" style={styles.summaryCard}>
+              <Text style={[styles.summaryLabel, { color: colors.textSecondary }]}>Avg. per Lesson</Text>
+              <Text style={[styles.summaryValue, { color: colors.text }]}>
                 {earningsData?.completed_lessons
                   ? formatCurrency(
                       (earningsData?.total_earnings || 0) / earningsData.completed_lessons
                     )
                   : formatCurrency(0)}
               </Text>
-              <Text style={styles.summarySubtext}>average</Text>
-            </View>
+              <Text style={[styles.summarySubtext, { color: colors.textMuted }]}>average</Text>
+            </Card>
           </View>
         </View>
 
         {/* Statistics */}
         <View style={styles.statsSection}>
-          <Text style={styles.sectionTitle}>Lesson Statistics</Text>
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>Lesson Statistics</Text>
           <View style={styles.statsGrid}>
-            <View style={styles.statCard}>
-              <View style={[styles.statDot, { backgroundColor: '#28a745' }]} />
-              <Text style={styles.statLabel}>Completed</Text>
-              <Text style={styles.statValue}>{earningsData?.completed_lessons || 0}</Text>
+            <View style={[styles.statCard, { backgroundColor: colors.backgroundSecondary }]}>
+              <View style={[styles.statDot, { backgroundColor: colors.success }]} />
+              <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Completed</Text>
+              <Text style={[styles.statValue, { color: colors.text }]}>{earningsData?.completed_lessons || 0}</Text>
             </View>
-            <View style={styles.statCard}>
-              <View style={[styles.statDot, { backgroundColor: '#ffc107' }]} />
-              <Text style={styles.statLabel}>Pending</Text>
-              <Text style={styles.statValue}>{earningsData?.pending_lessons || 0}</Text>
+            <View style={[styles.statCard, { backgroundColor: colors.backgroundSecondary }]}>
+              <View style={[styles.statDot, { backgroundColor: colors.warning }]} />
+              <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Pending</Text>
+              <Text style={[styles.statValue, { color: colors.text }]}>{earningsData?.pending_lessons || 0}</Text>
             </View>
-            <View style={styles.statCard}>
-              <View style={[styles.statDot, { backgroundColor: '#dc3545' }]} />
-              <Text style={styles.statLabel}>Cancelled</Text>
-              <Text style={styles.statValue}>{earningsData?.cancelled_lessons || 0}</Text>
+            <View style={[styles.statCard, { backgroundColor: colors.backgroundSecondary }]}>
+              <View style={[styles.statDot, { backgroundColor: colors.danger }]} />
+              <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Cancelled</Text>
+              <Text style={[styles.statValue, { color: colors.text }]}>{earningsData?.cancelled_lessons || 0}</Text>
             </View>
-            <View style={styles.statCard}>
-              <View style={[styles.statDot, { backgroundColor: '#007bff' }]} />
-              <Text style={styles.statLabel}>Total</Text>
-              <Text style={styles.statValue}>{earningsData?.total_lessons || 0}</Text>
+            <View style={[styles.statCard, { backgroundColor: colors.backgroundSecondary }]}>
+              <View style={[styles.statDot, { backgroundColor: colors.primary }]} />
+              <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Total</Text>
+              <Text style={[styles.statValue, { color: colors.text }]}>{earningsData?.total_lessons || 0}</Text>
             </View>
           </View>
         </View>
@@ -771,16 +788,16 @@ export default function EarningsReportScreen({ navigation }: any) {
         {/* Monthly Breakdown */}
         {earningsData?.earnings_by_month && earningsData.earnings_by_month.length > 0 && (
           <View style={styles.monthlySection}>
-            <Text style={styles.sectionTitle}>Monthly Breakdown</Text>
+            <Text style={[styles.sectionTitle, { color: colors.text }]}>Monthly Breakdown</Text>
             {earningsData.earnings_by_month.map((month, index) => (
-              <View key={index} style={styles.monthCard}>
+              <Card key={index} variant="elevated" style={styles.monthCard}>
                 <View style={styles.monthHeader}>
-                  <Text style={styles.monthName}>📅 {month.month}</Text>
-                  <Text style={styles.monthEarnings}>{formatCurrency(month.earnings)}</Text>
+                  <Text style={[styles.monthName, { color: colors.text }]}>📅 {month.month}</Text>
+                  <Text style={[styles.monthEarnings, { color: colors.success }]}>{formatCurrency(month.earnings)}</Text>
                 </View>
-                <View style={styles.monthDetails}>
-                  <Text style={styles.monthLessons}>{month.lessons} lessons completed</Text>
-                  <Text style={styles.monthAverage}>
+                <View style={[styles.monthDetails, { borderTopColor: colors.border }]}>
+                  <Text style={[styles.monthLessons, { color: colors.textSecondary }]}>{month.lessons} lessons completed</Text>
+                  <Text style={[styles.monthAverage, { color: colors.textMuted }]}>
                     Avg:{' '}
                     {month.lessons > 0
                       ? formatCurrency(month.earnings / month.lessons)
@@ -788,7 +805,7 @@ export default function EarningsReportScreen({ navigation }: any) {
                     per lesson
                   </Text>
                 </View>
-              </View>
+              </Card>
             ))}
           </View>
         )}
@@ -796,37 +813,36 @@ export default function EarningsReportScreen({ navigation }: any) {
         {/* Recent Earnings */}
         {earningsData?.recent_earnings && earningsData.recent_earnings.length > 0 && (
           <View style={styles.recentSection}>
-            <Text style={styles.sectionTitle}>Recent Earnings</Text>
+            <Text style={[styles.sectionTitle, { color: colors.text }]}>Recent Earnings</Text>
             {earningsData.recent_earnings.map((earning, index) => (
-              <TouchableOpacity
+              <Card
                 key={earning.id}
+                variant="elevated"
                 style={styles.earningCard}
                 onPress={() => {
                   setSelectedBooking(earning);
                   setShowDetailsModal(true);
                 }}
-                activeOpacity={0.7}
               >
                 <View style={styles.earningHeader}>
-                  <Text style={styles.earningStudent}>👤 {earning.student_name}</Text>
-                  <Text style={styles.earningAmount}>{formatCurrency(earning.amount)}</Text>
+                  <Text style={[styles.earningStudent, { color: colors.text }]}>👤 {earning.student_name}</Text>
+                  <Text style={[styles.earningAmount, { color: colors.success }]}>{formatCurrency(earning.amount)}</Text>
                 </View>
                 <View style={styles.earningDetails}>
-                  <Text style={styles.earningDate}>
+                  <Text style={[styles.earningDate, { color: colors.textSecondary }]}>
                     📅 {formatDate(earning.lesson_date)} at {formatTime(earning.lesson_date)}
                   </Text>
-                  <Text style={styles.earningDuration}>⏱️ {earning.duration_minutes} minutes</Text>
-                  <View
-                    style={[
-                      styles.earningStatus,
-                      { backgroundColor: getStatusColor(earning.status) },
-                    ]}
-                  >
-                    <Text style={styles.earningStatusText}>{earning.status}</Text>
-                  </View>
+                  <Text style={[styles.earningDuration, { color: colors.textSecondary }]}>⏱️ {earning.duration_minutes} minutes</Text>
+                  <Badge variant={
+                    earning.status === 'completed' ? 'success' :
+                    earning.status === 'cancelled' ? 'danger' :
+                    earning.status === 'confirmed' ? 'primary' : 'warning'
+                  }>
+                    {earning.status.toUpperCase()}
+                  </Badge>
                 </View>
-                <Text style={styles.tapHint}>Tap for details →</Text>
-              </TouchableOpacity>
+                <Text style={[styles.tapHint, { color: colors.textMuted }]}>Tap for details →</Text>
+              </Card>
             ))}
           </View>
         )}
@@ -835,8 +851,8 @@ export default function EarningsReportScreen({ navigation }: any) {
         {(!earningsData?.recent_earnings || earningsData.recent_earnings.length === 0) && (
           <View style={styles.emptyState}>
             <Text style={styles.emptyStateIcon}>💰</Text>
-            <Text style={styles.emptyStateTitle}>No Earnings Yet</Text>
-            <Text style={styles.emptyStateText}>
+            <Text style={[styles.emptyStateTitle, { color: colors.text }]}>No Earnings Yet</Text>
+            <Text style={[styles.emptyStateText, { color: colors.textSecondary }]}>
               Start completing lessons to see your earnings here!
             </Text>
           </View>
@@ -844,10 +860,10 @@ export default function EarningsReportScreen({ navigation }: any) {
 
         {/* Footer Info */}
         <View style={styles.footer}>
-          <Text style={styles.footerText}>
+          <Text style={[styles.footerText, { color: colors.textSecondary }]}>
             💡 Tip: Pull down to refresh your latest earnings data
           </Text>
-          <Text style={styles.footerSubtext}>
+          <Text style={[styles.footerSubtext, { color: colors.textMuted }]}>
             Last updated: {new Date().toLocaleString('en-ZA')}
           </Text>
         </View>
@@ -856,184 +872,151 @@ export default function EarningsReportScreen({ navigation }: any) {
       </ScrollView>
 
       {/* Details Modal */}
-      <Modal
+      <ThemedModal
         visible={showDetailsModal}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setShowDetailsModal(false)}
+        onClose={() => setShowDetailsModal(false)}
+        title="Lesson Details"
+        size="md"
+        footer={
+          <Button variant="primary" onPress={() => setShowDetailsModal(false)} fullWidth>
+            Close
+          </Button>
+        }
       >
-        <View style={styles.modalContainer}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Lesson Details</Text>
-              <TouchableOpacity onPress={() => setShowDetailsModal(false)}>
-                <Text style={styles.closeButton}>✕</Text>
-              </TouchableOpacity>
-            </View>
-
-            <ScrollView style={styles.modalBody}>
-              {selectedBooking && (
-                <>
-                  {/* Student Info */}
-                  <View style={styles.detailSection}>
-                    <Text style={styles.detailSectionTitle}>Student Information</Text>
-                    <View style={styles.detailRow}>
-                      <Text style={styles.detailLabel}>Name:</Text>
-                      <Text style={styles.detailValue}>
-                        {selectedBooking.student_name || 'N/A'}
-                      </Text>
-                    </View>
-                    {selectedBooking.student_email && (
-                      <View style={styles.detailRow}>
-                        <Text style={styles.detailLabel}>Email:</Text>
-                        <Text style={styles.detailValue}>{selectedBooking.student_email}</Text>
-                      </View>
-                    )}
-                    {selectedBooking.student_phone && (
-                      <View style={styles.detailRow}>
-                        <Text style={styles.detailLabel}>Phone:</Text>
-                        <Text style={styles.detailValue}>{selectedBooking.student_phone}</Text>
-                      </View>
-                    )}
-                    {selectedBooking.student_id_number && (
-                      <View style={styles.detailRow}>
-                        <Text style={styles.detailLabel}>ID Number:</Text>
-                        <Text style={styles.detailValue}>{selectedBooking.student_id_number}</Text>
-                      </View>
-                    )}
-                    {selectedBooking.student_city && (
-                      <View style={styles.detailRow}>
-                        <Text style={styles.detailLabel}>City:</Text>
-                        <Text style={styles.detailValue}>{selectedBooking.student_city}</Text>
-                      </View>
-                    )}
-                    {selectedBooking.student_suburb && (
-                      <View style={styles.detailRow}>
-                        <Text style={styles.detailLabel}>Suburb:</Text>
-                        <Text style={styles.detailValue}>{selectedBooking.student_suburb}</Text>
-                      </View>
-                    )}
+        <ScrollView style={styles.modalBody}>
+          {selectedBooking && (
+            <>
+              {/* Student Info */}
+              <View style={[styles.detailSection, { borderBottomColor: colors.border }]}>
+                <Text style={[styles.detailSectionTitle, { color: colors.text }]}>Student Information</Text>
+                <View style={styles.detailRow}>
+                  <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>Name:</Text>
+                  <Text style={[styles.detailValue, { color: colors.text }]}>
+                    {selectedBooking.student_name || 'N/A'}
+                  </Text>
+                </View>
+                {selectedBooking.student_email && (
+                  <View style={styles.detailRow}>
+                    <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>Email:</Text>
+                    <Text style={[styles.detailValue, { color: colors.text }]}>{selectedBooking.student_email}</Text>
                   </View>
-
-                  {/* Lesson Info */}
-                  <View style={styles.detailSection}>
-                    <Text style={styles.detailSectionTitle}>Lesson Information</Text>
-                    <View style={styles.detailRow}>
-                      <Text style={styles.detailLabel}>Date:</Text>
-                      <Text style={styles.detailValue}>
-                        {formatDate(selectedBooking.lesson_date)}
-                      </Text>
-                    </View>
-                    <View style={styles.detailRow}>
-                      <Text style={styles.detailLabel}>Time:</Text>
-                      <Text style={styles.detailValue}>
-                        {formatTime(selectedBooking.lesson_date)}
-                      </Text>
-                    </View>
-                    <View style={styles.detailRow}>
-                      <Text style={styles.detailLabel}>Duration:</Text>
-                      <Text style={styles.detailValue}>
-                        {selectedBooking.duration_minutes} minutes
-                      </Text>
-                    </View>
-                    {selectedBooking.pickup_location && (
-                      <View style={styles.detailRow}>
-                        <Text style={styles.detailLabel}>Pickup Location:</Text>
-                        <Text style={styles.detailValue}>{selectedBooking.pickup_location}</Text>
-                      </View>
-                    )}
+                )}
+                {selectedBooking.student_phone && (
+                  <View style={styles.detailRow}>
+                    <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>Phone:</Text>
+                    <Text style={[styles.detailValue, { color: colors.text }]}>{selectedBooking.student_phone}</Text>
                   </View>
-
-                  {/* Payment Info */}
-                  <View style={styles.detailSection}>
-                    <Text style={styles.detailSectionTitle}>Payment Information</Text>
-                    <View style={styles.detailRow}>
-                      <Text style={styles.detailLabel}>Amount:</Text>
-                      <Text style={styles.detailValueHighlight}>
-                        {formatCurrency(selectedBooking.amount)}
-                      </Text>
-                    </View>
-                    <View style={styles.detailRow}>
-                      <Text style={styles.detailLabel}>Status:</Text>
-                      <View
-                        style={[
-                          styles.statusBadge,
-                          { backgroundColor: getStatusColor(selectedBooking.status) },
-                        ]}
-                      >
-                        <Text style={styles.statusBadgeText}>{selectedBooking.status}</Text>
-                      </View>
-                    </View>
-                    {selectedBooking.payment_status && (
-                      <View style={styles.detailRow}>
-                        <Text style={styles.detailLabel}>Payment Status:</Text>
-                        <Text style={styles.detailValue}>{selectedBooking.payment_status}</Text>
-                      </View>
-                    )}
+                )}
+                {selectedBooking.student_id_number && (
+                  <View style={styles.detailRow}>
+                    <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>ID Number:</Text>
+                    <Text style={[styles.detailValue, { color: colors.text }]}>{selectedBooking.student_id_number}</Text>
                   </View>
-                </>
-              )}
-            </ScrollView>
+                )}
+                {selectedBooking.student_city && (
+                  <View style={styles.detailRow}>
+                    <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>City:</Text>
+                    <Text style={[styles.detailValue, { color: colors.text }]}>{selectedBooking.student_city}</Text>
+                  </View>
+                )}
+                {selectedBooking.student_suburb && (
+                  <View style={styles.detailRow}>
+                    <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>Suburb:</Text>
+                    <Text style={[styles.detailValue, { color: colors.text }]}>{selectedBooking.student_suburb}</Text>
+                  </View>
+                )}
+              </View>
 
-            <TouchableOpacity
-              style={styles.closeModalButton}
-              onPress={() => setShowDetailsModal(false)}
-            >
-              <Text style={styles.closeModalButtonText}>Close</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
+              {/* Lesson Info */}
+              <View style={[styles.detailSection, { borderBottomColor: colors.border }]}>
+                <Text style={[styles.detailSectionTitle, { color: colors.text }]}>Lesson Information</Text>
+                <View style={styles.detailRow}>
+                  <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>Date:</Text>
+                  <Text style={[styles.detailValue, { color: colors.text }]}>
+                    {formatDate(selectedBooking.lesson_date)}
+                  </Text>
+                </View>
+                <View style={styles.detailRow}>
+                  <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>Time:</Text>
+                  <Text style={[styles.detailValue, { color: colors.text }]}>
+                    {formatTime(selectedBooking.lesson_date)}
+                  </Text>
+                </View>
+                <View style={styles.detailRow}>
+                  <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>Duration:</Text>
+                  <Text style={[styles.detailValue, { color: colors.text }]}>
+                    {selectedBooking.duration_minutes} minutes
+                  </Text>
+                </View>
+                {selectedBooking.pickup_location && (
+                  <View style={styles.detailRow}>
+                    <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>Pickup Location:</Text>
+                    <Text style={[styles.detailValue, { color: colors.text }]}>{selectedBooking.pickup_location}</Text>
+                  </View>
+                )}
+              </View>
+
+              {/* Payment Info */}
+              <View style={[styles.detailSection, { borderBottomColor: colors.border }]}>
+                <Text style={[styles.detailSectionTitle, { color: colors.text }]}>Payment Information</Text>
+                <View style={styles.detailRow}>
+                  <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>Amount:</Text>
+                  <Text style={[styles.detailValueHighlight, { color: colors.success }]}>
+                    {formatCurrency(selectedBooking.amount)}
+                  </Text>
+                </View>
+                <View style={styles.detailRow}>
+                  <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>Status:</Text>
+                  <Badge variant={
+                    selectedBooking.status === 'completed' ? 'success' :
+                    selectedBooking.status === 'cancelled' ? 'danger' :
+                    selectedBooking.status === 'confirmed' ? 'primary' : 'warning'
+                  }>
+                    {selectedBooking.status.toUpperCase()}
+                  </Badge>
+                </View>
+                {selectedBooking.payment_status && (
+                  <View style={styles.detailRow}>
+                    <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>Payment Status:</Text>
+                    <Text style={[styles.detailValue, { color: colors.text }]}>{selectedBooking.payment_status}</Text>
+                  </View>
+                )}
+              </View>
+            </>
+          )}
+        </ScrollView>
+      </ThemedModal>
     </View>
   );
 }
 
-const getStatusColor = (status: string) => {
-  switch (status.toLowerCase()) {
-    case 'completed':
-      return '#28a745';
-    case 'pending':
-      return '#ffc107';
-    case 'confirmed':
-      return '#007bff';
-    case 'cancelled':
-      return '#dc3545';
-    default:
-      return '#6c757d';
-  }
-};
-
 const styles = StyleSheet.create({
   outerContainer: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
   },
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#f5f5f5',
   },
   loadingText: {
     marginTop: 12,
     fontSize: 16,
-    color: '#666',
+    fontFamily: 'Inter_400Regular',
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    backgroundColor: '#007bff',
     padding: 20,
     paddingTop: Platform.OS === 'web' ? 20 : 40,
   },
   headerTitle: {
     fontSize: 20,
-    fontWeight: 'bold',
+    fontFamily: 'Inter_700Bold',
     color: '#fff',
   },
   exportButton: {
@@ -1045,15 +1028,14 @@ const styles = StyleSheet.create({
   exportButtonText: {
     color: '#fff',
     fontSize: 14,
-    fontWeight: '600',
+    fontFamily: 'Inter_600SemiBold',
   },
   summarySection: {
     padding: 20,
   },
   sectionTitle: {
     fontSize: 18,
-    fontWeight: 'bold',
-    color: '#333',
+    fontFamily: 'Inter_700Bold',
     marginBottom: 16,
   },
   summaryGrid: {
@@ -1062,7 +1044,6 @@ const styles = StyleSheet.create({
     marginHorizontal: -5,
   },
   summaryCard: {
-    backgroundColor: '#fff',
     borderRadius: 12,
     padding: 16,
     margin: 6,
@@ -1071,26 +1052,20 @@ const styles = StyleSheet.create({
     maxWidth: Platform.OS === 'web' ? '48%' : '100%',
     flexGrow: 1,
     alignItems: 'center',
-    boxShadow: '0px 1px 3px #00000015',
-    elevation: 2,
-  },
-  primaryCard: {
-    backgroundColor: '#007bff',
   },
   summaryLabel: {
     fontSize: 12,
-    color: '#666',
+    fontFamily: 'Inter_400Regular',
     marginBottom: 8,
   },
   summaryValue: {
     fontSize: 24,
-    fontWeight: 'bold',
-    color: '#333',
+    fontFamily: 'Inter_700Bold',
     marginBottom: 4,
   },
   summarySubtext: {
     fontSize: 12,
-    color: '#999',
+    fontFamily: 'Inter_400Regular',
   },
   statsSection: {
     padding: 20,
@@ -1102,7 +1077,6 @@ const styles = StyleSheet.create({
     marginHorizontal: -5,
   },
   statCard: {
-    backgroundColor: '#F8F9FA',
     borderRadius: 8,
     padding: Platform.OS === 'web' ? 12 : 10,
     margin: Platform.OS === 'web' ? 5 : 4,
@@ -1111,8 +1085,6 @@ const styles = StyleSheet.create({
     maxWidth: '100%',
     flexGrow: 1,
     alignItems: 'center',
-    boxShadow: '0px 1px 3px #00000015',
-    elevation: 1,
   },
   statDot: {
     width: 16,
@@ -1122,26 +1094,20 @@ const styles = StyleSheet.create({
   },
   statLabel: {
     fontSize: 12,
-    color: '#666',
+    fontFamily: 'Inter_400Regular',
     marginBottom: 4,
     textAlign: 'center',
   },
   statValue: {
     fontSize: 24,
-    fontWeight: 'bold',
-    color: '#333',
+    fontFamily: 'Inter_700Bold',
   },
   monthlySection: {
     padding: 20,
     paddingTop: 0,
   },
   monthCard: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 16,
     marginBottom: 12,
-    boxShadow: '0px 2px 4px #0000001A',
-    elevation: 2,
   },
   monthHeader: {
     flexDirection: 'row',
@@ -1151,39 +1117,31 @@ const styles = StyleSheet.create({
   },
   monthName: {
     fontSize: 16,
-    fontWeight: 'bold',
-    color: '#333',
+    fontFamily: 'Inter_700Bold',
   },
   monthEarnings: {
     fontSize: 18,
-    fontWeight: 'bold',
-    color: '#28a745',
+    fontFamily: 'Inter_700Bold',
   },
   monthDetails: {
     borderTopWidth: 1,
-    borderTopColor: '#f0f0f0',
     paddingTop: 8,
   },
   monthLessons: {
     fontSize: 14,
-    color: '#666',
+    fontFamily: 'Inter_400Regular',
     marginBottom: 4,
   },
   monthAverage: {
     fontSize: 14,
-    color: '#999',
+    fontFamily: 'Inter_400Regular',
   },
   recentSection: {
     padding: 20,
     paddingTop: 0,
   },
   earningCard: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 16,
     marginBottom: 12,
-    boxShadow: '0px 2px 4px #0000001A',
-    elevation: 2,
   },
   earningHeader: {
     flexDirection: 'row',
@@ -1193,38 +1151,23 @@ const styles = StyleSheet.create({
   },
   earningStudent: {
     fontSize: 16,
-    fontWeight: 'bold',
-    color: '#333',
+    fontFamily: 'Inter_700Bold',
     flex: 1,
   },
   earningAmount: {
     fontSize: 18,
-    fontWeight: 'bold',
-    color: '#28a745',
+    fontFamily: 'Inter_700Bold',
   },
   earningDetails: {
     gap: 6,
   },
   earningDate: {
     fontSize: 14,
-    color: '#666',
+    fontFamily: 'Inter_400Regular',
   },
   earningDuration: {
     fontSize: 14,
-    color: '#666',
-  },
-  earningStatus: {
-    alignSelf: 'flex-start',
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    borderRadius: 12,
-    marginTop: 4,
-  },
-  earningStatusText: {
-    fontSize: 12,
-    color: '#fff',
-    fontWeight: '600',
-    textTransform: 'uppercase',
+    fontFamily: 'Inter_400Regular',
   },
   emptyState: {
     padding: 40,
@@ -1237,13 +1180,12 @@ const styles = StyleSheet.create({
   },
   emptyStateTitle: {
     fontSize: 20,
-    fontWeight: 'bold',
-    color: '#333',
+    fontFamily: 'Inter_700Bold',
     marginBottom: 8,
   },
   emptyStateText: {
     fontSize: 16,
-    color: '#666',
+    fontFamily: 'Inter_400Regular',
     textAlign: 'center',
   },
   footer: {
@@ -1253,65 +1195,33 @@ const styles = StyleSheet.create({
   },
   footerText: {
     fontSize: 14,
-    color: '#666',
+    fontFamily: 'Inter_400Regular',
     textAlign: 'center',
     marginBottom: 4,
   },
   footerSubtext: {
     fontSize: 12,
-    color: '#999',
+    fontFamily: 'Inter_400Regular',
     textAlign: 'center',
   },
   tapHint: {
     fontSize: 11,
-    color: '#999',
+    fontFamily: 'Inter_400Regular',
     marginTop: 8,
     fontStyle: 'italic',
     textAlign: 'right',
   },
-  modalContainer: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'flex-end',
-  },
-  modalContent: {
-    backgroundColor: '#fff',
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    maxHeight: '90%',
-    minHeight: '50%',
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
-  },
-  modalTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#333',
-  },
-  closeButton: {
-    fontSize: 24,
-    color: '#999',
-    padding: 8,
-  },
   modalBody: {
-    padding: 20,
+    maxHeight: 400,
   },
   detailSection: {
     marginBottom: 24,
     paddingBottom: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
   },
   detailSectionTitle: {
     fontSize: 16,
-    fontWeight: 'bold',
-    color: '#333',
+    fontFamily: 'Inter_700Bold',
     marginBottom: 12,
   },
   detailRow: {
@@ -1322,46 +1232,19 @@ const styles = StyleSheet.create({
   },
   detailLabel: {
     fontSize: 14,
-    color: '#666',
-    fontWeight: '600',
+    fontFamily: 'Inter_600SemiBold',
     flex: 1,
   },
   detailValue: {
     fontSize: 14,
-    color: '#333',
+    fontFamily: 'Inter_400Regular',
     flex: 1,
     textAlign: 'right',
   },
   detailValueHighlight: {
     fontSize: 16,
-    color: '#28a745',
-    fontWeight: 'bold',
+    fontFamily: 'Inter_700Bold',
     flex: 1,
     textAlign: 'right',
-  },
-  statusBadge: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 12,
-    alignSelf: 'flex-end',
-  },
-  statusBadgeText: {
-    fontSize: 12,
-    color: '#fff',
-    fontWeight: '600',
-    textTransform: 'uppercase',
-  },
-  closeModalButton: {
-    backgroundColor: '#007bff',
-    padding: 14,
-    margin: 20,
-    marginBottom: 30,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  closeModalButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
   },
 });

@@ -16,6 +16,8 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import { Card } from '../../components';
+import { useTheme } from '../../theme/ThemeContext';
 import InlineMessage from '../../components/InlineMessage';
 import WebNavigationHeader from '../../components/WebNavigationHeader';
 import apiService from '../../services/api';
@@ -41,6 +43,7 @@ interface InstructorOption {
 }
 
 export default function RevenueAnalyticsScreen({ navigation }: any) {
+  const { colors } = useTheme();
   const [stats, setStats] = useState<RevenueStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -66,7 +69,6 @@ export default function RevenueAnalyticsScreen({ navigation }: any) {
     try {
       const response = await apiService.get('/admin/instructors/earnings-summary');
       const instructorList = response.data.instructors || [];
-      // Sort alphabetically by instructor name
       const sortedInstructors = instructorList.sort((a: any, b: any) =>
         a.instructor_name.localeCompare(b.instructor_name)
       );
@@ -76,10 +78,8 @@ export default function RevenueAnalyticsScreen({ navigation }: any) {
     }
   };
 
-  // Filter instructors based on search query
   const filteredInstructors = useMemo(() => {
     if (!searchQuery.trim()) return instructors;
-
     const query = searchQuery.toLowerCase();
     return instructors.filter(
       instructor =>
@@ -110,17 +110,17 @@ export default function RevenueAnalyticsScreen({ navigation }: any) {
   };
 
   const renderTopInstructor = ({ item, index }: { item: any; index: number }) => (
-    <View style={styles.instructorCard}>
-      <View style={styles.rankBadge}>
+    <View style={[styles.instructorCard, { backgroundColor: colors.backgroundSecondary }]}>
+      <View style={[styles.rankBadge, { backgroundColor: colors.primary }]}>
         <Text style={styles.rankText}>#{index + 1}</Text>
       </View>
       <View style={styles.instructorInfo}>
-        <Text style={styles.instructorName}>{item.name}</Text>
+        <Text style={[styles.instructorName, { color: colors.text }]}>{item.name}</Text>
         <View style={styles.instructorStats}>
-          <Text style={styles.instructorStat}>💰 R{item.total_earnings.toFixed(2)}</Text>
-          <Text style={styles.instructorStat}>📚 {item.booking_count} lessons</Text>
-          <Text style={styles.instructorStat}>
-            📊 R{(item.total_earnings / item.booking_count).toFixed(2)}/lesson
+          <Text style={[styles.instructorStat, { color: colors.textSecondary }]}>R{item.total_earnings.toFixed(2)}</Text>
+          <Text style={[styles.instructorStat, { color: colors.textSecondary }]}>{item.booking_count} lessons</Text>
+          <Text style={[styles.instructorStat, { color: colors.textSecondary }]}>
+            R{(item.total_earnings / item.booking_count).toFixed(2)}/lesson
           </Text>
         </View>
       </View>
@@ -129,15 +129,15 @@ export default function RevenueAnalyticsScreen({ navigation }: any) {
 
   if (loading) {
     return (
-      <View style={styles.centerContainer}>
-        <ActivityIndicator size="large" color="#0066CC" />
-        <Text style={styles.loadingText}>Loading revenue analytics...</Text>
+      <View style={[styles.centerContainer, { backgroundColor: colors.background }]}>
+        <ActivityIndicator size="large" color={colors.primary} />
+        <Text style={[styles.loadingText, { color: colors.textSecondary }]}>Loading revenue analytics...</Text>
       </View>
     );
   }
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
       <WebNavigationHeader
         title="Revenue Analytics"
         onBack={() => navigation.goBack()}
@@ -149,24 +149,22 @@ export default function RevenueAnalyticsScreen({ navigation }: any) {
       >
 
       {/* Instructor Filter */}
-      <View style={styles.filterSection}>
-        <Text style={styles.filterLabel}>Filter by Instructor:</Text>
+      <Card variant="elevated" style={{ marginTop: 0, marginHorizontal: 15 }}>
+        <Text style={[styles.filterLabel, { color: colors.text }]}>Filter by Instructor:</Text>
 
-        {/* Search Input */}
         <TextInput
-          style={styles.searchInput}
+          style={[styles.searchInput, { borderColor: colors.border, backgroundColor: colors.card, color: colors.text }]}
           placeholder="Search by name, ID, email, or phone..."
           value={searchQuery}
           onChangeText={setSearchQuery}
-          placeholderTextColor="#999"
+          placeholderTextColor={colors.textMuted}
         />
 
-        {/* Dropdown Picker */}
-        <View style={styles.pickerContainer}>
+        <View style={[styles.pickerContainer, { borderColor: colors.border, backgroundColor: colors.card }]}>
           <Picker
             selectedValue={selectedInstructorId?.toString() || 'all'}
             onValueChange={handleInstructorChange}
-            style={styles.picker}
+            style={[styles.picker, { color: colors.text }]}
           >
             <Picker.Item label="All Instructors" value="all" />
             {filteredInstructors.map(instructor => (
@@ -178,42 +176,42 @@ export default function RevenueAnalyticsScreen({ navigation }: any) {
             ))}
           </Picker>
         </View>
-      </View>
+      </Card>
 
       {error && <InlineMessage message={error} type="error" />}
 
       {stats && (
         <>
-          {/* Main Revenue Stats - Responsive Grid */}
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Revenue Summary</Text>
+          {/* Main Revenue Stats */}
+          <Card variant="elevated" style={{ marginTop: 15, marginHorizontal: 15 }}>
+            <Text style={[styles.sectionTitle, { color: colors.text }]}>Revenue Summary</Text>
             <View style={styles.statsGrid}>
-              <View style={styles.statCard}>
-                <Text style={styles.statCardLabel}>Total Revenue</Text>
-                <Text style={[styles.statCardValue, styles.statCardSuccess]}>
+              <View style={[styles.statCard, { backgroundColor: colors.backgroundSecondary }]}>
+                <Text style={[styles.statCardLabel, { color: colors.textSecondary }]}>Total Revenue</Text>
+                <Text style={[styles.statCardValue, { color: colors.success }]}>
                   R{stats.total_revenue.toFixed(2)}
                 </Text>
               </View>
-              <View style={styles.statCard}>
-                <Text style={styles.statCardLabel}>Pending Revenue</Text>
-                <Text style={[styles.statCardValue, styles.statCardWarning]}>
+              <View style={[styles.statCard, { backgroundColor: colors.backgroundSecondary }]}>
+                <Text style={[styles.statCardLabel, { color: colors.textSecondary }]}>Pending Revenue</Text>
+                <Text style={[styles.statCardValue, { color: colors.warning }]}>
                   R{stats.pending_revenue.toFixed(2)}
                 </Text>
               </View>
-              <View style={styles.statCard}>
-                <Text style={styles.statCardLabel}>Completed Bookings</Text>
-                <Text style={styles.statCardValue}>{stats.completed_bookings}</Text>
+              <View style={[styles.statCard, { backgroundColor: colors.backgroundSecondary }]}>
+                <Text style={[styles.statCardLabel, { color: colors.textSecondary }]}>Completed Bookings</Text>
+                <Text style={[styles.statCardValue, { color: colors.text }]}>{stats.completed_bookings}</Text>
               </View>
-              <View style={styles.statCard}>
-                <Text style={styles.statCardLabel}>Average Booking Value</Text>
-                <Text style={styles.statCardValue}>R{stats.avg_booking_value.toFixed(2)}</Text>
+              <View style={[styles.statCard, { backgroundColor: colors.backgroundSecondary }]}>
+                <Text style={[styles.statCardLabel, { color: colors.textSecondary }]}>Average Booking Value</Text>
+                <Text style={[styles.statCardValue, { color: colors.text }]}>R{stats.avg_booking_value.toFixed(2)}</Text>
               </View>
             </View>
-          </View>
+          </Card>
 
           {/* Top Instructors */}
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Top Earning Instructors</Text>
+          <Card variant="elevated" style={{ marginTop: 15, marginHorizontal: 15 }}>
+            <Text style={[styles.sectionTitle, { color: colors.text }]}>Top Earning Instructors</Text>
             {stats.top_instructors.length > 0 ? (
               <FlatList
                 data={stats.top_instructors}
@@ -223,25 +221,25 @@ export default function RevenueAnalyticsScreen({ navigation }: any) {
               />
             ) : (
               <View style={styles.emptyContainer}>
-                <Text style={styles.emptyText}>No instructor data available</Text>
+                <Text style={[styles.emptyText, { color: colors.textMuted }]}>No instructor data available</Text>
               </View>
             )}
-          </View>
+          </Card>
 
-          {/* Additional Metrics */}
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Performance Metrics</Text>
+          {/* Performance Metrics */}
+          <Card variant="elevated" style={{ marginTop: 15, marginHorizontal: 15, marginBottom: 20 }}>
+            <Text style={[styles.sectionTitle, { color: colors.text }]}>Performance Metrics</Text>
             <View style={styles.metricsGrid}>
-              <View style={styles.metricCard}>
-                <Text style={styles.metricValue}>
+              <View style={[styles.metricCard, { backgroundColor: colors.backgroundSecondary }]}>
+                <Text style={[styles.metricValue, { color: colors.primary }]}>
                   {stats.completed_bookings > 0
                     ? (stats.total_revenue / stats.completed_bookings).toFixed(2)
                     : '0.00'}
                 </Text>
-                <Text style={styles.metricLabel}>Revenue per Booking</Text>
+                <Text style={[styles.metricLabel, { color: colors.textSecondary }]}>Revenue per Booking</Text>
               </View>
-              <View style={styles.metricCard}>
-                <Text style={styles.metricValue}>
+              <View style={[styles.metricCard, { backgroundColor: colors.backgroundSecondary }]}>
+                <Text style={[styles.metricValue, { color: colors.primary }]}>
                   {stats.top_instructors.length > 0
                     ? (
                         stats.total_revenue /
@@ -249,10 +247,10 @@ export default function RevenueAnalyticsScreen({ navigation }: any) {
                       ).toFixed(2)
                     : '0.00'}
                 </Text>
-                <Text style={styles.metricLabel}>Avg Instructor Revenue</Text>
+                <Text style={[styles.metricLabel, { color: colors.textSecondary }]}>Avg Instructor Revenue</Text>
               </View>
             </View>
-          </View>
+          </Card>
         </>
       )}
       </ScrollView>
@@ -263,82 +261,27 @@ export default function RevenueAnalyticsScreen({ navigation }: any) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F5F5F5',
   },
   scrollContent: {
     flex: 1,
-  },
-  header: {
-    alignItems: 'center',
-    padding: 16,
-    backgroundColor: '#FFF',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E0E0E0',
-    marginBottom: 0,
-  },
-  headerTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#333',
   },
   centerContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#F5F5F5',
   },
   loadingText: {
     marginTop: 10,
     fontSize: 16,
-    color: '#666',
-  },
-
-  section: {
-    backgroundColor: '#FFF',
-    padding: 15,
-    marginTop: 15,
-    marginHorizontal: 15,
-    borderRadius: 10,
-    boxShadow: '0px 2px 4px #0000001A',
+    fontFamily: 'Inter_400Regular',
   },
   sectionTitle: {
     fontSize: 18,
-    fontWeight: 'bold',
-    color: '#333',
+    fontFamily: 'Inter_700Bold',
     marginBottom: 15,
-  },
-  revenueCard: {
-    backgroundColor: '#F8F9FA',
-    borderRadius: 6,
-    padding: 10,
-  },
-  revenueItem: {
-    paddingVertical: 8,
-  },
-  revenueLabel: {
-    fontSize: 12,
-    color: '#666',
-    marginBottom: 4,
-  },
-  revenueValue: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#333',
-  },
-  revenueSuccess: {
-    color: '#28A745',
-  },
-  revenueWarning: {
-    color: '#FFC107',
-  },
-  divider: {
-    height: 1,
-    backgroundColor: '#E0E0E0',
-    marginVertical: 4,
   },
   instructorCard: {
     flexDirection: 'row',
-    backgroundColor: '#F8F9FA',
     borderRadius: 6,
     padding: 10,
     marginBottom: 8,
@@ -348,14 +291,13 @@ const styles = StyleSheet.create({
     width: 35,
     height: 35,
     borderRadius: 18,
-    backgroundColor: '#0066CC',
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 12,
   },
   rankText: {
     fontSize: 14,
-    fontWeight: 'bold',
+    fontFamily: 'Inter_700Bold',
     color: '#FFF',
   },
   instructorInfo: {
@@ -363,8 +305,7 @@ const styles = StyleSheet.create({
   },
   instructorName: {
     fontSize: 13,
-    fontWeight: 'bold',
-    color: '#333',
+    fontFamily: 'Inter_700Bold',
     marginBottom: 4,
   },
   instructorStats: {
@@ -373,7 +314,7 @@ const styles = StyleSheet.create({
   },
   instructorStat: {
     fontSize: 10,
-    color: '#666',
+    fontFamily: 'Inter_400Regular',
   },
   metricsGrid: {
     flexDirection: Platform.OS === 'web' ? 'row' : 'column',
@@ -382,7 +323,6 @@ const styles = StyleSheet.create({
   metricCard: {
     flex: Platform.OS === 'web' ? 1 : undefined,
     width: Platform.OS === 'web' ? undefined : '100%',
-    backgroundColor: '#F8F9FA',
     borderRadius: 6,
     padding: 10,
     marginHorizontal: Platform.OS === 'web' ? 4 : 0,
@@ -391,13 +331,12 @@ const styles = StyleSheet.create({
   },
   metricValue: {
     fontSize: 16,
-    fontWeight: 'bold',
-    color: '#0066CC',
+    fontFamily: 'Inter_700Bold',
     marginBottom: 4,
   },
   metricLabel: {
     fontSize: 10,
-    color: '#666',
+    fontFamily: 'Inter_400Regular',
     textAlign: 'center',
   },
   emptyContainer: {
@@ -406,51 +345,37 @@ const styles = StyleSheet.create({
   },
   emptyText: {
     fontSize: 14,
-    color: '#999',
-  },
-  filterSection: {
-    backgroundColor: '#FFF',
-    padding: 15,
-    marginTop: 0,
-    marginHorizontal: 15,
-    borderRadius: 10,
-    boxShadow: '0px 2px 4px #0000001A',
+    fontFamily: 'Inter_400Regular',
   },
   filterLabel: {
     fontSize: 14,
-    fontWeight: '600',
-    color: '#333',
+    fontFamily: 'Inter_600SemiBold',
     marginBottom: 8,
   },
   searchInput: {
     height: 45,
     borderWidth: 1,
-    borderColor: '#CCC',
     borderRadius: 6,
     paddingHorizontal: 12,
     fontSize: 14,
-    backgroundColor: '#FFF',
+    fontFamily: 'Inter_400Regular',
     marginBottom: 10,
   },
   pickerContainer: {
     borderWidth: 1,
-    borderColor: '#CCC',
     borderRadius: 6,
-    backgroundColor: '#FFF',
     overflow: 'hidden',
   },
   picker: {
     height: 50,
     width: '100%',
   },
-  // Responsive grid for stats cards
   statsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     marginHorizontal: -5,
   },
   statCard: {
-    backgroundColor: '#F8F9FA',
     borderRadius: 8,
     padding: Platform.OS === 'web' ? 16 : 12,
     margin: Platform.OS === 'web' ? 6 : 4,
@@ -459,24 +384,16 @@ const styles = StyleSheet.create({
     maxWidth: '100%',
     flexGrow: 1,
     alignItems: 'center',
-    boxShadow: '0px 1px 3px #00000015',
   },
   statCardLabel: {
     fontSize: Platform.OS === 'web' ? 11 : 10,
-    color: '#666',
+    fontFamily: 'Inter_400Regular',
     marginBottom: 6,
     textAlign: 'center',
   },
   statCardValue: {
     fontSize: Platform.OS === 'web' ? 18 : 16,
-    fontWeight: 'bold',
-    color: '#333',
+    fontFamily: 'Inter_700Bold',
     textAlign: 'center',
-  },
-  statCardSuccess: {
-    color: '#28A745',
-  },
-  statCardWarning: {
-    color: '#FFC107',
   },
 });

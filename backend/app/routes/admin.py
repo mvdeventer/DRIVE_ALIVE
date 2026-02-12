@@ -51,10 +51,9 @@ async def create_admin(
     Create a new admin user (requires existing admin privileges)
     
     If email exists, user must provide correct password to add admin role.
+    Admin accounts are activated immediately — no verification required.
     """
     from ..utils.auth import verify_password
-    from ..services.verification_service import VerificationService
-    from ..config import settings
     
     # Check if email already exists
     existing_user = db.query(User).filter(User.email == admin_data.email).first()
@@ -74,33 +73,13 @@ async def create_admin(
                 detail=f"Email is already registered with a different password. Please use the correct password to add admin role.",
             )
         
-        # Update existing user to admin role (requires verification)
+        # Update existing user to admin role (active immediately, keep current status)
         existing_user.role = UserRole.ADMIN
-        existing_user.status = UserStatus.INACTIVE
+        # Don't change status — keep whatever it was (ACTIVE stays ACTIVE)
+        if existing_user.status != UserStatus.ACTIVE:
+            existing_user.status = UserStatus.ACTIVE
         db.commit()
         db.refresh(existing_user)
-
-        validity_minutes = existing_user.verification_link_validity_minutes or 30
-        verification_token = VerificationService.create_verification_token(
-            db=db,
-            user_id=existing_user.id,
-            token_type="email",
-            validity_minutes=validity_minutes,
-        )
-
-        smtp_password = (
-            EncryptionService.decrypt(existing_user.smtp_password)
-            if existing_user.smtp_password
-            else None
-        )
-        verification_result = VerificationService.send_verification_messages(
-            db=db,
-            user=existing_user,
-            verification_token=verification_token,
-            frontend_url=settings.FRONTEND_URL,
-            admin_smtp_email=existing_user.smtp_email,
-            admin_smtp_password=smtp_password,
-        )
         
         # Trigger backup after successful role addition
         try:
@@ -112,17 +91,17 @@ async def create_admin(
             print(f"Warning: Backup after admin role creation failed: {e}")
         
         return {
-            "message": "Admin role added. Verification required to activate.",
+            "message": f"Admin role added for {existing_user.first_name} {existing_user.last_name}. Account is active immediately.",
             "user_id": existing_user.id,
             "verification_sent": {
-                "email_sent": verification_result.get("email_sent", False),
-                "whatsapp_sent": verification_result.get("whatsapp_sent", False),
-                "expires_in_minutes": verification_result.get("expires_in_minutes", validity_minutes),
+                "email_sent": False,
+                "whatsapp_sent": False,
+                "expires_in_minutes": 0,
             },
-            "note": f"Account will be activated after verification. The verification link is valid for {validity_minutes} minutes.",
+            "note": "Admin account activated immediately. No verification required.",
         }
     
-    # Create new admin user
+    # Create new admin user (ACTIVE immediately — no verification needed)
     new_admin = User(
         email=admin_data.email,
         phone=admin_data.phone,
@@ -134,7 +113,7 @@ async def create_admin(
         address_latitude=admin_data.address_latitude,
         address_longitude=admin_data.address_longitude,
         role=UserRole.ADMIN,
-        status=UserStatus.INACTIVE,
+        status=UserStatus.ACTIVE,
         smtp_email=admin_data.smtp_email,
         smtp_password=(
             EncryptionService.encrypt(admin_data.smtp_password)
@@ -150,28 +129,6 @@ async def create_admin(
     db.commit()
     db.refresh(new_admin)
 
-    validity_minutes = new_admin.verification_link_validity_minutes or 30
-    verification_token = VerificationService.create_verification_token(
-        db=db,
-        user_id=new_admin.id,
-        token_type="email",
-        validity_minutes=validity_minutes,
-    )
-
-    smtp_password = (
-        EncryptionService.decrypt(new_admin.smtp_password)
-        if new_admin.smtp_password
-        else None
-    )
-    verification_result = VerificationService.send_verification_messages(
-        db=db,
-        user=new_admin,
-        verification_token=verification_token,
-        frontend_url=settings.FRONTEND_URL,
-        admin_smtp_email=new_admin.smtp_email,
-        admin_smtp_password=smtp_password,
-    )
-
     # Trigger backup after successful admin creation
     try:
         from ..services.backup_scheduler import backup_scheduler
@@ -182,14 +139,14 @@ async def create_admin(
         print(f"Warning: Backup after admin creation failed: {e}")
 
     return {
-        "message": "Registration successful! Please check your email and WhatsApp to verify your account.",
+        "message": f"Admin account created for {new_admin.first_name} {new_admin.last_name}. Account is active immediately.",
         "user_id": new_admin.id,
         "verification_sent": {
-            "email_sent": verification_result.get("email_sent", False),
-            "whatsapp_sent": verification_result.get("whatsapp_sent", False),
-            "expires_in_minutes": verification_result.get("expires_in_minutes", validity_minutes),
+            "email_sent": False,
+            "whatsapp_sent": False,
+            "expires_in_minutes": 0,
         },
-        "note": f"Account will be activated after verification. The verification link is valid for {validity_minutes} minutes.",
+        "note": "Admin account activated immediately. No verification required.",
     }
 
 

@@ -1,7 +1,7 @@
 """
 Verification routes for email/phone confirmation
 """
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from app.database import get_db
@@ -197,8 +197,9 @@ def test_email_configuration(request: TestEmailRequest, db: Session = Depends(ge
 
 @router.post("/account")
 @limiter.limit("10/hour")  # Max 10 verification attempts per hour per IP
-def verify_account(
+async def verify_account(
     request: Request,  # Required for rate limiter
+    response: Response,  # Required for rate limiter to inject headers
     verify_data: VerifyAccountRequest,
     db: Session = Depends(get_db)
 ):
@@ -247,8 +248,9 @@ def verify_account(
 
 @router.get("/resend")
 @limiter.limit("3/hour")  # Max 3 resend requests per hour per IP
-def resend_verification(
+async def resend_verification(
     request: Request,  # Required for rate limiter
+    response: Response,  # Required for rate limiter to inject headers
     email: str = Query(...),
     db: Session = Depends(get_db)
 ):
@@ -374,7 +376,7 @@ def test_whatsapp_configuration(request: TestWhatsAppRequest, db: Session = Depe
         whatsapp_service = WhatsAppService()
         success = whatsapp_service.send_message(
             phone=retrieved_recipient,
-            message="""🎉 Drive Alive WhatsApp Test
+            message="""🎉 RoadReady WhatsApp Test
 
 Your Twilio WhatsApp configuration is working correctly!
 
@@ -415,9 +417,10 @@ You're all set to receive booking confirmations and reminders.""",
 @router.get("/instructor")
 @limiter.limit("10/minute")
 async def verify_instructor(
+    request: Request,  # Required for rate limiter
+    response: Response,  # Required for rate limiter to inject headers
     token: str = Query(...),
     db: Session = Depends(get_db),
-    request: Request = None,
 ):
     """
     Verify an instructor using a verification token

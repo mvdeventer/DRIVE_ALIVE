@@ -3,7 +3,9 @@
  * Replaces Alert.alert() popups with inline messages
  */
 import React, { useEffect } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { useTheme } from '../theme/ThemeContext';
 
 interface InlineMessageProps {
   type: 'success' | 'error' | 'warning' | 'info';
@@ -12,12 +14,21 @@ interface InlineMessageProps {
   autoDismissMs?: number;
 }
 
+const iconMap: Record<InlineMessageProps['type'], keyof typeof Ionicons.glyphMap> = {
+  success: 'checkmark-circle',
+  error: 'alert-circle',
+  warning: 'warning',
+  info: 'information-circle',
+};
+
 export default function InlineMessage({
   type,
   message,
   onDismiss,
   autoDismissMs = 0,
 }: InlineMessageProps) {
+  const { colors } = useTheme();
+
   useEffect(() => {
     if (autoDismissMs > 0 && onDismiss) {
       const timer = setTimeout(() => {
@@ -27,78 +38,39 @@ export default function InlineMessage({
     }
   }, [autoDismissMs, onDismiss]);
 
-  const getStyles = () => {
-    switch (type) {
-      case 'success':
-        return {
-          container: styles.successBox,
-          text: styles.successText,
-        };
-      case 'error':
-        return {
-          container: styles.errorBox,
-          text: styles.errorText,
-        };
-      case 'warning':
-        return {
-          container: styles.warningBox,
-          text: styles.warningText,
-        };
-      case 'info':
-        return {
-          container: styles.infoBox,
-          text: styles.infoText,
-        };
-    }
-  };
+  const colorMap = {
+    success: { bg: colors.successBg, text: colors.success, border: colors.success },
+    error: { bg: colors.dangerBg, text: colors.danger, border: colors.danger },
+    warning: { bg: colors.warningBg, text: colors.warning, border: colors.warning },
+    info: { bg: colors.infoBg, text: colors.info, border: colors.info },
+  } as const;
 
-  const messageStyles = getStyles();
+  const c = colorMap[type];
 
   return (
-    <View style={[styles.messageBox, messageStyles.container]}>
-      <Text style={[styles.messageText, messageStyles.text]}>{message}</Text>
+    <View
+      style={{
+        flexDirection: 'row',
+        alignItems: 'center',
+        padding: 14,
+        borderRadius: 12,
+        marginBottom: 16,
+        borderWidth: 1,
+        backgroundColor: c.bg,
+        borderColor: c.border + '40',
+      }}
+    >
+      <Ionicons name={iconMap[type]} size={20} color={c.text} style={{ marginRight: 10 }} />
+      <Text
+        style={{
+          flex: 1,
+          fontSize: 14,
+          fontFamily: 'Inter_500Medium',
+          color: c.text,
+        }}
+      >
+        {message}
+      </Text>
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  messageBox: {
-    padding: 12,
-    borderRadius: 8,
-    marginBottom: 16,
-    borderWidth: 1,
-  },
-  messageText: {
-    fontSize: 14,
-    textAlign: 'center',
-    fontWeight: '500',
-  },
-  successBox: {
-    backgroundColor: '#d4edda',
-    borderColor: '#c3e6cb',
-  },
-  successText: {
-    color: '#155724',
-  },
-  errorBox: {
-    backgroundColor: '#f8d7da',
-    borderColor: '#f5c6cb',
-  },
-  errorText: {
-    color: '#721c24',
-  },
-  warningBox: {
-    backgroundColor: '#fff3cd',
-    borderColor: '#ffeaa7',
-  },
-  warningText: {
-    color: '#856404',
-  },
-  infoBox: {
-    backgroundColor: '#d1ecf1',
-    borderColor: '#bee5eb',
-  },
-  infoText: {
-    color: '#0c5460',
-  },
-});

@@ -1,11 +1,14 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, ActivityIndicator, TouchableOpacity, ScrollView, Platform } from 'react-native';
+import { View, Text, StyleSheet, ActivityIndicator, ScrollView, Platform } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { Button, Card } from '../../components/ui';
 import apiService from '../../services/api';
+import { useTheme } from '../../theme/ThemeContext';
 
 type Props = NativeStackScreenProps<any, 'VerifyAccount'>;
 
 export default function VerifyAccountScreen({ route, navigation }: Props) {
+  const { colors } = useTheme();
   const [verifying, setVerifying] = useState(true);
   const [success, setSuccess] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
@@ -63,56 +66,80 @@ export default function VerifyAccountScreen({ route, navigation }: Props) {
   return (
     <ScrollView
       ref={scrollViewRef}
-      style={styles.container}
+      style={[styles.container, { backgroundColor: colors.background }]}
       contentContainerStyle={styles.contentContainer}
       showsVerticalScrollIndicator={false}
     >
-      {verifying ? (
-        <View style={styles.centerContent}>
-          <ActivityIndicator size="large" color="#007AFF" />
-          <Text style={styles.loadingText}>Verifying your account...</Text>
-          <Text style={styles.loadingSubtext}>Please wait a moment</Text>
-        </View>
-      ) : success ? (
-        <View style={styles.centerContent}>
-          <Text style={styles.successIcon}>✅</Text>
-          <Text style={styles.successTitle}>Account Verified!</Text>
-          <Text style={styles.successMessage}>
-            Welcome, {userName}! Your account has been successfully verified.
-          </Text>
-          <Text style={styles.successSubtext}>
-            You can now log in and start using the app.
-          </Text>
-          <View style={styles.redirectInfo}>
-            <ActivityIndicator size="small" color="#28a745" />
-            <Text style={styles.redirectText}>Redirecting to login...</Text>
+      <Card variant="elevated" padding="lg" style={styles.card}>
+        {verifying ? (
+          <View style={styles.centerContent}>
+            <ActivityIndicator size="large" color={colors.primary} />
+            <Text style={[styles.statusTitle, { color: colors.text }]}>
+              Verifying your account…
+            </Text>
+            <Text style={[styles.statusSub, { color: colors.textSecondary }]}>
+              Please wait a moment
+            </Text>
           </View>
-        </View>
-      ) : (
-        <View style={styles.centerContent}>
-          <Text style={styles.errorIcon}>❌</Text>
-          <Text style={styles.errorTitle}>Verification Failed</Text>
-          <Text style={styles.errorMessage}>{errorMessage}</Text>
-          
-          <View style={styles.helpSection}>
-            <Text style={styles.helpTitle}>Common reasons:</Text>
-            <Text style={styles.helpItem}>• Verification link has expired (30 minutes)</Text>
-            <Text style={styles.helpItem}>• Link has already been used</Text>
-            <Text style={styles.helpItem}>• Account has been deleted</Text>
+        ) : success ? (
+          <View style={styles.centerContent}>
+            <View style={[styles.bigIconCircle, { backgroundColor: colors.success + '15' }]}>
+              <Text style={styles.bigIcon}>✅</Text>
+            </View>
+            <Text style={[styles.statusTitle, { color: colors.success }]}>
+              Account Verified!
+            </Text>
+            <Text style={[styles.statusMessage, { color: colors.text }]}>
+              Welcome, {userName}! Your account has been successfully verified.
+            </Text>
+            <Text style={[styles.statusSub, { color: colors.textSecondary }]}>
+              You can now log in and start using the app.
+            </Text>
+            <View style={styles.redirectRow}>
+              <ActivityIndicator size="small" color={colors.success} />
+              <Text style={[styles.redirectText, { color: colors.success }]}>
+                Redirecting to login…
+              </Text>
+            </View>
           </View>
+        ) : (
+          <View style={styles.centerContent}>
+            <View style={[styles.bigIconCircle, { backgroundColor: colors.danger + '15' }]}>
+              <Text style={styles.bigIcon}>❌</Text>
+            </View>
+            <Text style={[styles.statusTitle, { color: colors.danger }]}>
+              Verification Failed
+            </Text>
+            <Text style={[styles.statusMessage, { color: colors.danger }]}>
+              {errorMessage}
+            </Text>
 
-          <Text style={styles.solutionText}>
-            Please register again or contact support if the problem persists.
-          </Text>
+            <View style={[styles.helpBox, { backgroundColor: colors.warningBg, borderLeftColor: colors.warning }]}>
+              <Text style={[styles.helpTitle, { color: colors.text }]}>Common reasons:</Text>
+              <Text style={[styles.helpItem, { color: colors.textSecondary }]}>
+                • Verification link has expired (30 minutes)
+              </Text>
+              <Text style={[styles.helpItem, { color: colors.textSecondary }]}>
+                • Link has already been used
+              </Text>
+              <Text style={[styles.helpItem, { color: colors.textSecondary }]}>
+                • Account has been deleted
+              </Text>
+            </View>
 
-          <TouchableOpacity
-            style={styles.backButton}
-            onPress={handleResendVerification}
-          >
-            <Text style={styles.backButtonText}>← Back to Login</Text>
-          </TouchableOpacity>
-        </View>
-      )}
+            <Text style={[styles.statusSub, { color: colors.textSecondary }]}>
+              Please register again or contact support if the problem persists.
+            </Text>
+
+            <Button
+              label="← Back to Login"
+              onPress={handleResendVerification}
+              size="lg"
+              style={{ marginTop: 16 }}
+            />
+          </View>
+        )}
+      </Card>
     </ScrollView>
   );
 }
@@ -120,121 +147,77 @@ export default function VerifyAccountScreen({ route, navigation }: Props) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
   },
   contentContainer: {
     flexGrow: 1,
     justifyContent: 'center',
     padding: Platform.OS === 'web' ? 40 : 20,
   },
+  card: {
+    maxWidth: 520,
+    width: '100%',
+    alignSelf: 'center',
+  },
   centerContent: {
     alignItems: 'center',
     justifyContent: 'center',
   },
-  loadingText: {
-    marginTop: 20,
-    fontSize: Platform.OS === 'web' ? 18 : 16,
-    color: '#333',
-    fontWeight: '500',
-  },
-  loadingSubtext: {
-    marginTop: 8,
-    fontSize: Platform.OS === 'web' ? 14 : 12,
-    color: '#666',
-  },
-  successIcon: {
-    fontSize: Platform.OS === 'web' ? 100 : 80,
+  bigIconCircle: {
+    width: Platform.OS === 'web' ? 96 : 80,
+    height: Platform.OS === 'web' ? 96 : 80,
+    borderRadius: 48,
+    alignItems: 'center',
+    justifyContent: 'center',
     marginBottom: 20,
   },
-  successTitle: {
-    fontSize: Platform.OS === 'web' ? 32 : 24,
-    fontWeight: 'bold',
-    color: '#28a745',
-    marginBottom: 12,
-    textAlign: 'center',
+  bigIcon: {
+    fontSize: Platform.OS === 'web' ? 48 : 40,
   },
-  successMessage: {
-    fontSize: Platform.OS === 'web' ? 18 : 16,
-    color: '#333',
+  statusTitle: {
+    fontSize: Platform.OS === 'web' ? 28 : 22,
+    fontWeight: '800',
+    marginBottom: 10,
+    textAlign: 'center',
+    letterSpacing: -0.3,
+  },
+  statusMessage: {
+    fontSize: Platform.OS === 'web' ? 16 : 14,
     textAlign: 'center',
     marginBottom: 8,
-    maxWidth: 500,
+    maxWidth: 420,
+    lineHeight: 22,
   },
-  successSubtext: {
-    fontSize: Platform.OS === 'web' ? 16 : 14,
-    color: '#666',
+  statusSub: {
+    fontSize: Platform.OS === 'web' ? 14 : 13,
     textAlign: 'center',
-    marginBottom: 24,
+    marginBottom: 16,
   },
-  redirectInfo: {
+  redirectRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
-    marginTop: 16,
+    marginTop: 8,
   },
   redirectText: {
-    fontSize: Platform.OS === 'web' ? 14 : 12,
-    color: '#28a745',
+    fontSize: 13,
     fontStyle: 'italic',
   },
-  errorIcon: {
-    fontSize: Platform.OS === 'web' ? 100 : 80,
-    marginBottom: 20,
-  },
-  errorTitle: {
-    fontSize: Platform.OS === 'web' ? 32 : 24,
-    fontWeight: 'bold',
-    color: '#dc3545',
-    marginBottom: 12,
-    textAlign: 'center',
-  },
-  errorMessage: {
-    fontSize: Platform.OS === 'web' ? 18 : 16,
-    color: '#dc3545',
-    textAlign: 'center',
-    marginBottom: 24,
-    maxWidth: 500,
-    paddingHorizontal: 20,
-  },
-  helpSection: {
-    backgroundColor: '#fff3cd',
+  helpBox: {
     borderLeftWidth: 4,
-    borderLeftColor: '#ffc107',
-    padding: Platform.OS === 'web' ? 20 : 16,
+    padding: Platform.OS === 'web' ? 18 : 14,
     borderRadius: 8,
-    marginBottom: 20,
-    maxWidth: 500,
+    marginVertical: 16,
+    maxWidth: 420,
     width: '100%',
   },
   helpTitle: {
-    fontSize: Platform.OS === 'web' ? 16 : 14,
+    fontSize: Platform.OS === 'web' ? 15 : 14,
     fontWeight: '600',
-    color: '#856404',
-    marginBottom: 8,
+    marginBottom: 6,
   },
   helpItem: {
-    fontSize: Platform.OS === 'web' ? 14 : 12,
-    color: '#856404',
-    marginBottom: 4,
-    lineHeight: 20,
-  },
-  solutionText: {
-    fontSize: Platform.OS === 'web' ? 16 : 14,
-    color: '#666',
-    textAlign: 'center',
-    marginBottom: 24,
-    maxWidth: 500,
-  },
-  backButton: {
-    backgroundColor: '#007AFF',
-    paddingVertical: Platform.OS === 'web' ? 14 : 12,
-    paddingHorizontal: Platform.OS === 'web' ? 32 : 24,
-    borderRadius: 8,
-    marginTop: 12,
-  },
-  backButtonText: {
-    color: '#fff',
-    fontSize: Platform.OS === 'web' ? 16 : 14,
-    fontWeight: '600',
+    fontSize: Platform.OS === 'web' ? 13 : 12,
+    marginBottom: 3,
+    lineHeight: 19,
   },
 });

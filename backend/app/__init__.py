@@ -1,3 +1,3 @@
-"""Drive Alive Backend Application Package"""
+"""RoadReady Backend Application Package"""
 
-__version__ = "2.0.5"
+__version__ = "3.0.0"

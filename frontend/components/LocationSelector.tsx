@@ -1,17 +1,11 @@
-/**
+﻿/**
  * Hierarchical Location Selector Component
  * Province -> City -> Suburb selection with search
  */
 import React, { useEffect, useState } from 'react';
-import {
-  Modal,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
-} from 'react-native';
+import { Modal, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { useTheme } from '../theme/ThemeContext';
 import {
   getCitiesInProvince,
   getProvinces,
@@ -30,8 +24,8 @@ interface LocationSelectorProps {
   onProvinceChange: (province: string) => void;
   onCityChange: (city: string) => void;
   onSuburbChange: (suburb: string) => void;
-  onPostalCodeChange?: (postalCode: string) => void; // Optional callback for postal code
-  showSuburbs?: boolean; // Whether to show suburb selection
+  onPostalCodeChange?: (postalCode: string) => void;
+  showSuburbs?: boolean;
 }
 
 export default function LocationSelector({
@@ -47,6 +41,7 @@ export default function LocationSelector({
   onPostalCodeChange,
   showSuburbs = false,
 }: LocationSelectorProps) {
+  const { colors } = useTheme();
   const [showSelector, setShowSelector] = useState(false);
   const [showTooltip, setShowTooltip] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -56,7 +51,6 @@ export default function LocationSelector({
   const [cities, setCities] = useState<string[]>([]);
   const [suburbs, setSuburbs] = useState<Suburb[]>([]);
 
-  // Update cities when province changes
   useEffect(() => {
     if (selectedProvince) {
       setCities(getCitiesInProvince(selectedProvince));
@@ -69,7 +63,6 @@ export default function LocationSelector({
     }
   }, [selectedProvince]);
 
-  // Update suburbs when city changes
   useEffect(() => {
     if (selectedProvince && selectedCity && showSuburbs) {
       setSuburbs(getSuburbsInCity(selectedProvince, selectedCity));
@@ -135,41 +128,68 @@ export default function LocationSelector({
   };
 
   const smartResults = searchQuery ? getSmartSearchResults() : null;
+  const hasSelection = selectedProvince || selectedCity || selectedSuburb;
 
   return (
-    <View style={styles.container}>
+    <View style={{ marginBottom: 15 }}>
       {label && (
-        <View style={styles.labelContainer}>
-          <Text style={styles.label}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+          <Text
+            style={{
+              fontSize: 14,
+              fontFamily: 'Inter_600SemiBold',
+              color: colors.text,
+              flex: 1,
+            }}
+          >
             {label}
-            {required && <Text style={styles.required}> *</Text>}
+            {required && <Text style={{ color: colors.danger }}> *</Text>}
           </Text>
           {tooltip && (
-            <TouchableOpacity
-              style={styles.infoButton}
+            <Pressable
+              style={{
+                marginLeft: 8,
+                width: 22,
+                height: 22,
+                borderRadius: 11,
+                backgroundColor: colors.primary,
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
               onPress={() => setShowTooltip(true)}
               hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
             >
-              <View style={styles.infoIcon}>
-                <Text style={styles.infoIconText}>i</Text>
-              </View>
-            </TouchableOpacity>
+              <Ionicons name="information" size={14} color={colors.textInverse} />
+            </Pressable>
           )}
         </View>
       )}
 
-      <TouchableOpacity style={styles.selectorButton} onPress={() => setShowSelector(true)}>
+      <Pressable
+        style={({ pressed }) => ({
+          backgroundColor: pressed ? colors.backgroundSecondary : colors.inputBackground,
+          padding: 15,
+          borderRadius: 10,
+          borderWidth: 1,
+          borderColor: colors.inputBorder,
+          flexDirection: 'row' as const,
+          alignItems: 'center' as const,
+          justifyContent: 'space-between' as const,
+        })}
+        onPress={() => setShowSelector(true)}
+      >
         <Text
-          style={
-            selectedProvince || selectedCity || selectedSuburb
-              ? styles.selectedText
-              : styles.placeholderText
-          }
+          style={{
+            color: hasSelection ? colors.inputText : colors.inputPlaceholder,
+            fontSize: 16,
+            fontFamily: 'Inter_400Regular',
+            flex: 1,
+          }}
         >
           {getDisplayText()}
         </Text>
-        <Text style={styles.chevron}>›</Text>
-      </TouchableOpacity>
+        <Ionicons name="chevron-forward" size={20} color={colors.textTertiary} />
+      </Pressable>
 
       {/* Location Selector Modal */}
       <Modal
@@ -178,205 +198,175 @@ export default function LocationSelector({
         transparent
         onRequestClose={() => setShowSelector(false)}
       >
-        <View style={styles.modalOverlay}>
-          <View style={styles.selectorContainer}>
-            <View style={styles.header}>
-              <Text style={styles.headerTitle}>Select Location</Text>
-              <TouchableOpacity onPress={() => setShowSelector(false)}>
-                <Text style={styles.doneButton}>Done</Text>
-              </TouchableOpacity>
+        <View
+          style={{
+            flex: 1,
+            backgroundColor: 'rgba(0, 0, 0, 0.5)',
+            justifyContent: 'flex-end',
+          }}
+        >
+          <View
+            style={{
+              backgroundColor: colors.card,
+              borderTopLeftRadius: 20,
+              borderTopRightRadius: 20,
+              maxHeight: '90%',
+              paddingBottom: 20,
+            }}
+          >
+            <View
+              style={{
+                flexDirection: 'row',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                padding: 20,
+                borderBottomWidth: 1,
+                borderBottomColor: colors.divider,
+              }}
+            >
+              <Text style={{ fontSize: 18, fontFamily: 'Inter_700Bold', color: colors.text }}>
+                Select Location
+              </Text>
+              <Pressable onPress={() => setShowSelector(false)} style={{ padding: 8 }}>
+                <Text style={{ fontSize: 16, fontFamily: 'Inter_600SemiBold', color: colors.primary }}>
+                  Done
+                </Text>
+              </Pressable>
             </View>
 
-            {/* Search Bar */}
-            <View style={styles.searchContainer}>
-              <Text style={styles.searchIcon}>🔍</Text>
+            <View
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                backgroundColor: colors.backgroundSecondary,
+                margin: 16,
+                paddingHorizontal: 12,
+                borderRadius: 10,
+              }}
+            >
+              <Ionicons name="search" size={18} color={colors.textTertiary} style={{ marginRight: 8 }} />
               <TextInput
-                style={styles.searchInput}
+                style={{ flex: 1, padding: 12, fontSize: 16, fontFamily: 'Inter_400Regular', color: colors.inputText }}
                 placeholder="Search provinces, cities, or suburbs..."
+                placeholderTextColor={colors.inputPlaceholder}
                 value={searchQuery}
                 onChangeText={setSearchQuery}
                 autoFocus
               />
               {searchQuery.length > 0 && (
-                <TouchableOpacity onPress={() => setSearchQuery('')}>
-                  <Text style={styles.clearIcon}>✕</Text>
-                </TouchableOpacity>
+                <Pressable onPress={() => setSearchQuery('')} style={{ padding: 6 }}>
+                  <Ionicons name="close-circle" size={20} color={colors.textTertiary} />
+                </Pressable>
               )}
             </View>
 
-            {/* Tabs - only show if not searching */}
             {!searchQuery && (
-              <View style={styles.tabContainer}>
-                <TouchableOpacity
-                  style={[styles.tab, activeTab === 'province' && styles.tabActive]}
-                  onPress={() => setActiveTab('province')}
-                >
-                  <Text style={[styles.tabText, activeTab === 'province' && styles.tabTextActive]}>
-                    Province
-                  </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[
-                    styles.tab,
-                    activeTab === 'city' && styles.tabActive,
-                    !selectedProvince && styles.tabDisabled,
-                  ]}
-                  onPress={() => selectedProvince && setActiveTab('city')}
-                  disabled={!selectedProvince}
-                >
-                  <Text
-                    style={[
-                      styles.tabText,
-                      activeTab === 'city' && styles.tabTextActive,
-                      !selectedProvince && styles.tabTextDisabled,
-                    ]}
-                  >
-                    City
-                  </Text>
-                </TouchableOpacity>
-                {showSuburbs && (
-                  <TouchableOpacity
-                    style={[
-                      styles.tab,
-                      activeTab === 'suburb' && styles.tabActive,
-                      !selectedCity && styles.tabDisabled,
-                    ]}
-                    onPress={() => selectedCity && setActiveTab('suburb')}
-                    disabled={!selectedCity}
-                  >
-                    <Text
-                      style={[
-                        styles.tabText,
-                        activeTab === 'suburb' && styles.tabTextActive,
-                        !selectedCity && styles.tabTextDisabled,
-                      ]}
+              <View style={{ flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: colors.divider, paddingHorizontal: 16 }}>
+                {(['province', 'city', ...(showSuburbs ? ['suburb'] : [])] as const).map(tab => {
+                  const isActive = activeTab === tab;
+                  const isDisabled = (tab === 'city' && !selectedProvince) || (tab === 'suburb' && !selectedCity);
+                  return (
+                    <Pressable
+                      key={tab}
+                      style={{
+                        flex: 1, paddingVertical: 12, alignItems: 'center',
+                        borderBottomWidth: 2,
+                        borderBottomColor: isActive ? colors.primary : 'transparent',
+                        opacity: isDisabled ? 0.4 : 1,
+                      }}
+                      onPress={() => !isDisabled && setActiveTab(tab)}
+                      disabled={isDisabled}
                     >
-                      Suburb
-                    </Text>
-                  </TouchableOpacity>
-                )}
+                      <Text style={{
+                        fontSize: 14, fontFamily: 'Inter_600SemiBold',
+                        color: isActive ? colors.primary : isDisabled ? colors.textTertiary : colors.textSecondary,
+                      }}>
+                        {tab.charAt(0).toUpperCase() + tab.slice(1)}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
               </View>
             )}
 
-            {/* Breadcrumb */}
             {!searchQuery && (selectedProvince || selectedCity) && (
-              <View style={styles.breadcrumbContainer}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 8, backgroundColor: colors.backgroundSecondary }}>
                 {selectedProvince && (
-                  <View style={styles.breadcrumbItem}>
-                    <Text style={styles.breadcrumbText}>{selectedProvince}</Text>
-                    <TouchableOpacity onPress={() => handleProvinceSelect('')}>
-                      <Text style={styles.breadcrumbClear}>✕</Text>
-                    </TouchableOpacity>
+                  <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                    <Text style={{ fontSize: 14, fontFamily: 'Inter_500Medium', color: colors.primary }}>{selectedProvince}</Text>
+                    <Pressable onPress={() => handleProvinceSelect('')} style={{ padding: 6 }}>
+                      <Ionicons name="close-circle" size={16} color={colors.danger} style={{ marginLeft: 4 }} />
+                    </Pressable>
                   </View>
                 )}
                 {selectedCity && (
-                  <View style={styles.breadcrumbItem}>
-                    <Text style={styles.breadcrumbArrow}>›</Text>
-                    <Text style={styles.breadcrumbText}>{selectedCity}</Text>
-                    <TouchableOpacity onPress={() => handleCitySelect('')}>
-                      <Text style={styles.breadcrumbClear}>✕</Text>
-                    </TouchableOpacity>
+                  <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                    <Ionicons name="chevron-forward" size={14} color={colors.textTertiary} style={{ marginHorizontal: 6 }} />
+                    <Text style={{ fontSize: 14, fontFamily: 'Inter_500Medium', color: colors.primary }}>{selectedCity}</Text>
+                    <Pressable onPress={() => handleCitySelect('')} style={{ padding: 6 }}>
+                      <Ionicons name="close-circle" size={16} color={colors.danger} style={{ marginLeft: 4 }} />
+                    </Pressable>
                   </View>
                 )}
               </View>
             )}
 
-            <ScrollView style={styles.scrollView}>
-              {/* Smart Search Results */}
+            <ScrollView style={{ maxHeight: 500 }}>
               {smartResults && (
-                <View style={styles.searchResults}>
+                <View style={{ padding: 8 }}>
                   {smartResults.provinces.length > 0 && (
-                    <View style={styles.searchSection}>
-                      <Text style={styles.searchSectionTitle}>Provinces</Text>
+                    <View style={{ marginBottom: 16 }}>
+                      <Text style={{ fontSize: 12, fontFamily: 'Inter_700Bold', color: colors.textTertiary, textTransform: 'uppercase', paddingHorizontal: 8, paddingVertical: 8, backgroundColor: colors.backgroundSecondary }}>Provinces</Text>
                       {smartResults.provinces.map(province => (
-                        <TouchableOpacity
-                          key={province}
-                          style={styles.searchResultItem}
-                          onPress={() => {
-                            handleProvinceSelect(province);
-                            setSearchQuery('');
-                          }}
-                        >
-                          <Text style={styles.searchResultText}>{province}</Text>
-                        </TouchableOpacity>
+                        <Pressable key={province} style={{ padding: 16, borderBottomWidth: 1, borderBottomColor: colors.divider }} onPress={() => { handleProvinceSelect(province); setSearchQuery(''); }}>
+                          <Text style={{ fontSize: 16, fontFamily: 'Inter_500Medium', color: colors.text }}>{province}</Text>
+                        </Pressable>
                       ))}
                     </View>
                   )}
                   {smartResults.cities.length > 0 && (
-                    <View style={styles.searchSection}>
-                      <Text style={styles.searchSectionTitle}>Cities</Text>
+                    <View style={{ marginBottom: 16 }}>
+                      <Text style={{ fontSize: 12, fontFamily: 'Inter_700Bold', color: colors.textTertiary, textTransform: 'uppercase', paddingHorizontal: 8, paddingVertical: 8, backgroundColor: colors.backgroundSecondary }}>Cities</Text>
                       {smartResults.cities.map((city, idx) => (
-                        <TouchableOpacity
-                          key={`${city.name}-${idx}`}
-                          style={styles.searchResultItem}
-                          onPress={() => {
-                            handleProvinceSelect(city.province);
-                            handleCitySelect(city.name);
-                            setSearchQuery('');
-                          }}
-                        >
-                          <Text style={styles.searchResultText}>{city.name}</Text>
-                          <Text style={styles.searchResultSubtext}>{city.province}</Text>
-                        </TouchableOpacity>
+                        <Pressable key={`${city.name}-${idx}`} style={{ padding: 16, borderBottomWidth: 1, borderBottomColor: colors.divider }} onPress={() => { handleProvinceSelect(city.province); handleCitySelect(city.name); setSearchQuery(''); }}>
+                          <Text style={{ fontSize: 16, fontFamily: 'Inter_500Medium', color: colors.text }}>{city.name}</Text>
+                          <Text style={{ fontSize: 12, fontFamily: 'Inter_400Regular', color: colors.textTertiary, marginTop: 2 }}>{city.province}</Text>
+                        </Pressable>
                       ))}
                     </View>
                   )}
                   {smartResults.suburbs.length > 0 && showSuburbs && (
-                    <View style={styles.searchSection}>
-                      <Text style={styles.searchSectionTitle}>Suburbs</Text>
+                    <View style={{ marginBottom: 16 }}>
+                      <Text style={{ fontSize: 12, fontFamily: 'Inter_700Bold', color: colors.textTertiary, textTransform: 'uppercase', paddingHorizontal: 8, paddingVertical: 8, backgroundColor: colors.backgroundSecondary }}>Suburbs</Text>
                       {smartResults.suburbs.map((suburb, idx) => (
-                        <TouchableOpacity
-                          key={`${suburb.name}-${idx}`}
-                          style={styles.searchResultItem}
-                          onPress={() => {
-                            handleProvinceSelect(suburb.province);
-                            handleCitySelect(suburb.city);
-                            handleSuburbSelect(suburb.name, suburb.postalCode);
-                          }}
-                        >
-                          <Text style={styles.searchResultText}>{suburb.name}</Text>
-                          <Text style={styles.searchResultSubtext}>
-                            {suburb.city}, {suburb.province}
-                            {suburb.postalCode && ` • ${suburb.postalCode}`}
-                          </Text>
-                        </TouchableOpacity>
+                        <Pressable key={`${suburb.name}-${idx}`} style={{ padding: 16, borderBottomWidth: 1, borderBottomColor: colors.divider }} onPress={() => { handleProvinceSelect(suburb.province); handleCitySelect(suburb.city); handleSuburbSelect(suburb.name, suburb.postalCode); }}>
+                          <Text style={{ fontSize: 16, fontFamily: 'Inter_500Medium', color: colors.text }}>{suburb.name}</Text>
+                          <Text style={{ fontSize: 12, fontFamily: 'Inter_400Regular', color: colors.textTertiary, marginTop: 2 }}>{suburb.city}, {suburb.province}{suburb.postalCode && ` \u2022 ${suburb.postalCode}`}</Text>
+                        </Pressable>
                       ))}
                     </View>
                   )}
-                  {smartResults.provinces.length === 0 &&
-                    smartResults.cities.length === 0 &&
-                    smartResults.suburbs.length === 0 && (
-                      <View style={styles.noResults}>
-                        <Text style={styles.noResultsText}>No locations found</Text>
-                      </View>
-                    )}
+                  {smartResults.provinces.length === 0 && smartResults.cities.length === 0 && smartResults.suburbs.length === 0 && (
+                    <View style={{ padding: 40, alignItems: 'center' }}>
+                      <Text style={{ fontSize: 16, fontFamily: 'Inter_400Regular', color: colors.textTertiary }}>No locations found</Text>
+                    </View>
+                  )}
                 </View>
               )}
 
-              {/* Regular Lists */}
               {!searchQuery && (
                 <>
                   {activeTab === 'province' && (
                     <View>
                       {getFilteredProvinces().map(province => (
-                        <TouchableOpacity
+                        <Pressable
                           key={province}
-                          style={[
-                            styles.listItem,
-                            selectedProvince === province && styles.listItemSelected,
-                          ]}
+                          style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16, borderBottomWidth: 1, borderBottomColor: colors.divider, backgroundColor: selectedProvince === province ? colors.primary + '12' : 'transparent' }}
                           onPress={() => handleProvinceSelect(province)}
                         >
-                          <Text
-                            style={[
-                              styles.listItemText,
-                              selectedProvince === province && styles.listItemTextSelected,
-                            ]}
-                          >
-                            {province}
-                          </Text>
-                          {selectedProvince === province && <Text style={styles.checkmark}>✓</Text>}
-                        </TouchableOpacity>
+                          <Text style={{ fontSize: 16, fontFamily: selectedProvince === province ? 'Inter_600SemiBold' : 'Inter_400Regular', color: selectedProvince === province ? colors.primary : colors.text }}>{province}</Text>
+                          {selectedProvince === province && <Ionicons name="checkmark" size={20} color={colors.primary} />}
+                        </Pressable>
                       ))}
                     </View>
                   )}
@@ -384,29 +374,19 @@ export default function LocationSelector({
                   {activeTab === 'city' && selectedProvince && (
                     <View>
                       {getFilteredCities().length === 0 ? (
-                        <View style={styles.noResults}>
-                          <Text style={styles.noResultsText}>No cities found</Text>
+                        <View style={{ padding: 40, alignItems: 'center' }}>
+                          <Text style={{ fontSize: 16, fontFamily: 'Inter_400Regular', color: colors.textTertiary }}>No cities found</Text>
                         </View>
                       ) : (
                         getFilteredCities().map(city => (
-                          <TouchableOpacity
+                          <Pressable
                             key={city}
-                            style={[
-                              styles.listItem,
-                              selectedCity === city && styles.listItemSelected,
-                            ]}
+                            style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16, borderBottomWidth: 1, borderBottomColor: colors.divider, backgroundColor: selectedCity === city ? colors.primary + '12' : 'transparent' }}
                             onPress={() => handleCitySelect(city)}
                           >
-                            <Text
-                              style={[
-                                styles.listItemText,
-                                selectedCity === city && styles.listItemTextSelected,
-                              ]}
-                            >
-                              {city}
-                            </Text>
-                            {selectedCity === city && <Text style={styles.checkmark}>✓</Text>}
-                          </TouchableOpacity>
+                            <Text style={{ fontSize: 16, fontFamily: selectedCity === city ? 'Inter_600SemiBold' : 'Inter_400Regular', color: selectedCity === city ? colors.primary : colors.text }}>{city}</Text>
+                            {selectedCity === city && <Ionicons name="checkmark" size={20} color={colors.primary} />}
+                          </Pressable>
                         ))
                       )}
                     </View>
@@ -415,36 +395,22 @@ export default function LocationSelector({
                   {activeTab === 'suburb' && selectedCity && showSuburbs && (
                     <View>
                       {getFilteredSuburbs().length === 0 ? (
-                        <View style={styles.noResults}>
-                          <Text style={styles.noResultsText}>No suburbs found</Text>
+                        <View style={{ padding: 40, alignItems: 'center' }}>
+                          <Text style={{ fontSize: 16, fontFamily: 'Inter_400Regular', color: colors.textTertiary }}>No suburbs found</Text>
                         </View>
                       ) : (
                         getFilteredSuburbs().map((suburb, idx) => (
-                          <TouchableOpacity
+                          <Pressable
                             key={`${suburb.name}-${idx}`}
-                            style={[
-                              styles.listItem,
-                              selectedSuburb === suburb.name && styles.listItemSelected,
-                            ]}
+                            style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16, borderBottomWidth: 1, borderBottomColor: colors.divider, backgroundColor: selectedSuburb === suburb.name ? colors.primary + '12' : 'transparent' }}
                             onPress={() => handleSuburbSelect(suburb.name, suburb.postalCode)}
                           >
-                            <View style={styles.suburbInfo}>
-                              <Text
-                                style={[
-                                  styles.listItemText,
-                                  selectedSuburb === suburb.name && styles.listItemTextSelected,
-                                ]}
-                              >
-                                {suburb.name}
-                              </Text>
-                              {suburb.postalCode && (
-                                <Text style={styles.postalCode}>{suburb.postalCode}</Text>
-                              )}
+                            <View style={{ flex: 1 }}>
+                              <Text style={{ fontSize: 16, fontFamily: selectedSuburb === suburb.name ? 'Inter_600SemiBold' : 'Inter_400Regular', color: selectedSuburb === suburb.name ? colors.primary : colors.text }}>{suburb.name}</Text>
+                              {suburb.postalCode && <Text style={{ fontSize: 12, fontFamily: 'Inter_400Regular', color: colors.textTertiary, marginTop: 2 }}>{suburb.postalCode}</Text>}
                             </View>
-                            {selectedSuburb === suburb.name && (
-                              <Text style={styles.checkmark}>✓</Text>
-                            )}
-                          </TouchableOpacity>
+                            {selectedSuburb === suburb.name && <Ionicons name="checkmark" size={20} color={colors.primary} />}
+                          </Pressable>
                         ))
                       )}
                     </View>
@@ -456,309 +422,19 @@ export default function LocationSelector({
         </View>
       </Modal>
 
-      {/* Tooltip Modal */}
       {tooltip && (
-        <Modal
-          visible={showTooltip}
-          transparent
-          animationType="fade"
-          onRequestClose={() => setShowTooltip(false)}
-        >
-          <TouchableOpacity
-            style={styles.tooltipOverlay}
-            activeOpacity={1}
-            onPress={() => setShowTooltip(false)}
-          >
-            <View style={styles.tooltipContainer}>
-              <Text style={styles.tooltipTitle}>{label}</Text>
-              <Text style={styles.tooltipText}>{tooltip}</Text>
-              <TouchableOpacity style={styles.closeButton} onPress={() => setShowTooltip(false)}>
-                <Text style={styles.closeButtonText}>Got it!</Text>
-              </TouchableOpacity>
+        <Modal visible={showTooltip} transparent animationType="fade" onRequestClose={() => setShowTooltip(false)}>
+          <Pressable style={{ flex: 1, backgroundColor: 'rgba(0, 0, 0, 0.5)', justifyContent: 'center', alignItems: 'center', padding: 20 }} onPress={() => setShowTooltip(false)}>
+            <View style={{ backgroundColor: colors.card, borderRadius: 16, padding: 24, maxWidth: 350, width: '100%' }}>
+              <Text style={{ fontSize: 18, fontFamily: 'Inter_700Bold', color: colors.text, marginBottom: 10 }}>{label}</Text>
+              <Text style={{ fontSize: 15, fontFamily: 'Inter_400Regular', color: colors.textSecondary, lineHeight: 22, marginBottom: 20 }}>{tooltip}</Text>
+              <Pressable onPress={() => setShowTooltip(false)} style={({ pressed }) => ({ backgroundColor: pressed ? colors.primaryDark : colors.primary, paddingVertical: 12, borderRadius: 10, alignItems: 'center' })}>
+                <Text style={{ color: colors.buttonPrimaryText, fontSize: 15, fontFamily: 'Inter_600SemiBold' }}>Got it!</Text>
+              </Pressable>
             </View>
-          </TouchableOpacity>
+          </Pressable>
         </Modal>
       )}
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    marginBottom: 15,
-  },
-  labelContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  label: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#333',
-    flex: 1,
-  },
-  required: {
-    color: '#FF3B30',
-  },
-  infoButton: {
-    marginLeft: 8,
-  },
-  infoIcon: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    backgroundColor: '#007AFF',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  infoIconText: {
-    color: '#fff',
-    fontSize: 12,
-    fontWeight: 'bold',
-  },
-  selectorButton: {
-    backgroundColor: '#fff',
-    padding: 15,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: '#ddd',
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  placeholderText: {
-    color: '#999',
-    fontSize: 16,
-    flex: 1,
-  },
-  selectedText: {
-    color: '#333',
-    fontSize: 16,
-    flex: 1,
-  },
-  chevron: {
-    fontSize: 24,
-    color: '#999',
-    transform: [{ rotate: '90deg' }],
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'flex-end',
-  },
-  selectorContainer: {
-    backgroundColor: '#fff',
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    maxHeight: '90%',
-    paddingBottom: 20,
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: '#eee',
-  },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#333',
-  },
-  doneButton: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#007AFF',
-  },
-  searchContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#f5f5f5',
-    margin: 16,
-    paddingHorizontal: 12,
-    borderRadius: 10,
-  },
-  searchIcon: {
-    fontSize: 16,
-    marginRight: 8,
-  },
-  searchInput: {
-    flex: 1,
-    padding: 12,
-    fontSize: 16,
-  },
-  clearIcon: {
-    fontSize: 20,
-    color: '#999',
-    padding: 8,
-  },
-  tabContainer: {
-    flexDirection: 'row',
-    borderBottomWidth: 1,
-    borderBottomColor: '#eee',
-    paddingHorizontal: 16,
-  },
-  tab: {
-    flex: 1,
-    paddingVertical: 12,
-    alignItems: 'center',
-    borderBottomWidth: 2,
-    borderBottomColor: 'transparent',
-  },
-  tabActive: {
-    borderBottomColor: '#007AFF',
-  },
-  tabDisabled: {
-    opacity: 0.4,
-  },
-  tabText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#666',
-  },
-  tabTextActive: {
-    color: '#007AFF',
-  },
-  tabTextDisabled: {
-    color: '#ccc',
-  },
-  breadcrumbContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    backgroundColor: '#f9f9f9',
-  },
-  breadcrumbItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  breadcrumbText: {
-    fontSize: 14,
-    color: '#007AFF',
-    fontWeight: '500',
-  },
-  breadcrumbArrow: {
-    fontSize: 16,
-    color: '#999',
-    marginHorizontal: 8,
-  },
-  breadcrumbClear: {
-    fontSize: 16,
-    color: '#FF3B30',
-    marginLeft: 6,
-    padding: 4,
-  },
-  scrollView: {
-    maxHeight: 500,
-  },
-  listItem: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
-  },
-  listItemSelected: {
-    backgroundColor: '#E7F3FF',
-  },
-  listItemText: {
-    fontSize: 16,
-    color: '#333',
-  },
-  listItemTextSelected: {
-    color: '#007AFF',
-    fontWeight: '600',
-  },
-  checkmark: {
-    fontSize: 20,
-    color: '#007AFF',
-    fontWeight: 'bold',
-  },
-  suburbInfo: {
-    flex: 1,
-  },
-  postalCode: {
-    fontSize: 12,
-    color: '#999',
-    marginTop: 2,
-  },
-  searchResults: {
-    padding: 8,
-  },
-  searchSection: {
-    marginBottom: 16,
-  },
-  searchSectionTitle: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#999',
-    textTransform: 'uppercase',
-    paddingHorizontal: 8,
-    paddingVertical: 8,
-    backgroundColor: '#f9f9f9',
-  },
-  searchResultItem: {
-    padding: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
-  },
-  searchResultText: {
-    fontSize: 16,
-    color: '#333',
-    fontWeight: '500',
-  },
-  searchResultSubtext: {
-    fontSize: 12,
-    color: '#999',
-    marginTop: 2,
-  },
-  noResults: {
-    padding: 40,
-    alignItems: 'center',
-  },
-  noResultsText: {
-    fontSize: 16,
-    color: '#999',
-  },
-  tooltipOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
-  },
-  tooltipContainer: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 20,
-    maxWidth: 350,
-    width: '100%',
-  },
-  tooltipTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#333',
-    marginBottom: 10,
-  },
-  tooltipText: {
-    fontSize: 15,
-    color: '#666',
-    lineHeight: 22,
-    marginBottom: 15,
-  },
-  closeButton: {
-    backgroundColor: '#007AFF',
-    padding: 12,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  closeButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-});

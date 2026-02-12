@@ -46,7 +46,7 @@ async def lifespan(app: FastAPI):
     """
     # Startup
     print("=" * 80)
-    print("Drive Alive Backend API - Starting Up")
+    print("RoadReady Backend API - Starting Up")
     print("=" * 80)
     print(f"Python Path: {sys.executable}")
     venv_status = "Active" if "venv" in sys.executable else "Not Active"
@@ -177,7 +177,7 @@ origins = [
     "http://10.0.0.121:19000",
     "http://10.0.0.121:19001",
     "http://10.0.0.121:19006",
-    "https://drive-alive-2.onrender.com",  # Production frontend
+    "https://roadready.onrender.com",  # Production frontend
 ]
 
 app.add_middleware(

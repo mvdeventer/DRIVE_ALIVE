@@ -3,7 +3,9 @@
  * Provides a visual calendar for date selection
  */
 import React, { useState } from 'react';
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { useTheme } from '../theme/ThemeContext';
 
 interface CalendarPickerProps {
   value: Date;
@@ -30,6 +32,7 @@ export default function CalendarPicker({
   fullyBookedDates,
   showActions = true,
 }: CalendarPickerProps) {
+  const { colors } = useTheme();
   const [currentMonth, setCurrentMonth] = useState(
     new Date(value.getFullYear(), value.getMonth(), 1)
   );
@@ -44,18 +47,8 @@ export default function CalendarPicker({
   };
 
   const monthNames = [
-    'January',
-    'February',
-    'March',
-    'April',
-    'May',
-    'June',
-    'July',
-    'August',
-    'September',
-    'October',
-    'November',
-    'December',
+    'January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December',
   ];
 
   const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -70,11 +63,7 @@ export default function CalendarPicker({
 
   const selectDate = (day: number) => {
     const selectedDate = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), day);
-
-    // Prevent selection if date doesn't pass validation
     if (isDateDisabled(day)) return;
-
-    // Just update temp selection, don't trigger onChange yet
     setTempSelectedDate(selectedDate);
   };
 
@@ -94,7 +83,6 @@ export default function CalendarPicker({
     if (minDate && date < minDate) return true;
     if (maxDate && date > maxDate) return true;
 
-    // Check if date is in disabledDates array (backward compatibility)
     if (disabledDates) {
       const isDisabled = disabledDates.some(disabledDate => {
         return (
@@ -106,7 +94,6 @@ export default function CalendarPicker({
       if (isDisabled) return true;
     }
 
-    // Check if date is in timeOffDates
     if (timeOffDates) {
       const isTimeOff = timeOffDates.some(timeOffDate => {
         return (
@@ -118,7 +105,6 @@ export default function CalendarPicker({
       if (isTimeOff) return true;
     }
 
-    // Check if date is in noScheduleDates
     if (noScheduleDates) {
       const isNoSchedule = noScheduleDates.some(noScheduleDate => {
         return (
@@ -129,9 +115,6 @@ export default function CalendarPicker({
       });
       if (isNoSchedule) return true;
     }
-
-    // NOTE: Fully booked dates are NOT disabled - user can still click to see time slots
-    // (might show purple conflicts if they have existing bookings)
 
     return false;
   };
@@ -154,7 +137,6 @@ export default function CalendarPicker({
   };
 
   const isInTimeOff = (day: number) => {
-    // Check new timeOffDates prop first, fallback to disabledDates for backward compatibility
     const dates = timeOffDates || disabledDates;
     if (!dates) return false;
     const date = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), day);
@@ -181,23 +163,71 @@ export default function CalendarPicker({
 
   const isFullyBooked = (day: number) => {
     if (!fullyBookedDates) return false;
-    // Create date in UTC for consistent comparison
     const date = new Date(Date.UTC(currentMonth.getFullYear(), currentMonth.getMonth(), day));
-    const result = fullyBookedDates.some(fullyBookedDate => {
+    return fullyBookedDates.some(fullyBookedDate => {
       return (
         date.getUTCDate() === fullyBookedDate.getUTCDate() &&
         date.getUTCMonth() === fullyBookedDate.getUTCMonth() &&
         date.getUTCFullYear() === fullyBookedDate.getUTCFullYear()
       );
     });
-    if (result) {
-      console.log(`🔴 Day ${day} is FULLY BOOKED`, {
-        checkingDate: date.toISOString(),
-        fullyBookedDatesCount: fullyBookedDates.length,
-        fullyBookedDates: fullyBookedDates.map(d => d.toISOString()),
-      });
+  };
+
+  const getDayStyle = (day: number) => {
+    const disabled = isDateDisabled(day);
+    const today = isToday(day);
+    const selected = isSelected(day);
+    const inTimeOff = isInTimeOff(day);
+    const noSchedule = isNoSchedule(day);
+    const fullyBooked = isFullyBooked(day);
+
+    let bg = 'transparent';
+    let textColor = colors.text;
+    let borderColor = 'transparent';
+    let borderWidth = 0;
+    let opacity = 1;
+    let fontFamily = 'Inter_400Regular';
+
+    if (disabled) {
+      opacity = 0.3;
+      textColor = colors.textTertiary;
     }
-    return result;
+    if (today && !fullyBooked) {
+      bg = colors.primaryLight + '18';
+      textColor = colors.primary;
+      fontFamily = 'Inter_700Bold';
+    }
+    if (selected && !fullyBooked) {
+      bg = colors.primary;
+      textColor = colors.textInverse;
+      fontFamily = 'Inter_700Bold';
+    }
+    if (noSchedule) {
+      bg = colors.backgroundSecondary;
+      borderWidth = 2;
+      borderColor = colors.textTertiary;
+      textColor = colors.textTertiary;
+      fontFamily = 'Inter_700Bold';
+      opacity = 1;
+    }
+    if (inTimeOff) {
+      bg = colors.warningBg;
+      borderWidth = 2;
+      borderColor = colors.warning;
+      textColor = colors.warning;
+      fontFamily = 'Inter_700Bold';
+      opacity = 1;
+    }
+    if (fullyBooked) {
+      bg = colors.danger;
+      borderWidth = 2;
+      borderColor = colors.danger + 'CC';
+      textColor = colors.textInverse;
+      fontFamily = 'Inter_700Bold';
+      opacity = 1;
+    }
+
+    return { bg, textColor, borderColor, borderWidth, opacity, disabled, fontFamily };
   };
 
   const renderCalendar = () => {
@@ -205,70 +235,55 @@ export default function CalendarPicker({
     const firstDay = getFirstDayOfMonth(currentMonth);
     const days = [];
 
-    console.log('📅 CalendarPicker rendering:', {
-      currentMonth: currentMonth.toISOString(),
-      fullyBookedDatesCount: fullyBookedDates?.length || 0,
-      fullyBookedDates: fullyBookedDates?.map(d => d.toISOString()) || [],
-    });
-
-    // Empty cells for days before the first day of the month
     for (let i = 0; i < firstDay; i++) {
-      days.push(<View key={`empty-${i}`} style={styles.dayCell} />);
+      days.push(
+        <View
+          key={`empty-${i}`}
+          style={{ width: '14.28%' as any, aspectRatio: 1 }}
+        />
+      );
     }
 
-    // Days of the month
     for (let day = 1; day <= daysInMonth; day++) {
-      const disabled = isDateDisabled(day);
-      const today = isToday(day);
-      const selected = isSelected(day);
-      const inTimeOff = isInTimeOff(day);
-      const noSchedule = isNoSchedule(day);
-      const fullyBooked = isFullyBooked(day);
-
-      // Determine cell styles based on priority
-      // Apply base styles first, then override with higher priority styles
-      const cellStyles = [styles.dayCell];
-      const textStyles = [styles.dayText];
-
-      // Lower priority styles first
-      if (disabled) {
-        cellStyles.push(styles.disabledCell);
-        textStyles.push(styles.disabledText);
-      }
-      if (today && !fullyBooked) {
-        cellStyles.push(styles.todayCell);
-        textStyles.push(styles.todayText);
-      }
-      // Only apply selected style if NOT fully booked
-      if (selected && !fullyBooked) {
-        cellStyles.push(styles.selectedCell);
-        textStyles.push(styles.selectedText);
-      }
-
-      // Higher priority styles last (will override previous)
-      if (noSchedule) {
-        cellStyles.push(styles.noScheduleCell);
-        textStyles.push(styles.noScheduleText);
-      }
-      if (inTimeOff) {
-        cellStyles.push(styles.timeOffCell);
-        textStyles.push(styles.timeOffText);
-      }
-      // Fully booked ALWAYS overrides everything (highest priority)
-      if (fullyBooked) {
-        cellStyles.push(styles.fullyBookedCell);
-        textStyles.push(styles.fullyBookedText);
-      }
+      const s = getDayStyle(day);
 
       days.push(
-        <TouchableOpacity
+        <Pressable
           key={day}
-          style={cellStyles}
-          onPress={() => !disabled && selectDate(day)}
-          disabled={disabled}
+          style={{
+            width: '14.28%' as any,
+            aspectRatio: 1,
+            justifyContent: 'center',
+            alignItems: 'center',
+            padding: 4,
+            opacity: s.opacity,
+          }}
+          onPress={() => !s.disabled && selectDate(day)}
+          disabled={s.disabled}
         >
-          <Text style={textStyles}>{day}</Text>
-        </TouchableOpacity>
+          <View
+            style={{
+              width: 36,
+              height: 36,
+              borderRadius: 10,
+              justifyContent: 'center',
+              alignItems: 'center',
+              backgroundColor: s.bg,
+              borderWidth: s.borderWidth,
+              borderColor: s.borderColor,
+            }}
+          >
+            <Text
+              style={{
+                fontSize: 15,
+                fontFamily: s.fontFamily,
+                color: s.textColor,
+              }}
+            >
+              {day}
+            </Text>
+          </View>
+        </Pressable>
       );
     }
 
@@ -276,195 +291,116 @@ export default function CalendarPicker({
   };
 
   return (
-    <View style={styles.container}>
+    <View style={{ backgroundColor: colors.card, borderRadius: 12, padding: 16 }}>
       {/* Month/Year Header */}
-      <View style={styles.header}>
-        <TouchableOpacity onPress={previousMonth} style={styles.navButton}>
-          <Text style={styles.navButtonText}>‹</Text>
-        </TouchableOpacity>
-        <Text style={styles.headerText}>
+      <View
+        style={{
+          flexDirection: 'row',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          marginBottom: 16,
+        }}
+      >
+        <Pressable
+          onPress={previousMonth}
+          style={{ padding: 8, borderRadius: 8 }}
+        >
+          <Ionicons name="chevron-back" size={22} color={colors.primary} />
+        </Pressable>
+        <Text
+          style={{
+            fontSize: 17,
+            fontFamily: 'Inter_700Bold',
+            color: colors.text,
+          }}
+        >
           {monthNames[currentMonth.getMonth()]} {currentMonth.getFullYear()}
         </Text>
-        <TouchableOpacity onPress={nextMonth} style={styles.navButton}>
-          <Text style={styles.navButtonText}>›</Text>
-        </TouchableOpacity>
+        <Pressable
+          onPress={nextMonth}
+          style={{ padding: 8, borderRadius: 8 }}
+        >
+          <Ionicons name="chevron-forward" size={22} color={colors.primary} />
+        </Pressable>
       </View>
 
       {/* Day Names */}
-      <View style={styles.dayNamesRow}>
+      <View style={{ flexDirection: 'row', marginBottom: 8 }}>
         {dayNames.map(name => (
-          <View key={name} style={styles.dayNameCell}>
-            <Text style={styles.dayNameText}>{name}</Text>
+          <View key={name} style={{ flex: 1, alignItems: 'center', paddingVertical: 8 }}>
+            <Text
+              style={{
+                fontSize: 12,
+                fontFamily: 'Inter_600SemiBold',
+                color: colors.textTertiary,
+              }}
+            >
+              {name}
+            </Text>
           </View>
         ))}
       </View>
 
       {/* Calendar Grid */}
-      <View style={styles.calendarGrid}>{renderCalendar()}</View>
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>{renderCalendar()}</View>
 
       {/* Action Buttons */}
       {showActions && (
-        <View style={styles.actionButtons}>
-          <TouchableOpacity
+        <View
+          style={{
+            flexDirection: 'row',
+            justifyContent: 'space-between',
+            gap: 12,
+            marginTop: 16,
+            paddingHorizontal: 8,
+          }}
+        >
+          <Pressable
             onPress={handleCancel}
-            style={[styles.actionButton, styles.cancelButton]}
+            style={({ pressed }) => ({
+              flex: 1,
+              paddingVertical: 12,
+              paddingHorizontal: 24,
+              borderRadius: 10,
+              alignItems: 'center' as const,
+              backgroundColor: pressed ? colors.border : colors.backgroundSecondary,
+              borderWidth: 1,
+              borderColor: colors.border,
+            })}
           >
-            <Text style={styles.cancelButtonText}>Cancel</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
+            <Text
+              style={{
+                color: colors.text,
+                fontSize: 15,
+                fontFamily: 'Inter_600SemiBold',
+              }}
+            >
+              Cancel
+            </Text>
+          </Pressable>
+          <Pressable
             onPress={handleConfirm}
-            style={[styles.actionButton, styles.confirmButton]}
+            style={({ pressed }) => ({
+              flex: 1,
+              paddingVertical: 12,
+              paddingHorizontal: 24,
+              borderRadius: 10,
+              alignItems: 'center' as const,
+              backgroundColor: pressed ? colors.primaryDark : colors.primary,
+            })}
           >
-            <Text style={styles.confirmButtonText}>OK</Text>
-          </TouchableOpacity>
+            <Text
+              style={{
+                color: colors.buttonPrimaryText,
+                fontSize: 15,
+                fontFamily: 'Inter_600SemiBold',
+              }}
+            >
+              OK
+            </Text>
+          </Pressable>
         </View>
       )}
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    backgroundColor: '#fff',
-    borderRadius: 8,
-    padding: 16,
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  navButton: {
-    padding: 8,
-    width: 40,
-    alignItems: 'center',
-  },
-  navButtonText: {
-    fontSize: 24,
-    color: '#007bff',
-    fontWeight: 'bold',
-  },
-  headerText: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#333',
-  },
-  dayNamesRow: {
-    flexDirection: 'row',
-    marginBottom: 8,
-  },
-  dayNameCell: {
-    flex: 1,
-    alignItems: 'center',
-    paddingVertical: 8,
-  },
-  dayNameText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#666',
-  },
-  calendarGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-  },
-  dayCell: {
-    width: '14.28%', // 100% / 7 days
-    aspectRatio: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 4,
-  },
-  todayCell: {
-    backgroundColor: '#e7f5ff',
-    borderRadius: 8,
-  },
-  selectedCell: {
-    backgroundColor: '#007bff',
-    borderRadius: 8,
-  },
-  disabledCell: {
-    opacity: 0.3,
-  },
-  noScheduleCell: {
-    backgroundColor: '#f5f5f5',
-    borderRadius: 8,
-    borderWidth: 2,
-    borderColor: '#9e9e9e',
-    opacity: 1,
-  },
-  timeOffCell: {
-    backgroundColor: '#fff3cd',
-    borderRadius: 8,
-    borderWidth: 2,
-    borderColor: '#ffc107',
-    opacity: 1,
-  },
-  fullyBookedCell: {
-    backgroundColor: '#f44336',
-    borderRadius: 8,
-    borderWidth: 2,
-    borderColor: '#d32f2f',
-    opacity: 1,
-  },
-  dayText: {
-    fontSize: 16,
-    color: '#333',
-  },
-  todayText: {
-    color: '#007bff',
-    fontWeight: 'bold',
-  },
-  selectedText: {
-    color: '#fff',
-    fontWeight: 'bold',
-  },
-  disabledText: {
-    color: '#ccc',
-  },
-  noScheduleText: {
-    color: '#9e9e9e',
-    fontWeight: 'bold',
-  },
-  timeOffText: {
-    color: '#856404',
-    fontWeight: 'bold',
-    textDecorationLine: 'line-through',
-  },
-  fullyBookedText: {
-    color: '#fff',
-    fontWeight: 'bold',
-  },
-  actionButtons: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: 12,
-    marginTop: 16,
-    paddingHorizontal: 8,
-  },
-  actionButton: {
-    flex: 1,
-    paddingVertical: 12,
-    paddingHorizontal: 24,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  cancelButton: {
-    backgroundColor: '#f5f5f5',
-    borderWidth: 1,
-    borderColor: '#ddd',
-  },
-  confirmButton: {
-    backgroundColor: '#007bff',
-  },
-  cancelButtonText: {
-    color: '#333',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  confirmButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-});

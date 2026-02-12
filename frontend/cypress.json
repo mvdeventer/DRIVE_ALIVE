@@ -1,7 +1,7 @@
 {
-  "name": "drive-alive-cypress-tests",
+  "name": "roadready-cypress-tests",
   "version": "1.0.0",
-  "description": "Cypress E2E tests for Drive Alive Database Interface",
+  "description": "Cypress E2E tests for RoadReady Database Interface",
   "devDependencies": {
     "cypress": "^13.6.0"
   },

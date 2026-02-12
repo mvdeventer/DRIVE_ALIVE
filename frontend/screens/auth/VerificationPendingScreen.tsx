@@ -3,15 +3,18 @@ import {
   View,
   Text,
   StyleSheet,
-  TouchableOpacity,
   ScrollView,
   Platform,
 } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { Button, Card } from '../../components/ui';
+import { useTheme } from '../../theme/ThemeContext';
+import { API_BASE_URL } from '../../config';
 
 type Props = NativeStackScreenProps<any, 'VerificationPending'>;
 
 export default function VerificationPendingScreen({ route, navigation }: Props) {
+  const { colors } = useTheme();
   const scrollViewRef = useRef<ScrollView>(null);
   const [resendingEmail, setResendingEmail] = useState(false);
   const [resendMessage, setResendMessage] = useState('');
@@ -35,7 +38,7 @@ export default function VerificationPendingScreen({ route, navigation }: Props) 
     setResendMessage('');
 
     try {
-      const response = await fetch('http://localhost:8000/verify/resend?email=' + encodeURIComponent(email), {
+      const response = await fetch(`${API_BASE_URL}/verify/resend?email=` + encodeURIComponent(email), {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
@@ -61,170 +64,131 @@ export default function VerificationPendingScreen({ route, navigation }: Props) 
   return (
     <ScrollView
       ref={scrollViewRef}
-      style={styles.container}
+      style={[styles.container, { backgroundColor: colors.background }]}
       contentContainerStyle={styles.contentContainer}
       showsVerticalScrollIndicator={false}
     >
       {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.headerIcon}>📧</Text>
-        <Text style={styles.title}>Verify Your Account</Text>
-        <Text style={styles.subtitle}>
+        <View style={[styles.headerIcon, { backgroundColor: colors.primary + '15' }]}>
+          <Text style={styles.headerEmoji}>📧</Text>
+        </View>
+        <Text style={[styles.title, { color: colors.text }]}>Verify Your Account</Text>
+        <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
           Complete registration to start using the app
         </Text>
       </View>
 
-      {/* Main Message */}
-      <View style={styles.mainMessage}>
-        <Text style={styles.mainText}>
-          ✅ Registration successful! We've sent verification links to confirm it's really you.
+      {/* Main Status */}
+      <View style={[styles.statusBanner, { backgroundColor: colors.infoBg, borderLeftColor: colors.primary }]}>
+        <Text style={[styles.statusText, { color: colors.primary }]}>
+          Registration successful! We've sent verification links to confirm it's really you.
         </Text>
-          <Text style={styles.mainTextEmphasis}>
-          Please check your email and WhatsApp. Complete registration by clicking the verification link.
-          </Text>
+        <Text style={[styles.statusEmphasis, { color: colors.text }]}>
+          Please check your email and WhatsApp then click the verification link.
+        </Text>
       </View>
 
-      {/* Verification Details Card */}
-      <View style={styles.detailsCard}>
-        <View style={styles.detailRow}>
-          <Text style={styles.detailIcon}>✉️</Text>
-          <View style={styles.detailContent}>
-            <Text style={styles.detailLabel}>Email Verification</Text>
-            <Text style={styles.detailValue}>{email}</Text>
-            {emailSent ? (
-              <Text style={styles.detailStatus}>✅ Email sent</Text>
-            ) : (
-              <Text style={styles.detailStatusWarning}>⚠️ Email not sent (check admin settings)</Text>
-            )}
+      {/* Channels Card */}
+      <Card variant="elevated" padding="md" style={styles.channelsCard}>
+        <View style={styles.channelRow}>
+          <Text style={styles.channelIcon}>✉️</Text>
+          <View style={styles.channelContent}>
+            <Text style={[styles.channelLabel, { color: colors.textSecondary }]}>Email</Text>
+            <Text style={[styles.channelValue, { color: colors.text }]}>{email}</Text>
+            <Text style={{ fontSize: 12, color: emailSent ? colors.success : colors.warning, fontWeight: '500' }}>
+              {emailSent ? '✅ Sent' : '⚠️ Not sent (check admin settings)'}
+            </Text>
           </View>
         </View>
 
-        <View style={styles.divider} />
+        <View style={[styles.divider, { backgroundColor: colors.divider }]} />
 
-        <View style={styles.detailRow}>
-          <Text style={styles.detailIcon}>💬</Text>
-          <View style={styles.detailContent}>
-            <Text style={styles.detailLabel}>WhatsApp Verification</Text>
-            <Text style={styles.detailValue}>{phone}</Text>
-            {whatsappSent ? (
-              <Text style={styles.detailStatus}>✅ WhatsApp sent</Text>
-            ) : (
-              <Text style={styles.detailStatusWarning}>⚠️ WhatsApp not sent (Twilio sandbox may require opt-in)</Text>
-            )}
+        <View style={styles.channelRow}>
+          <Text style={styles.channelIcon}>💬</Text>
+          <View style={styles.channelContent}>
+            <Text style={[styles.channelLabel, { color: colors.textSecondary }]}>WhatsApp</Text>
+            <Text style={[styles.channelValue, { color: colors.text }]}>{phone}</Text>
+            <Text style={{ fontSize: 12, color: whatsappSent ? colors.success : colors.warning, fontWeight: '500' }}>
+              {whatsappSent ? '✅ Sent' : '⚠️ Not sent (sandbox may require opt-in)'}
+            </Text>
           </View>
         </View>
-      </View>
+      </Card>
 
-      {/* Important Info */}
-      <View style={styles.importantBox}>
-        <Text style={styles.importantTitle}>⏰ Important Timeline</Text>
-        <Text style={styles.importantText}>
-          Your verification link will expire in <Text style={styles.bold}>{expiryMinutes} minutes</Text>
-        </Text>
-        <Text style={styles.importantText}>
-          After expiry, your account will be automatically deleted and you'll need to register again.
+      {/* Timer Warning */}
+      <View style={[styles.warningBox, { backgroundColor: colors.warningBg, borderLeftColor: colors.warning }]}>
+        <Text style={[styles.warningTitle, { color: colors.text }]}>⏰ Expires in {expiryMinutes} minutes</Text>
+        <Text style={[styles.warningText, { color: colors.textSecondary }]}>
+          After expiry, your account will be deleted and you'll need to register again.
         </Text>
       </View>
 
       {/* Steps */}
-      <View style={styles.stepsBox}>
-        <Text style={styles.stepsTitle}>What to do next:</Text>
+      <Card variant="outlined" padding="md" style={styles.stepsCard}>
+        <Text style={[styles.stepsTitle, { color: colors.text }]}>What to do next:</Text>
+        {[
+          { num: '1', title: 'Check your email', desc: 'Look for a verification email' },
+          { num: '2', title: 'Check WhatsApp', desc: `Message sent to ${phone}` },
+          { num: '3', title: 'Click the link', desc: 'From either email or WhatsApp' },
+          { num: '4', title: 'Log in', desc: 'After verification, log in to the app' },
+        ].map((step) => (
+          <View key={step.num} style={styles.step}>
+            <View style={[styles.stepBadge, { backgroundColor: colors.primary }]}>
+              <Text style={styles.stepNum}>{step.num}</Text>
+            </View>
+            <View style={styles.stepText}>
+              <Text style={[styles.stepTitle, { color: colors.text }]}>{step.title}</Text>
+              <Text style={[styles.stepDesc, { color: colors.textSecondary }]}>{step.desc}</Text>
+            </View>
+          </View>
+        ))}
+      </Card>
 
-        <View style={styles.step}>
-          <View style={styles.stepNumber}>
-            <Text style={styles.stepNumberText}>1</Text>
-          </View>
-          <View style={styles.stepContent}>
-            <Text style={styles.stepTitle}>Check your email</Text>
-            <Text style={styles.stepDescription}>
-              Look for a message from the driving school with subject "Verify Your Driving School Account"
-            </Text>
-          </View>
-        </View>
-
-        <View style={styles.step}>
-          <View style={styles.stepNumber}>
-            <Text style={styles.stepNumberText}>2</Text>
-          </View>
-          <View style={styles.stepContent}>
-            <Text style={styles.stepTitle}>Check WhatsApp</Text>
-            <Text style={styles.stepDescription}>
-              You'll also receive a WhatsApp message to {phone} with the verification link
-            </Text>
-          </View>
-        </View>
-
-        <View style={styles.step}>
-          <View style={styles.stepNumber}>
-            <Text style={styles.stepNumberText}>3</Text>
-          </View>
-          <View style={styles.stepContent}>
-            <Text style={styles.stepTitle}>Click the verification link</Text>
-            <Text style={styles.stepDescription}>
-              Click on the link from either email or WhatsApp to verify your account
-            </Text>
-          </View>
-        </View>
-
-        <View style={styles.step}>
-          <View style={styles.stepNumber}>
-            <Text style={styles.stepNumberText}>4</Text>
-          </View>
-          <View style={styles.stepContent}>
-            <Text style={styles.stepTitle}>Log in to the app</Text>
-            <Text style={styles.stepDescription}>
-              After verification is complete, you can log in and start using the app
-            </Text>
-          </View>
-        </View>
-      </View>
-
-      {/* Resend Message */}
-      {resendMessage && (
+      {/* Resend feedback */}
+      {resendMessage ? (
         <View
           style={[
-            styles.resendMessage,
-            resendMessage.includes('✅') ? styles.resendSuccess : styles.resendError,
+            styles.resendFeedback,
+            {
+              backgroundColor: resendMessage.includes('✅') ? colors.successBg : colors.dangerBg,
+              borderLeftColor: resendMessage.includes('✅') ? colors.success : colors.danger,
+            },
           ]}
         >
-          <Text style={styles.resendMessageText}>{resendMessage}</Text>
+          <Text style={[styles.resendFeedbackText, { color: colors.text }]}>{resendMessage}</Text>
         </View>
-      )}
+      ) : null}
 
-      {/* Action Buttons */}
-      <View style={styles.buttonContainer}>
-        <TouchableOpacity
-          style={styles.resendButton}
+      {/* Buttons */}
+      <View style={styles.buttons}>
+        <Button
+          label={resendingEmail ? 'Resending…' : 'Resend Verification'}
           onPress={handleResendVerification}
+          loading={resendingEmail}
           disabled={resendingEmail}
-        >
-          <Text style={styles.resendButtonText}>
-            {resendingEmail ? '⏳ Resending...' : '🔄 Resend Verification'}
-          </Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.loginButton}
+          variant="accent"
+          fullWidth
+        />
+        <Button
+          label="← Back to Login"
           onPress={() => navigation.replace('Login')}
-        >
-          <Text style={styles.loginButtonText}>← Back to Login</Text>
-        </TouchableOpacity>
+          variant="outline"
+          fullWidth
+        />
       </View>
 
       {/* Footer Notes */}
-      <View style={styles.footer}>
-        <Text style={styles.footerTitle}>📝 Important Notes:</Text>
-        <Text style={styles.footerItem}>
-          • You <Text style={styles.bold}>cannot log in</Text> until your account is verified
+      <View style={[styles.footer, { backgroundColor: colors.backgroundSecondary, borderLeftColor: colors.textTertiary }]}>
+        <Text style={[styles.footerTitle, { color: colors.text }]}>Important Notes:</Text>
+        <Text style={[styles.footerItem, { color: colors.textSecondary }]}>
+          • You cannot log in until your account is verified
         </Text>
-        <Text style={styles.footerItem}>
-          • Verification links are valid for {expiryMinutes} minutes only
+        <Text style={[styles.footerItem, { color: colors.textSecondary }]}>
+          • Links are valid for {expiryMinutes} minutes only
         </Text>
-        <Text style={styles.footerItem}>
-          • If the link expires, register again or use "Resend Verification"
-        </Text>
-        <Text style={styles.footerItem}>
-          • Check your spam/junk folder if you don't see the email
+        <Text style={[styles.footerItem, { color: colors.textSecondary }]}>
+          • Check spam/junk folder if you don't see the email
         </Text>
       </View>
     </ScrollView>
@@ -232,243 +196,97 @@ export default function VerificationPendingScreen({ route, navigation }: Props) 
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#f5f5f5',
-  },
+  container: { flex: 1 },
   contentContainer: {
     padding: Platform.OS === 'web' ? 40 : 20,
-    paddingTop: Platform.OS === 'web' ? 40 : 20,
+    maxWidth: 600,
+    alignSelf: 'center',
+    width: '100%',
   },
   header: {
     alignItems: 'center',
-    marginBottom: Platform.OS === 'web' ? 32 : 24,
+    marginBottom: 28,
   },
   headerIcon: {
-    fontSize: 60,
-    marginBottom: 12,
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 14,
   },
+  headerEmoji: { fontSize: 36 },
   title: {
-    fontSize: Platform.OS === 'web' ? 32 : 28,
-    fontWeight: 'bold',
-    color: '#333',
-    marginBottom: 8,
+    fontSize: Platform.OS === 'web' ? 28 : 24,
+    fontWeight: '800',
+    letterSpacing: -0.3,
+    marginBottom: 6,
   },
   subtitle: {
-    fontSize: Platform.OS === 'web' ? 16 : 14,
-    color: '#666',
-  },
-  mainMessage: {
-    backgroundColor: '#e3f2fd',
-    borderLeftWidth: 4,
-    borderLeftColor: '#007AFF',
-    padding: Platform.OS === 'web' ? 20 : 16,
-    borderRadius: 8,
-    marginBottom: Platform.OS === 'web' ? 28 : 20,
-  },
-  mainText: {
-    fontSize: Platform.OS === 'web' ? 16 : 14,
-    color: '#0056b3',
-    fontWeight: '500',
-    lineHeight: 22,
-  },
-    mainTextEmphasis: {
-      fontSize: Platform.OS === 'web' ? 16 : 14,
-      color: '#212529',
-      textAlign: 'center',
-      lineHeight: 22,
-      marginTop: 8,
-      fontWeight: '600',
-    },
-  detailsCard: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: Platform.OS === 'web' ? 24 : 16,
-    borderWidth: 1,
-    borderColor: '#ddd',
-    marginBottom: Platform.OS === 'web' ? 28 : 20,
-    ...Platform.select({
-      web: { boxShadow: '0 2px 4px rgba(0,0,0,0.08)' },
-      default: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.08,
-        shadowRadius: 4,
-        elevation: 2,
-      },
-    }),
-  },
-  detailRow: {
-    flexDirection: 'row',
-    gap: Platform.OS === 'web' ? 16 : 12,
-  },
-  detailIcon: {
-    fontSize: Platform.OS === 'web' ? 28 : 24,
-    marginTop: 4,
-  },
-  detailContent: {
-    flex: 1,
-  },
-  detailLabel: {
-    fontSize: Platform.OS === 'web' ? 14 : 12,
-    fontWeight: '600',
-    color: '#666',
-    marginBottom: 4,
-  },
-  detailValue: {
-    fontSize: Platform.OS === 'web' ? 16 : 14,
-    color: '#333',
-    fontWeight: '500',
-    marginBottom: 6,
-  },
-  detailStatus: {
-    fontSize: Platform.OS === 'web' ? 13 : 11,
-    color: '#28a745',
-    fontWeight: '500',
-  },
-  detailStatusWarning: {
-    fontSize: Platform.OS === 'web' ? 13 : 11,
-    color: '#ffc107',
-    fontWeight: '500',
-  },
-  divider: {
-    height: 1,
-    backgroundColor: '#e0e0e0',
-    marginVertical: Platform.OS === 'web' ? 16 : 12,
-  },
-  importantBox: {
-    backgroundColor: '#fff3cd',
-    borderLeftWidth: 4,
-    borderLeftColor: '#ffc107',
-    padding: Platform.OS === 'web' ? 20 : 16,
-    borderRadius: 8,
-    marginBottom: Platform.OS === 'web' ? 28 : 20,
-  },
-  importantTitle: {
-    fontSize: Platform.OS === 'web' ? 16 : 14,
-    fontWeight: '600',
-    color: '#856404',
-    marginBottom: 8,
-  },
-  importantText: {
-    fontSize: Platform.OS === 'web' ? 14 : 12,
-    color: '#856404',
-    lineHeight: 20,
-    marginBottom: 6,
-  },
-  bold: {
-    fontWeight: '700',
-  },
-  stepsBox: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: Platform.OS === 'web' ? 24 : 16,
-    borderWidth: 1,
-    borderColor: '#ddd',
-    marginBottom: Platform.OS === 'web' ? 28 : 20,
-  },
-  stepsTitle: {
-    fontSize: Platform.OS === 'web' ? 16 : 14,
-    fontWeight: '600',
-    color: '#333',
-    marginBottom: Platform.OS === 'web' ? 16 : 12,
-  },
-  step: {
-    flexDirection: 'row',
-    gap: Platform.OS === 'web' ? 16 : 12,
-    marginBottom: Platform.OS === 'web' ? 16 : 12,
-  },
-  stepNumber: {
-    width: Platform.OS === 'web' ? 40 : 36,
-    height: Platform.OS === 'web' ? 40 : 36,
-    borderRadius: 20,
-    backgroundColor: '#007AFF',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  stepNumberText: {
-    color: '#fff',
-    fontWeight: 'bold',
-    fontSize: Platform.OS === 'web' ? 16 : 14,
-  },
-  stepContent: {
-    flex: 1,
-    justifyContent: 'center',
-  },
-  stepTitle: {
     fontSize: Platform.OS === 'web' ? 15 : 13,
+  },
+  statusBanner: {
+    borderLeftWidth: 4,
+    padding: Platform.OS === 'web' ? 18 : 14,
+    borderRadius: 8,
+    marginBottom: 20,
+  },
+  statusText: {
+    fontSize: Platform.OS === 'web' ? 15 : 13,
+    fontWeight: '500',
+    lineHeight: 21,
+  },
+  statusEmphasis: {
+    fontSize: Platform.OS === 'web' ? 14 : 13,
     fontWeight: '600',
-    color: '#333',
-    marginBottom: 4,
+    marginTop: 6,
   },
-  stepDescription: {
-    fontSize: Platform.OS === 'web' ? 13 : 11,
-    color: '#666',
-    lineHeight: 18,
+  channelsCard: { marginBottom: 20 },
+  channelRow: {
+    flexDirection: 'row',
+    gap: 12,
   },
-  resendMessage: {
+  channelIcon: { fontSize: 24, marginTop: 2 },
+  channelContent: { flex: 1 },
+  channelLabel: { fontSize: 12, fontWeight: '600', marginBottom: 2 },
+  channelValue: { fontSize: 14, fontWeight: '500', marginBottom: 4 },
+  divider: { height: 1, marginVertical: 12 },
+  warningBox: {
+    borderLeftWidth: 4,
     padding: Platform.OS === 'web' ? 16 : 12,
     borderRadius: 8,
-    marginBottom: Platform.OS === 'web' ? 20 : 16,
+    marginBottom: 20,
   },
-  resendSuccess: {
-    backgroundColor: '#d4edda',
-    borderLeftWidth: 4,
-    borderLeftColor: '#28a745',
-  },
-  resendError: {
-    backgroundColor: '#f8d7da',
-    borderLeftWidth: 4,
-    borderLeftColor: '#dc3545',
-  },
-  resendMessageText: {
-    fontSize: Platform.OS === 'web' ? 14 : 12,
-    fontWeight: '500',
-    color: '#333',
-  },
-  buttonContainer: {
-    gap: Platform.OS === 'web' ? 12 : 8,
-    marginBottom: Platform.OS === 'web' ? 28 : 20,
-  },
-  resendButton: {
-    backgroundColor: '#28a745',
-    paddingVertical: Platform.OS === 'web' ? 14 : 12,
-    borderRadius: 8,
+  warningTitle: { fontSize: 14, fontWeight: '600', marginBottom: 4 },
+  warningText: { fontSize: 13, lineHeight: 19 },
+  stepsCard: { marginBottom: 20 },
+  stepsTitle: { fontSize: 15, fontWeight: '600', marginBottom: 14 },
+  step: { flexDirection: 'row', gap: 12, marginBottom: 12 },
+  stepBadge: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    justifyContent: 'center',
     alignItems: 'center',
   },
-  resendButtonText: {
-    color: '#fff',
-    fontSize: Platform.OS === 'web' ? 16 : 14,
-    fontWeight: '600',
-  },
-  loginButton: {
-    backgroundColor: '#007AFF',
-    paddingVertical: Platform.OS === 'web' ? 14 : 12,
+  stepNum: { color: '#fff', fontWeight: '700', fontSize: 14 },
+  stepText: { flex: 1, justifyContent: 'center' },
+  stepTitle: { fontSize: 14, fontWeight: '600', marginBottom: 2 },
+  stepDesc: { fontSize: 12, lineHeight: 17 },
+  resendFeedback: {
+    borderLeftWidth: 4,
+    padding: 12,
     borderRadius: 8,
-    alignItems: 'center',
+    marginBottom: 16,
   },
-  loginButtonText: {
-    color: '#fff',
-    fontSize: Platform.OS === 'web' ? 16 : 14,
-    fontWeight: '600',
-  },
+  resendFeedbackText: { fontSize: 13, fontWeight: '500' },
+  buttons: { gap: 10, marginBottom: 24 },
   footer: {
-    backgroundColor: '#f8f9fa',
     borderLeftWidth: 4,
-    borderLeftColor: '#6c757d',
-    padding: Platform.OS === 'web' ? 20 : 16,
+    padding: Platform.OS === 'web' ? 18 : 14,
     borderRadius: 8,
+    marginBottom: 20,
   },
-  footerTitle: {
-    fontSize: Platform.OS === 'web' ? 14 : 12,
-    fontWeight: '600',
-    color: '#333',
-    marginBottom: 8,
-  },
-  footerItem: {
-    fontSize: Platform.OS === 'web' ? 13 : 11,
-    color: '#666',
-    lineHeight: 20,
-    marginBottom: 4,
-  },
+  footerTitle: { fontSize: 13, fontWeight: '600', marginBottom: 6 },
+  footerItem: { fontSize: 12, lineHeight: 19, marginBottom: 3 },
 });

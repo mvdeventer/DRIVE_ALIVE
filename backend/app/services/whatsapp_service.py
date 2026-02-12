@@ -190,7 +190,7 @@ Your driving lesson has been booked successfully.
 • Amount: R{amount:.2f}{notes_section}
 
 Drive Safe! 🚗
-- Drive Alive Team"""
+- RoadReady Team"""
 
             to_number = self._format_phone_number(student_phone)
             from_number = self.get_admin_twilio_sender_phone()
@@ -247,7 +247,7 @@ Your driving lesson is coming up.
 Please be ready for your lesson.
 
 Drive Safe! 🚗
-- Drive Alive Team"""
+- RoadReady Team"""
 
             to_number = self._format_phone_number(student_phone)
             from_number = self.get_admin_twilio_sender_phone()
@@ -304,7 +304,7 @@ Your next lesson is coming up.
 📞 Student Contact: {student_phone}
 
 Drive Safe! 🚗
-- Drive Alive Team"""
+- RoadReady Team"""
 
             to_number = self._format_phone_number(instructor_phone)
             from_number = self.get_admin_twilio_sender_phone()
@@ -363,7 +363,7 @@ You have a new confirmed booking.
 📞 Student Contact: {student_phone}
 
 Drive Safe! 🚗
-- Drive Alive Team"""
+- RoadReady Team"""
 
             to_number = self._format_phone_number(instructor_phone)
             from_number = self.get_admin_twilio_sender_phone()
@@ -401,7 +401,7 @@ Here are your upcoming lessons:
 {bookings_summary}
 
 Drive Safe! 🚗
-- Drive Alive Team"""
+- RoadReady Team"""
 
             to_number = self._format_phone_number(instructor_phone)
             from_number = self.get_admin_twilio_sender_phone()
@@ -447,7 +447,7 @@ Drive Safe! 🚗
             # Message body with clickable link
             message_body = (
                 f"🎉 Welcome {first_name}!\n\n"
-                f"Click here to verify your Drive Alive account:\n"
+                f"Click here to verify your RoadReady account:\n"
                 f"{verification_link}\n\n"
                 f"⏰ Link expires in: {validity_minutes} minutes\n\n"
                 f"Not you? Ignore this message."
@@ -506,7 +506,7 @@ Drive Safe! 🚗
                 f"⏳ Status: Awaiting verification\n\n"
                 f"The student has been sent a verification link. "
                 f"They will be able to book lessons once verified.\n\n"
-                f"This is an automated notification from Drive Alive."
+                f"This is an automated notification from RoadReady."
             )
             
             # Send message

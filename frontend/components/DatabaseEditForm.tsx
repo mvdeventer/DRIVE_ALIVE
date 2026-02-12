@@ -343,7 +343,7 @@ export default function DatabaseEditForm({
           {/* Header */}
           <View style={styles.header}>
             <Text style={styles.title}>Edit {tableType.charAt(0).toUpperCase() + tableType.slice(1)}</Text>
-            <TouchableOpacity onPress={onClose} disabled={loading}>
+            <TouchableOpacity onPress={onClose} disabled={loading} style={{ padding: 8 }}>
               <Text style={styles.closeButton}>✕</Text>
             </TouchableOpacity>
           </View>
@@ -489,8 +489,8 @@ const styles = {
     alignItems: 'center' as const,
   },
   booleanButtonActive: {
-    backgroundColor: '#007AFF',
-    borderColor: '#007AFF',
+    backgroundColor: '#0D9488',
+    borderColor: '#0D9488',
   },
   booleanButtonText: {
     fontSize: Platform.OS === 'web' ? 14 : 13,
@@ -514,8 +514,8 @@ const styles = {
     backgroundColor: '#f9f9f9',
   },
   enumButtonActive: {
-    backgroundColor: '#007AFF',
-    borderColor: '#007AFF',
+    backgroundColor: '#0D9488',
+    borderColor: '#0D9488',
   },
   enumButtonText: {
     fontSize: Platform.OS === 'web' ? 13 : 12,

@@ -36,7 +36,7 @@ class EmailService:
             self.smtp_port = getattr(settings, "SMTP_PORT", 587)
             self.smtp_username = getattr(settings, "SMTP_USERNAME", None)
             self.smtp_password = getattr(settings, "SMTP_PASSWORD", None)
-            self.from_email = getattr(settings, "FROM_EMAIL", "noreply@drivealive.com")
+            self.from_email = getattr(settings, "FROM_EMAIL", "noreply@roadready.co.za")
 
         if not self.smtp_username or not self.smtp_password:
             logger.warning(
@@ -61,7 +61,7 @@ class EmailService:
             reset_link = f"{settings.FRONTEND_URL}/reset-password?token={reset_token}"
 
             # Create email content
-            subject = "Drive Alive - Password Reset Request"
+            subject = "RoadReady - Password Reset Request"
             html_body = f"""
 <!DOCTYPE html>
 <html>
@@ -87,7 +87,7 @@ class EmailService:
 <body>
     <div class="container">
         <div class="header">
-            <h1>🚗 Drive Alive</h1>
+            <h1>🚗 RoadReady</h1>
         </div>
         <div class="content">
             <h2>Password Reset Request</h2>
@@ -103,7 +103,7 @@ class EmailService:
             <p>For security reasons, never share this link with anyone.</p>
         </div>
         <div class="footer">
-            <p>Drive Alive - Your Trusted Driving School Platform</p>
+            <p>RoadReady - Your Trusted Driving School Platform</p>
             <p>This is an automated email. Please do not reply.</p>
         </div>
     </div>
@@ -112,7 +112,7 @@ class EmailService:
             """
 
             plain_body = f"""
-Drive Alive - Password Reset Request
+RoadReady - Password Reset Request
 
 Hello {user_name},
 
@@ -127,7 +127,7 @@ If you didn't request this password reset, please ignore this email. Your passwo
 For security reasons, never share this link with anyone.
 
 ---
-Drive Alive - Your Trusted Driving School Platform
+RoadReady - Your Trusted Driving School Platform
 This is an automated email. Please do not reply.
             """
 
@@ -216,7 +216,7 @@ This is an automated email. Please do not reply.
             <p>If you didn't create an account with us, please ignore this email. The account will be automatically removed after {validity_minutes} minutes.</p>
         </div>
         <div class="footer">
-            <p>&copy; 2026 Drive Alive - Your Trusted Driving School Platform</p>
+            <p>&copy; 2026 RoadReady - Your Trusted Driving School Platform</p>
             <p>This is an automated message, please do not reply to this email.</p>
         </div>
     </div>
@@ -235,7 +235,7 @@ IMPORTANT: This link will expire in {validity_minutes} minutes. If you don't ver
 
 If you didn't create an account with us, please ignore this email.
 
-© 2026 Drive Alive
+© 2026 RoadReady
 """
 
         try:
@@ -377,7 +377,7 @@ If you didn't create an account with us, please ignore this email.
         </div>
         <div class="content">
             <p>Hello {admin_name},</p>
-            <p>A new student has registered on the Drive Alive platform:</p>
+            <p>A new student has registered on the RoadReady platform:</p>
             
             <div class="info-box">
                 <div class="info-row">
@@ -403,7 +403,7 @@ If you didn't create an account with us, please ignore this email.
             <p style="font-size: 12px; color: #666;">This is an automated notification. You do not need to take any action unless the student contacts you directly.</p>
         </div>
         <div class="footer">
-            <p>&copy; 2026 Drive Alive. All rights reserved.</p>
+            <p>&copy; 2026 RoadReady. All rights reserved.</p>
         </div>
     </div>
 </body>
@@ -445,6 +445,166 @@ The student has been sent a verification link. Once verified, they will be able 
 
         except Exception as e:
             logger.error("Failed to send admin notification to %s: %s", admin_email, e)
+            return False
+
+
+    def send_admin_instructor_verification_notification(
+        self,
+        admin_email: str,
+        admin_name: str,
+        instructor_name: str,
+        instructor_email: str,
+        instructor_phone: str,
+        license_number: str,
+        vehicle_info: str,
+        city: str,
+        hourly_rate: str,
+        verification_link: str,
+    ) -> bool:
+        """
+        Send notification to admin about new instructor registration requiring verification.
+
+        Args:
+            admin_email: Admin's email address
+            admin_name: Admin's first name
+            instructor_name: Instructor's full name
+            instructor_email: Instructor's email
+            instructor_phone: Instructor's phone
+            license_number: Instructor's driving license number
+            vehicle_info: Vehicle description (year make model)
+            city: Instructor's city
+            hourly_rate: Instructor's hourly rate
+            verification_link: Link for admin to verify instructor
+
+        Returns:
+            bool: True if sent successfully
+        """
+        if not self.smtp_username or not self.smtp_password:
+            logger.warning("SMTP not configured. Cannot send admin instructor notification.")
+            return False
+
+        subject = f"New Instructor Verification Required - {instructor_name}"
+
+        html_body = f"""
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
+        .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
+        .header {{ background-color: #0D9488; color: white; padding: 20px; text-align: center; border-radius: 5px 5px 0 0; }}
+        .content {{ background-color: #f9f9f9; padding: 30px; border: 1px solid #ddd; border-top: none; }}
+        .info-box {{ background-color: #fff; border: 1px solid #ddd; border-radius: 5px; padding: 15px; margin: 15px 0; }}
+        .info-row {{ padding: 8px 0; border-bottom: 1px solid #eee; }}
+        .info-label {{ font-weight: bold; color: #555; }}
+        .info-value {{ color: #333; }}
+        .button {{ display: inline-block; padding: 15px 30px; background-color: #0D9488; color: white; text-decoration: none; border-radius: 5px; margin: 20px 0; font-weight: bold; }}
+        .footer {{ text-align: center; padding: 20px; font-size: 12px; color: #666; }}
+        .note {{ background-color: #fff3cd; border-left: 4px solid #ffc107; padding: 10px; margin: 20px 0; }}
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>New Instructor Registration</h1>
+        </div>
+        <div class="content">
+            <p>Hello {admin_name},</p>
+            <p>A new instructor has registered on the RoadReady platform and requires your verification:</p>
+
+            <div class="info-box">
+                <div class="info-row">
+                    <span class="info-label">Name:</span>
+                    <span class="info-value">{instructor_name}</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Email:</span>
+                    <span class="info-value">{instructor_email}</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Phone:</span>
+                    <span class="info-value">{instructor_phone}</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">License Number:</span>
+                    <span class="info-value">{license_number}</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Vehicle:</span>
+                    <span class="info-value">{vehicle_info}</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">City:</span>
+                    <span class="info-value">{city}</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Hourly Rate:</span>
+                    <span class="info-value">ZAR {hourly_rate}</span>
+                </div>
+            </div>
+
+            <div style="text-align: center;">
+                <a href="{verification_link}" class="button">Verify Instructor</a>
+            </div>
+
+            <p>Or copy and paste this link into your browser:</p>
+            <p style="word-break: break-all; background-color: #fff; padding: 10px; border: 1px solid #ddd;">{verification_link}</p>
+
+            <div class="note">
+                <strong>Note:</strong> This verification link expires in 60 minutes.
+                You can also verify instructors from the admin dashboard.
+            </div>
+        </div>
+        <div class="footer">
+            <p>&copy; 2026 RoadReady. All rights reserved.</p>
+        </div>
+    </div>
+</body>
+</html>
+"""
+
+        plain_body = f"""
+New Instructor Verification Required
+
+Hello {admin_name},
+
+A new instructor has registered and requires verification:
+
+- Name: {instructor_name}
+- Email: {instructor_email}
+- Phone: {instructor_phone}
+- License: {license_number}
+- Vehicle: {vehicle_info}
+- City: {city}
+- Rate: ZAR {hourly_rate}/hour
+
+Verification Link: {verification_link}
+(Expires in 60 minutes)
+
+You can also verify from the admin dashboard.
+"""
+
+        try:
+            msg = MIMEMultipart("alternative")
+            msg["Subject"] = subject
+            msg["From"] = self.from_email
+            msg["To"] = admin_email
+
+            part1 = MIMEText(plain_body, "plain")
+            part2 = MIMEText(html_body, "html")
+            msg.attach(part1)
+            msg.attach(part2)
+
+            with smtplib.SMTP(self.smtp_server, self.smtp_port) as server:
+                server.starttls()
+                server.login(self.smtp_username, self.smtp_password)
+                server.send_message(msg)
+
+            logger.info("Admin instructor verification email sent to %s", admin_email)
+            return True
+
+        except Exception as e:
+            logger.error("Failed to send instructor verification email to %s: %s", admin_email, e)
             return False
 
 

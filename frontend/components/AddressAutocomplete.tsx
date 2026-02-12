@@ -1,18 +1,19 @@
-/**
+﻿/**
  * Address Input Component - Structured Fields with GPS Location
- * Users can enter address manually OR capture current GPS coordinates
+ * Modernized: Pressable, Ionicons, useTheme, Inter fonts
  */
 import * as Location from 'expo-location';
 import React, { useState } from 'react';
 import {
   ActivityIndicator,
   Platform,
-  StyleSheet,
+  Pressable,
   Text,
   TextInput,
-  TouchableOpacity,
   View,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { useTheme } from '../theme/ThemeContext';
 import MapPreview from './MapPreview';
 
 interface AddressAutocompleteProps {
@@ -29,6 +30,8 @@ export default function AddressAutocomplete({
   onLocationCapture,
   style,
 }: AddressAutocompleteProps) {
+  const { colors } = useTheme();
+
   // Parse existing address value into separate fields
   const lines = value.split('\n').filter(line => line.trim());
   const [streetAddress, setStreetAddress] = useState(lines[0] || '');
@@ -55,29 +58,25 @@ export default function AddressAutocomplete({
     setGpsError(null);
 
     try {
-      // Use expo-location for native apps, navigator.geolocation for web
       if (Platform.OS === 'web') {
-        // Web-specific geolocation
         if (!navigator.geolocation) {
           setGpsError('GPS not available on this device');
           setLoadingGPS(false);
           return;
         }
 
-        // iOS Safari/Chrome requires HTTPS for geolocation
         const isSecure = window.location.protocol === 'https:';
         const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
 
         if (isIOS && !isSecure) {
           setGpsError(
-            '🔒 iOS web browsers require HTTPS for GPS.\n\n' +
+            'iOS web browsers require HTTPS for GPS.\n\n' +
               'Please enter the pickup address manually below.'
           );
           setLoadingGPS(false);
           return;
         }
 
-        // Web geolocation API
         navigator.geolocation.getCurrentPosition(
           async position => {
             await processLocation({
@@ -95,15 +94,13 @@ export default function AddressAutocomplete({
           }
         );
       } else {
-        // Native app - use expo-location
-        // Request permissions first
         const { status } = await Location.requestForegroundPermissionsAsync();
 
         if (status !== 'granted') {
           setGpsError(
-            '📱 Location Permission Required\n\n' +
+            'Location Permission Required\n\n' +
               '1. Open Settings on your device\n' +
-              '2. Find "Drive Alive" app\n' +
+              '2. Find "RoadReady" app\n' +
               '3. Enable Location Services\n' +
               '4. Return and try again\n\n' +
               'OR enter address manually below'
@@ -112,7 +109,6 @@ export default function AddressAutocomplete({
           return;
         }
 
-        // Get current position
         const location = await Location.getCurrentPositionAsync({
           accuracy: Location.Accuracy.High,
         });
@@ -138,14 +134,11 @@ export default function AddressAutocomplete({
     setCoordinates(coords);
     setLoadingGPS(false);
 
-    // Notify parent immediately that location was captured
     if (onLocationCapture) {
       onLocationCapture(coords);
     }
 
-    // Attempt reverse geocoding - try Google first (more accurate for SA), fallback to OpenStreetMap
     try {
-      // Try Google Geocoding API first (more accurate for South African addresses)
       const googleResponse = await fetch(
         `https://maps.googleapis.com/maps/api/geocode/json?latlng=${coords.latitude},${coords.longitude}&key=AIzaSyBFw0Qbyq9zTFTd-tUY6dZWTgaQzuU17R8`
       );
@@ -155,7 +148,6 @@ export default function AddressAutocomplete({
         if (googleData.status === 'OK' && googleData.results?.[0]) {
           const components = googleData.results[0].address_components;
 
-          // Extract address components
           let street = '';
           let house = '';
           let suburbValue = '';
@@ -186,17 +178,16 @@ export default function AddressAutocomplete({
           setCity(cityValue);
           setPostalCode(postalValue);
           updateAddress(fullStreet, suburbValue, cityValue, postalValue);
-          return; // Success - exit
+          return;
         }
       }
 
-      // Fallback to OpenStreetMap if Google fails
       const osmResponse = await fetch(
         `https://nominatim.openstreetmap.org/reverse?` +
           `lat=${coords.latitude}&lon=${coords.longitude}&format=json&addressdetails=1`,
         {
           headers: {
-            'User-Agent': 'DriveAlive-BookingApp/1.0',
+            'User-Agent': 'RoadReady-BookingApp/3.0',
           },
         }
       );
@@ -205,7 +196,6 @@ export default function AddressAutocomplete({
         const data = await osmResponse.json();
         const address = data.address;
 
-        // Auto-fill address fields from geocoded data
         if (address) {
           const street = address.road || address.street || '';
           const house = address.house_number || '';
@@ -224,7 +214,6 @@ export default function AddressAutocomplete({
       }
     } catch (error) {
       console.log('Reverse geocoding failed, coordinates captured:', coords);
-      // Even if reverse geocoding fails, we still have the coordinates
     }
   };
 
@@ -235,10 +224,10 @@ export default function AddressAutocomplete({
     const isIOS = Platform.OS === 'web' && /iPad|iPhone|iPod/.test(navigator.userAgent);
 
     switch (errorCode) {
-      case 1: // PERMISSION_DENIED
+      case 1:
         if (isIOS) {
           setGpsError(
-            '📱 iOS Location Access:\n' +
+            'iOS Location Access:\n' +
               '1. Open Settings > Safari > Location\n' +
               '2. Select "Ask" or "Allow"\n' +
               '3. Reload page and try again\n\n' +
@@ -247,17 +236,17 @@ export default function AddressAutocomplete({
         } else {
           setGpsError(
             'Location permission denied.\n\n' +
-              'Click the 🔒 icon in your browser address bar to allow location access.\n' +
+              'Click the lock icon in your browser address bar to allow location access.\n' +
               'Then reload the page and try again.'
           );
         }
         break;
-      case 2: // POSITION_UNAVAILABLE
+      case 2:
         setGpsError(
           'Location unavailable. Check GPS/Location Services are enabled on your device.'
         );
         break;
-      case 3: // TIMEOUT
+      case 3:
         setGpsError('Location request timed out. Please try again or enter address manually.');
         break;
       default:
@@ -265,32 +254,105 @@ export default function AddressAutocomplete({
     }
   };
 
+  // Shared input style
+  const inputStyle = {
+    backgroundColor: colors.inputBackground,
+    padding: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: colors.inputBorder,
+    fontSize: 16,
+    fontFamily: 'Inter_400Regular',
+    color: colors.inputText,
+  } as const;
+
   return (
-    <View style={[styles.container, style]}>
+    <View style={[{ gap: 12 }, style]}>
       {/* GPS Location Button */}
-      <TouchableOpacity
-        style={styles.gpsButton}
+      <Pressable
         onPress={handleGetCurrentLocation}
         disabled={loadingGPS}
+        style={({ pressed }) => ({
+          backgroundColor: loadingGPS
+            ? colors.textTertiary
+            : pressed
+              ? colors.primaryDark
+              : colors.buttonPrimary,
+          padding: 14,
+          borderRadius: 8,
+          alignItems: 'center' as const,
+          justifyContent: 'center' as const,
+          flexDirection: 'row' as const,
+          gap: 8,
+          minHeight: 48,
+          opacity: loadingGPS ? 0.7 : 1,
+        })}
       >
         {loadingGPS ? (
-          <ActivityIndicator size="small" color="#fff" />
+          <ActivityIndicator size="small" color={colors.buttonPrimaryText} />
         ) : (
-          <Text style={styles.gpsButtonText}>📍 Use Current Location (GPS)</Text>
+          <>
+            <Ionicons name="location" size={20} color={colors.buttonPrimaryText} />
+            <Text
+              style={{
+                color: colors.buttonPrimaryText,
+                fontSize: 16,
+                fontFamily: 'Inter_600SemiBold',
+              }}
+            >
+              Use Current Location (GPS)
+            </Text>
+          </>
         )}
-      </TouchableOpacity>
+      </Pressable>
 
       {/* GPS Status Messages */}
       {gpsError && (
-        <View style={styles.errorContainer}>
-          <Text style={styles.errorText}>{gpsError}</Text>
+        <View
+          style={{
+            backgroundColor: colors.dangerBg,
+            padding: 12,
+            borderRadius: 8,
+            borderLeftWidth: 4,
+            borderLeftColor: colors.danger,
+          }}
+        >
+          <Text
+            style={{
+              color: colors.danger,
+              fontSize: 13,
+              lineHeight: 18,
+              fontFamily: 'Inter_400Regular',
+            }}
+          >
+            {gpsError}
+          </Text>
         </View>
       )}
 
       {coordinates && (
-        <View style={styles.successContainer}>
-          <Text style={styles.successText}>
-            ✓ GPS Location: {coordinates.latitude.toFixed(6)},{' '}
+        <View
+          style={{
+            backgroundColor: colors.successBg,
+            padding: 10,
+            borderRadius: 8,
+            borderLeftWidth: 4,
+            borderLeftColor: colors.success,
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 8,
+          }}
+        >
+          <Ionicons name="checkmark-circle" size={18} color={colors.success} />
+          <Text
+            style={{
+              color: colors.success,
+              fontSize: 14,
+              fontFamily: 'Inter_500Medium',
+              flex: 1,
+            }}
+          >
+            GPS Location: {coordinates.latitude.toFixed(6)},{' '}
             {coordinates.longitude.toFixed(6)}
           </Text>
         </View>
@@ -302,13 +364,33 @@ export default function AddressAutocomplete({
       )}
 
       {/* Manual Address Entry */}
-      <Text style={styles.orText}>— OR Enter Address Manually —</Text>
+      <Text
+        style={{
+          textAlign: 'center',
+          color: colors.textTertiary,
+          fontSize: 14,
+          fontFamily: 'Inter_500Medium',
+          marginVertical: 4,
+        }}
+      >
+        — OR Enter Address Manually —
+      </Text>
 
-      <View style={styles.fieldContainer}>
-        <Text style={styles.label}>Street Address *</Text>
+      <View style={{ marginBottom: 4 }}>
+        <Text
+          style={{
+            fontSize: 14,
+            fontFamily: 'Inter_600SemiBold',
+            color: colors.text,
+            marginBottom: 6,
+          }}
+        >
+          Street Address <Text style={{ color: colors.danger }}>*</Text>
+        </Text>
         <TextInput
-          style={styles.input}
+          style={inputStyle}
           placeholder="e.g. 40 Potgieter Crescent"
+          placeholderTextColor={colors.inputPlaceholder}
           value={streetAddress}
           onChangeText={text => {
             setStreetAddress(text);
@@ -317,11 +399,21 @@ export default function AddressAutocomplete({
         />
       </View>
 
-      <View style={styles.fieldContainer}>
-        <Text style={styles.label}>Suburb *</Text>
+      <View style={{ marginBottom: 4 }}>
+        <Text
+          style={{
+            fontSize: 14,
+            fontFamily: 'Inter_600SemiBold',
+            color: colors.text,
+            marginBottom: 6,
+          }}
+        >
+          Suburb <Text style={{ color: colors.danger }}>*</Text>
+        </Text>
         <TextInput
-          style={styles.input}
+          style={inputStyle}
           placeholder="e.g. Brackenfell"
+          placeholderTextColor={colors.inputPlaceholder}
           value={suburb}
           onChangeText={text => {
             setSuburb(text);
@@ -330,11 +422,21 @@ export default function AddressAutocomplete({
         />
       </View>
 
-      <View style={styles.fieldContainer}>
-        <Text style={styles.label}>City *</Text>
+      <View style={{ marginBottom: 4 }}>
+        <Text
+          style={{
+            fontSize: 14,
+            fontFamily: 'Inter_600SemiBold',
+            color: colors.text,
+            marginBottom: 6,
+          }}
+        >
+          City <Text style={{ color: colors.danger }}>*</Text>
+        </Text>
         <TextInput
-          style={styles.input}
+          style={inputStyle}
           placeholder="e.g. Cape Town"
+          placeholderTextColor={colors.inputPlaceholder}
           value={city}
           onChangeText={text => {
             setCity(text);
@@ -343,11 +445,21 @@ export default function AddressAutocomplete({
         />
       </View>
 
-      <View style={styles.fieldContainer}>
-        <Text style={styles.label}>Postal Code *</Text>
+      <View style={{ marginBottom: 4 }}>
+        <Text
+          style={{
+            fontSize: 14,
+            fontFamily: 'Inter_600SemiBold',
+            color: colors.text,
+            marginBottom: 6,
+          }}
+        >
+          Postal Code <Text style={{ color: colors.danger }}>*</Text>
+        </Text>
         <TextInput
-          style={styles.input}
+          style={inputStyle}
           placeholder="e.g. 7560"
+          placeholderTextColor={colors.inputPlaceholder}
           value={postalCode}
           onChangeText={text => {
             setPostalCode(text);
@@ -360,69 +472,3 @@ export default function AddressAutocomplete({
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    gap: 12,
-  },
-  gpsButton: {
-    backgroundColor: '#007AFF',
-    padding: 14,
-    borderRadius: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
-    minHeight: 48,
-  },
-  gpsButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  errorContainer: {
-    backgroundColor: '#fee',
-    padding: 12,
-    borderRadius: 6,
-    borderLeftWidth: 4,
-    borderLeftColor: '#d00',
-  },
-  errorText: {
-    color: '#d00',
-    fontSize: 13,
-    lineHeight: 18,
-    fontFamily: 'monospace',
-  },
-  successContainer: {
-    backgroundColor: '#efe',
-    padding: 10,
-    borderRadius: 6,
-    borderLeftWidth: 4,
-    borderLeftColor: '#0a0',
-  },
-  successText: {
-    color: '#0a0',
-    fontSize: 14,
-  },
-  orText: {
-    textAlign: 'center',
-    color: '#999',
-    fontSize: 14,
-    marginVertical: 8,
-  },
-  fieldContainer: {
-    marginBottom: 4,
-  },
-  label: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#333',
-    marginBottom: 6,
-  },
-  input: {
-    backgroundColor: '#f8f9fa',
-    padding: 12,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#dee2e6',
-    fontSize: 16,
-  },
-});

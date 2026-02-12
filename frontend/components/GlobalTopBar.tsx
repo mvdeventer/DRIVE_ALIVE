@@ -1,10 +1,13 @@
 /**
  * Global Top Bar Component
- * Displays user role and name with logout button
- * Fixed at the top of all web pages
+ * Displays user role, name, dark-mode toggle, and logout button.
+ * Fixed at the top on web; hidden on native (native uses header).
  */
+import { Ionicons } from '@expo/vector-icons';
 import React from 'react';
-import { Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+
+import { useTheme } from '../theme/ThemeContext';
 
 interface GlobalTopBarProps {
   userName: string;
@@ -13,6 +16,8 @@ interface GlobalTopBarProps {
 }
 
 export default function GlobalTopBar({ userName, userRole, onLogout }: GlobalTopBarProps) {
+  const { colors, isDark, toggle } = useTheme();
+
   // Only show on web
   if (Platform.OS !== 'web') {
     return null;
@@ -26,30 +31,28 @@ export default function GlobalTopBar({ userName, userRole, onLogout }: GlobalTop
   const getRoleColor = (role: string | null) => {
     switch (role?.toLowerCase()) {
       case 'admin':
-        return '#FF6B6B'; // Red
+        return colors.roleAdmin;
       case 'instructor':
-        return '#4ECDC4'; // Teal
+        return colors.roleInstructor;
       case 'student':
-        return '#45B7D1'; // Blue
+        return colors.roleStudent;
       default:
-        return '#6C757D'; // Gray
+        return colors.textSecondary;
     }
   };
 
-  // Apply fixed positioning via inline style for web
-  const webStyles =
-    Platform.OS === 'web'
-      ? {
-          position: 'fixed' as any,
-          top: 0,
-          left: 0,
-          right: 0,
-          zIndex: 1000,
-        }
-      : {};
+  // Fixed positioning for web
+  const webStyles = {
+    position: 'fixed' as const,
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 1000,
+  };
 
   return (
     <View style={[styles.container, { backgroundColor: getRoleColor(userRole) }, webStyles]}>
+      {/* Left: user info */}
       <View style={styles.userInfo}>
         <View style={styles.userDetails}>
           <Text style={styles.userName}>{userName}</Text>
@@ -57,53 +60,99 @@ export default function GlobalTopBar({ userName, userRole, onLogout }: GlobalTop
         </View>
       </View>
 
-      <TouchableOpacity style={styles.logoutButton} onPress={onLogout}>
-        <Text style={styles.logoutButtonText}>Logout</Text>
-      </TouchableOpacity>
+      {/* Right: actions */}
+      <View style={styles.actions}>
+        {/* Dark-mode toggle */}
+        <Pressable
+          onPress={toggle}
+          style={({ pressed }) => [styles.iconButton, pressed && styles.iconButtonPressed]}
+          accessibilityLabel={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
+          accessibilityRole="button"
+        >
+          <Ionicons
+            name={isDark ? 'sunny' : 'moon'}
+            size={18}
+            color="#fff"
+          />
+        </Pressable>
+
+        {/* Logout */}
+        <Pressable
+          onPress={onLogout}
+          style={({ pressed }) => [styles.logoutButton, pressed && styles.logoutButtonPressed]}
+          accessibilityLabel="Logout"
+          accessibilityRole="button"
+        >
+          <Ionicons name="log-out-outline" size={16} color="#fff" style={{ marginRight: 6 }} />
+          <Text style={styles.logoutButtonText}>Logout</Text>
+        </Pressable>
+      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
-    height: 70,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    height: 56,
+    flexDirection: 'row' as const,
+    justifyContent: 'space-between' as const,
+    alignItems: 'center' as const,
     paddingHorizontal: 20,
-    paddingTop: 10,
-    paddingBottom: 10,
-    boxShadow: '0 2px 8px rgba(0, 0, 0, 0.25)',
+    boxShadow: '0 2px 10px rgba(0, 0, 0, 0.20)',
   },
   userInfo: {
     flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
   },
   userDetails: {
-    justifyContent: 'center',
+    justifyContent: 'center' as const,
   },
   userName: {
-    fontSize: 16,
-    fontWeight: 'bold',
+    fontSize: 15,
+    fontFamily: 'Inter_600SemiBold',
     color: '#fff',
+    letterSpacing: 0.2,
   },
   userRole: {
-    fontSize: 12,
-    color: 'rgba(255, 255, 255, 0.8)',
-    marginTop: 2,
+    fontSize: 11,
+    fontFamily: 'Inter_400Regular',
+    color: 'rgba(255, 255, 255, 0.75)',
+    marginTop: 1,
+    textTransform: 'uppercase' as const,
+    letterSpacing: 0.8,
+  },
+  actions: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: 10,
+  },
+  iconButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(255, 255, 255, 0.18)',
+    justifyContent: 'center' as const,
+    alignItems: 'center' as const,
+  },
+  iconButtonPressed: {
+    backgroundColor: 'rgba(255, 255, 255, 0.30)',
   },
   logoutButton: {
-    backgroundColor: 'rgba(255, 255, 255, 0.25)',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 6,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.5)',
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    backgroundColor: 'rgba(255, 255, 255, 0.18)',
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 8,
+  },
+  logoutButtonPressed: {
+    backgroundColor: 'rgba(255, 255, 255, 0.30)',
   },
   logoutButtonText: {
     color: '#fff',
-    fontSize: 14,
-    fontWeight: '600',
+    fontSize: 13,
+    fontFamily: 'Inter_600SemiBold',
+    letterSpacing: 0.3,
   },
 });

@@ -7,13 +7,12 @@ import React, { useCallback, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
-  Modal,
   Platform,
+  Pressable,
   RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
-  TouchableOpacity,
   View,
 } from 'react-native';
 import * as DocumentPicker from 'expo-document-picker';
@@ -26,6 +25,8 @@ const FileSystem = FileSystemModule as typeof FileSystemModule & {
 };
 import InlineMessage from '../../components/InlineMessage';
 import WebNavigationHeader from '../../components/WebNavigationHeader';
+import { Button, Card, ThemedModal } from '../../components';
+import { useTheme } from '../../theme/ThemeContext';
 import apiService from '../../services/api';
 
 interface AdminStats {
@@ -44,6 +45,7 @@ interface AdminStats {
 }
 
 export default function AdminDashboardScreen({ navigation }: any) {
+  const { colors } = useTheme();
   const [stats, setStats] = useState<AdminStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -93,14 +95,14 @@ export default function AdminDashboardScreen({ navigation }: any) {
         const url = window.URL.createObjectURL(new Blob([response.data]));
         const link = document.createElement('a');
         link.href = url;
-        link.setAttribute('download', `drive_alive_backup_${new Date().toISOString().split('T')[0]}.json`);
+        link.setAttribute('download', `roadready_backup_${new Date().toISOString().split('T')[0]}.json`);
         document.body.appendChild(link);
         link.click();
         link.remove();
         alert('✅ Database backup downloaded successfully!');
       } else {
         // Mobile: Save to device storage
-        const fileUri = (FileSystem.documentDirectory || '') + `drive_alive_backup_${new Date().toISOString().split('T')[0]}.json`;
+        const fileUri = (FileSystem.documentDirectory || '') + `roadready_backup_${new Date().toISOString().split('T')[0]}.json`;
         await FileSystem.writeAsStringAsync(fileUri, JSON.stringify(response.data));
         alert(`✅ Database backed up to: ${fileUri}`);
       }
@@ -127,13 +129,13 @@ export default function AdminDashboardScreen({ navigation }: any) {
           const url = window.URL.createObjectURL(new Blob([backupResponse.data]));
           const link = document.createElement('a');
           link.href = url;
-          link.setAttribute('download', `drive_alive_backup_before_reset_${new Date().toISOString().split('T')[0]}.json`);
+          link.setAttribute('download', `roadready_backup_before_reset_${new Date().toISOString().split('T')[0]}.json`);
           document.body.appendChild(link);
           link.click();
           link.remove();
         } else {
           // Mobile: Save to device storage
-          const fileUri = (FileSystem.documentDirectory || '') + `drive_alive_backup_before_reset_${new Date().toISOString().split('T')[0]}.json`;
+          const fileUri = (FileSystem.documentDirectory || '') + `roadready_backup_before_reset_${new Date().toISOString().split('T')[0]}.json`;
           await FileSystem.writeAsStringAsync(fileUri, JSON.stringify(backupResponse.data));
         }
       } catch (backupErr) {
@@ -302,15 +304,26 @@ export default function AdminDashboardScreen({ navigation }: any) {
 
   if (loading) {
     return (
-      <View style={styles.centerContainer}>
-        <ActivityIndicator size="large" color="#0066CC" />
-        <Text style={styles.loadingText}>Loading dashboard...</Text>
+      <View style={[styles.centerContainer, { backgroundColor: colors.background }]}>
+        <ActivityIndicator size="large" color={colors.primary} />
+        <Text style={[styles.loadingText, { color: colors.textSecondary }]}>Loading dashboard...</Text>
       </View>
     );
   }
 
+  const actionItems = [
+    { key: 'verify', label: 'Verify Instructors', screen: 'InstructorVerification', badge: stats?.pending_verification },
+    { key: 'users', label: 'User Management', screen: 'UserManagement' },
+    { key: 'bookings', label: 'Booking Oversight', screen: 'BookingOversight', badge: stats?.pending_bookings },
+    { key: 'revenue', label: 'Revenue Analytics', screen: 'RevenueAnalytics' },
+    { key: 'earnings', label: 'Instructor Earnings', screen: 'InstructorEarningsOverview' },
+    { key: 'settings', label: 'Settings', screen: 'AdminSettings' },
+    { key: 'createAdmin', label: 'Create Admin', screen: 'CreateAdmin' },
+    { key: 'database', label: 'Database', screen: 'DatabaseInterface' },
+  ];
+
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
       <WebNavigationHeader
         title="Admin Dashboard"
         onBack={() => navigation.goBack()}
@@ -318,20 +331,14 @@ export default function AdminDashboardScreen({ navigation }: any) {
       />
       <ScrollView
         style={styles.scrollView}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
       >
-        <View style={styles.header}>
+        <View style={[styles.header, { backgroundColor: colors.primary }]}>
           <View style={styles.headerContent}>
             <View>
               <Text style={styles.headerTitle}>Admin Dashboard</Text>
               <Text style={styles.headerSubtitle}>System Overview & Management</Text>
             </View>
-            <TouchableOpacity
-              style={styles.dbButton}
-              onPress={() => setShowDbModal(true)}
-            >
-              <Text style={styles.dbButtonText}>💾 Database</Text>
-            </TouchableOpacity>
           </View>
         </View>
 
@@ -340,409 +347,319 @@ export default function AdminDashboardScreen({ navigation }: any) {
         {stats && (
           <>
             {/* Quick Action Buttons */}
-            <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Quick Actions</Text>
+            <Card variant="elevated" style={styles.section}>
+              <Text style={[styles.sectionTitle, { color: colors.text }]}>Quick Actions</Text>
               <View style={styles.actionGrid}>
-                <TouchableOpacity
-                  style={[styles.actionCard, styles.actionPrimary]}
-                  onPress={() => navigation.navigate('InstructorVerification')}
-                >
-                  <Text style={styles.actionIcon}>✅</Text>
-                  <Text style={styles.actionTitle}>Verify Instructors</Text>
-                  {stats.pending_verification > 0 && (
-                    <View style={styles.badge}>
-                      <Text style={styles.badgeText}>{stats.pending_verification}</Text>
-                    </View>
-                  )}
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={[styles.actionCard, styles.actionSuccess]}
-                  onPress={() => navigation.navigate('UserManagement')}
-                >
-                  <Text style={styles.actionIcon}>👥</Text>
-                  <Text style={styles.actionTitle}>User Management</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={[styles.actionCard, styles.actionInfo]}
-                  onPress={() => navigation.navigate('BookingOversight')}
-                >
-                  <Text style={styles.actionIcon}>📅</Text>
-                  <Text style={styles.actionTitle}>Booking Oversight</Text>
-                  {stats.pending_bookings > 0 && (
-                    <View style={styles.badge}>
-                      <Text style={styles.badgeText}>{stats.pending_bookings}</Text>
-                    </View>
-                  )}
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={[styles.actionCard, styles.actionWarning]}
-                  onPress={() => navigation.navigate('RevenueAnalytics')}
-                >
-                  <Text style={styles.actionIcon}>💰</Text>
-                  <Text style={styles.actionTitle}>Revenue Analytics</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={[styles.actionCard, styles.actionSecondary]}
-                  onPress={() => navigation.navigate('InstructorEarningsOverview')}
-                >
-                  <Text style={styles.actionIcon}>💵</Text>
-                  <Text style={styles.actionTitle}>Instructor Earnings</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={[styles.actionCard, styles.actionSettings]}
-                  onPress={() => navigation.navigate('AdminSettings')}
-                >
-                  <Text style={styles.actionIcon}>⚙️</Text>
-                  <Text style={styles.actionTitle}>Settings</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={[styles.actionCard, styles.actionCreateAdmin]}
-                  onPress={() => navigation.navigate('CreateAdmin')}
-                >
-                  <Text style={styles.actionIcon}>👤</Text>
-                  <Text style={styles.actionTitle}>Create Admin</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={[styles.actionCard, styles.actionDatabase]}
-                  onPress={() => navigation.navigate('DatabaseInterface')}
-                >
-                  <Text style={styles.actionIcon}>🗄️</Text>
-                  <Text style={styles.actionTitle}>Database</Text>
-                </TouchableOpacity>
+                {actionItems.map((item) => (
+                  <Pressable
+                    key={item.key}
+                    style={[styles.actionCard, { backgroundColor: colors.primary }]}
+                    onPress={() => navigation.navigate(item.screen)}
+                  >
+                    <Text style={styles.actionTitle}>{item.label}</Text>
+                    {item.badge && item.badge > 0 ? (
+                      <View style={[styles.badge, { backgroundColor: colors.danger }]}>
+                        <Text style={styles.badgeText}>{item.badge}</Text>
+                      </View>
+                    ) : null}
+                  </Pressable>
+                ))}
               </View>
-            </View>
+            </Card>
 
             {/* User Statistics */}
-            <View style={styles.section}>
-              <Text style={styles.sectionTitle}>User Statistics</Text>
+            <Card variant="elevated" style={styles.section}>
+              <Text style={[styles.sectionTitle, { color: colors.text }]}>User Statistics</Text>
               <View style={styles.statsGrid}>
-                <View style={styles.statCard}>
-                  <Text style={styles.statValue}>{stats.total_users}</Text>
-                  <Text style={styles.statLabel}>Total Users</Text>
+                <View style={[styles.statCard, { backgroundColor: colors.backgroundSecondary }]}>
+                  <Text style={[styles.statValue, { color: colors.text }]}>{stats.total_users}</Text>
+                  <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Total Users</Text>
                 </View>
-                <View style={styles.statCard}>
-                  <Text style={[styles.statValue, styles.statSuccess]}>{stats.active_users}</Text>
-                  <Text style={styles.statLabel}>Active</Text>
+                <View style={[styles.statCard, { backgroundColor: colors.backgroundSecondary }]}>
+                  <Text style={[styles.statValue, { color: colors.success }]}>{stats.active_users}</Text>
+                  <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Active</Text>
                 </View>
-                <View style={styles.statCard}>
-                  <Text style={styles.statValue}>{stats.total_instructors}</Text>
-                  <Text style={styles.statLabel}>Instructors</Text>
+                <View style={[styles.statCard, { backgroundColor: colors.backgroundSecondary }]}>
+                  <Text style={[styles.statValue, { color: colors.text }]}>{stats.total_instructors}</Text>
+                  <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Instructors</Text>
                 </View>
-                <View style={styles.statCard}>
-                  <Text style={styles.statValue}>{stats.total_students}</Text>
-                  <Text style={styles.statLabel}>Students</Text>
+                <View style={[styles.statCard, { backgroundColor: colors.backgroundSecondary }]}>
+                  <Text style={[styles.statValue, { color: colors.text }]}>{stats.total_students}</Text>
+                  <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Students</Text>
                 </View>
               </View>
-            </View>
+            </Card>
 
             {/* Instructor Verification */}
-            <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Instructor Verification</Text>
+            <Card variant="elevated" style={styles.section}>
+              <Text style={[styles.sectionTitle, { color: colors.text }]}>Instructor Verification</Text>
               <View style={styles.statsGrid}>
-                <View style={styles.statCard}>
-                  <Text style={[styles.statValue, styles.statSuccess]}>
+                <View style={[styles.statCard, { backgroundColor: colors.backgroundSecondary }]}>
+                  <Text style={[styles.statValue, { color: colors.success }]}>
                     {stats.verified_instructors}
                   </Text>
-                  <Text style={styles.statLabel}>Verified</Text>
+                  <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Verified</Text>
                 </View>
-                <View style={styles.statCard}>
-                  <Text style={[styles.statValue, styles.statWarning]}>
+                <View style={[styles.statCard, { backgroundColor: colors.backgroundSecondary }]}>
+                  <Text style={[styles.statValue, { color: colors.warning }]}>
                     {stats.pending_verification}
                   </Text>
-                  <Text style={styles.statLabel}>Pending</Text>
+                  <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Pending</Text>
                 </View>
               </View>
-            </View>
+            </Card>
 
             {/* Booking Statistics */}
-            <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Booking Statistics</Text>
+            <Card variant="elevated" style={styles.section}>
+              <Text style={[styles.sectionTitle, { color: colors.text }]}>Booking Statistics</Text>
               <View style={styles.statsGrid}>
-                <View style={styles.statCard}>
-                  <Text style={styles.statValue}>{stats.total_bookings}</Text>
-                  <Text style={styles.statLabel}>Total</Text>
+                <View style={[styles.statCard, { backgroundColor: colors.backgroundSecondary }]}>
+                  <Text style={[styles.statValue, { color: colors.text }]}>{stats.total_bookings}</Text>
+                  <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Total</Text>
                 </View>
-                <View style={styles.statCard}>
-                  <Text style={[styles.statValue, styles.statWarning]}>
+                <View style={[styles.statCard, { backgroundColor: colors.backgroundSecondary }]}>
+                  <Text style={[styles.statValue, { color: colors.warning }]}>
                     {stats.pending_bookings}
                   </Text>
-                  <Text style={styles.statLabel}>Pending</Text>
+                  <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Pending</Text>
                 </View>
-                <View style={styles.statCard}>
-                  <Text style={[styles.statValue, styles.statSuccess]}>
+                <View style={[styles.statCard, { backgroundColor: colors.backgroundSecondary }]}>
+                  <Text style={[styles.statValue, { color: colors.success }]}>
                     {stats.completed_bookings}
                   </Text>
-                  <Text style={styles.statLabel}>Completed</Text>
+                  <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Completed</Text>
                 </View>
-                <View style={styles.statCard}>
-                  <Text style={[styles.statValue, styles.statDanger]}>
+                <View style={[styles.statCard, { backgroundColor: colors.backgroundSecondary }]}>
+                  <Text style={[styles.statValue, { color: colors.danger }]}>
                     {stats.cancelled_bookings}
                   </Text>
-                  <Text style={styles.statLabel}>Cancelled</Text>
+                  <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Cancelled</Text>
                 </View>
               </View>
-            </View>
+            </Card>
 
             {/* Revenue Overview */}
-            <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Revenue Overview</Text>
+            <Card variant="elevated" style={styles.section}>
+              <Text style={[styles.sectionTitle, { color: colors.text }]}>Revenue Overview</Text>
               <View style={styles.statsGrid}>
-                <View style={styles.statCard}>
-                  <Text style={[styles.statValue, styles.statSuccess]}>
+                <View style={[styles.statCard, { backgroundColor: colors.backgroundSecondary }]}>
+                  <Text style={[styles.statValue, { color: colors.success }]}>
                     R{stats.total_revenue.toFixed(0)}
                   </Text>
-                  <Text style={styles.statLabel}>Total Revenue</Text>
+                  <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Total Revenue</Text>
                 </View>
-                <View style={styles.statCard}>
-                  <Text style={styles.statValue}>R{stats.avg_booking_value.toFixed(0)}</Text>
-                  <Text style={styles.statLabel}>Avg Booking</Text>
+                <View style={[styles.statCard, { backgroundColor: colors.backgroundSecondary }]}>
+                  <Text style={[styles.statValue, { color: colors.text }]}>R{stats.avg_booking_value.toFixed(0)}</Text>
+                  <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Avg Booking</Text>
                 </View>
               </View>
-            </View>
+            </Card>
           </>
         )}
       </ScrollView>
 
       {/* Database Management Modal */}
-      <Modal
+      <ThemedModal
         visible={showDbModal}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setShowDbModal(false)}
+        onClose={() => setShowDbModal(false)}
+        title="Database Management"
+        footer={
+          <Button variant="secondary" onPress={() => setShowDbModal(false)} disabled={!!dbAction} fullWidth>
+            Cancel
+          </Button>
+        }
       >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>💾 Database Management</Text>
-            <Text style={styles.modalSubtitle}>
-              Backup, restore, or reset your database
-            </Text>
+        <Text style={[styles.modalSubtitle, { color: colors.textSecondary }]}>
+          Backup, restore, or reset your database
+        </Text>
 
-            <View style={styles.modalButtons}>
-              <TouchableOpacity
-                style={[styles.modalButton, styles.modalButtonPrimary]}
-                onPress={handleBackupDatabase}
-                disabled={!!dbAction}
-              >
-                {dbAction === 'backup' ? (
-                  <ActivityIndicator color="#fff" />
-                ) : (
-                  <Text style={styles.modalButtonText}>📥 Backup to PC</Text>
-                )}
-              </TouchableOpacity>
+        <View style={styles.modalButtons}>
+          <Button
+            variant="primary"
+            onPress={handleBackupDatabase}
+            disabled={!!dbAction}
+            loading={dbAction === 'backup'}
+            fullWidth
+          >
+            Backup to PC
+          </Button>
 
-              <TouchableOpacity
-                style={[styles.modalButton, styles.modalButtonSuccess]}
-                onPress={handleRestoreDatabase}
-                disabled={!!dbAction}
-              >
-                {dbAction === 'restore' ? (
-                  <ActivityIndicator color="#fff" />
-                ) : (
-                  <Text style={styles.modalButtonText}>📤 Restore from Backup</Text>
-                )}
-              </TouchableOpacity>
+          <Button
+            variant="primary"
+            style={{ backgroundColor: colors.success }}
+            onPress={handleRestoreDatabase}
+            disabled={!!dbAction}
+            loading={dbAction === 'restore'}
+            fullWidth
+          >
+            Restore from Backup
+          </Button>
 
-              <TouchableOpacity
-                style={[styles.modalButton, styles.modalButtonDanger]}
-                onPress={() => {
-                  if (Platform.OS === 'web') {
-                    if (confirm('⚠️ This will DELETE ALL DATA! Are you absolutely sure?')) {
-                      handleResetDatabase();
-                    }
-                  } else {
-                    Alert.alert(
-                      'Reset Database',
-                      '⚠️ This will DELETE ALL DATA! Are you absolutely sure?',
-                      [
-                        { text: 'Cancel', style: 'cancel' },
-                        { text: 'Reset', style: 'destructive', onPress: handleResetDatabase },
-                      ]
-                    );
-                  }
-                }}
-                disabled={!!dbAction}
-              >
-                {dbAction === 'reset' ? (
-                  <ActivityIndicator color="#fff" />
-                ) : (
-                  <Text style={styles.modalButtonText}>🗑️ Reset Database</Text>
-                )}
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[styles.modalButton, styles.modalButtonSecondary]}
-                onPress={() => setShowDbModal(false)}
-                disabled={!!dbAction}
-              >
-                <Text style={styles.modalButtonTextSecondary}>Cancel</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
+          <Button
+            variant="danger"
+            onPress={() => {
+              if (Platform.OS === 'web') {
+                if (confirm('This will DELETE ALL DATA! Are you absolutely sure?')) {
+                  handleResetDatabase();
+                }
+              } else {
+                Alert.alert(
+                  'Reset Database',
+                  'This will DELETE ALL DATA! Are you absolutely sure?',
+                  [
+                    { text: 'Cancel', style: 'cancel' },
+                    { text: 'Reset', style: 'destructive', onPress: handleResetDatabase },
+                  ]
+                );
+              }
+            }}
+            disabled={!!dbAction}
+            loading={dbAction === 'reset'}
+            fullWidth
+          >
+            Reset Database
+          </Button>
         </View>
-      </Modal>
+      </ThemedModal>
 
       {/* Restore Options Modal */}
-      <Modal
+      <ThemedModal
         visible={showRestoreOptions}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setShowRestoreOptions(false)}
+        onClose={() => setShowRestoreOptions(false)}
+        title="Restore Database"
+        size="lg"
+        footer={
+          <Button variant="secondary" onPress={() => setShowRestoreOptions(false)} disabled={!!dbAction} fullWidth>
+            Cancel
+          </Button>
+        }
       >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>📥 Restore Database</Text>
-            <Text style={styles.modalSubtitle}>
-              Choose where to restore from
-            </Text>
+        <Text style={[styles.modalSubtitle, { color: colors.textSecondary }]}>
+          Choose where to restore from
+        </Text>
 
-            {backupsLoading ? (
-              <ActivityIndicator size="large" color="#0066CC" style={{ marginVertical: 20 }} />
-            ) : (
+        {backupsLoading ? (
+          <ActivityIndicator size="large" color={colors.primary} style={{ marginVertical: 20 }} />
+        ) : (
+          <>
+            {/* Server Backups Section */}
+            {serverBackups.length > 0 && (
               <>
-                {/* Server Backups Section */}
-                {serverBackups.length > 0 && (
-                  <>
-                    <Text style={styles.restoreSectionTitle}>📁 Server Backups ({serverBackups.length})</Text>
-                    <ScrollView style={styles.backupsList} nestedScrollEnabled={true}>
-                      {serverBackups.map((backup: any) => (
-                        <TouchableOpacity
-                          key={`${backup.type}-${backup.filename}`}
-                          style={styles.backupItem}
-                          onPress={() => {
-                            const desc = backup.type === 'archived' ? `📦 Archive: ${backup.filename}` : `${backup.filename}`;
-                            if (confirm(`🔄 Restore from ${desc}?\n\n⚠️ This will replace all current data!`)) {
-                              restoreFromServerBackup(backup);
-                            }
-                          }}
-                          disabled={!!dbAction}
-                        >
-                          <View style={styles.backupInfo}>
-                            <Text style={styles.backupFilename}>
-                              {backup.type === 'archived' ? '📦' : '📄'} {backup.filename}
-                            </Text>
-                            <Text style={styles.backupMeta}>
-                              Size: {backup.size_mb}MB • Created: {new Date(backup.created_at).toLocaleDateString()}
-                              {backup.type === 'archived' && ` • Files: ${backup.file_count}`}
-                            </Text>
-                          </View>
-                          {dbAction === 'restore' && (
-                            <ActivityIndicator color="#0066CC" />
-                          )}
-                        </TouchableOpacity>
-                      ))}
-                    </ScrollView>
+                <Text style={[styles.restoreSectionTitle, { color: colors.text }]}>Server Backups ({serverBackups.length})</Text>
+                <ScrollView style={[styles.backupsList, { borderColor: colors.border, backgroundColor: colors.backgroundSecondary }]} nestedScrollEnabled={true}>
+                  {serverBackups.map((backup: any) => (
+                    <Pressable
+                      key={`${backup.type}-${backup.filename}`}
+                      style={[styles.backupItem, { borderBottomColor: colors.border }]}
+                      onPress={() => {
+                        const desc = backup.type === 'archived' ? `Archive: ${backup.filename}` : `${backup.filename}`;
+                        if (confirm(`Restore from ${desc}?\n\nThis will replace all current data!`)) {
+                          restoreFromServerBackup(backup);
+                        }
+                      }}
+                      disabled={!!dbAction}
+                    >
+                      <View style={styles.backupInfo}>
+                        <Text style={[styles.backupFilename, { color: colors.primary }]}>
+                          {backup.filename}
+                        </Text>
+                        <Text style={[styles.backupMeta, { color: colors.textMuted }]}>
+                          Size: {backup.size_mb}MB {'\u2022'} Created: {new Date(backup.created_at).toLocaleDateString()}
+                          {backup.type === 'archived' && ` \u2022 Files: ${backup.file_count}`}
+                        </Text>
+                      </View>
+                      {dbAction === 'restore' && (
+                        <ActivityIndicator color={colors.primary} />
+                      )}
+                    </Pressable>
+                  ))}
+                </ScrollView>
 
-                    <View style={styles.divider} />
-                  </>
-                )}
-
-                {/* Backup Settings Button */}
-                <TouchableOpacity
-                  style={[styles.modalButton, styles.modalButtonInfo]}
-                  onPress={handleLoadBackupConfig}
-                  disabled={!!dbAction}
-                >
-                  <Text style={styles.modalButtonText}>⚙️ Backup Settings</Text>
-                </TouchableOpacity>
-
-                {/* Local File Option */}
-                <TouchableOpacity
-                  style={[styles.modalButton, styles.modalButtonPrimary]}
-                  onPress={restoreFromLocalFile}
-                  disabled={!!dbAction}
-                >
-                  {dbAction === 'restore' ? (
-                    <ActivityIndicator color="#fff" />
-                  ) : (
-                    <Text style={styles.modalButtonText}>📂 Browse Local File</Text>
-                  )}
-                </TouchableOpacity>
-
-                {/* Cancel Button */}
-                <TouchableOpacity
-                  style={[styles.modalButton, styles.modalButtonSecondary]}
-                  onPress={() => setShowRestoreOptions(false)}
-                  disabled={!!dbAction}
-                >
-                  <Text style={styles.modalButtonTextSecondary}>Cancel</Text>
-                </TouchableOpacity>
+                <View style={[styles.divider, { backgroundColor: colors.border }]} />
               </>
             )}
-          </View>
-        </View>
-      </Modal>
+
+            {/* Backup Settings Button */}
+            <Button
+              variant="secondary"
+              onPress={handleLoadBackupConfig}
+              disabled={!!dbAction}
+              fullWidth
+              style={{ marginBottom: 12 }}
+            >
+              Backup Settings
+            </Button>
+
+            {/* Local File Option */}
+            <Button
+              variant="primary"
+              onPress={restoreFromLocalFile}
+              disabled={!!dbAction}
+              loading={dbAction === 'restore'}
+              fullWidth
+            >
+              Browse Local File
+            </Button>
+          </>
+        )}
+      </ThemedModal>
 
       {/* Backup Configuration Modal */}
-      <Modal
+      <ThemedModal
         visible={showBackupConfig}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setShowBackupConfig(false)}
+        onClose={() => setShowBackupConfig(false)}
+        title="Backup Configuration"
+        footer={
+          <Button variant="secondary" onPress={() => setShowBackupConfig(false)} disabled={configLoading} fullWidth>
+            Close
+          </Button>
+        }
       >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>⚙️ Backup Configuration</Text>
-            <Text style={styles.modalSubtitle}>
-              Manage automatic backup settings
-            </Text>
+        <Text style={[styles.modalSubtitle, { color: colors.textSecondary }]}>
+          Manage automatic backup settings
+        </Text>
 
-            {configLoading || !backupConfig ? (
-              <ActivityIndicator size="large" color="#0066CC" style={{ marginVertical: 20 }} />
-            ) : (
-              <>
-                <View style={styles.configItem}>
-                  <Text style={styles.configLabel}>Retention Period (Days):</Text>
-                  <Text style={styles.configValue}>{backupConfig.retention_days} days</Text>
-                  <Text style={styles.configDescription}>
-                    Backups older than this will be automatically deleted
-                  </Text>
-                </View>
+        {configLoading || !backupConfig ? (
+          <ActivityIndicator size="large" color={colors.primary} style={{ marginVertical: 20 }} />
+        ) : (
+          <>
+            <View style={[styles.configItem, { backgroundColor: colors.backgroundSecondary, borderLeftColor: colors.primary }]}>
+              <Text style={[styles.configLabel, { color: colors.text }]}>Retention Period (Days):</Text>
+              <Text style={[styles.configValue, { color: colors.primary }]}>{backupConfig.retention_days} days</Text>
+              <Text style={[styles.configDescription, { color: colors.textMuted }]}>
+                Backups older than this will be automatically deleted
+              </Text>
+            </View>
 
-                <View style={styles.configItem}>
-                  <Text style={styles.configLabel}>Auto-Archive After (Days):</Text>
-                  <Text style={styles.configValue}>{backupConfig.auto_archive_after_days} days</Text>
-                  <Text style={styles.configDescription}>
-                    Backups older than this will be compressed into ZIP files
-                  </Text>
-                </View>
+            <View style={[styles.configItem, { backgroundColor: colors.backgroundSecondary, borderLeftColor: colors.primary }]}>
+              <Text style={[styles.configLabel, { color: colors.text }]}>Auto-Archive After (Days):</Text>
+              <Text style={[styles.configValue, { color: colors.primary }]}>{backupConfig.auto_archive_after_days} days</Text>
+              <Text style={[styles.configDescription, { color: colors.textMuted }]}>
+                Backups older than this will be compressed into ZIP files
+              </Text>
+            </View>
 
-                <View style={styles.configItem}>
-                  <Text style={styles.configLabel}>Backup Interval (Minutes):</Text>
-                  <Text style={styles.configValue}>{backupConfig.backup_interval_minutes} minutes</Text>
-                  <Text style={styles.configDescription}>
-                    Automatic backups are created at this interval
-                  </Text>
-                </View>
+            <View style={[styles.configItem, { backgroundColor: colors.backgroundSecondary, borderLeftColor: colors.primary }]}>
+              <Text style={[styles.configLabel, { color: colors.text }]}>Backup Interval (Minutes):</Text>
+              <Text style={[styles.configValue, { color: colors.primary }]}>{backupConfig.backup_interval_minutes} minutes</Text>
+              <Text style={[styles.configDescription, { color: colors.textMuted }]}>
+                Automatic backups are created at this interval
+              </Text>
+            </View>
 
-                <TouchableOpacity
-                  style={[styles.modalButton, styles.modalButtonInfo]}
-                  onPress={() => {
-                    // In a full implementation, would show input fields to edit these values
-                    alert('Note: Configuration editing requires a dedicated settings screen.\nContact admin to modify these settings via backend API.');
-                  }}
-                >
-                  <Text style={styles.modalButtonText}>📝 Edit Settings (Admin API)</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={[styles.modalButton, styles.modalButtonSecondary]}
-                  onPress={() => setShowBackupConfig(false)}
-                  disabled={configLoading}
-                >
-                  <Text style={styles.modalButtonTextSecondary}>Close</Text>
-                </TouchableOpacity>
-              </>
-            )}
-          </View>
-        </View>
-      </Modal>
+            <Button
+              variant="secondary"
+              onPress={() => {
+                alert('Note: Configuration editing requires a dedicated settings screen.\nContact admin to modify these settings via backend API.');
+              }}
+              fullWidth
+              style={{ marginBottom: 12 }}
+            >
+              Edit Settings (Admin API)
+            </Button>
+          </>
+        )}
+      </ThemedModal>
     </View>
   );
 }
@@ -750,7 +667,6 @@ export default function AdminDashboardScreen({ navigation }: any) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F5F5F5',
   },
   scrollView: {
     flex: 1,
@@ -759,15 +675,13 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#F5F5F5',
   },
   loadingText: {
     marginTop: 10,
     fontSize: 16,
-    color: '#666',
+    fontFamily: 'Inter_400Regular',
   },
   header: {
-    backgroundColor: '#0066CC',
     padding: Platform.OS === 'web' ? 20 : 15,
     paddingTop: Platform.OS === 'web' ? 40 : 20,
   },
@@ -776,40 +690,24 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'flex-start',
   },
-  dbButton: {
-    backgroundColor: '#28a745',
-    paddingHorizontal: Platform.OS === 'web' ? 20 : 12,
-    paddingVertical: Platform.OS === 'web' ? 10 : 8,
-    borderRadius: 8,
-    marginLeft: 10,
-  },
-  dbButtonText: {
-    color: '#FFF',
-    fontSize: Platform.OS === 'web' ? 14 : 12,
-    fontWeight: '600',
-  },
   headerTitle: {
     fontSize: Platform.OS === 'web' ? 28 : 22,
-    fontWeight: 'bold',
+    fontFamily: 'Inter_700Bold',
     color: '#FFF',
   },
   headerSubtitle: {
     fontSize: Platform.OS === 'web' ? 16 : 13,
-    color: '#E0E0E0',
+    fontFamily: 'Inter_400Regular',
+    color: 'rgba(255,255,255,0.8)',
     marginTop: 5,
   },
   section: {
-    backgroundColor: '#FFF',
-    padding: Platform.OS === 'web' ? 15 : 10,
     marginTop: Platform.OS === 'web' ? 15 : 10,
     marginHorizontal: Platform.OS === 'web' ? 15 : 8,
-    borderRadius: 10,
-    boxShadow: '0px 2px 4px #0000001A',
   },
   sectionTitle: {
     fontSize: Platform.OS === 'web' ? 18 : 16,
-    fontWeight: 'bold',
-    color: '#333',
+    fontFamily: 'Inter_700Bold',
     marginBottom: Platform.OS === 'web' ? 15 : 12,
   },
   actionGrid: {
@@ -826,65 +724,20 @@ const styles = StyleSheet.create({
     maxWidth: '100%',
     flexGrow: 1,
     alignItems: 'center',
-    boxShadow: '0px 1px 3px #00000015',
-    elevation: 2,
-  },
-  actionPrimary: {
-    backgroundColor: '#0066CC',
-  },
-  actionSecondary: {
-    backgroundColor: '#6C757D',
-  },
-  actionSuccess: {
-    backgroundColor: '#28A745',
-  },
-  actionWarning: {
-    backgroundColor: '#FFC107',
-  },
-  actionInfo: {
-    backgroundColor: '#17A2B8',
-  },
-  actionSettings: {
-    backgroundColor: '#6F42C1',
-  },
-  actionCreateAdmin: {
-    backgroundColor: '#20C997',
-  },
-  actionDatabase: {
-    backgroundColor: '#0D6EFD',
-  },
-  actionIcon: {
-    fontSize: 26,
-    fontWeight: 'bold',
-    color: '#FFF',
-    marginBottom: 8,
-    lineHeight: 32,
-  },
-  actionBadge: {
-    fontSize: 26,
-    fontWeight: 'bold',
-    color: '#FFF',
-    marginBottom: 8,
-    lineHeight: 32,
+    justifyContent: 'center',
+    minHeight: Platform.OS === 'web' ? 80 : 60,
   },
   actionTitle: {
-    fontSize: 15,
-    fontWeight: 'bold',
+    fontSize: Platform.OS === 'web' ? 15 : 13,
+    fontFamily: 'Inter_600SemiBold',
     color: '#FFF',
     textAlign: 'center',
     lineHeight: 20,
-  },
-  actionSubtitle: {
-    fontSize: 13,
-    color: '#E0E0E0',
-    lineHeight: 18,
-    marginTop: 2,
   },
   badge: {
     position: 'absolute',
     top: 5,
     right: 5,
-    backgroundColor: '#DC3545',
     borderRadius: 12,
     minWidth: 24,
     height: 24,
@@ -895,7 +748,7 @@ const styles = StyleSheet.create({
   badgeText: {
     color: '#FFF',
     fontSize: 12,
-    fontWeight: 'bold',
+    fontFamily: 'Inter_700Bold',
   },
   statsGrid: {
     flexDirection: 'row',
@@ -903,7 +756,6 @@ const styles = StyleSheet.create({
     marginHorizontal: -5,
   },
   statCard: {
-    backgroundColor: '#F8F9FA',
     borderRadius: 8,
     padding: Platform.OS === 'web' ? 20 : 12,
     margin: Platform.OS === 'web' ? 6 : 4,
@@ -912,129 +764,38 @@ const styles = StyleSheet.create({
     maxWidth: '100%',
     flexGrow: 1,
     alignItems: 'center',
-    boxShadow: '0px 1px 3px #00000015',
-    elevation: 2,
   },
   statValue: {
     fontSize: 30,
-    fontWeight: 'bold',
-    color: '#333',
+    fontFamily: 'Inter_700Bold',
     lineHeight: 38,
   },
   statLabel: {
     fontSize: 14,
-    color: '#666',
+    fontFamily: 'Inter_400Regular',
     marginTop: 8,
     textAlign: 'center',
     lineHeight: 20,
   },
-  statSuccess: {
-    color: '#28A745',
-  },
-  statWarning: {
-    color: '#FFC107',
-  },
-  statDanger: {
-    color: '#DC3545',
-  },
-  revenueCard: {
-    backgroundColor: '#F8F9FA',
-    padding: 15,
-    borderRadius: 8,
-  },
-  revenueRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E0E0E0',
-  },
-  revenueLabel: {
-    fontSize: 16,
-    color: '#666',
-  },
-  revenueValue: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#333',
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: Platform.OS === 'web' ? 20 : 10,
-  },
-  modalContent: {
-    backgroundColor: '#FFF',
-    borderRadius: 12,
-    padding: Platform.OS === 'web' ? 32 : 24,
-    width: Platform.OS === 'web' ? '45%' : '92%',
-    maxWidth: 550,
-  },
-  modalTitle: {
-    fontSize: Platform.OS === 'web' ? 24 : 20,
-    fontWeight: 'bold',
-    color: '#333',
-    marginBottom: 8,
-  },
   modalSubtitle: {
     fontSize: Platform.OS === 'web' ? 14 : 12,
-    color: '#666',
+    fontFamily: 'Inter_400Regular',
     marginBottom: 20,
   },
   modalButtons: {
     gap: 12,
   },
-  modalButton: {
-    padding: Platform.OS === 'web' ? 16 : 12,
-    borderRadius: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
-    minHeight: 50,
-  },
-  modalButtonPrimary: {
-    backgroundColor: '#0066CC',
-  },
-  modalButtonSuccess: {
-    backgroundColor: '#28a745',
-  },
-  modalButtonDanger: {
-    backgroundColor: '#dc3545',
-  },
-  modalButtonSecondary: {
-    backgroundColor: '#FFF',
-    borderWidth: 1,
-    borderColor: '#DDD',
-  },
-  modalButtonText: {
-    color: '#FFF',
-    fontSize: Platform.OS === 'web' ? 16 : 14,
-    fontWeight: '600',
-  },
-  modalButtonTextSecondary: {
-    color: '#666',
-    fontSize: Platform.OS === 'web' ? 16 : 14,
-    fontWeight: '600',
-  },
-  modalButtonInfo: {
-    backgroundColor: '#17A2B8',
-  },
   restoreSectionTitle: {
     fontSize: Platform.OS === 'web' ? 16 : 14,
-    fontWeight: '600',
-    color: '#333',
+    fontFamily: 'Inter_600SemiBold',
     marginBottom: Platform.OS === 'web' ? 12 : 10,
     marginTop: Platform.OS === 'web' ? 15 : 12,
   },
   backupsList: {
     maxHeight: 250,
     borderWidth: 1,
-    borderColor: '#DDD',
     borderRadius: 8,
     marginBottom: Platform.OS === 'web' ? 15 : 12,
-    backgroundColor: '#F9F9F9',
   },
   backupItem: {
     flexDirection: 'row',
@@ -1042,49 +803,42 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: Platform.OS === 'web' ? 12 : 10,
     borderBottomWidth: 1,
-    borderBottomColor: '#EEE',
   },
   backupInfo: {
     flex: 1,
   },
   backupFilename: {
     fontSize: Platform.OS === 'web' ? 14 : 13,
-    fontWeight: '600',
-    color: '#0066CC',
+    fontFamily: 'Inter_600SemiBold',
     marginBottom: 4,
   },
   backupMeta: {
     fontSize: Platform.OS === 'web' ? 12 : 11,
-    color: '#999',
+    fontFamily: 'Inter_400Regular',
   },
   divider: {
     height: 1,
-    backgroundColor: '#EEE',
     marginVertical: Platform.OS === 'web' ? 15 : 12,
   },
   configItem: {
-    backgroundColor: '#F5F5F5',
     borderRadius: 8,
     padding: Platform.OS === 'web' ? 15 : 12,
     marginBottom: Platform.OS === 'web' ? 12 : 10,
     borderLeftWidth: 4,
-    borderLeftColor: '#17A2B8',
   },
   configLabel: {
     fontSize: Platform.OS === 'web' ? 14 : 13,
-    fontWeight: '600',
-    color: '#333',
+    fontFamily: 'Inter_600SemiBold',
     marginBottom: 4,
   },
   configValue: {
     fontSize: Platform.OS === 'web' ? 18 : 16,
-    fontWeight: 'bold',
-    color: '#17A2B8',
+    fontFamily: 'Inter_700Bold',
     marginBottom: 4,
   },
   configDescription: {
     fontSize: Platform.OS === 'web' ? 12 : 11,
-    color: '#999',
+    fontFamily: 'Inter_400Regular',
     fontStyle: 'italic',
   },
 });

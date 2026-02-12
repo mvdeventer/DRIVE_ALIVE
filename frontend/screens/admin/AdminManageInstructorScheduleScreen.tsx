@@ -6,18 +6,19 @@ import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  Modal,
   Platform,
+  Pressable,
   ScrollView,
   StyleSheet,
   Switch,
   Text,
   TextInput,
-  TouchableOpacity,
   View,
 } from 'react-native';
+import { Button, Card, ThemedModal } from '../../components';
 import InlineMessage from '../../components/InlineMessage';
 import WebNavigationHeader from '../../components/WebNavigationHeader';
+import { useTheme } from '../../theme/ThemeContext';
 import ApiService from '../../services/api';
 import TimePickerWheel from '../../components/TimePickerWheel';
 import CalendarPicker from '../../components/CalendarPicker';
@@ -53,6 +54,7 @@ const DAY_LABELS: { [key: string]: string } = {
 export default function AdminManageInstructorScheduleScreen({ route, navigation: navProp }: any) {
   const { instructorId, instructorName } = route.params;
   const navInstance = navProp || useNavigation();
+  const { colors } = useTheme();
   const scrollViewRef = useRef<ScrollView>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -320,22 +322,22 @@ export default function AdminManageInstructorScheduleScreen({ route, navigation:
 
   if (loading) {
     return (
-      <View style={styles.container}>
+      <View style={[styles.container, { backgroundColor: colors.background }]}>
         <WebNavigationHeader
           title={`${instructorName}'s Schedule`}
           onBack={() => navInstance.goBack()}
           showBackButton={true}
         />
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#0066CC" />
-          <Text style={styles.loadingText}>Loading schedule...</Text>
+          <ActivityIndicator size="large" color={colors.primary} />
+          <Text style={[styles.loadingText, { color: colors.textSecondary }]}>Loading schedule...</Text>
         </View>
       </View>
     );
   }
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
       <WebNavigationHeader
         title={`${instructorName}'s Schedule`}
         onBack={() => navInstance.goBack()}
@@ -346,135 +348,138 @@ export default function AdminManageInstructorScheduleScreen({ route, navigation:
         {errorMessage ? <InlineMessage message={errorMessage} type="error" /> : null}
 
         {/* Weekly Schedule */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>📅 Weekly Schedule</Text>
-          <Text style={styles.sectionHint}>Set the instructor's default weekly availability</Text>
+        <Card variant="elevated" style={{ marginVertical: 10, marginHorizontal: Platform.OS === 'web' ? 20 : 10 }}>
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>Weekly Schedule</Text>
+          <Text style={[styles.sectionHint, { color: colors.textMuted }]}>Set the instructor's default weekly availability</Text>
 
-          <View style={styles.enableAllCard}>
+          <View style={[styles.enableAllCard, { backgroundColor: colors.backgroundSecondary }]}>
             <View style={styles.enableAllHeader}>
-              <Text style={styles.enableAllLabel}>Enable All Days</Text>
+              <Text style={[styles.enableAllLabel, { color: colors.text }]}>Enable All Days</Text>
               <Switch
                 value={schedules.every((s) => s.is_active)}
                 onValueChange={toggleAllDays}
-                trackColor={{ false: '#ccc', true: '#28a745' }}
+                trackColor={{ false: colors.border, true: colors.success }}
                 thumbColor={Platform.OS === 'android' ? '#fff' : undefined}
               />
             </View>
-            <Text style={styles.enableAllDescription}>
+            <Text style={[styles.enableAllDescription, { color: colors.textMuted }]}>
               Quickly enable or disable all days
             </Text>
           </View>
 
           {schedules.map((schedule) => (
-            <View key={schedule.day_of_week} style={styles.dayRow}>
+            <View key={schedule.day_of_week} style={[styles.dayRow, { borderBottomColor: colors.border }]}>
               <View style={styles.dayHeader}>
-                <Text style={styles.dayLabel}>{DAY_LABELS[schedule.day_of_week]}</Text>
+                <Text style={[styles.dayLabel, { color: colors.text }]}>{DAY_LABELS[schedule.day_of_week]}</Text>
                 <Switch
                   value={schedule.is_active}
                   onValueChange={() => toggleDay(schedule.day_of_week)}
-                  trackColor={{ false: '#ccc', true: '#28a745' }}
+                  trackColor={{ false: colors.border, true: colors.success }}
                   thumbColor={schedule.is_active ? '#fff' : '#f4f3f4'}
                 />
               </View>
 
               {schedule.is_active && (
                 <View style={styles.timeRow}>
-                  <TouchableOpacity
-                    style={styles.timeButton}
+                  <Pressable
+                    style={[styles.timeButton, { backgroundColor: colors.primary }]}
                     onPress={() => setShowTimePicker({ day: schedule.day_of_week, field: 'start_time' })}
                   >
-                    <Text style={styles.timeButtonText}>🕐 {schedule.start_time}</Text>
-                  </TouchableOpacity>
-                  <Text style={styles.timeSeparator}>to</Text>
-                  <TouchableOpacity
-                    style={styles.timeButton}
+                    <Text style={styles.timeButtonText}>{schedule.start_time}</Text>
+                  </Pressable>
+                  <Text style={[styles.timeSeparator, { color: colors.textMuted }]}>to</Text>
+                  <Pressable
+                    style={[styles.timeButton, { backgroundColor: colors.primary }]}
                     onPress={() => setShowTimePicker({ day: schedule.day_of_week, field: 'end_time' })}
                   >
-                    <Text style={styles.timeButtonText}>🕐 {schedule.end_time}</Text>
-                  </TouchableOpacity>
+                    <Text style={styles.timeButtonText}>{schedule.end_time}</Text>
+                  </Pressable>
                   {schedule.id && (
-                    <TouchableOpacity
-                      style={styles.deleteButton}
+                    <Pressable
+                      style={[styles.deleteButton, { backgroundColor: colors.danger }]}
                       onPress={() => setConfirmDelete(schedule.id!)}
                     >
-                      <Text style={styles.deleteButtonText}>🗑️</Text>
-                    </TouchableOpacity>
+                      <Text style={styles.deleteButtonText}>Delete</Text>
+                    </Pressable>
                   )}
                 </View>
               )}
             </View>
           ))}
 
-          <TouchableOpacity
-            style={[styles.saveButton, saving && styles.saveButtonDisabled]}
+          <Button
+            variant="primary"
+            fullWidth
+            style={{ backgroundColor: colors.success, marginTop: 20 }}
             onPress={handleSaveSchedule}
             disabled={saving || !hasUnsavedChanges}
+            loading={saving}
           >
-            <Text style={styles.saveButtonText}>
-              {saving ? '⏳ Saving...' : '💾 Save Schedule'}
-            </Text>
-          </TouchableOpacity>
-        </View>
+            {saving ? 'Saving...' : 'Save Schedule'}
+          </Button>
+        </Card>
 
         {/* Time Off */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>🚫 Time Off</Text>
-          <Text style={styles.sectionHint}>Block out dates when instructor is unavailable</Text>
+        <Card variant="elevated" style={{ marginVertical: 10, marginHorizontal: Platform.OS === 'web' ? 20 : 10 }}>
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>Time Off</Text>
+          <Text style={[styles.sectionHint, { color: colors.textMuted }]}>Block out dates when instructor is unavailable</Text>
 
           {/* Existing Time Off */}
           {timeOff.map((item) => (
-            <View key={item.id} style={styles.timeOffCard}>
-              <Text style={styles.timeOffDates}>
-                📅 {item.start_date} to {item.end_date}
+            <View key={item.id} style={[styles.timeOffCard, { backgroundColor: colors.backgroundSecondary }]}>
+              <Text style={[styles.timeOffDates, { color: colors.text }]}>
+                {item.start_date} to {item.end_date}
               </Text>
-              {item.reason && <Text style={styles.timeOffReason}>{item.reason}</Text>}
-              <TouchableOpacity
-                style={styles.deleteTimeOffButton}
+              {item.reason && <Text style={[styles.timeOffReason, { color: colors.textSecondary }]}>{item.reason}</Text>}
+              <Button
+                variant="danger"
+                size="sm"
                 onPress={() => setConfirmDeleteTimeOff(item.id!)}
               >
-                <Text style={styles.deleteTimeOffButtonText}>🗑️ Delete</Text>
-              </TouchableOpacity>
+                Delete
+              </Button>
             </View>
           ))}
 
           {/* Add New Time Off */}
-          <View style={styles.addTimeOffSection}>
-            <Text style={styles.addTimeOffTitle}>➕ Add New Time Off</Text>
+          <View style={[styles.addTimeOffSection, { backgroundColor: colors.backgroundSecondary }]}>
+            <Text style={[styles.addTimeOffTitle, { color: colors.text }]}>Add New Time Off</Text>
             
             <View style={styles.dateRow}>
-              <TouchableOpacity
-                style={styles.dateButton}
+              <Pressable
+                style={[styles.dateButton, { backgroundColor: colors.card, borderColor: colors.border }]}
                 onPress={() => setShowDatePicker({ field: 'start_date' })}
               >
-                <Text style={styles.dateButtonLabel}>Start Date</Text>
-                <Text style={styles.dateButtonValue}>
+                <Text style={[styles.dateButtonLabel, { color: colors.textMuted }]}>Start Date</Text>
+                <Text style={[styles.dateButtonValue, { color: colors.text }]}>
                   {newTimeOff.start_date || 'Select...'}
                 </Text>
-              </TouchableOpacity>
+              </Pressable>
 
-              <TouchableOpacity
-                style={styles.dateButton}
+              <Pressable
+                style={[styles.dateButton, { backgroundColor: colors.card, borderColor: colors.border }]}
                 onPress={() => setShowDatePicker({ field: 'end_date' })}
               >
-                <Text style={styles.dateButtonLabel}>End Date</Text>
-                <Text style={styles.dateButtonValue}>
+                <Text style={[styles.dateButtonLabel, { color: colors.textMuted }]}>End Date</Text>
+                <Text style={[styles.dateButtonValue, { color: colors.text }]}>
                   {newTimeOff.end_date || 'Select...'}
                 </Text>
-              </TouchableOpacity>
+              </Pressable>
             </View>
 
             <TextInput
-              style={styles.reasonInput}
+              style={[styles.reasonInput, { backgroundColor: colors.card, borderColor: colors.border, color: colors.text }]}
               placeholder="Reason (optional)"
+              placeholderTextColor={colors.textMuted}
               value={newTimeOff.reason}
               onChangeText={(text) => setNewTimeOff({ ...newTimeOff, reason: text })}
             />
 
-            <TouchableOpacity style={styles.addButton} onPress={handleAddTimeOff}>
-              <Text style={styles.addButtonText}>➕ Add Time Off</Text>
-            </TouchableOpacity>
+            <Button variant="primary" fullWidth onPress={handleAddTimeOff}>
+              Add Time Off
+            </Button>
           </View>
-        </View>
+        </Card>
       </ScrollView>
 
       {/* Time Picker Modal */}
@@ -487,120 +492,100 @@ export default function AdminManageInstructorScheduleScreen({ route, navigation:
       )}
 
       {/* Date Picker Modal */}
-      {showDatePicker.field && (
-        <Modal
-          visible={true}
-          transparent={true}
-          animationType="slide"
-          onRequestClose={() => setShowDatePicker({})}
-        >
-          <View style={styles.modalOverlay}>
-            <View style={styles.modalContent}>
-              <Text style={styles.modalTitle}>
-                Select {showDatePicker.field === 'start_date' ? 'Start' : 'End'} Date
-              </Text>
-              <CalendarPicker
-                value={
-                  tempSelectedDate ||
-                  (showDatePicker.field === 'start_date' && newTimeOff.start_date
-                    ? new Date(newTimeOff.start_date)
-                    : showDatePicker.field === 'end_date' && newTimeOff.end_date
-                    ? new Date(newTimeOff.end_date)
-                    : new Date())
-                }
-                onChange={handleDatePickerConfirm}
-                onCancel={() => {
-                  setShowDatePicker({});
-                  setTempSelectedDate(null);
-                }}
-                minDate={
-                  showDatePicker.field === 'end_date' && newTimeOff.start_date
-                    ? new Date(newTimeOff.start_date)
-                    : new Date()
-                }
-              />
-            </View>
-          </View>
-        </Modal>
-      )}
+      <ThemedModal
+        visible={!!showDatePicker.field}
+        onClose={() => {
+          setShowDatePicker({});
+          setTempSelectedDate(null);
+        }}
+        title={`Select ${showDatePicker.field === 'start_date' ? 'Start' : 'End'} Date`}
+      >
+        {showDatePicker.field && (
+          <CalendarPicker
+            value={
+              tempSelectedDate ||
+              (showDatePicker.field === 'start_date' && newTimeOff.start_date
+                ? new Date(newTimeOff.start_date)
+                : showDatePicker.field === 'end_date' && newTimeOff.end_date
+                ? new Date(newTimeOff.end_date)
+                : new Date())
+            }
+            onChange={handleDatePickerConfirm}
+            onCancel={() => {
+              setShowDatePicker({});
+              setTempSelectedDate(null);
+            }}
+            minDate={
+              showDatePicker.field === 'end_date' && newTimeOff.start_date
+                ? new Date(newTimeOff.start_date)
+                : new Date()
+            }
+          />
+        )}
+      </ThemedModal>
 
       {/* Confirm Delete Schedule Modal */}
-      <Modal visible={!!confirmDelete} transparent animationType="fade">
-        <View style={styles.modalOverlay}>
-          <View style={styles.confirmModalContainer}>
-            <Text style={styles.confirmTitle}>⚠️ Delete Schedule Entry</Text>
-            <Text style={styles.confirmMessage}>
-              Are you sure you want to delete this schedule entry? This cannot be undone.
-            </Text>
-            <View style={styles.confirmButtons}>
-              <TouchableOpacity
-                style={styles.confirmCancelButton}
-                onPress={() => setConfirmDelete(null)}
-              >
-                <Text style={styles.confirmCancelButtonText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.confirmDeleteButton}
-                onPress={() => confirmDelete && handleDeleteSchedule(confirmDelete)}
-              >
-                <Text style={styles.confirmDeleteButtonText}>Delete</Text>
-              </TouchableOpacity>
-            </View>
+      <ThemedModal
+        visible={!!confirmDelete}
+        onClose={() => setConfirmDelete(null)}
+        title="Delete Schedule Entry"
+        footer={
+          <View style={{ flexDirection: 'row', gap: 12 }}>
+            <Button variant="secondary" style={{ flex: 1 }} onPress={() => setConfirmDelete(null)}>
+              Cancel
+            </Button>
+            <Button variant="danger" style={{ flex: 1 }} onPress={() => confirmDelete && handleDeleteSchedule(confirmDelete)}>
+              Delete
+            </Button>
           </View>
-        </View>
-      </Modal>
+        }
+      >
+        <Text style={{ fontSize: 15, color: colors.textSecondary, textAlign: 'center', lineHeight: 22, fontFamily: 'Inter_400Regular' }}>
+          Are you sure you want to delete this schedule entry? This cannot be undone.
+        </Text>
+      </ThemedModal>
 
       {/* Confirm Delete Time Off Modal */}
-      <Modal visible={!!confirmDeleteTimeOff} transparent animationType="fade">
-        <View style={styles.modalOverlay}>
-          <View style={styles.confirmModalContainer}>
-            <Text style={styles.confirmTitle}>⚠️ Delete Time Off</Text>
-            <Text style={styles.confirmMessage}>
-              Are you sure you want to delete this time off entry?
-            </Text>
-            <View style={styles.confirmButtons}>
-              <TouchableOpacity
-                style={styles.confirmCancelButton}
-                onPress={() => setConfirmDeleteTimeOff(null)}
-              >
-                <Text style={styles.confirmCancelButtonText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.confirmDeleteButton}
-                onPress={() => confirmDeleteTimeOff && handleDeleteTimeOff(confirmDeleteTimeOff)}
-              >
-                <Text style={styles.confirmDeleteButtonText}>Delete</Text>
-              </TouchableOpacity>
-            </View>
+      <ThemedModal
+        visible={!!confirmDeleteTimeOff}
+        onClose={() => setConfirmDeleteTimeOff(null)}
+        title="Delete Time Off"
+        footer={
+          <View style={{ flexDirection: 'row', gap: 12 }}>
+            <Button variant="secondary" style={{ flex: 1 }} onPress={() => setConfirmDeleteTimeOff(null)}>
+              Cancel
+            </Button>
+            <Button variant="danger" style={{ flex: 1 }} onPress={() => confirmDeleteTimeOff && handleDeleteTimeOff(confirmDeleteTimeOff)}>
+              Delete
+            </Button>
           </View>
-        </View>
-      </Modal>
+        }
+      >
+        <Text style={{ fontSize: 15, color: colors.textSecondary, textAlign: 'center', lineHeight: 22, fontFamily: 'Inter_400Regular' }}>
+          Are you sure you want to delete this time off entry?
+        </Text>
+      </ThemedModal>
 
       {/* Unsaved Changes Modal */}
-      <Modal visible={showDiscardModal} transparent animationType="fade">
-        <View style={styles.modalOverlay}>
-          <View style={styles.confirmModalContainer}>
-            <Text style={styles.confirmTitle}>⚠️ Unsaved Changes</Text>
-            <Text style={styles.confirmMessage}>
-              You have unsaved changes. Do you want to save before leaving?
-            </Text>
-            <View style={styles.confirmButtons}>
-              <TouchableOpacity
-                style={styles.confirmCancelButton}
-                onPress={handleDiscardChanges}
-              >
-                <Text style={styles.confirmCancelButtonText}>Discard</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.confirmSaveButton}
-                onPress={handleSaveAndContinue}
-              >
-                <Text style={styles.confirmSaveButtonText}>Save & Leave</Text>
-              </TouchableOpacity>
-            </View>
+      <ThemedModal
+        visible={showDiscardModal}
+        onClose={() => setShowDiscardModal(false)}
+        title="Unsaved Changes"
+        footer={
+          <View style={{ flexDirection: 'row', gap: 12 }}>
+            <Button variant="danger" style={{ flex: 1 }} onPress={handleDiscardChanges}>
+              Discard
+            </Button>
+            <Button variant="primary" style={{ flex: 1, backgroundColor: colors.success }} onPress={handleSaveAndContinue}>
+              Save & Leave
+            </Button>
           </View>
-        </View>
-      </Modal>
+        }
+      >
+        <Text style={{ fontSize: 15, color: colors.textSecondary, textAlign: 'center', lineHeight: 22, fontFamily: 'Inter_400Regular' }}>
+          You have unsaved changes. Do you want to save before leaving?
+        </Text>
+      </ThemedModal>
     </View>
   );
 }
@@ -608,7 +593,6 @@ export default function AdminManageInstructorScheduleScreen({ route, navigation:
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
   },
   scrollContent: {
     flex: 1,
@@ -621,30 +605,19 @@ const styles = StyleSheet.create({
   loadingText: {
     marginTop: 10,
     fontSize: 16,
-    color: '#666',
-  },
-  section: {
-    backgroundColor: '#fff',
-    marginVertical: 10,
-    marginHorizontal: Platform.OS === 'web' ? 20 : 10,
-    padding: Platform.OS === 'web' ? 20 : 15,
-    borderRadius: 8,
-    boxShadow: Platform.OS === 'web' ? '0 2px 4px rgba(0, 0, 0, 0.1)' : undefined,
-    elevation: 3,
+    fontFamily: 'Inter_400Regular',
   },
   sectionTitle: {
     fontSize: Platform.OS === 'web' ? 20 : 18,
-    fontWeight: 'bold',
+    fontFamily: 'Inter_700Bold',
     marginBottom: 5,
-    color: '#333',
   },
   sectionHint: {
     fontSize: Platform.OS === 'web' ? 14 : 12,
-    color: '#666',
+    fontFamily: 'Inter_400Regular',
     marginBottom: 15,
   },
   enableAllCard: {
-    backgroundColor: '#f8f9fa',
     borderRadius: 8,
     padding: Platform.OS === 'web' ? 16 : 12,
     marginBottom: 15,
@@ -657,17 +630,15 @@ const styles = StyleSheet.create({
   },
   enableAllLabel: {
     fontSize: Platform.OS === 'web' ? 14 : 12,
-    fontWeight: '600',
-    color: '#333',
+    fontFamily: 'Inter_600SemiBold',
   },
   enableAllDescription: {
     fontSize: Platform.OS === 'web' ? 12 : 11,
-    color: '#666',
+    fontFamily: 'Inter_400Regular',
   },
   dayRow: {
     marginBottom: 15,
     borderBottomWidth: 1,
-    borderBottomColor: '#eee',
     paddingBottom: 10,
   },
   dayHeader: {
@@ -678,8 +649,7 @@ const styles = StyleSheet.create({
   },
   dayLabel: {
     fontSize: Platform.OS === 'web' ? 16 : 14,
-    fontWeight: '600',
-    color: '#333',
+    fontFamily: 'Inter_600SemiBold',
   },
   timeRow: {
     flexDirection: 'row',
@@ -688,7 +658,6 @@ const styles = StyleSheet.create({
   },
   timeButton: {
     flex: 1,
-    backgroundColor: '#007AFF',
     paddingVertical: Platform.OS === 'web' ? 12 : 10,
     paddingHorizontal: Platform.OS === 'web' ? 16 : 12,
     borderRadius: 8,
@@ -697,79 +666,47 @@ const styles = StyleSheet.create({
   timeButtonText: {
     color: '#fff',
     fontSize: Platform.OS === 'web' ? 14 : 12,
-    fontWeight: '600',
+    fontFamily: 'Inter_600SemiBold',
   },
   timeSeparator: {
     fontSize: Platform.OS === 'web' ? 14 : 12,
-    color: '#666',
     paddingHorizontal: 5,
+    fontFamily: 'Inter_400Regular',
   },
   deleteButton: {
-    backgroundColor: '#dc3545',
-    paddingVertical: Platform.OS === 'web' ? 12 : 10,
-    paddingHorizontal: Platform.OS === 'web' ? 16 : 12,
+    paddingVertical: Platform.OS === 'web' ? 10 : 8,
+    paddingHorizontal: Platform.OS === 'web' ? 14 : 10,
     borderRadius: 8,
   },
   deleteButtonText: {
-    fontSize: Platform.OS === 'web' ? 18 : 16,
-  },
-  saveButton: {
-    backgroundColor: '#28a745',
-    paddingVertical: Platform.OS === 'web' ? 16 : 14,
-    paddingHorizontal: Platform.OS === 'web' ? 32 : 24,
-    borderRadius: 8,
-    alignItems: 'center',
-    marginTop: 20,
-  },
-  saveButtonDisabled: {
-    backgroundColor: '#ccc',
-    opacity: 0.6,
-  },
-  saveButtonText: {
     color: '#fff',
-    fontSize: Platform.OS === 'web' ? 18 : 16,
-    fontWeight: 'bold',
+    fontSize: Platform.OS === 'web' ? 13 : 11,
+    fontFamily: 'Inter_600SemiBold',
   },
   timeOffCard: {
-    backgroundColor: '#f8f9fa',
     padding: Platform.OS === 'web' ? 16 : 12,
     borderRadius: 8,
     marginBottom: 10,
   },
   timeOffDates: {
     fontSize: Platform.OS === 'web' ? 16 : 14,
-    fontWeight: '600',
-    color: '#333',
+    fontFamily: 'Inter_600SemiBold',
     marginBottom: 5,
   },
   timeOffReason: {
     fontSize: Platform.OS === 'web' ? 14 : 12,
-    color: '#666',
+    fontFamily: 'Inter_400Regular',
     marginBottom: 10,
-  },
-  deleteTimeOffButton: {
-    backgroundColor: '#dc3545',
-    paddingVertical: Platform.OS === 'web' ? 10 : 8,
-    paddingHorizontal: Platform.OS === 'web' ? 16 : 12,
-    borderRadius: 6,
-    alignSelf: 'flex-start',
-  },
-  deleteTimeOffButtonText: {
-    color: '#fff',
-    fontSize: Platform.OS === 'web' ? 14 : 12,
-    fontWeight: '600',
   },
   addTimeOffSection: {
     marginTop: 20,
     padding: Platform.OS === 'web' ? 16 : 12,
-    backgroundColor: '#f8f9fa',
     borderRadius: 8,
   },
   addTimeOffTitle: {
     fontSize: Platform.OS === 'web' ? 16 : 14,
-    fontWeight: '600',
+    fontFamily: 'Inter_600SemiBold',
     marginBottom: 15,
-    color: '#333',
   },
   dateRow: {
     flexDirection: 'row',
@@ -778,131 +715,26 @@ const styles = StyleSheet.create({
   },
   dateButton: {
     flex: 1,
-    backgroundColor: '#fff',
     padding: Platform.OS === 'web' ? 12 : 10,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#ddd',
   },
   dateButtonLabel: {
     fontSize: Platform.OS === 'web' ? 12 : 11,
-    color: '#666',
+    fontFamily: 'Inter_400Regular',
     marginBottom: 4,
   },
   dateButtonValue: {
     fontSize: Platform.OS === 'web' ? 14 : 13,
-    color: '#333',
-    fontWeight: '600',
+    fontFamily: 'Inter_600SemiBold',
   },
   reasonInput: {
-    backgroundColor: '#fff',
     borderWidth: 1,
-    borderColor: '#ddd',
     borderRadius: 8,
     paddingVertical: Platform.OS === 'web' ? 12 : 10,
     paddingHorizontal: Platform.OS === 'web' ? 16 : 12,
     fontSize: Platform.OS === 'web' ? 16 : 14,
+    fontFamily: 'Inter_400Regular',
     marginBottom: 10,
-  },
-  addButton: {
-    backgroundColor: '#007AFF',
-    paddingVertical: Platform.OS === 'web' ? 14 : 12,
-    paddingHorizontal: Platform.OS === 'web' ? 24 : 18,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  addButtonText: {
-    color: '#fff',
-    fontSize: Platform.OS === 'web' ? 16 : 14,
-    fontWeight: '600',
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: Platform.OS === 'web' ? 20 : 10,
-  },
-  modalContent: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: Platform.OS === 'web' ? 32 : 24,
-    width: Platform.OS === 'web' ? '45%' : '92%',
-    maxWidth: 550,
-    maxHeight: '85%',
-  },
-  modalTitle: {
-    fontSize: Platform.OS === 'web' ? 24 : 20,
-    fontWeight: 'bold',
-    color: '#333',
-    marginBottom: 10,
-    textAlign: 'center',
-  },
-  confirmModalContainer: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: Platform.OS === 'web' ? 32 : 24,
-    width: Platform.OS === 'web' ? '45%' : '92%',
-    maxWidth: 550,
-  },
-  confirmTitle: {
-    fontSize: Platform.OS === 'web' ? 24 : 20,
-    fontWeight: 'bold',
-    color: '#dc3545',
-    marginBottom: 10,
-    textAlign: 'center',
-  },
-  confirmMessage: {
-    fontSize: Platform.OS === 'web' ? 16 : 14,
-    color: '#666',
-    marginBottom: 20,
-    textAlign: 'center',
-    lineHeight: 22,
-  },
-  confirmButtons: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: Platform.OS === 'web' ? 16 : 12,
-  },
-  confirmCancelButton: {
-    flex: 1,
-    backgroundColor: '#fff',
-    borderWidth: 2,
-    borderColor: '#6c757d',
-    paddingVertical: Platform.OS === 'web' ? 14 : 12,
-    paddingHorizontal: Platform.OS === 'web' ? 20 : 16,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  confirmCancelButtonText: {
-    color: '#6c757d',
-    fontSize: Platform.OS === 'web' ? 16 : 15,
-    fontWeight: '600',
-  },
-  confirmDeleteButton: {
-    flex: 1,
-    backgroundColor: '#dc3545',
-    paddingVertical: Platform.OS === 'web' ? 14 : 12,
-    paddingHorizontal: Platform.OS === 'web' ? 20 : 16,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  confirmDeleteButtonText: {
-    color: '#fff',
-    fontSize: Platform.OS === 'web' ? 16 : 15,
-    fontWeight: '600',
-  },
-  confirmSaveButton: {
-    flex: 1,
-    backgroundColor: '#28a745',
-    paddingVertical: Platform.OS === 'web' ? 14 : 12,
-    paddingHorizontal: Platform.OS === 'web' ? 20 : 16,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  confirmSaveButtonText: {
-    color: '#fff',
-    fontSize: Platform.OS === 'web' ? 16 : 15,
-    fontWeight: '600',
   },
 });

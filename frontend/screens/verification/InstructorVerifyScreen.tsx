@@ -78,7 +78,7 @@ export default function InstructorVerifyScreen({ route, navigation }: any) {
           {/* Loading State */}
           {loading && (
             <View style={styles.loadingContainer}>
-              <ActivityIndicator size="large" color="#007AFF" />
+              <ActivityIndicator size="large" color="#0D9488" />
               <Text style={styles.loadingText}>Verifying instructor...</Text>
             </View>
           )}
@@ -250,7 +250,7 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   button: {
-    backgroundColor: '#007AFF',
+    backgroundColor: '#0D9488',
     paddingVertical: Platform.OS === 'web' ? 16 : 14,
     paddingHorizontal: Platform.OS === 'web' ? 40 : 32,
     borderRadius: 8,

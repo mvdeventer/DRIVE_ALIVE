@@ -6,15 +6,18 @@ import React, { useState, useEffect } from 'react';
 import {
   ActivityIndicator,
   Platform,
+  Pressable,
   StyleSheet,
   Text,
-  TouchableOpacity,
   View,
 } from 'react-native';
 import ApiService from '../../services/api';
 import AdminManageInstructorScheduleScreen from '../admin/AdminManageInstructorScheduleScreen';
+import { Button } from '../../components/ui';
+import { useTheme } from '../../theme/ThemeContext';
 
 export default function InstructorScheduleSetupScreen({ route, navigation }: any) {
+  const { colors } = useTheme();
   const {
     instructorId: passedInstructorId,
     instructorName,
@@ -57,53 +60,52 @@ export default function InstructorScheduleSetupScreen({ route, navigation }: any
 
   if (loading) {
     return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#0066CC" />
-        <Text style={styles.loadingText}>Loading...</Text>
+      <View style={[styles.loadingContainer, { backgroundColor: colors.background }]}>
+        <ActivityIndicator size="large" color={colors.primary} />
+        <Text style={[styles.loadingText, { color: colors.textSecondary }]}>Loading...</Text>
       </View>
     );
   }
 
   if (error) {
     return (
-      <View style={styles.errorContainer}>
-        <Text style={styles.errorText}>❌ {error}</Text>
-        <TouchableOpacity style={styles.retryButton} onPress={fetchInstructorId}>
-          <Text style={styles.retryButtonText}>🔄 Retry</Text>
-        </TouchableOpacity>
-        {isInitialSetup && (
-          <TouchableOpacity style={styles.skipButton} onPress={handleSkip}>
-            <Text style={styles.skipButtonText}>⏩ Skip for Now</Text>
-          </TouchableOpacity>
-        )}
+      <View style={[styles.errorContainer, { backgroundColor: colors.background }]}>
+        <Text style={[styles.errorText, { color: colors.danger }]}>❌ {error}</Text>
+        <Button label="🔄 Retry" onPress={fetchInstructorId} style={{ marginBottom: 10 }} />
+        {isInitialSetup ? (
+          <Button label="⏩ Skip for Now" onPress={handleSkip} variant="secondary" />
+        ) : null}
       </View>
     );
   }
 
   return (
-    <View style={styles.container}>
-      {isInitialSetup && (
-        <View style={styles.headerBanner}>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
+      {isInitialSetup ? (
+        <View style={[styles.headerBanner, { backgroundColor: colors.successBg, borderBottomColor: colors.success + '40' }]}>
           {verificationData?.adminVerificationPending ? (
             <>
-              <Text style={styles.bannerText}>
+              <Text style={[styles.bannerText, { color: colors.success }]}>
                 ✅ Registration Successful! {verificationData.adminCount > 0 ? `${verificationData.adminCount} admin(s) have been notified to verify your account.` : 'Admins will verify your account soon.'}
               </Text>
-              <Text style={[styles.bannerText, { marginTop: 8, fontSize: Platform.OS === 'web' ? 14 : 12 }]}>
+              <Text style={[styles.bannerText, { marginTop: 8, fontSize: Platform.OS === 'web' ? 14 : 12, color: colors.textSecondary }]}>
                 📅 You can set up your schedule now or skip and do it later.
               </Text>
             </>
           ) : (
-            <Text style={styles.bannerText}>
+            <Text style={[styles.bannerText, { color: colors.success }]}>
               📅 Set up your weekly schedule and availability (optional - you can skip and do this
               later)
             </Text>
           )}
-          <TouchableOpacity style={styles.skipBannerButton} onPress={handleSkip}>
+          <Pressable
+            style={[styles.skipBannerButton, { backgroundColor: colors.primary }]}
+            onPress={handleSkip}
+          >
             <Text style={styles.skipBannerButtonText}>⏩ Skip</Text>
-          </TouchableOpacity>
+          </Pressable>
         </View>
-      )}
+      ) : null}
       <AdminManageInstructorScheduleScreen
         route={{ params: { instructorId, instructorName } }}
         navigation={navigation}
@@ -113,74 +115,40 @@ export default function InstructorScheduleSetupScreen({ route, navigation }: any
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#f5f5f5',
-  },
+  container: { flex: 1 },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#f5f5f5',
   },
   loadingText: {
     marginTop: 10,
     fontSize: 16,
-    color: '#666',
   },
   errorContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#f5f5f5',
     padding: 20,
   },
   errorText: {
     fontSize: Platform.OS === 'web' ? 16 : 14,
-    color: '#dc3545',
     textAlign: 'center',
     marginBottom: 20,
   },
-  retryButton: {
-    backgroundColor: '#007AFF',
-    paddingVertical: Platform.OS === 'web' ? 14 : 12,
-    paddingHorizontal: Platform.OS === 'web' ? 24 : 18,
-    borderRadius: 8,
-    marginBottom: 10,
-  },
-  retryButtonText: {
-    color: '#fff',
-    fontSize: Platform.OS === 'web' ? 16 : 14,
-    fontWeight: '600',
-  },
-  skipButton: {
-    backgroundColor: '#6c757d',
-    paddingVertical: Platform.OS === 'web' ? 14 : 12,
-    paddingHorizontal: Platform.OS === 'web' ? 24 : 18,
-    borderRadius: 8,
-  },
-  skipButtonText: {
-    color: '#fff',
-    fontSize: Platform.OS === 'web' ? 16 : 14,
-    fontWeight: '600',
-  },
   headerBanner: {
-    backgroundColor: '#e8f5e9',
     padding: Platform.OS === 'web' ? 16 : 12,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     borderBottomWidth: 1,
-    borderBottomColor: '#c8e6c9',
   },
   bannerText: {
     flex: 1,
     fontSize: Platform.OS === 'web' ? 14 : 12,
-    color: '#2e7d32',
     marginRight: 10,
   },
   skipBannerButton: {
-    backgroundColor: '#4caf50',
     paddingVertical: Platform.OS === 'web' ? 10 : 8,
     paddingHorizontal: Platform.OS === 'web' ? 16 : 12,
     borderRadius: 6,

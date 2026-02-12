@@ -7,14 +7,14 @@ import React, { useCallback, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
-  Modal,
   Platform,
   RefreshControl,
   StyleSheet,
   Text,
-  TouchableOpacity,
   View,
 } from 'react-native';
+import { Button, Card, ThemedModal } from '../../components';
+import { useTheme } from '../../theme/ThemeContext';
 import InlineMessage from '../../components/InlineMessage';
 import WebNavigationHeader from '../../components/WebNavigationHeader';
 import apiService from '../../services/api';
@@ -37,6 +37,7 @@ interface PendingInstructor {
 }
 
 export default function InstructorVerificationScreen({ navigation }: any) {
+  const { colors } = useTheme();
   const [instructors, setInstructors] = useState<PendingInstructor[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -94,71 +95,65 @@ export default function InstructorVerificationScreen({ navigation }: any) {
   };
 
   const renderInstructor = ({ item }: { item: PendingInstructor }) => (
-    <View style={styles.instructorCard}>
-      <View style={styles.instructorHeader}>
+    <Card variant="elevated" style={{ marginBottom: 10 }}>
+      <View style={[styles.instructorHeader, { borderBottomColor: colors.border }]}>
         <View>
-          <Text style={styles.instructorName}>{item.full_name}</Text>
-          <Text style={styles.instructorEmail}>{item.email}</Text>
-          <Text style={styles.instructorPhone}>{item.phone}</Text>
+          <Text style={[styles.instructorName, { color: colors.text }]}>{item.full_name}</Text>
+          <Text style={[styles.instructorEmail, { color: colors.textSecondary }]}>{item.email}</Text>
+          <Text style={[styles.instructorPhone, { color: colors.textSecondary }]}>{item.phone}</Text>
         </View>
-        <Text style={styles.registrationDate}>
+        <Text style={[styles.registrationDate, { color: colors.textMuted }]}>
           {new Date(item.created_at).toLocaleDateString()}
         </Text>
       </View>
 
       <View style={styles.detailsSection}>
         <View style={styles.detailRow}>
-          <Text style={styles.detailLabel}>License Number:</Text>
-          <Text style={styles.detailValue}>{item.license_number}</Text>
+          <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>License Number:</Text>
+          <Text style={[styles.detailValue, { color: colors.text }]}>{item.license_number}</Text>
         </View>
         <View style={styles.detailRow}>
-          <Text style={styles.detailLabel}>License Types:</Text>
-          <Text style={styles.detailValue}>{item.license_types}</Text>
+          <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>License Types:</Text>
+          <Text style={[styles.detailValue, { color: colors.text }]}>{item.license_types}</Text>
         </View>
         <View style={styles.detailRow}>
-          <Text style={styles.detailLabel}>ID Number:</Text>
-          <Text style={styles.detailValue}>{item.id_number}</Text>
+          <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>ID Number:</Text>
+          <Text style={[styles.detailValue, { color: colors.text }]}>{item.id_number}</Text>
         </View>
         <View style={styles.detailRow}>
-          <Text style={styles.detailLabel}>Vehicle:</Text>
-          <Text style={styles.detailValue}>
+          <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>Vehicle:</Text>
+          <Text style={[styles.detailValue, { color: colors.text }]}>
             {item.vehicle_make} {item.vehicle_model} ({item.vehicle_year})
           </Text>
         </View>
         <View style={styles.detailRow}>
-          <Text style={styles.detailLabel}>Registration:</Text>
-          <Text style={styles.detailValue}>{item.vehicle_registration}</Text>
+          <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>Registration:</Text>
+          <Text style={[styles.detailValue, { color: colors.text }]}>{item.vehicle_registration}</Text>
         </View>
       </View>
 
       <View style={styles.actionButtons}>
-        <TouchableOpacity
-          style={[styles.actionButton, styles.approveButton]}
-          onPress={() => handleVerify(item, true)}
-        >
-          <Text style={styles.actionButtonText}>✓ Verify</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.actionButton, styles.rejectButton]}
-          onPress={() => handleVerify(item, false)}
-        >
-          <Text style={styles.actionButtonText}>✗ Reject</Text>
-        </TouchableOpacity>
+        <Button variant="primary" style={{ flex: 1, backgroundColor: colors.success }} onPress={() => handleVerify(item, true)}>
+          ✓ Verify
+        </Button>
+        <Button variant="danger" style={{ flex: 1 }} onPress={() => handleVerify(item, false)}>
+          ✗ Reject
+        </Button>
       </View>
-    </View>
+    </Card>
   );
 
   if (loading) {
     return (
-      <View style={styles.centerContainer}>
-        <ActivityIndicator size="large" color="#0066CC" />
-        <Text style={styles.loadingText}>Loading pending instructors...</Text>
+      <View style={[styles.centerContainer, { backgroundColor: colors.background }]}>
+        <ActivityIndicator size="large" color={colors.primary} />
+        <Text style={[styles.loadingText, { color: colors.textSecondary }]}>Loading pending instructors...</Text>
       </View>
     );
   }
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
       <WebNavigationHeader
         title="Instructor Verification"
         onBack={() => navigation.goBack()}
@@ -170,8 +165,8 @@ export default function InstructorVerificationScreen({ navigation }: any) {
 
       {instructors.length === 0 ? (
         <View style={styles.emptyContainer}>
-          <Text style={styles.emptyText}>✓ All instructors verified!</Text>
-          <Text style={styles.emptySubtext}>No pending verifications at this time.</Text>
+          <Text style={[styles.emptyText, { color: colors.success }]}>✓ All instructors verified!</Text>
+          <Text style={[styles.emptySubtext, { color: colors.textSecondary }]}>No pending verifications at this time.</Text>
         </View>
       ) : (
         <FlatList
@@ -184,43 +179,31 @@ export default function InstructorVerificationScreen({ navigation }: any) {
       )}
 
       {/* Confirmation Modal */}
-      <Modal
+      <ThemedModal
         visible={!!confirmAction}
-        transparent={true}
-        animationType="fade"
-        onRequestClose={() => setConfirmAction(null)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>
-              {confirmAction?.approve ? '✅ Verify' : '❌ Reject'} Instructor
-            </Text>
-            <Text style={styles.modalMessage}>
-              Are you sure you want to {confirmAction?.approve ? 'verify' : 'reject'}{' '}
-              {confirmAction?.instructor.full_name}?
-            </Text>
-            <View style={styles.modalButtons}>
-              <TouchableOpacity
-                style={[styles.modalButton, styles.modalCancelButton]}
-                onPress={() => setConfirmAction(null)}
-              >
-                <Text style={styles.modalCancelText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[
-                  styles.modalButton,
-                  confirmAction?.approve ? styles.modalConfirmButton : styles.modalRejectButton,
-                ]}
-                onPress={confirmVerification}
-              >
-                <Text style={styles.modalConfirmText}>
-                  {confirmAction?.approve ? 'Verify' : 'Reject'}
-                </Text>
-              </TouchableOpacity>
-            </View>
+        onClose={() => setConfirmAction(null)}
+        title={`${confirmAction?.approve ? '✅ Verify' : '❌ Reject'} Instructor`}
+        size="sm"
+        footer={
+          <View style={styles.modalButtons}>
+            <Button variant="secondary" style={{ flex: 1 }} onPress={() => setConfirmAction(null)}>
+              Cancel
+            </Button>
+            <Button
+              variant={confirmAction?.approve ? 'primary' : 'danger'}
+              style={confirmAction?.approve ? { flex: 1, backgroundColor: colors.success } : { flex: 1 }}
+              onPress={confirmVerification}
+            >
+              {confirmAction?.approve ? 'Verify' : 'Reject'}
+            </Button>
           </View>
-        </View>
-      </Modal>
+        }
+      >
+        <Text style={[styles.modalMessage, { color: colors.textSecondary }]}>
+          Are you sure you want to {confirmAction?.approve ? 'verify' : 'reject'}{' '}
+          {confirmAction?.instructor.full_name}?
+        </Text>
+      </ThemedModal>
     </View>
   );
 }
@@ -228,50 +211,19 @@ export default function InstructorVerificationScreen({ navigation }: any) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F5F5F5',
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: 16,
-    backgroundColor: '#FFF',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E0E0E0',
-  },
-  backButton: {
-    width: 150,
-  },
-  backButtonText: {
-    fontSize: 16,
-    color: '#007bff',
-    fontWeight: '600',
-  },
-  headerTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#333',
   },
   centerContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#F5F5F5',
   },
   loadingText: {
     marginTop: 10,
     fontSize: 16,
-    color: '#666',
+    fontFamily: 'Inter_400Regular',
   },
   listContainer: {
     padding: 15,
-  },
-  instructorCard: {
-    backgroundColor: '#FFF',
-    borderRadius: 8,
-    padding: 10,
-    marginBottom: 10,
-    boxShadow: '0px 2px 4px rgba(0,0,0,0.1)',
   },
   instructorHeader: {
     flexDirection: 'row',
@@ -280,26 +232,24 @@ const styles = StyleSheet.create({
     marginBottom: 10,
     paddingBottom: 10,
     borderBottomWidth: 1,
-    borderBottomColor: '#E0E0E0',
   },
   instructorName: {
     fontSize: Platform.OS === 'web' ? 16 : 15,
-    fontWeight: 'bold',
-    color: '#333',
+    fontFamily: 'Inter_700Bold',
     marginBottom: 4,
   },
   instructorEmail: {
     fontSize: Platform.OS === 'web' ? 13 : 12,
-    color: '#666',
+    fontFamily: 'Inter_400Regular',
     marginBottom: 2,
   },
   instructorPhone: {
     fontSize: 12,
-    color: '#666',
+    fontFamily: 'Inter_400Regular',
   },
   registrationDate: {
     fontSize: 10,
-    color: '#999',
+    fontFamily: 'Inter_400Regular',
   },
   detailsSection: {
     marginBottom: 10,
@@ -311,35 +261,16 @@ const styles = StyleSheet.create({
   },
   detailLabel: {
     fontSize: 12,
-    color: '#666',
-    fontWeight: '600',
+    fontFamily: 'Inter_600SemiBold',
   },
   detailValue: {
     fontSize: 12,
-    color: '#333',
-    fontWeight: '400',
+    fontFamily: 'Inter_400Regular',
   },
   actionButtons: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     gap: 8,
-  },
-  actionButton: {
-    flex: 1,
-    padding: 10,
-    borderRadius: 6,
-    alignItems: 'center',
-  },
-  approveButton: {
-    backgroundColor: '#28A745',
-  },
-  rejectButton: {
-    backgroundColor: '#DC3545',
-  },
-  actionButtonText: {
-    color: '#FFF',
-    fontSize: 13,
-    fontWeight: 'bold',
   },
   emptyContainer: {
     flex: 1,
@@ -349,70 +280,21 @@ const styles = StyleSheet.create({
   },
   emptyText: {
     fontSize: 24,
-    fontWeight: 'bold',
-    color: '#28A745',
+    fontFamily: 'Inter_700Bold',
     marginBottom: 10,
   },
   emptySubtext: {
     fontSize: 16,
-    color: '#666',
-    textAlign: 'center',
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: Platform.OS === 'web' ? 20 : 10,
-  },
-  modalContent: {
-    backgroundColor: '#FFF',
-    borderRadius: 12,
-    padding: Platform.OS === 'web' ? 32 : 24,
-    width: Platform.OS === 'web' ? '45%' : '92%',
-    maxWidth: 550,
-    boxShadow: '0px 4px 6px rgba(0,0,0,0.2)',
-  },
-  modalTitle: {
-    fontSize: Platform.OS === 'web' ? 20 : 18,
-    fontWeight: 'bold',
-    color: '#333',
-    marginBottom: 12,
-    textAlign: 'center',
-  },
-  modalMessage: {
-    fontSize: Platform.OS === 'web' ? 16 : 15,
-    color: '#666',
-    marginBottom: 24,
+    fontFamily: 'Inter_400Regular',
     textAlign: 'center',
   },
   modalButtons: {
     flexDirection: 'row',
     gap: 12,
   },
-  modalButton: {
-    flex: 1,
-    padding: 12,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  modalCancelButton: {
-    backgroundColor: '#E0E0E0',
-  },
-  modalConfirmButton: {
-    backgroundColor: '#28A745',
-  },
-  modalRejectButton: {
-    backgroundColor: '#DC3545',
-  },
-  modalCancelText: {
-    color: '#333',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  modalConfirmText: {
-    color: '#FFF',
-    fontSize: 16,
-    fontWeight: '600',
+  modalMessage: {
+    fontSize: Platform.OS === 'web' ? 16 : 15,
+    fontFamily: 'Inter_400Regular',
+    textAlign: 'center',
   },
 });

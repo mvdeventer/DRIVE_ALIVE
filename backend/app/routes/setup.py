@@ -8,7 +8,6 @@ from sqlalchemy.orm import Session
 from ..database import get_db
 from ..models.user import User, UserRole, UserStatus
 from ..schemas.admin import AdminCreateRequest
-from ..schemas.user import UserResponse
 from ..utils.auth import get_password_hash
 from ..utils.encryption import EncryptionService  # For SMTP password encryption
 
@@ -56,7 +55,7 @@ def create_initial_admin(admin_data: AdminCreateRequest, db: Session = Depends(g
             detail=f"Email '{admin_data.email}' is already registered. Please use a different email.",
         )
 
-    # Create admin user (INACTIVE until verification)
+    # Create admin user (ACTIVE immediately - no verification needed for initial admin)
     new_admin = User(
         email=admin_data.email,
         phone=admin_data.phone,
@@ -65,7 +64,7 @@ def create_initial_admin(admin_data: AdminCreateRequest, db: Session = Depends(g
         last_name=admin_data.last_name,
         id_number=admin_data.id_number,
         role=UserRole.ADMIN,
-        status=UserStatus.INACTIVE,
+        status=UserStatus.ACTIVE,
         address=admin_data.address,
         address_latitude=admin_data.address_latitude,
         address_longitude=admin_data.address_longitude,
@@ -81,35 +80,14 @@ def create_initial_admin(admin_data: AdminCreateRequest, db: Session = Depends(g
     db.commit()
     db.refresh(new_admin)
 
-    # Create verification token and send messages
-    from ..services.verification_service import VerificationService
-    from ..config import settings
-
-    validity_minutes = new_admin.verification_link_validity_minutes or 30
-    verification_token = VerificationService.create_verification_token(
-        db=db,
-        user_id=new_admin.id,
-        token_type="email",
-        validity_minutes=validity_minutes,
-    )
-
-    verification_result = VerificationService.send_verification_messages(
-        db=db,
-        user=new_admin,
-        verification_token=verification_token,
-        frontend_url=settings.FRONTEND_URL,
-        admin_smtp_email=new_admin.smtp_email,
-        admin_smtp_password=new_admin.smtp_password,
-    )
-
     return {
-        "message": "Registration successful! Please check your email and WhatsApp to verify your account.",
+        "message": "Admin account created successfully! You can now log in.",
         "user_id": new_admin.id,
         "verification_sent": {
-            "email_sent": verification_result.get("email_sent", False),
-            "whatsapp_sent": verification_result.get("whatsapp_sent", False),
-            "expires_in_minutes": verification_result.get("expires_in_minutes", validity_minutes),
+            "email_sent": False,
+            "whatsapp_sent": False,
+            "expires_in_minutes": 0,
         },
-        "note": f"Account will be activated after verification. The verification link is valid for {validity_minutes} minutes.",
+        "note": "Admin account is active immediately. No verification required.",
     }
 

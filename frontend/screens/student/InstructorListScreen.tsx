@@ -1,25 +1,23 @@
 /**
  * Instructor List Screen - Browse and select instructors for booking
  */
-import { CommonActions } from '@react-navigation/native';
-import * as SecureStore from 'expo-secure-store';
 import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Dimensions,
   FlatList,
-  Modal,
   Platform,
+  Pressable,
   RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
-  TouchableOpacity,
   View,
 } from 'react-native';
 import WebNavigationHeader from '../../components/WebNavigationHeader';
+import InlineMessage from '../../components/InlineMessage';
+import { Badge, Button, Card, Input, ThemedModal } from '../../components/ui';
+import { useTheme } from '../../theme/ThemeContext';
 import ApiService from '../../services/api';
 import { getAllCitiesAndSuburbs } from '../../utils/cities';
 
@@ -50,11 +48,13 @@ interface Instructor {
 }
 
 export default function InstructorListScreen({ navigation }: any) {
+  const { colors } = useTheme();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [numColumns, setNumColumns] = useState(getNumColumns());
   const [instructors, setInstructors] = useState<Instructor[]>([]);
   const [filteredInstructors, setFilteredInstructors] = useState<Instructor[]>([]);
+  const [errorMessage, setErrorMessage] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCity, setSelectedCity] = useState('');
   const [availableOnly, setAvailableOnly] = useState(true);
@@ -80,6 +80,7 @@ export default function InstructorListScreen({ navigation }: any) {
 
   const loadInstructors = async () => {
     try {
+      setErrorMessage('');
       // Get current user to identify their instructor profile
       const currentUserResponse = await ApiService.getCurrentUser();
       const currentUserId = currentUserResponse.id;
@@ -100,11 +101,7 @@ export default function InstructorListScreen({ navigation }: any) {
       setFilteredInstructors(allInstructors);
     } catch (error: any) {
       console.error('Error loading instructors:', error);
-      if (Platform.OS === 'web') {
-        alert('Failed to load instructors');
-      } else {
-        Alert.alert('Error', 'Failed to load instructors');
-      }
+      setErrorMessage(error?.response?.data?.detail || 'Failed to load instructors. Please try again.');
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -145,26 +142,6 @@ export default function InstructorListScreen({ navigation }: any) {
   const onRefresh = () => {
     setRefreshing(true);
     loadInstructors();
-  };
-
-  const handleLogout = async () => {
-    try {
-      if (Platform.OS === 'web') {
-        sessionStorage.clear(); // Changed from localStorage
-        window.location.reload();
-      } else {
-        await SecureStore.deleteItemAsync('access_token');
-        await SecureStore.deleteItemAsync('user_role');
-        navigation.dispatch(
-          CommonActions.reset({
-            index: 0,
-            routes: [{ name: 'Login' }],
-          })
-        );
-      }
-    } catch (error) {
-      console.error('Logout error:', error);
-    }
   };
 
   const handleSelectInstructor = (instructor: Instructor) => {
@@ -287,7 +264,7 @@ export default function InstructorListScreen({ navigation }: any) {
       // Professional message with student details
       const message = `Good day ${instructor.first_name},
 
-I am ${studentName} and I found your profile on Drive Alive.
+I am ${studentName} and I found your profile on RoadReady.
 
 I am interested in booking driving lessons with you.
 
@@ -388,36 +365,36 @@ ${studentName}`;
   };
 
   const renderInstructor = ({ item }: { item: Instructor }) => {
-    // Compact location display
     const location = [item.suburb, item.city, item.province].filter(Boolean).join(', ');
 
     return (
-      <TouchableOpacity style={styles.instructorCard} onPress={() => handleSelectInstructor(item)}>
+      <Pressable
+        style={({ pressed }) => [
+          styles.instructorCard,
+          { backgroundColor: colors.card, borderColor: colors.border },
+          pressed && { opacity: 0.85 },
+        ]}
+        onPress={() => handleSelectInstructor(item)}
+      >
         <View style={styles.instructorHeader}>
           <View style={styles.instructorInfo}>
             <View style={styles.nameRow}>
               <View style={styles.nameBadgesRow}>
-                <Text style={styles.instructorName}>
+                <Text style={[styles.instructorName, { color: colors.text }]}>
                   {item.first_name} {item.last_name} {item.is_verified && '✅'}
                 </Text>
                 {item.is_self && (
-                  <View style={styles.selfBadge}>
-                    <Text style={styles.selfBadgeText}>Your Instructor Profile</Text>
-                  </View>
+                  <Badge variant="default" size="sm">Your Profile</Badge>
                 )}
               </View>
-              <View
-                style={[
-                  styles.availabilityBadge,
-                  { backgroundColor: item.is_available ? '#28a745' : '#dc3545' },
-                ]}
+              <Badge
+                variant={item.is_available ? 'success' : 'danger'}
+                size="sm"
               >
-                <Text style={styles.availabilityText}>
-                  {item.is_available ? 'Available' : 'Unavailable'}
-                </Text>
-              </View>
+                {item.is_available ? 'Available' : 'Unavailable'}
+              </Badge>
             </View>
-            <Text style={styles.vehicleInfo}>
+            <Text style={[styles.vehicleInfo, { color: colors.textSecondary }]}>
               🚗 {item.vehicle_make} {item.vehicle_model} ({item.vehicle_year})
             </Text>
           </View>
@@ -425,10 +402,10 @@ ${studentName}`;
 
         <View style={styles.instructorDetails}>
           <View style={styles.detailRow}>
-            <Text style={styles.detailLabel}>📍 {location}</Text>
+            <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>📍 {location}</Text>
           </View>
           <View style={styles.detailRow}>
-            <Text style={styles.detailLabel}>
+            <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>
               🪪{' '}
               {item.license_types
                 .split(',')
@@ -437,53 +414,53 @@ ${studentName}`;
             </Text>
           </View>
           <View style={styles.infoRow}>
-            <Text style={styles.detailLabel}>
+            <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>
               💰 R{((item.hourly_rate || 0) + (item.booking_fee || 20.0)).toFixed(2)}/hr
             </Text>
-            <Text style={styles.detailLabel}>
+            <Text style={[styles.detailLabel, { color: colors.accent }]}>
               ⭐ {item.rating.toFixed(1)} ({item.total_reviews})
             </Text>
           </View>
         </View>
 
-        {/* Action Buttons */}
+        {/* Action Button */}
         <View style={styles.actionButtonsContainer}>
-          <TouchableOpacity
-            style={[
-              styles.primaryButton,
-              (!item.is_available || item.is_self) && styles.primaryButtonDisabled,
-            ]}
+          <Button
+            variant="primary"
+            size="sm"
+            fullWidth
             onPress={() => handleBookLesson(item)}
             disabled={!item.is_available || !!item.is_self}
+            icon="📅"
           >
-            <Text style={styles.primaryButtonText}>📅 Book Lesson</Text>
-          </TouchableOpacity>
+            Book Lesson
+          </Button>
         </View>
-      </TouchableOpacity>
+      </Pressable>
     );
   };
 
   if (loading) {
     return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#007bff" />
-        <Text style={styles.loadingText}>Loading instructors...</Text>
+      <View style={[styles.loadingContainer, { backgroundColor: colors.background }]}>
+        <ActivityIndicator size="large" color={colors.primary} />
+        <Text style={[styles.loadingText, { color: colors.textSecondary }]}>Loading instructors...</Text>
       </View>
     );
   }
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
       <WebNavigationHeader
         title="Instructor List"
         onBack={() => navigation.goBack()}
         showBackButton={true}
       />
+
       {/* Search Bar and Filter Toggles */}
-      <View style={styles.searchAndFilterRow}>
+      <View style={[styles.searchAndFilterRow, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
         <View style={styles.searchContainer}>
-          <TextInput
-            style={styles.searchInput}
+          <Input
             placeholder="Search by name, vehicle, city, suburb, or province..."
             value={searchQuery}
             onChangeText={setSearchQuery}
@@ -491,95 +468,97 @@ ${studentName}`;
         </View>
 
         <View style={styles.filterContainer}>
-          <TouchableOpacity
-            style={[styles.filterButton, availableOnly && styles.filterButtonActive]}
+          <Pressable
+            style={[
+              styles.filterButton,
+              { borderColor: colors.primary },
+              availableOnly && { backgroundColor: colors.primary },
+            ]}
             onPress={() => setAvailableOnly(!availableOnly)}
           >
-            <Text style={[styles.filterButtonText, availableOnly && styles.filterButtonTextActive]}>
+            <Text style={[styles.filterButtonText, { color: colors.primary }, availableOnly && { color: '#fff' }]}>
               {availableOnly ? '✓ Available Only' : 'Show All'}
             </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.filterButton, selectedCity && styles.filterButtonActive]}
+          </Pressable>
+          <Pressable
+            style={[
+              styles.filterButton,
+              { borderColor: colors.primary },
+              selectedCity ? { backgroundColor: colors.primary } : undefined,
+            ]}
             onPress={() => setShowCityPicker(true)}
           >
-            <Text style={[styles.filterButtonText, selectedCity && styles.filterButtonTextActive]}>
+            <Text style={[styles.filterButtonText, { color: colors.primary }, selectedCity ? { color: '#fff' } : undefined]}>
               {selectedCity ? `📍 ${selectedCity}` : '📍 All Cities'}
             </Text>
-          </TouchableOpacity>
+          </Pressable>
           {selectedCity && (
-            <TouchableOpacity style={styles.clearCityButton} onPress={() => setSelectedCity(null)}>
+            <Pressable
+              style={[styles.clearCityButton, { backgroundColor: colors.danger }]}
+              onPress={() => setSelectedCity(null)}
+            >
               <Text style={styles.clearCityText}>✕</Text>
-            </TouchableOpacity>
+            </Pressable>
           )}
         </View>
       </View>
 
-      <View style={styles.resultCountContainer}>
-        <Text style={styles.resultCount}>{filteredInstructors.length} instructor(s) found</Text>
+      <View style={[styles.resultCountContainer, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
+        <Text style={[styles.resultCount, { color: colors.textSecondary }]}>
+          {filteredInstructors.length} instructor(s) found
+        </Text>
       </View>
 
       {/* City Picker Modal */}
-      <Modal
+      <ThemedModal
         visible={showCityPicker}
-        transparent={true}
-        animationType="fade"
-        onRequestClose={() => {
+        onClose={() => {
           setShowCityPicker(false);
           setLocationSearchQuery('');
         }}
+        title="Select City or Suburb"
+        size="md"
       >
-        <View style={styles.pickerOverlay}>
-          <View style={styles.pickerContainer}>
-            <View style={styles.pickerHeader}>
-              <Text style={styles.pickerTitle}>Select City or Suburb</Text>
-              <TouchableOpacity
+        <View style={{ marginBottom: 12 }}>
+          <Input
+            placeholder="Search locations..."
+            value={locationSearchQuery}
+            onChangeText={setLocationSearchQuery}
+            autoFocus={Platform.OS !== 'android'}
+          />
+        </View>
+        <ScrollView style={styles.cityList}>
+          {getAllCitiesAndSuburbs()
+            .filter(location =>
+              location.toLowerCase().includes(locationSearchQuery.toLowerCase())
+            )
+            .map(location => (
+              <Pressable
+                key={location}
+                style={[
+                  styles.cityItem,
+                  { borderBottomColor: colors.border },
+                  selectedCity === location && { backgroundColor: colors.primaryLight },
+                ]}
                 onPress={() => {
+                  setSelectedCity(location);
                   setShowCityPicker(false);
                   setLocationSearchQuery('');
                 }}
               >
-                <Text style={styles.pickerClose}>✕</Text>
-              </TouchableOpacity>
-            </View>
-            <View style={styles.pickerSearchContainer}>
-              <TextInput
-                style={styles.pickerSearchInput}
-                placeholder="Search locations..."
-                value={locationSearchQuery}
-                onChangeText={setLocationSearchQuery}
-                autoFocus={Platform.OS !== 'android'}
-              />
-            </View>
-            <ScrollView style={styles.cityList}>
-              {getAllCitiesAndSuburbs()
-                .filter(location =>
-                  location.toLowerCase().includes(locationSearchQuery.toLowerCase())
-                )
-                .map(location => (
-                  <TouchableOpacity
-                    key={location}
-                    style={[styles.cityItem, selectedCity === location && styles.cityItemSelected]}
-                    onPress={() => {
-                      setSelectedCity(location);
-                      setShowCityPicker(false);
-                      setLocationSearchQuery('');
-                    }}
-                  >
-                    <Text
-                      style={[
-                        styles.cityItemText,
-                        selectedCity === location && styles.cityItemTextSelected,
-                      ]}
-                    >
-                      {location}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-            </ScrollView>
-          </View>
-        </View>
-      </Modal>
+                <Text
+                  style={[
+                    styles.cityItemText,
+                    { color: colors.text },
+                    selectedCity === location && { color: colors.primary, fontWeight: '600' },
+                  ]}
+                >
+                  {location}
+                </Text>
+              </Pressable>
+            ))}
+        </ScrollView>
+      </ThemedModal>
 
       {/* Instructor List */}
       <FlatList
@@ -590,11 +569,23 @@ ${studentName}`;
         key={numColumns}
         columnWrapperStyle={numColumns > 1 ? styles.row : undefined}
         contentContainerStyle={styles.listContainer}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} colors={[colors.primary]} />}
         ListEmptyComponent={
           <View style={styles.emptyState}>
-            <Text style={styles.emptyStateText}>No instructors found</Text>
-            <Text style={styles.emptyStateSubtext}>Try adjusting your filters or search query</Text>
+            {errorMessage ? (
+              <InlineMessage type="error" message={errorMessage} />
+            ) : instructors.length === 0 ? (
+              <>
+                <InlineMessage type="info" message="No instructors have registered yet. Please check back later." />
+              </>
+            ) : (
+              <>
+                <Text style={[styles.emptyStateText, { color: colors.text }]}>No instructors match your filters</Text>
+                <Text style={[styles.emptyStateSubtext, { color: colors.textSecondary }]}>
+                  Try adjusting your filters or search query
+                </Text>
+              </>
+            )}
           </View>
         }
       />
@@ -606,80 +597,61 @@ ${studentName}`;
 function getNumColumns(): number {
   if (Platform.OS === 'web') {
     const width = typeof window !== 'undefined' ? window.innerWidth : 1024;
-    if (width >= 1200) return 3; // Large screens
-    if (width >= 768) return 2; // Tablets
-    return 1; // Mobile
+    if (width >= 1200) return 3;
+    if (width >= 768) return 2;
+    return 1;
   }
-  // For native mobile apps, use screen dimensions
   const width = Dimensions.get('window').width;
-  if (width >= 768) return 2; // Tablets in landscape
-  return 1; // Mobile phones
+  if (width >= 768) return 2;
+  return 1;
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#f5f5f5',
   },
   loadingText: {
     marginTop: 16,
     fontSize: 16,
-    color: '#666',
+    fontFamily: 'Inter_500Medium',
   },
   searchAndFilterRow: {
     flexDirection: 'row',
     alignItems: 'center',
     padding: 16,
-    backgroundColor: '#fff',
     borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
     flexWrap: 'wrap',
+    gap: 8,
   },
   searchContainer: {
     flex: 1,
     minWidth: 200,
-    marginRight: 12,
-  },
-  searchInput: {
-    backgroundColor: '#f5f5f5',
-    padding: 12,
-    borderRadius: 8,
-    fontSize: 16,
   },
   filterContainer: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 8,
   },
   filterButton: {
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: '#007bff',
-    marginRight: 8,
-  },
-  filterButtonActive: {
-    backgroundColor: '#007bff',
   },
   filterButtonText: {
-    color: '#007bff',
     fontWeight: '600',
     fontSize: 14,
-  },
-  filterButtonTextActive: {
-    color: '#fff',
+    fontFamily: 'Inter_600SemiBold',
   },
   clearCityButton: {
     width: 28,
     height: 28,
     borderRadius: 14,
-    backgroundColor: '#dc3545',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -688,89 +660,14 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: 'bold',
   },
-  sortContainer: {
-    padding: 16,
-    paddingTop: 8,
-    paddingBottom: 12,
-    backgroundColor: '#fff',
-    borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
-  },
-  sortButton: {
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#6c757d',
-    backgroundColor: '#fff',
-  },
-  sortButtonActive: {
-    backgroundColor: '#6c757d',
-    borderColor: '#6c757d',
-  },
-  sortButtonText: {
-    color: '#6c757d',
-    fontWeight: '600',
-    fontSize: 14,
-    textAlign: 'center',
-  },
-  sortButtonTextActive: {
-    color: '#fff',
-  },
   resultCountContainer: {
     paddingHorizontal: 16,
-    paddingBottom: 8,
-    backgroundColor: '#fff',
+    paddingVertical: 8,
     borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
   },
   resultCount: {
     fontSize: 14,
-    color: '#666',
-  },
-  pickerOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  pickerContainer: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    width: '90%',
-    maxWidth: 500,
-    maxHeight: '80%',
-    overflow: 'hidden',
-  },
-  pickerHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
-  },
-  pickerSearchContainer: {
-    padding: 12,
-    paddingTop: 0,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
-  },
-  pickerSearchInput: {
-    backgroundColor: '#f5f5f5',
-    padding: 10,
-    borderRadius: 8,
-    fontSize: 16,
-  },
-  pickerTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#333',
-  },
-  pickerClose: {
-    fontSize: 24,
-    color: '#666',
-    fontWeight: 'bold',
+    fontFamily: 'Inter_500Medium',
   },
   cityList: {
     maxHeight: 400,
@@ -778,18 +675,10 @@ const styles = StyleSheet.create({
   cityItem: {
     padding: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
-  },
-  cityItemSelected: {
-    backgroundColor: '#e7f3ff',
   },
   cityItemText: {
     fontSize: 16,
-    color: '#333',
-  },
-  cityItemTextSelected: {
-    color: '#007bff',
-    fontWeight: '600',
+    fontFamily: 'Inter_400Regular',
   },
   listContainer: {
     padding: 8,
@@ -800,15 +689,15 @@ const styles = StyleSheet.create({
     marginHorizontal: -5,
   },
   instructorCard: {
-    backgroundColor: '#fff',
-    borderRadius: 8,
+    borderRadius: 12,
     padding: 18,
     margin: 6,
     flexBasis: '45%',
     minWidth: 340,
     maxWidth: '100%',
     flexGrow: 1,
-    boxShadow: '0px 2px 4px #0000001A',
+    borderWidth: 1,
+    boxShadow: '0px 2px 8px rgba(0, 0, 0, 0.08)',
     elevation: 2,
   },
   instructorHeader: {
@@ -823,117 +712,39 @@ const styles = StyleSheet.create({
   nameBadgesRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: 8,
     flexWrap: 'wrap',
     flex: 1,
-  },
-  selfBadge: {
-    backgroundColor: '#6c757d',
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 10,
-    marginLeft: 6,
-  },
-  selfBadgeText: {
-    color: '#fff',
-    fontSize: 10,
-    fontWeight: '600',
   },
   instructorInfo: {
     flex: 1,
   },
   instructorName: {
-    fontSize: 14,
-    fontWeight: 'bold',
-    color: '#333',
+    fontSize: 15,
+    fontFamily: 'Inter_700Bold',
     flex: 1,
   },
   vehicleInfo: {
-    fontSize: 11,
-    color: '#666',
-  },
-  availabilityBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 8,
-  },
-  availabilityText: {
-    color: '#fff',
-    fontSize: 10,
-    fontWeight: '600',
+    fontSize: 12,
+    fontFamily: 'Inter_400Regular',
   },
   instructorDetails: {
-    marginBottom: 6,
+    marginBottom: 8,
   },
   detailRow: {
-    marginBottom: 2,
+    marginBottom: 3,
   },
   infoRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginTop: 2,
+    marginTop: 4,
   },
   detailLabel: {
-    fontSize: 11,
-    color: '#666',
-  },
-  detailValue: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: '#333',
+    fontSize: 12,
+    fontFamily: 'Inter_400Regular',
   },
   actionButtonsContainer: {
-    marginTop: 5,
-  },
-  primaryButton: {
-    backgroundColor: '#007bff',
-    padding: 8,
-    borderRadius: 5,
-    alignItems: 'center',
-    marginBottom: 5,
-  },
-  primaryButtonDisabled: {
-    backgroundColor: '#6c757d',
-  },
-  primaryButtonText: {
-    color: '#fff',
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  secondaryButtonsRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  secondaryButton: {
-    flex: 1,
-    backgroundColor: '#f8f9fa',
-    padding: 6,
-    borderRadius: 5,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: '#dee2e6',
-    marginHorizontal: 2,
-  },
-  secondaryButtonText: {
-    color: '#495057',
-    fontSize: 11,
-    fontWeight: '600',
-  },
-  bookButton: {
-    backgroundColor: '#007bff',
-    padding: 10,
-    borderRadius: 6,
-    alignItems: 'center',
-  },
-  bookButtonDisabled: {
-    backgroundColor: '#6c757d',
-  },
-  bookButtonText: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: '600',
+    marginTop: 8,
   },
   emptyState: {
     padding: 40,
@@ -941,13 +752,12 @@ const styles = StyleSheet.create({
   },
   emptyStateText: {
     fontSize: 18,
-    fontWeight: '600',
-    color: '#333',
+    fontFamily: 'Inter_600SemiBold',
     marginBottom: 8,
   },
   emptyStateSubtext: {
     fontSize: 14,
-    color: '#666',
+    fontFamily: 'Inter_400Regular',
     textAlign: 'center',
   },
 });

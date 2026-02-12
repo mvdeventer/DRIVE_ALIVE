@@ -5,30 +5,23 @@ import { useNavigation, useRoute } from '@react-navigation/native';
 import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
-  Modal,
   Platform,
+  Pressable,
   ScrollView,
   StyleSheet,
   Text,
-  TouchableOpacity,
   View,
 } from 'react-native';
 import FormFieldWithTip from '../../components/FormFieldWithTip';
 import InlineMessage from '../../components/InlineMessage';
 import LocationSelector from '../../components/LocationSelector';
 import WebNavigationHeader from '../../components/WebNavigationHeader';
+import { Button, Card, ThemedModal } from '../../components/ui';
+import { useTheme } from '../../theme/ThemeContext';
 import ApiService from '../../services/api';
 
-const showAlert = (title: string, message: string) => {
-  if (Platform.OS === 'web') {
-    alert(`${title}\n\n${message}`);
-  } else {
-    Alert.alert(title, message);
-  }
-};
-
 export default function EditStudentProfileScreen({ navigation: navProp }: any) {
+  const { colors } = useTheme();
   const navigation = navProp || useNavigation();
   const route = useRoute();
   const params = route.params as { userId?: number } | undefined;
@@ -155,7 +148,8 @@ export default function EditStudentProfileScreen({ navigation: navProp }: any) {
       });
     } catch (error) {
       console.error('Error loading profile:', error);
-      showAlert('Error', 'Failed to load profile data');
+      setErrorMessage('Failed to load profile data');
+      setTimeout(() => setErrorMessage(''), 5000);
     } finally {
       setLoading(false);
     }
@@ -303,15 +297,15 @@ export default function EditStudentProfileScreen({ navigation: navProp }: any) {
 
   if (loading) {
     return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#007bff" />
-        <Text style={styles.loadingText}>Loading profile...</Text>
+      <View style={[styles.loadingContainer, { backgroundColor: colors.background }]}>
+        <ActivityIndicator size="large" color={colors.primary} />
+        <Text style={[styles.loadingText, { color: colors.textSecondary }]}>Loading profile...</Text>
       </View>
     );
   }
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
       <WebNavigationHeader
         title="Edit Student Profile"
         onBack={() => navigation.goBack()}
@@ -342,260 +336,275 @@ export default function EditStudentProfileScreen({ navigation: navProp }: any) {
 
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
         {/* Personal Information */}
-        <Text style={styles.sectionTitle}>Personal Information</Text>
+        <Card variant="default" style={{ marginBottom: 16 }}>
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>Personal Information</Text>
 
-        <FormFieldWithTip
-          label="First Name"
-          required
-          placeholder="Your first name"
-          value={formData.first_name}
-          onChangeText={value => updateField('first_name', value)}
-          tooltip="Your legal first name as it appears on your ID"
-        />
+          <FormFieldWithTip
+            label="First Name"
+            required
+            placeholder="Your first name"
+            value={formData.first_name}
+            onChangeText={value => updateField('first_name', value)}
+            tooltip="Your legal first name as it appears on your ID"
+          />
 
-        <FormFieldWithTip
-          label="Last Name"
-          required
-          placeholder="Your last name"
-          value={formData.last_name}
-          onChangeText={value => updateField('last_name', value)}
-          tooltip="Your legal last name as it appears on your ID"
-        />
+          <FormFieldWithTip
+            label="Last Name"
+            required
+            placeholder="Your last name"
+            value={formData.last_name}
+            onChangeText={value => updateField('last_name', value)}
+            tooltip="Your legal last name as it appears on your ID"
+          />
 
-        <FormFieldWithTip
-          label="Email Address"
-          placeholder="email@example.com"
-          value={formData.email}
-          editable={false}
-          tooltip="Email cannot be changed. Contact support if you need to update it."
-          keyboardType="email-address"
-        />
+          <FormFieldWithTip
+            label="Email Address"
+            placeholder="email@example.com"
+            value={formData.email}
+            editable={false}
+            tooltip="Email cannot be changed. Contact support if you need to update it."
+            keyboardType="email-address"
+          />
 
-        <FormFieldWithTip
-          label="Phone Number"
-          required
-          placeholder="+27821234567"
-          value={formData.phone}
-          onChangeText={value => updateField('phone', value)}
-          tooltip="Your contact number for instructors to reach you"
-          keyboardType="phone-pad"
-        />
+          <FormFieldWithTip
+            label="Phone Number"
+            required
+            placeholder="+27821234567"
+            value={formData.phone}
+            onChangeText={value => updateField('phone', value)}
+            tooltip="Your contact number for instructors to reach you"
+            keyboardType="phone-pad"
+          />
 
-        <FormFieldWithTip
-          label="ID Number"
-          required
-          placeholder="e.g., 7901175104084"
-          value={formData.id_number}
-          onChangeText={value => updateField('id_number', value)}
-          tooltip="Your South African ID number (13 digits)"
-          keyboardType="numeric"
-        />
+          <FormFieldWithTip
+            label="ID Number"
+            required
+            placeholder="e.g., 7901175104084"
+            value={formData.id_number}
+            onChangeText={value => updateField('id_number', value)}
+            tooltip="Your South African ID number (13 digits)"
+            keyboardType="numeric"
+          />
 
-        <FormFieldWithTip
-          label="Learner's Permit Number (Optional)"
-          placeholder="e.g., LP123456789"
-          value={formData.learners_permit_number}
-          onChangeText={value => updateField('learners_permit_number', value)}
-          tooltip="Your learner's permit number if you have one"
-        />
+          <FormFieldWithTip
+            label="Learner's Permit Number (Optional)"
+            placeholder="e.g., LP123456789"
+            value={formData.learners_permit_number}
+            onChangeText={value => updateField('learners_permit_number', value)}
+            tooltip="Your learner's permit number if you have one"
+          />
+        </Card>
 
         {/* Emergency Contact */}
-        <Text style={styles.sectionTitle}>Emergency Contact</Text>
+        <Card variant="default" style={{ marginBottom: 16 }}>
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>Emergency Contact</Text>
 
-        <FormFieldWithTip
-          label="Emergency Contact Name"
-          required
-          placeholder="e.g., Jane Doe"
-          value={formData.emergency_contact_name}
-          onChangeText={value => updateField('emergency_contact_name', value)}
-          tooltip="Full name of your emergency contact person"
-        />
+          <FormFieldWithTip
+            label="Emergency Contact Name"
+            required
+            placeholder="e.g., Jane Doe"
+            value={formData.emergency_contact_name}
+            onChangeText={value => updateField('emergency_contact_name', value)}
+            tooltip="Full name of your emergency contact person"
+          />
 
-        <FormFieldWithTip
-          label="Emergency Contact Phone"
-          required
-          placeholder="+27821234567"
-          value={formData.emergency_contact_phone}
-          onChangeText={value => updateField('emergency_contact_phone', value)}
-          tooltip="Phone number of your emergency contact"
-          keyboardType="phone-pad"
-        />
+          <FormFieldWithTip
+            label="Emergency Contact Phone"
+            required
+            placeholder="+27821234567"
+            value={formData.emergency_contact_phone}
+            onChangeText={value => updateField('emergency_contact_phone', value)}
+            tooltip="Phone number of your emergency contact"
+            keyboardType="phone-pad"
+          />
+        </Card>
 
         {/* Residential Address */}
-        <Text style={styles.sectionTitle}>Residential Address</Text>
+        <Card variant="default" style={{ marginBottom: 16 }}>
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>Residential Address</Text>
 
-        <FormFieldWithTip
-          label="Address Line 1"
-          required
-          placeholder="e.g., 123 Main Street"
-          value={formData.address_line1}
-          onChangeText={value => updateField('address_line1', value)}
-          tooltip="Your street address"
-        />
+          <FormFieldWithTip
+            label="Address Line 1"
+            required
+            placeholder="e.g., 123 Main Street"
+            value={formData.address_line1}
+            onChangeText={value => updateField('address_line1', value)}
+            tooltip="Your street address"
+          />
 
-        <FormFieldWithTip
-          label="Address Line 2 (Optional)"
-          placeholder="e.g., Apartment 4B"
-          value={formData.address_line2}
-          onChangeText={value => updateField('address_line2', value)}
-          tooltip="Additional address information (optional)"
-        />
+          <FormFieldWithTip
+            label="Address Line 2 (Optional)"
+            placeholder="e.g., Apartment 4B"
+            value={formData.address_line2}
+            onChangeText={value => updateField('address_line2', value)}
+            tooltip="Additional address information (optional)"
+          />
 
-        <LocationSelector
-          label="Residential Location"
-          tooltip="Select your province, city, and suburb where you live"
-          required
-          selectedProvince={formData.province}
-          selectedCity={formData.city}
-          selectedSuburb={formData.suburb}
-          onProvinceChange={province =>
-            setFormData(prev => ({ ...prev, province, city: '', suburb: '' }))
-          }
-          onCityChange={city => setFormData(prev => ({ ...prev, city, suburb: '' }))}
-          onSuburbChange={suburb => setFormData(prev => ({ ...prev, suburb }))}
-          onPostalCodeChange={postalCode =>
-            setFormData(prev => ({ ...prev, postal_code: postalCode || prev.postal_code }))
-          }
-          showSuburbs={true}
-        />
+          <LocationSelector
+            label="Residential Location"
+            tooltip="Select your province, city, and suburb where you live"
+            required
+            selectedProvince={formData.province}
+            selectedCity={formData.city}
+            selectedSuburb={formData.suburb}
+            onProvinceChange={province =>
+              setFormData(prev => ({ ...prev, province, city: '', suburb: '' }))
+            }
+            onCityChange={city => setFormData(prev => ({ ...prev, city, suburb: '' }))}
+            onSuburbChange={suburb => setFormData(prev => ({ ...prev, suburb }))}
+            onPostalCodeChange={postalCode =>
+              setFormData(prev => ({ ...prev, postal_code: postalCode || prev.postal_code }))
+            }
+            showSuburbs={true}
+          />
 
-        <FormFieldWithTip
-          label="Postal Code"
-          required
-          placeholder="4-digit postal code"
-          value={formData.postal_code}
-          onChangeText={value => updateField('postal_code', value)}
-          keyboardType="numeric"
-          tooltip="4-digit postal code"
-        />
+          <FormFieldWithTip
+            label="Postal Code"
+            required
+            placeholder="4-digit postal code"
+            value={formData.postal_code}
+            onChangeText={value => updateField('postal_code', value)}
+            keyboardType="numeric"
+            tooltip="4-digit postal code"
+          />
+        </Card>
 
         {/* Action Buttons */}
-        <TouchableOpacity style={styles.passwordButton} onPress={() => setShowPasswordModal(true)}>
-          <Text style={styles.passwordButtonText}>🔒 Change Password</Text>
-        </TouchableOpacity>
+        <View style={styles.actionsContainer}>
+          <Button
+            variant="secondary"
+            fullWidth
+            onPress={() => setShowPasswordModal(true)}
+            icon="🔒"
+          >
+            Change Password
+          </Button>
 
-        <TouchableOpacity
-          style={[styles.saveButton, saving && styles.saveButtonDisabled]}
-          onPress={handleSaveProfile}
-          disabled={saving}
-        >
-          <Text style={styles.saveButtonText}>{saving ? 'Saving...' : '✅ Save Changes'}</Text>
-        </TouchableOpacity>
+          <Button
+            variant="primary"
+            fullWidth
+            onPress={handleSaveProfile}
+            disabled={saving}
+            loading={saving}
+            style={{ marginTop: 12, marginBottom: 40 }}
+          >
+            {saving ? 'Saving...' : 'Save Changes'}
+          </Button>
+        </View>
       </ScrollView>
 
       {/* Password Change Modal */}
-      {showPasswordModal && (
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Change Password</Text>
-              <TouchableOpacity onPress={() => setShowPasswordModal(false)}>
-                <Text style={styles.modalClose}>✕</Text>
-              </TouchableOpacity>
-            </View>
-
-            <FormFieldWithTip
-              label="Current Password"
-              required
-              placeholder="Enter current password"
-              value={passwordData.currentPassword}
-              onChangeText={value => setPasswordData(prev => ({ ...prev, currentPassword: value }))}
-              secureTextEntry={!showPassword}
-              tooltip="Your current password for verification"
-            />
-
-            <FormFieldWithTip
-              label="New Password"
-              required
-              placeholder="Enter new password"
-              value={passwordData.newPassword}
-              onChangeText={value => setPasswordData(prev => ({ ...prev, newPassword: value }))}
-              secureTextEntry={!showPassword}
-              tooltip="New password (minimum 6 characters)"
-            />
-
-            <FormFieldWithTip
-              label="Confirm New Password"
-              required
-              placeholder="Confirm new password"
-              value={passwordData.confirmPassword}
-              onChangeText={value => setPasswordData(prev => ({ ...prev, confirmPassword: value }))}
-              secureTextEntry={!showPassword}
-              tooltip="Re-enter your new password"
-            />
-
-            <TouchableOpacity
-              style={styles.showPasswordButton}
-              onPress={() => setShowPassword(!showPassword)}
+      <ThemedModal
+        visible={showPasswordModal}
+        onClose={() => setShowPasswordModal(false)}
+        title="Change Password"
+        size="sm"
+        footer={
+          <View style={styles.modalButtons}>
+            <Button
+              variant="outline"
+              onPress={() => {
+                setShowPasswordModal(false);
+                setPasswordData({ currentPassword: '', newPassword: '', confirmPassword: '' });
+              }}
+              style={{ flex: 1 }}
             >
-              <Text style={styles.showPasswordText}>
-                {showPassword ? '🙈 Hide Password' : '👁️ Show Password'}
-              </Text>
-            </TouchableOpacity>
-
-            <View style={styles.modalButtons}>
-              <TouchableOpacity
-                style={[styles.modalButton, styles.modalCancelButton]}
-                onPress={() => {
-                  setShowPasswordModal(false);
-                  setPasswordData({ currentPassword: '', newPassword: '', confirmPassword: '' });
-                }}
-              >
-                <Text style={styles.modalCancelButtonText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.modalButton, styles.modalSaveButton]}
-                onPress={handleChangePassword}
-              >
-                <Text style={styles.modalSaveButtonText}>Change Password</Text>
-              </TouchableOpacity>
-            </View>
+              Cancel
+            </Button>
+            <Button
+              variant="primary"
+              onPress={handleChangePassword}
+              style={{ flex: 1 }}
+            >
+              Change Password
+            </Button>
           </View>
-        </View>
-      )}
+        }
+      >
+        <FormFieldWithTip
+          label="Current Password"
+          required
+          placeholder="Enter current password"
+          value={passwordData.currentPassword}
+          onChangeText={value => setPasswordData(prev => ({ ...prev, currentPassword: value }))}
+          secureTextEntry={!showPassword}
+          tooltip="Your current password for verification"
+        />
+
+        <FormFieldWithTip
+          label="New Password"
+          required
+          placeholder="Enter new password"
+          value={passwordData.newPassword}
+          onChangeText={value => setPasswordData(prev => ({ ...prev, newPassword: value }))}
+          secureTextEntry={!showPassword}
+          tooltip="New password (minimum 6 characters)"
+        />
+
+        <FormFieldWithTip
+          label="Confirm New Password"
+          required
+          placeholder="Confirm new password"
+          value={passwordData.confirmPassword}
+          onChangeText={value => setPasswordData(prev => ({ ...prev, confirmPassword: value }))}
+          secureTextEntry={!showPassword}
+          tooltip="Re-enter your new password"
+        />
+
+        <Pressable
+          style={styles.showPasswordButton}
+          onPress={() => setShowPassword(!showPassword)}
+        >
+          <Text style={[styles.showPasswordText, { color: colors.primary }]}>
+            {showPassword ? '🙈 Hide Password' : '👁️ Show Password'}
+          </Text>
+        </Pressable>
+      </ThemedModal>
 
       {/* Discard Changes Confirmation Modal */}
-      <Modal
+      <ThemedModal
         visible={showDiscardModal}
-        transparent={true}
-        animationType="fade"
-        onRequestClose={() => setShowDiscardModal(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.confirmModalContent}>
-            <Text style={styles.confirmModalTitle}>⚠️ Unsaved Changes</Text>
-            <Text style={styles.confirmModalText}>
-              You have unsaved changes! Choose an option below:
-            </Text>
-            <View style={styles.confirmModalButtons}>
-              <TouchableOpacity
-                style={[styles.confirmModalButton, styles.cancelButton]}
-                onPress={() => {
-                  setShowDiscardModal(false);
-                  setPendingNavigation(null);
-                }}
-              >
-                <Text style={styles.cancelButtonText}>Stay</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.confirmModalButton, styles.saveAndContinueButton]}
-                onPress={handleSaveAndContinue}
-                disabled={saving}
-              >
-                <Text style={styles.saveAndContinueButtonText}>
-                  {saving ? 'Saving...' : 'Save & Continue'}
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.confirmModalButton, styles.deleteConfirmButton]}
-                onPress={handleDiscardChanges}
-              >
-                <Text style={styles.deleteConfirmButtonText}>Discard</Text>
-              </TouchableOpacity>
-            </View>
+        onClose={() => {
+          setShowDiscardModal(false);
+          setPendingNavigation(null);
+        }}
+        title="⚠️ Unsaved Changes"
+        size="sm"
+        footer={
+          <View style={styles.modalButtons}>
+            <Button
+              variant="ghost"
+              onPress={() => {
+                setShowDiscardModal(false);
+                setPendingNavigation(null);
+              }}
+              style={{ flex: 1 }}
+            >
+              Stay
+            </Button>
+            <Button
+              variant="primary"
+              onPress={handleSaveAndContinue}
+              disabled={saving}
+              loading={saving}
+              style={{ flex: 1 }}
+            >
+              Save & Continue
+            </Button>
+            <Button
+              variant="danger"
+              onPress={handleDiscardChanges}
+              style={{ flex: 1 }}
+            >
+              Discard
+            </Button>
           </View>
-        </View>
-      </Modal>
+        }
+      >
+        <Text style={[styles.discardText, { color: colors.textSecondary }]}>
+          You have unsaved changes! Choose an option below:
+        </Text>
+      </ThemedModal>
     </View>
   );
 }
@@ -603,30 +612,16 @@ export default function EditStudentProfileScreen({ navigation: navProp }: any) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#f5f5f5',
   },
   loadingText: {
     marginTop: 16,
     fontSize: 16,
-    color: '#666',
-  },
-  header: {
-    alignItems: 'center',
-    padding: 20,
-    backgroundColor: '#fff',
-    borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
-  },
-  headerTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#333',
+    fontFamily: 'Inter_500Medium',
   },
   scrollView: {
     flex: 1,
@@ -636,185 +631,30 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     fontSize: 20,
-    fontWeight: 'bold',
-    color: '#333',
-    marginTop: 24,
+    fontFamily: 'Inter_700Bold',
     marginBottom: 16,
   },
-  passwordButton: {
-    backgroundColor: '#6c757d',
-    padding: 16,
-    borderRadius: 12,
-    alignItems: 'center',
-    marginTop: 24,
-  },
-  passwordButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  saveButton: {
-    backgroundColor: '#28a745',
-    paddingVertical: Platform.OS === 'web' ? 16 : 14,
-    paddingHorizontal: Platform.OS === 'web' ? 32 : 24,
-    borderRadius: 8,
-    alignItems: 'center',
-    marginTop: 16,
-    marginBottom: 40,
-  },
-  saveButtonDisabled: {
-    backgroundColor: '#ccc',
-    opacity: 0.7,
-  },
-  saveButtonText: {
-    color: '#fff',
-    fontSize: Platform.OS === 'web' ? 18 : 16,
-    fontWeight: 'bold',
-  },
-  modalOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: Platform.OS === 'web' ? 20 : 10,
-  },
-  modalContent: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: Platform.OS === 'web' ? 32 : 24,
-    width: Platform.OS === 'web' ? '45%' : '92%',
-    maxWidth: 550,
-    maxHeight: '85%',
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: Platform.OS === 'web' ? 20 : 16,
-    paddingBottom: Platform.OS === 'web' ? 16 : 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
-  },
-  modalTitle: {
-    fontSize: Platform.OS === 'web' ? 24 : 20,
-    fontWeight: 'bold',
-    color: '#333',
-  },
-  modalClose: {
-    fontSize: 28,
-    color: '#666',
-    fontWeight: 'bold',
-    padding: 4,
-  },
-  modalButtons: {
-    flexDirection: 'row',
-    marginTop: 24,
-    gap: Platform.OS === 'web' ? 16 : 12,
-  },
-  modalButton: {
-    flex: 1,
-    paddingVertical: Platform.OS === 'web' ? 14 : 12,
-    paddingHorizontal: Platform.OS === 'web' ? 20 : 16,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  modalCancelButton: {
-    backgroundColor: '#fff',
-    borderWidth: 2,
-    borderColor: '#dc3545',
-  },
-  modalCancelButtonText: {
-    color: '#dc3545',
-    fontSize: Platform.OS === 'web' ? 16 : 15,
-    fontWeight: '600',
-  },
-  modalSaveButton: {
-    backgroundColor: '#28a745',
-  },
-  modalSaveButtonText: {
-    color: '#fff',
-    fontSize: Platform.OS === 'web' ? 16 : 15,
-    fontWeight: '600',
+  actionsContainer: {
+    marginTop: 8,
   },
   showPasswordButton: {
-    marginBottom: 15,
+    marginBottom: 8,
     padding: 8,
     alignItems: 'center',
   },
   showPasswordText: {
-    color: '#007bff',
     fontSize: 14,
-    fontWeight: '600',
+    fontFamily: 'Inter_600SemiBold',
   },
-  confirmModalContent: {
-    backgroundColor: '#fff',
-    borderRadius: 16,
-    padding: 24,
-    width: '85%',
-    maxWidth: 400,
-    ...Platform.select({
-      web: { boxShadow: '0 4px 8px rgba(0,0,0,0.3)' },
-      default: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.3,
-        shadowRadius: 8,
-        elevation: 8,
-      },
-    }),
-  },
-  confirmModalTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#333',
-    marginBottom: 12,
-    textAlign: 'center',
-  },
-  confirmModalText: {
-    fontSize: 16,
-    color: '#555',
-    marginBottom: 24,
-    textAlign: 'center',
-    lineHeight: 22,
-  },
-  confirmModalButtons: {
+  modalButtons: {
     flexDirection: 'row',
     gap: 12,
   },
-  confirmModalButton: {
-    flex: 1,
-    padding: 14,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  cancelButton: {
-    backgroundColor: '#f8f9fa',
-    borderWidth: 1,
-    borderColor: '#ddd',
-  },
-  cancelButtonText: {
-    color: '#333',
+  discardText: {
     fontSize: 16,
-    fontWeight: '600',
-  },
-  saveAndContinueButton: {
-    backgroundColor: '#28a745',
-  },
-  saveAndContinueButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  deleteConfirmButton: {
-    backgroundColor: '#dc3545',
-  },
-  deleteConfirmButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: 'bold',
+    textAlign: 'center',
+    lineHeight: 22,
+    fontFamily: 'Inter_400Regular',
+    marginBottom: 8,
   },
 });

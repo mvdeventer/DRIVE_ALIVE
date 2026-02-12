@@ -1,24 +1,25 @@
 /**
- * Reset Password Screen - Set new password with token
+ * Reset Password Screen — Set new password with token
  */
 import { useNavigation, useRoute } from '@react-navigation/native';
 import React, { useEffect, useState } from 'react';
 import {
-  ActivityIndicator,
   Platform,
+  Pressable,
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
-  TouchableOpacity,
   View,
 } from 'react-native';
 import InlineMessage from '../../components/InlineMessage';
+import { Button, Card, Input } from '../../components/ui';
 import ApiService from '../../services/api';
+import { useTheme } from '../../theme/ThemeContext';
 
 export default function ResetPasswordScreen() {
   const navigation = useNavigation();
   const route = useRoute();
+  const { colors } = useTheme();
   const [token, setToken] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -97,19 +98,26 @@ export default function ResetPasswordScreen() {
   };
 
   return (
-    <ScrollView contentContainerStyle={styles.container}>
-      <View style={styles.card}>
-        <Text style={styles.title}>🔑 Reset Password</Text>
-        <Text style={styles.subtitle}>Enter your new password below.</Text>
+    <ScrollView
+      contentContainerStyle={[styles.container, { backgroundColor: colors.background }]}
+      keyboardShouldPersistTaps="handled"
+    >
+      <Card variant="elevated" padding="lg" style={styles.card}>
+        <View style={[styles.iconCircle, { backgroundColor: colors.primary + '15' }]}>
+          <Text style={styles.icon}>🔑</Text>
+        </View>
+
+        <Text style={[styles.title, { color: colors.text }]}>Reset Password</Text>
+        <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
+          Enter your new password below.
+        </Text>
 
         {successMessage && <InlineMessage type="success" message={successMessage} />}
         {errorMessage && <InlineMessage type="error" message={errorMessage} />}
 
-        <View style={styles.formGroup}>
-          <Text style={styles.label}>New Password</Text>
-          <TextInput
-            key={`password-${showPassword}`}
-            style={styles.input}
+        <View style={styles.passwordRow}>
+          <Input
+            label="New Password"
             placeholder="Enter new password (min. 6 characters)"
             value={newPassword}
             onChangeText={setNewPassword}
@@ -118,51 +126,45 @@ export default function ResetPasswordScreen() {
             autoCorrect={false}
             editable={!loading}
           />
+          <Pressable
+            onPress={() => setShowPassword(!showPassword)}
+            style={styles.togglePassword}
+            hitSlop={8}
+          >
+            <Text style={[styles.toggleText, { color: colors.primary }]}>
+              {showPassword ? 'Hide' : 'Show'}
+            </Text>
+          </Pressable>
         </View>
 
-        <View style={styles.formGroup}>
-          <Text style={styles.label}>Confirm Password</Text>
-          <TextInput
-            key={`confirm-password-${showPassword}`}
-            style={styles.input}
-            placeholder="Re-enter new password"
-            value={confirmPassword}
-            onChangeText={setConfirmPassword}
-            secureTextEntry={!showPassword}
-            autoCapitalize="none"
-            autoCorrect={false}
-            editable={!loading}
-          />
-        </View>
+        <Input
+          label="Confirm Password"
+          placeholder="Re-enter new password"
+          value={confirmPassword}
+          onChangeText={setConfirmPassword}
+          secureTextEntry={!showPassword}
+          autoCapitalize="none"
+          autoCorrect={false}
+          editable={!loading}
+        />
 
-        <TouchableOpacity
-          style={styles.showPasswordButton}
-          onPress={() => setShowPassword(!showPassword)}
-        >
-          <Text style={styles.showPasswordText}>
-            {showPassword ? '🙈 Hide Password' : '👁️ Show Password'}
-          </Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[styles.submitButton, loading && styles.submitButtonDisabled]}
+        <Button
+          label="Reset Password"
           onPress={handleSubmit}
+          loading={loading}
           disabled={loading}
-        >
-          {loading ? (
-            <ActivityIndicator color="#fff" />
-          ) : (
-            <Text style={styles.submitButtonText}>Reset Password</Text>
-          )}
-        </TouchableOpacity>
+          fullWidth
+          size="lg"
+          style={{ marginTop: 12 }}
+        />
 
-        <TouchableOpacity
-          style={styles.backButton}
+        <Pressable
+          style={styles.backLink}
           onPress={() => navigation.navigate('Login' as never)}
         >
-          <Text style={styles.backButtonText}>← Back to Login</Text>
-        </TouchableOpacity>
-      </View>
+          <Text style={[styles.backText, { color: colors.primary }]}>← Back to Login</Text>
+        </Pressable>
+      </Card>
     </ScrollView>
   );
 }
@@ -170,82 +172,58 @@ export default function ResetPasswordScreen() {
 const styles = StyleSheet.create({
   container: {
     flexGrow: 1,
-    backgroundColor: '#f5f5f5',
-    padding: 20,
+    padding: Platform.OS === 'web' ? 40 : 20,
     justifyContent: 'center',
   },
   card: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 24,
-    maxWidth: 400,
+    maxWidth: 440,
     width: '100%',
     alignSelf: 'center',
-    boxShadow: '0px 4px 12px rgba(0, 0, 0, 0.1)',
-    elevation: 4,
+    alignItems: 'center',
+  },
+  iconCircle: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 16,
+  },
+  icon: {
+    fontSize: 32,
   },
   title: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: '#333',
-    textAlign: 'center',
+    fontSize: Platform.OS === 'web' ? 26 : 22,
+    fontWeight: '800',
     marginBottom: 8,
+    letterSpacing: -0.3,
   },
   subtitle: {
-    fontSize: 14,
-    color: '#666',
+    fontSize: Platform.OS === 'web' ? 14 : 13,
     textAlign: 'center',
     marginBottom: 24,
     lineHeight: 20,
   },
-  formGroup: {
-    marginBottom: 16,
+  passwordRow: {
+    position: 'relative',
+    width: '100%',
   },
-  label: {
-    fontSize: 14,
+  togglePassword: {
+    position: 'absolute',
+    right: 0,
+    top: 0,
+    paddingVertical: 10,
+    paddingHorizontal: 10,
+  },
+  toggleText: {
+    fontSize: 13,
     fontWeight: '600',
-    color: '#333',
-    marginBottom: 8,
   },
-  input: {
-    borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 8,
+  backLink: {
+    marginTop: 20,
     padding: 12,
-    fontSize: 16,
-    backgroundColor: '#fff',
   },
-  showPasswordButton: {
-    marginBottom: 20,
-    padding: 8,
-    alignItems: 'center',
-  },
-  showPasswordText: {
-    color: '#007bff',
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  submitButton: {
-    backgroundColor: '#28a745',
-    padding: 16,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  submitButtonDisabled: {
-    backgroundColor: '#ccc',
-  },
-  submitButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  backButton: {
-    marginTop: 16,
-    padding: 12,
-    alignItems: 'center',
-  },
-  backButtonText: {
-    color: '#007bff',
+  backText: {
     fontSize: 14,
     fontWeight: '600',
   },

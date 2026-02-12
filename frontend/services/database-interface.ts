@@ -1,19 +1,11 @@
 /**
  * Database Interface API Service
  * Handles all HTTP requests to /admin/database-interface endpoints
+ * Uses apiService for authenticated requests
  */
 
-import axios, { AxiosError } from 'axios';
-import { Platform } from 'react-native';
-
-// Get API base URL
-const API_BASE_URL = Platform.select({
-  web: process.env.REACT_APP_API_URL || 'http://localhost:8000',
-  default: 'http://localhost:8000',
-});
-
-// Use HTTP-only cookies for auth on web
-axios.defaults.withCredentials = true;
+import { AxiosError } from 'axios';
+import apiService from './api';
 
 interface ListResponse<T> {
   data: T[];
@@ -68,21 +60,15 @@ export const getDatabaseUsers = async (
   if (filterStatus) params.append('filter_status', filterStatus);
   if (sort) params.append('sort', sort);
 
-  const response = await axios.get(
-    `${API_BASE_URL}/admin/database-interface/users?${params.toString()}`,
-    {
-      headers: {},
-    }
+  const response = await apiService.get(
+    `/admin/database-interface/users?${params.toString()}`
   );
   return response.data;
 };
 
 export const getUserDetail = async (userId: number): Promise<DetailResponse<any>> => {
-  const response = await axios.get(
-    `${API_BASE_URL}/admin/database-interface/users/${userId}`,
-    {
-      headers: {},
-    }
+  const response = await apiService.get(
+    `/admin/database-interface/users/${userId}`
   );
   return response.data;
 };
@@ -100,8 +86,8 @@ export const updateUser = async (
     headers['If-Match'] = etag;
   }
 
-  const response = await axios.put(
-    `${API_BASE_URL}/admin/database-interface/users/${userId}`,
+  const response = await apiService.put(
+    `/admin/database-interface/users/${userId}`,
     data,
     { headers }
   );
@@ -121,12 +107,12 @@ export const deleteUser = async (
   }
 
   // Build URL with role_type query parameter if provided
-  let url = `${API_BASE_URL}/admin/database-interface/users/${userId}`;
+  let url = `/admin/database-interface/users/${userId}`;
   if (roleType) {
     url += `?role_type=${roleType}`;
   }
 
-  const response = await axios.delete(url, { headers });
+  const response = await apiService.delete(url, { headers });
   return response.data;
 };
 
@@ -148,21 +134,15 @@ export const getDatabaseInstructors = async (
   if (filterVerified !== undefined) params.append('filter_verified', filterVerified.toString());
   if (sort) params.append('sort', sort);
 
-  const response = await axios.get(
-    `${API_BASE_URL}/admin/database-interface/instructors?${params.toString()}`,
-    {
-      headers: {},
-    }
+  const response = await apiService.get(
+    `/admin/database-interface/instructors?${params.toString()}`
   );
   return response.data;
 };
 
 export const getInstructorDetail = async (instructorId: number): Promise<DetailResponse<any>> => {
-  const response = await axios.get(
-    `${API_BASE_URL}/admin/database-interface/instructors/${instructorId}`,
-    {
-      headers: {},
-    }
+  const response = await apiService.get(
+    `/admin/database-interface/instructors/${instructorId}`
   );
   return response.data;
 };
@@ -180,8 +160,8 @@ export const updateInstructor = async (
     headers['If-Match'] = etag;
   }
 
-  const response = await axios.put(
-    `${API_BASE_URL}/admin/database-interface/instructors/${instructorId}`,
+  const response = await apiService.put(
+    `/admin/database-interface/instructors/${instructorId}`,
     data,
     { headers }
   );
@@ -199,8 +179,8 @@ export const deleteInstructor = async (
     headers['If-Match'] = etag;
   }
 
-  const response = await axios.delete(
-    `${API_BASE_URL}/admin/database-interface/instructors/${instructorId}`,
+  const response = await apiService.delete(
+    `/admin/database-interface/instructors/${instructorId}`,
     { headers }
   );
   return response.data;
@@ -222,21 +202,15 @@ export const getDatabaseStudents = async (
   if (search) params.append('search', search);
   if (sort) params.append('sort', sort);
 
-  const response = await axios.get(
-    `${API_BASE_URL}/admin/database-interface/students?${params.toString()}`,
-    {
-      headers: {},
-    }
+  const response = await apiService.get(
+    `/admin/database-interface/students?${params.toString()}`
   );
   return response.data;
 };
 
 export const getStudentDetail = async (studentId: number): Promise<DetailResponse<any>> => {
-  const response = await axios.get(
-    `${API_BASE_URL}/admin/database-interface/students/${studentId}`,
-    {
-      headers: {},
-    }
+  const response = await apiService.get(
+    `/admin/database-interface/students/${studentId}`
   );
   return response.data;
 };
@@ -254,8 +228,8 @@ export const updateStudent = async (
     headers['If-Match'] = etag;
   }
 
-  const response = await axios.put(
-    `${API_BASE_URL}/admin/database-interface/students/${studentId}`,
+  const response = await apiService.put(
+    `/admin/database-interface/students/${studentId}`,
     data,
     { headers }
   );
@@ -273,8 +247,8 @@ export const deleteStudent = async (
     headers['If-Match'] = etag;
   }
 
-  const response = await axios.delete(
-    `${API_BASE_URL}/admin/database-interface/students/${studentId}`,
+  const response = await apiService.delete(
+    `/admin/database-interface/students/${studentId}`,
     { headers }
   );
   return response.data;
@@ -304,21 +278,15 @@ export const getDatabaseBookings = async (
   if (endDate) params.append('end_date', endDate);
   if (sort) params.append('sort', sort);
 
-  const response = await axios.get(
-    `${API_BASE_URL}/admin/database-interface/bookings?${params.toString()}`,
-    {
-        headers: {},
-    }
+  const response = await apiService.get(
+    `/admin/database-interface/bookings?${params.toString()}`
   );
   return response.data;
 };
 
 export const getBookingDetail = async (bookingId: number): Promise<DetailResponse<any>> => {
-  const response = await axios.get(
-    `${API_BASE_URL}/admin/database-interface/bookings/${bookingId}`,
-    {
-        headers: {},
-    }
+  const response = await apiService.get(
+    `/admin/database-interface/bookings/${bookingId}`
   );
   return response.data;
 };
@@ -336,8 +304,8 @@ export const updateBooking = async (
     headers['If-Match'] = etag;
   }
 
-  const response = await axios.put(
-    `${API_BASE_URL}/admin/database-interface/bookings/${bookingId}`,
+  const response = await apiService.put(
+    `/admin/database-interface/bookings/${bookingId}`,
     data,
     { headers }
   );
@@ -355,8 +323,8 @@ export const deleteBooking = async (
     headers['If-Match'] = etag;
   }
 
-  const response = await axios.delete(
-    `${API_BASE_URL}/admin/database-interface/bookings/${bookingId}`,
+  const response = await apiService.delete(
+    `/admin/database-interface/bookings/${bookingId}`,
     {
       headers,
       data: reason ? { reason } : undefined,
@@ -379,11 +347,8 @@ export const getDatabaseReviews = async (
   params.append('page_size', pageSize.toString());
   if (sort) params.append('sort', sort);
 
-  const response = await axios.get(
-    `${API_BASE_URL}/admin/database-interface/reviews?${params.toString()}`,
-    {
-        headers: {},
-    }
+  const response = await apiService.get(
+    `/admin/database-interface/reviews?${params.toString()}`
   );
   return response.data;
 };
@@ -404,11 +369,8 @@ export const getDatabaseSchedules = async (
   if (filterInstructorId) params.append('filter_instructor_id', filterInstructorId.toString());
   if (sort) params.append('sort', sort);
 
-  const response = await axios.get(
-    `${API_BASE_URL}/admin/database-interface/schedules?${params.toString()}`,
-    {
-        headers: {},
-    }
+  const response = await apiService.get(
+    `/admin/database-interface/schedules?${params.toString()}`
   );
   return response.data;
 };
@@ -433,14 +395,9 @@ export interface BulkUpdateResponse {
 export const bulkUpdateRecords = async (
   request: BulkUpdateRequest
 ): Promise<BulkUpdateResponse> => {
-  const response = await axios.post(
-    `${API_BASE_URL}/admin/database-interface/bulk-update`,
-    request,
-    {
-      headers: {
-        'Content-Type': 'application/json',
-      },
-    }
+  const response = await apiService.post(
+    `/admin/database-interface/bulk-update`,
+    request
   );
   return response.data;
 };

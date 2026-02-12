@@ -315,7 +315,7 @@ def backup_database(db: Session = Depends(get_db)):
         
         # Create backup file
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        filename = f"drive_alive_backup_{timestamp}.json"
+        filename = f"roadready_backup_{timestamp}.json"
         filepath = os.path.join("backups", filename)
         
         # Create backups directory if it doesn't exist

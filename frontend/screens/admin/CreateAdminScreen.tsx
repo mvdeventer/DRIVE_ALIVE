@@ -3,13 +3,14 @@ import {
   View,
   Text,
   TextInput,
-  TouchableOpacity,
+  Pressable,
   ScrollView,
   StyleSheet,
   ActivityIndicator,
-  Modal,
   Platform,
 } from 'react-native';
+import { Button, Card, ThemedModal } from '../../components';
+import { useTheme } from '../../theme/ThemeContext';
 import InlineMessage from '../../components/InlineMessage';
 import WebNavigationHeader from '../../components/WebNavigationHeader';
 import AddressAutocomplete from '../../components/AddressAutocomplete';
@@ -34,6 +35,7 @@ interface FormData {
 }
 
 export default function CreateAdminScreen({ navigation }: any) {
+  const { colors } = useTheme();
   const scrollViewRef = useRef<ScrollView>(null);
   const [formData, setFormData] = useState<FormData>({
     first_name: '',
@@ -170,14 +172,10 @@ export default function CreateAdminScreen({ navigation }: any) {
         expires_in_minutes: formData.verification_link_validity_minutes || 30,
       };
 
-      navigation.navigate('VerificationPending', {
-        email: formData.email,
-        phone: formData.phone,
-        firstName: formData.first_name,
-        emailSent: verificationData.email_sent,
-        whatsappSent: verificationData.whatsapp_sent,
-        expiryMinutes: verificationData.expires_in_minutes || 30,
-      });
+      scrollViewRef.current?.scrollTo({ y: 0, animated: true });
+      setSuccessMessage(`Admin account created for ${formData.first_name} ${formData.last_name}. Account is active immediately — no verification needed.`);
+      // Return to dashboard after a short delay
+      setTimeout(() => navigation.goBack(), 2500);
     } catch (error: any) {
       scrollViewRef.current?.scrollTo({ y: 0, animated: true });
       setErrorMessage(error.message || 'Failed to create admin account');
@@ -187,7 +185,7 @@ export default function CreateAdminScreen({ navigation }: any) {
   };
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
       <WebNavigationHeader
         title="Create New Admin"
         onBack={() => navigation.goBack()}
@@ -202,28 +200,28 @@ export default function CreateAdminScreen({ navigation }: any) {
           <InlineMessage message={successMessage} type="success" />
         ) : null}
 
-        <View style={styles.formSection}>
-          <Text style={styles.sectionTitle}>Personal Information</Text>
+        <View style={[styles.formSection, { borderBottomColor: colors.border }]}>
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>Personal Information</Text>
 
-          <Text style={styles.label}>First Name *</Text>
+          <Text style={[styles.label, { color: colors.textSecondary }]}>First Name *</Text>
           <TextInput
-            style={styles.input}
+            style={[styles.input, { borderColor: colors.border, backgroundColor: colors.backgroundSecondary, color: colors.text }]}
             value={formData.first_name}
             onChangeText={(text) => handleChange('first_name', text)}
             placeholder="John"
           />
 
-          <Text style={styles.label}>Last Name *</Text>
+          <Text style={[styles.label, { color: colors.textSecondary }]}>Last Name *</Text>
           <TextInput
-            style={styles.input}
+            style={[styles.input, { borderColor: colors.border, backgroundColor: colors.backgroundSecondary, color: colors.text }]}
             value={formData.last_name}
             onChangeText={(text) => handleChange('last_name', text)}
             placeholder="Doe"
           />
 
-          <Text style={styles.label}>Email *</Text>
+          <Text style={[styles.label, { color: colors.textSecondary }]}>Email *</Text>
           <TextInput
-            style={styles.input}
+            style={[styles.input, { borderColor: colors.border, backgroundColor: colors.backgroundSecondary, color: colors.text }]}
             value={formData.email}
             onChangeText={(text) => handleChange('email', text)}
             placeholder="admin@example.com"
@@ -231,25 +229,25 @@ export default function CreateAdminScreen({ navigation }: any) {
             autoCapitalize="none"
           />
 
-          <Text style={styles.label}>Phone Number *</Text>
+          <Text style={[styles.label, { color: colors.textSecondary }]}>Phone Number *</Text>
           <TextInput
-            style={styles.input}
+            style={[styles.input, { borderColor: colors.border, backgroundColor: colors.backgroundSecondary, color: colors.text }]}
             value={formData.phone}
             onChangeText={(text) => handleChange('phone', text)}
             placeholder="0611154598 or +27611154598"
             keyboardType="phone-pad"
           />
 
-          <Text style={styles.label}>ID Number *</Text>
+          <Text style={[styles.label, { color: colors.textSecondary }]}>ID Number *</Text>
           <TextInput
-            style={styles.input}
+            style={[styles.input, { borderColor: colors.border, backgroundColor: colors.backgroundSecondary, color: colors.text }]}
             value={formData.id_number}
             onChangeText={(text) => handleChange('id_number', text)}
             placeholder="9001015009087"
             keyboardType="numeric"
           />
 
-          <Text style={styles.label}>Address (Optional)</Text>
+          <Text style={[styles.label, { color: colors.textSecondary }]}>Address (Optional)</Text>
           <AddressAutocomplete
             value={formData.address}
             onChangeText={(text) => handleChange('address', text)}
@@ -261,64 +259,64 @@ export default function CreateAdminScreen({ navigation }: any) {
           />
         </View>
 
-        <View style={styles.formSection}>
-          <Text style={styles.sectionTitle}>Security</Text>
+        <View style={[styles.formSection, { borderBottomColor: colors.border }]}>
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>Security</Text>
 
-          <Text style={styles.label}>Password *</Text>
-          <View style={styles.passwordContainer}>
+          <Text style={[styles.label, { color: colors.textSecondary }]}>Password *</Text>
+          <View style={[styles.passwordContainer, { borderColor: colors.border, backgroundColor: colors.backgroundSecondary }]}>
             <TextInput
-              style={styles.passwordInput}
+              style={[styles.passwordInput, { color: colors.text }]}
               value={formData.password}
               onChangeText={(text) => handleChange('password', text)}
               placeholder="Min 6 characters"
               secureTextEntry={!showPassword}
             />
-            <TouchableOpacity
+            <Pressable
               style={styles.eyeButton}
               onPress={() => setShowPassword(!showPassword)}
             >
               <Text style={styles.eyeButtonText}>{showPassword ? '👁️' : '👁️‍🗨️'}</Text>
-            </TouchableOpacity>
+            </Pressable>
           </View>
 
-          <Text style={styles.label}>Confirm Password *</Text>
-          <View style={styles.passwordContainer}>
+          <Text style={[styles.label, { color: colors.textSecondary }]}>Confirm Password *</Text>
+          <View style={[styles.passwordContainer, { borderColor: colors.border, backgroundColor: colors.backgroundSecondary }]}>
             <TextInput
-              style={styles.passwordInput}
+              style={[styles.passwordInput, { color: colors.text }]}
               value={formData.confirmPassword}
               onChangeText={(text) => handleChange('confirmPassword', text)}
               placeholder="Re-enter password"
               secureTextEntry={!showConfirmPassword}
             />
-            <TouchableOpacity
+            <Pressable
               style={styles.eyeButton}
               onPress={() => setShowConfirmPassword(!showConfirmPassword)}
             >
               <Text style={styles.eyeButtonText}>
                 {showConfirmPassword ? '👁️' : '👁️‍🗨️'}
               </Text>
-            </TouchableOpacity>
+            </Pressable>
           </View>
         </View>
 
         {loadingSettings && (
-          <View style={styles.formSection}>
-            <Text style={styles.sectionTitle}>Loading Admin Settings...</Text>
-            <ActivityIndicator size="large" color="#007BFF" style={{ marginVertical: 20 }} />
+          <View style={[styles.formSection, { borderBottomColor: colors.border }]}>
+            <Text style={[styles.sectionTitle, { color: colors.text }]}>Loading Admin Settings...</Text>
+            <ActivityIndicator size="large" color={colors.primary} style={{ marginVertical: 20 }} />
           </View>
         )}
 
-        <View style={styles.formSection}>
-          <Text style={styles.sectionTitle}>Email Configuration (Optional)</Text>
+        <View style={[styles.formSection, { borderBottomColor: colors.border }]}>
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>Email Configuration (Optional)</Text>
           {loadingSettings ? (
-            <Text style={styles.hintText}>Loading settings from database...</Text>
+            <Text style={[styles.hintText, { color: colors.textMuted }]}>Loading settings from database...</Text>
           ) : (
-            <Text style={styles.hintText}>📧 Pre-populated from current admin settings (🌍 Global setting - shared by all admins)</Text>
+            <Text style={[styles.hintText, { color: colors.textMuted }]}>Pre-populated from current admin settings (Global setting - shared by all admins)</Text>
           )}
 
-          <Text style={styles.label}>Gmail Address</Text>
+          <Text style={[styles.label, { color: colors.textSecondary }]}>Gmail Address</Text>
           <TextInput
-            style={styles.input}
+            style={[styles.input, { borderColor: colors.border, backgroundColor: colors.backgroundSecondary, color: colors.text }]}
             value={formData.smtp_email}
             onChangeText={(text) => handleChange('smtp_email', text)}
             placeholder="your-gmail@gmail.com"
@@ -326,28 +324,28 @@ export default function CreateAdminScreen({ navigation }: any) {
             autoCapitalize="none"
           />
 
-          <Text style={styles.label}>Gmail App Password</Text>
-          <View style={styles.passwordContainer}>
+          <Text style={[styles.label, { color: colors.textSecondary }]}>Gmail App Password</Text>
+          <View style={[styles.passwordContainer, { borderColor: colors.border, backgroundColor: colors.backgroundSecondary }]}>
             <TextInput
-              style={styles.passwordInput}
+              style={[styles.passwordInput, { color: colors.text }]}
               value={formData.smtp_password}
               onChangeText={(text) => handleChange('smtp_password', text)}
               placeholder="xxxx xxxx xxxx xxxx"
               secureTextEntry={!showSmtpPassword}
             />
-            <TouchableOpacity
+            <Pressable
               style={styles.eyeButton}
               onPress={() => setShowSmtpPassword(!showSmtpPassword)}
             >
               <Text style={styles.eyeButtonText}>
                 {showSmtpPassword ? '👁️' : '👁️‍🗨️'}
               </Text>
-            </TouchableOpacity>
+            </Pressable>
           </View>
 
-          <Text style={styles.label}>Verification Link Validity (minutes)</Text>
+          <Text style={[styles.label, { color: colors.textSecondary }]}>Verification Link Validity (minutes)</Text>
           <TextInput
-            style={styles.input}
+            style={[styles.input, { borderColor: colors.border, backgroundColor: colors.backgroundSecondary, color: colors.text }]}
             value={String(formData.verification_link_validity_minutes)}
             onChangeText={(text) =>
               handleChange('verification_link_validity_minutes', Number(text) || 30)
@@ -357,22 +355,22 @@ export default function CreateAdminScreen({ navigation }: any) {
           />
         </View>
 
-        <View style={styles.formSection}>
-          <Text style={styles.sectionTitle}>WhatsApp Configuration (Optional)</Text>
-          <Text style={styles.hintText}>📱 Pre-populated from current admin settings (🌍 Global setting - shared by all admins)</Text>
+        <View style={[styles.formSection, { borderBottomColor: colors.border }]}>
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>WhatsApp Configuration (Optional)</Text>
+          <Text style={[styles.hintText, { color: colors.textMuted }]}>Pre-populated from current admin settings (Global setting - shared by all admins)</Text>
 
-          <Text style={styles.label}>Twilio Sender Phone Number</Text>
+          <Text style={[styles.label, { color: colors.textSecondary }]}>Twilio Sender Phone Number</Text>
           <TextInput
-            style={styles.input}
+            style={[styles.input, { borderColor: colors.border, backgroundColor: colors.backgroundSecondary, color: colors.text }]}
             value={formData.twilio_sender_phone_number}
             onChangeText={(text) => handleChange('twilio_sender_phone_number', text)}
             placeholder="+27123456789 or +14155238886"
             keyboardType="phone-pad"
           />
 
-          <Text style={styles.label}>Admin Phone (for test messages)</Text>
+          <Text style={[styles.label, { color: colors.textSecondary }]}>Admin Phone (for test messages)</Text>
           <TextInput
-            style={styles.input}
+            style={[styles.input, { borderColor: colors.border, backgroundColor: colors.backgroundSecondary, color: colors.text }]}
             value={formData.twilio_phone_number}
             onChangeText={(text) => handleChange('twilio_phone_number', text)}
             placeholder="0611154598 or +27611154598"
@@ -380,89 +378,81 @@ export default function CreateAdminScreen({ navigation }: any) {
           />
         </View>
 
-        <TouchableOpacity
-          style={[styles.button, loading && styles.buttonDisabled]}
-          onPress={handleCreateAdmin}
+        <Button
+          variant="primary"
+          fullWidth
+          loading={loading}
           disabled={loading}
+          onPress={handleCreateAdmin}
+          style={{ margin: Platform.OS === 'web' ? 20 : 16 }}
         >
-          {loading ? (
-            <ActivityIndicator color="#fff" />
-          ) : (
-            <Text style={styles.buttonText}>Create Admin Account</Text>
-          )}
-        </TouchableOpacity>
+          Create Admin Account
+        </Button>
 
         <View style={{ height: 40 }} />
       </ScrollView>
 
       {/* Confirmation Modal */}
-      <Modal visible={showConfirmModal} transparent animationType="fade">
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <ScrollView>
-              <Text style={styles.modalTitle}>✓ Confirm Admin Account Details</Text>
-
-              <View style={styles.modalSection}>
-                <Text style={styles.modalSectionTitle}>Personal Information</Text>
-                <Text style={styles.modalText}>Name: {formData.first_name} {formData.last_name}</Text>
-                <Text style={styles.modalText}>Email: {formData.email}</Text>
-                <Text style={styles.modalText}>Phone: {formData.phone}</Text>
-                <Text style={styles.modalText}>ID Number: {formData.id_number}</Text>
-                {formData.address && (
-                  <>
-                    <Text style={styles.modalText}>Address: {formData.address}</Text>
-                    {pickupCoordinates && (
-                      <Text style={styles.modalText}>
-                        📍 GPS: {pickupCoordinates.latitude.toFixed(4)}, {pickupCoordinates.longitude.toFixed(4)}
-                      </Text>
-                    )}
-                  </>
-                )}
-              </View>
-
-              {formData.smtp_email && (
-                <View style={styles.modalSection}>
-                  <Text style={styles.modalSectionTitle}>Email Configuration</Text>
-                  <Text style={styles.modalText}>Gmail: {formData.smtp_email}</Text>
-                  <Text style={styles.modalText}>
-                    Link Validity: {formData.verification_link_validity_minutes} minutes
-                  </Text>
-                </View>
-              )}
-
-              {formData.twilio_sender_phone_number && (
-                <View style={styles.modalSection}>
-                  <Text style={styles.modalSectionTitle}>WhatsApp Configuration</Text>
-                  <Text style={styles.modalText}>
-                    Twilio Sender: {formData.twilio_sender_phone_number}
-                  </Text>
-                  {formData.twilio_phone_number && (
-                    <Text style={styles.modalText}>
-                      Test Recipient: {formData.twilio_phone_number}
-                    </Text>
-                  )}
-                </View>
-              )}
-
-              <View style={styles.modalButtons}>
-                <TouchableOpacity
-                  style={styles.modalButtonCancel}
-                  onPress={() => setShowConfirmModal(false)}
-                >
-                  <Text style={styles.modalButtonTextCancel}>✏️ Edit</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={styles.modalButtonConfirm}
-                  onPress={confirmAndSubmit}
-                >
-                  <Text style={styles.modalButtonTextConfirm}>✓ Confirm & Create</Text>
-                </TouchableOpacity>
-              </View>
-            </ScrollView>
+      <ThemedModal
+        visible={showConfirmModal}
+        onClose={() => setShowConfirmModal(false)}
+        title="Confirm Admin Account Details"
+        size="md"
+        footer={
+          <View style={styles.modalButtons}>
+            <Button variant="secondary" style={{ flex: 1 }} onPress={() => setShowConfirmModal(false)}>
+              Edit
+            </Button>
+            <Button variant="primary" style={{ flex: 1, backgroundColor: colors.success }} onPress={confirmAndSubmit}>
+              Confirm & Create
+            </Button>
           </View>
-        </View>
-      </Modal>
+        }
+      >
+        <ScrollView>
+          <View style={[styles.modalSection, { backgroundColor: colors.backgroundSecondary }]}>
+            <Text style={[styles.modalSectionTitle, { color: colors.text }]}>Personal Information</Text>
+            <Text style={[styles.modalText, { color: colors.textSecondary }]}>Name: {formData.first_name} {formData.last_name}</Text>
+            <Text style={[styles.modalText, { color: colors.textSecondary }]}>Email: {formData.email}</Text>
+            <Text style={[styles.modalText, { color: colors.textSecondary }]}>Phone: {formData.phone}</Text>
+            <Text style={[styles.modalText, { color: colors.textSecondary }]}>ID Number: {formData.id_number}</Text>
+            {formData.address && (
+              <>
+                <Text style={[styles.modalText, { color: colors.textSecondary }]}>Address: {formData.address}</Text>
+                {pickupCoordinates && (
+                  <Text style={[styles.modalText, { color: colors.textSecondary }]}>
+                    GPS: {pickupCoordinates.latitude.toFixed(4)}, {pickupCoordinates.longitude.toFixed(4)}
+                  </Text>
+                )}
+              </>
+            )}
+          </View>
+
+          {formData.smtp_email && (
+            <View style={[styles.modalSection, { backgroundColor: colors.backgroundSecondary }]}>
+              <Text style={[styles.modalSectionTitle, { color: colors.text }]}>Email Configuration</Text>
+              <Text style={[styles.modalText, { color: colors.textSecondary }]}>Gmail: {formData.smtp_email}</Text>
+              <Text style={[styles.modalText, { color: colors.textSecondary }]}>
+                Link Validity: {formData.verification_link_validity_minutes} minutes
+              </Text>
+            </View>
+          )}
+
+          {formData.twilio_sender_phone_number && (
+            <View style={[styles.modalSection, { backgroundColor: colors.backgroundSecondary }]}>
+              <Text style={[styles.modalSectionTitle, { color: colors.text }]}>WhatsApp Configuration</Text>
+              <Text style={[styles.modalText, { color: colors.textSecondary }]}>
+                Twilio Sender: {formData.twilio_sender_phone_number}
+              </Text>
+              {formData.twilio_phone_number && (
+                <Text style={[styles.modalText, { color: colors.textSecondary }]}>
+                  Test Recipient: {formData.twilio_phone_number}
+                </Text>
+              )}
+            </View>
+          )}
+        </ScrollView>
+      </ThemedModal>
     </View>
   );
 }
@@ -470,7 +460,6 @@ export default function CreateAdminScreen({ navigation }: any) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fff',
   },
   scrollContent: {
     flex: 1,
@@ -478,48 +467,43 @@ const styles = StyleSheet.create({
   formSection: {
     padding: Platform.OS === 'web' ? 20 : 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#E0E0E0',
   },
   sectionTitle: {
     fontSize: Platform.OS === 'web' ? 20 : 18,
-    fontWeight: 'bold',
+    fontFamily: 'Inter_700Bold',
     marginBottom: 16,
-    color: '#333',
   },
   label: {
     fontSize: Platform.OS === 'web' ? 14 : 12,
-    fontWeight: '600',
+    fontFamily: 'Inter_600SemiBold',
     marginBottom: 8,
-    color: '#555',
   },
   hintText: {
     fontSize: Platform.OS === 'web' ? 13 : 11,
-    color: '#666',
+    fontFamily: 'Inter_400Regular',
     fontStyle: 'italic',
     marginBottom: 12,
   },
   input: {
     borderWidth: 1,
-    borderColor: '#DDD',
     borderRadius: 8,
     padding: Platform.OS === 'web' ? 12 : 10,
     fontSize: Platform.OS === 'web' ? 16 : 14,
+    fontFamily: 'Inter_400Regular',
     marginBottom: 16,
-    backgroundColor: '#F9F9F9',
   },
   passwordContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#DDD',
     borderRadius: 8,
     marginBottom: 16,
-    backgroundColor: '#F9F9F9',
   },
   passwordInput: {
     flex: 1,
     padding: Platform.OS === 'web' ? 12 : 10,
     fontSize: Platform.OS === 'web' ? 16 : 14,
+    fontFamily: 'Inter_400Regular',
   },
   eyeButton: {
     padding: 12,
@@ -527,88 +511,23 @@ const styles = StyleSheet.create({
   eyeButtonText: {
     fontSize: 20,
   },
-  button: {
-    backgroundColor: '#007BFF',
-    padding: Platform.OS === 'web' ? 16 : 14,
-    borderRadius: 8,
-    alignItems: 'center',
-    margin: Platform.OS === 'web' ? 20 : 16,
-  },
-  buttonDisabled: {
-    backgroundColor: '#CCC',
-    opacity: 0.6,
-  },
-  buttonText: {
-    color: '#fff',
-    fontSize: Platform.OS === 'web' ? 18 : 16,
-    fontWeight: 'bold',
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  modalContent: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: Platform.OS === 'web' ? 24 : 20,
-    width: Platform.OS === 'web' ? '50%' : '90%',
-    maxWidth: 600,
-    maxHeight: Platform.OS === 'web' ? '80%' : '85%',
-  },
-  modalTitle: {
-    fontSize: Platform.OS === 'web' ? 24 : 20,
-    fontWeight: 'bold',
-    marginBottom: 20,
-    color: '#28a745',
-    textAlign: 'center',
+  modalButtons: {
+    flexDirection: 'row',
+    gap: 12,
   },
   modalSection: {
     marginBottom: 16,
     padding: 12,
-    backgroundColor: '#F8F9FA',
     borderRadius: 8,
   },
   modalSectionTitle: {
     fontSize: Platform.OS === 'web' ? 16 : 14,
-    fontWeight: 'bold',
+    fontFamily: 'Inter_700Bold',
     marginBottom: 8,
-    color: '#333',
   },
   modalText: {
     fontSize: Platform.OS === 'web' ? 14 : 12,
+    fontFamily: 'Inter_400Regular',
     marginBottom: 4,
-    color: '#555',
-  },
-  modalButtons: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: 20,
-    gap: 12,
-  },
-  modalButtonCancel: {
-    flex: 1,
-    backgroundColor: '#6C757D',
-    padding: Platform.OS === 'web' ? 14 : 12,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  modalButtonTextCancel: {
-    color: '#fff',
-    fontSize: Platform.OS === 'web' ? 16 : 14,
-    fontWeight: 'bold',
-  },
-  modalButtonConfirm: {
-    flex: 1,
-    backgroundColor: '#28a745',
-    padding: Platform.OS === 'web' ? 14 : 12,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  modalButtonTextConfirm: {
-    color: '#fff',
-    fontSize: Platform.OS === 'web' ? 16 : 14,
-    fontWeight: 'bold',
   },
 });

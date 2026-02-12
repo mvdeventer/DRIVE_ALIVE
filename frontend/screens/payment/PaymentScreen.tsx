@@ -10,9 +10,10 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  TouchableOpacity,
   View,
 } from 'react-native';
+import { Button, Card } from '../../components/ui';
+import { useTheme } from '../../theme/ThemeContext';
 import InlineMessage from '../../components/InlineMessage';
 import WebNavigationHeader from '../../components/WebNavigationHeader';
 import ApiService from '../../services/api';
@@ -28,6 +29,7 @@ interface RouteParams {
 export default function PaymentScreen() {
   const navigation = useNavigation();
   const route = useRoute();
+  const { colors } = useTheme();
   const params = route.params as RouteParams;
 
   const { instructor, bookings, total_amount, booking_fee, lesson_amount } = params;
@@ -74,7 +76,7 @@ export default function PaymentScreen() {
       } else {
         await Linking.openURL(response.payment_url);
         navigation.navigate(
-          'PaymentStatus' as never,
+          'PaymentSuccess' as never,
           {
             payment_session_id: response.payment_session_id,
           } as never
@@ -93,7 +95,7 @@ export default function PaymentScreen() {
   };
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
       {message && (
         <View style={{ marginHorizontal: 16, marginTop: 8 }}>
           <InlineMessage
@@ -112,145 +114,103 @@ export default function PaymentScreen() {
       />
 
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
-        <View style={styles.card}>
-          <Text style={styles.sectionTitle}>Instructor</Text>
-          <Text style={styles.instructorName}>
+        <Card variant="elevated" style={styles.cardSpacing}>
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>Instructor</Text>
+          <Text style={[styles.instructorName, { color: colors.primary }]}>
             {instructor.first_name} {instructor.last_name}
             {instructor.is_verified && ' ✅'}
           </Text>
-          <Text style={styles.instructorDetail}>
+          <Text style={[styles.instructorDetail, { color: colors.textSecondary }]}>
             🚗 {instructor.vehicle_make} {instructor.vehicle_model}
           </Text>
-          <Text style={styles.instructorDetail}>
+          <Text style={[styles.instructorDetail, { color: colors.textSecondary }]}>
             📍 {instructor.city}
             {instructor.suburb && `, ${instructor.suburb}`}
           </Text>
-        </View>
+        </Card>
 
-        <View style={styles.card}>
-          <Text style={styles.sectionTitle}>Booking Summary</Text>
+        <Card variant="elevated" style={styles.cardSpacing}>
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>Booking Summary</Text>
           {bookings.map((booking, index) => (
-            <View key={index} style={styles.bookingItem}>
-              <Text style={styles.bookingDate}>
+            <View key={index} style={[styles.bookingItem, { borderBottomColor: colors.border }]}>
+              <Text style={[styles.bookingDate, { color: colors.text }]}>
                 📅 {booking.date} at {booking.time}
               </Text>
-              <Text style={styles.bookingDuration}>⏱ 60 minutes</Text>
-              <Text style={styles.bookingAddress}>📍 {booking.pickup_address}</Text>
+              <Text style={[styles.bookingDuration, { color: colors.textSecondary }]}>⏱ 60 minutes</Text>
+              <Text style={[styles.bookingDuration, { color: colors.textSecondary }]}>📍 {booking.pickup_address}</Text>
             </View>
           ))}
-        </View>
+        </Card>
 
-        <View style={styles.card}>
-          <Text style={styles.sectionTitle}>Payment Summary</Text>
+        <Card variant="elevated" style={styles.cardSpacing}>
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>Payment Summary</Text>
           <View style={styles.totalRow}>
-            <Text style={styles.totalLabel}>Total</Text>
-            <Text style={styles.totalValue}>R{total_amount.toFixed(2)}</Text>
+            <Text style={[styles.totalLabel, { color: colors.text }]}>Total</Text>
+            <Text style={[styles.totalValue, { color: colors.primary }]}>R{total_amount.toFixed(2)}</Text>
           </View>
-        </View>
+        </Card>
 
-        <View style={styles.card}>
-          <Text style={styles.sectionTitle}>Payment Method</Text>
-          <Text style={styles.paymentMethod}>💳 PayFast</Text>
-          <Text style={styles.paymentInfo}>Secure payment via:</Text>
-          <Text style={styles.paymentOption}>• Instant EFT</Text>
-          <Text style={styles.paymentOption}>• Credit/Debit Cards</Text>
-          <Text style={styles.secureText}>🔒 Powered by PayFast</Text>
-        </View>
+        <Card variant="elevated" style={styles.cardSpacing}>
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>Payment Method</Text>
+          <Text style={[styles.paymentMethod, { color: colors.text }]}>💳 PayFast</Text>
+          <Text style={[styles.paymentInfo, { color: colors.textSecondary }]}>Secure payment via:</Text>
+          <Text style={[styles.paymentInfo, { color: colors.textSecondary }]}>• Instant EFT</Text>
+          <Text style={[styles.paymentInfo, { color: colors.textSecondary }]}>• Credit/Debit Cards</Text>
+          <Text style={[styles.secureText, { color: colors.success }]}>🔒 Powered by PayFast</Text>
+        </Card>
 
-        <TouchableOpacity
-          style={[styles.payButton, loading && styles.payButtonDisabled]}
+        <Button
+          variant="primary"
           onPress={handlePayment}
           disabled={loading}
+          loading={loading}
+          fullWidth
+          style={{ marginTop: 8 }}
         >
-          {loading ? (
-            <ActivityIndicator color="#fff" />
-          ) : (
-            <Text style={styles.payButtonText}>Pay R{total_amount.toFixed(2)}</Text>
-          )}
-        </TouchableOpacity>
+          Pay R{total_amount.toFixed(2)}
+        </Button>
 
-        <TouchableOpacity
-          style={styles.cancelButton}
+        <Button
+          variant="outline"
           onPress={() => navigation.goBack()}
           disabled={loading}
+          fullWidth
+          style={{ marginTop: 12 }}
         >
-          <Text style={styles.cancelButtonText}>Cancel</Text>
-        </TouchableOpacity>
+          Cancel
+        </Button>
       </ScrollView>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f5f5f5' },
+  container: { flex: 1 },
   scrollView: { flex: 1 },
   scrollContent: { padding: 16, paddingBottom: 32 },
-  card: {
-    backgroundColor: '#fff',
-    borderRadius: 8,
-    padding: 16,
-    marginBottom: 16,
-    ...Platform.select({
-      web: { boxShadow: '0 2px 4px rgba(0,0,0,0.1)' },
-      default: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 4,
-        elevation: 3,
-      },
-    }),
-  },
+  cardSpacing: { marginBottom: 16 },
   sectionTitle: {
     fontSize: Platform.OS === 'web' ? 18 : 16,
-    fontWeight: 'bold',
-    color: '#333',
+    fontFamily: 'Inter_700Bold',
     marginBottom: Platform.OS === 'web' ? 12 : 10,
   },
   instructorName: {
     fontSize: Platform.OS === 'web' ? 16 : 14,
-    fontWeight: '600',
-    color: '#007AFF',
+    fontFamily: 'Inter_600SemiBold',
     marginBottom: Platform.OS === 'web' ? 8 : 6,
   },
-  instructorDetail: { fontSize: 14, color: '#666', marginBottom: 4 },
-  bookingItem: { paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#eee' },
+  instructorDetail: { fontSize: 14, fontFamily: 'Inter_400Regular', marginBottom: 4 },
+  bookingItem: { paddingVertical: 12, borderBottomWidth: 1 },
   bookingDate: {
     fontSize: Platform.OS === 'web' ? 16 : 14,
-    fontWeight: '600',
-    color: '#333',
+    fontFamily: 'Inter_600SemiBold',
     marginBottom: 4,
   },
-  bookingDuration: { fontSize: 14, color: '#666', marginBottom: 4 },
-  bookingAddress: { fontSize: 14, color: '#666' },
-  priceRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 8 },
-  priceLabel: { fontSize: 14, color: '#666' },
-  priceValue: { fontSize: 14, fontWeight: '600', color: '#333' },
-  divider: { height: 1, backgroundColor: '#ddd', marginVertical: 12 },
+  bookingDuration: { fontSize: 14, fontFamily: 'Inter_400Regular', marginBottom: 4 },
   totalRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 8 },
-  totalLabel: { fontSize: Platform.OS === 'web' ? 18 : 16, fontWeight: 'bold', color: '#333' },
-  totalValue: { fontSize: Platform.OS === 'web' ? 18 : 16, fontWeight: 'bold', color: '#007AFF' },
-  paymentMethod: { fontSize: 16, fontWeight: '600', color: '#333', marginBottom: 12 },
-  paymentInfo: { fontSize: 14, color: '#666', marginBottom: 8 },
-  paymentOption: { fontSize: 14, color: '#666', marginLeft: 8, marginBottom: 4 },
-  secureText: { fontSize: 12, color: '#28a745', marginTop: 8, fontStyle: 'italic' },
-  payButton: {
-    backgroundColor: '#007AFF',
-    borderRadius: 8,
-    paddingVertical: 16,
-    alignItems: 'center',
-    marginTop: 8,
-  },
-  payButtonDisabled: { backgroundColor: '#ccc' },
-  payButtonText: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
-  cancelButton: {
-    backgroundColor: '#fff',
-    borderRadius: 8,
-    paddingVertical: 16,
-    alignItems: 'center',
-    marginTop: 12,
-    borderWidth: 1,
-    borderColor: '#ddd',
-  },
-  cancelButtonText: { color: '#666', fontSize: 16, fontWeight: '600' },
+  totalLabel: { fontSize: Platform.OS === 'web' ? 18 : 16, fontFamily: 'Inter_700Bold' },
+  totalValue: { fontSize: Platform.OS === 'web' ? 18 : 16, fontFamily: 'Inter_700Bold' },
+  paymentMethod: { fontSize: 16, fontFamily: 'Inter_600SemiBold', marginBottom: 12 },
+  paymentInfo: { fontSize: 14, fontFamily: 'Inter_400Regular', marginBottom: 4 },
+  secureText: { fontSize: 12, fontFamily: 'Inter_400Regular', marginTop: 8, fontStyle: 'italic' },
 });

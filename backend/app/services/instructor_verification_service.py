@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 from ..models.user import User, UserRole, Instructor
 from ..models.instructor_verification import InstructorVerificationToken
 from ..services.email_service import EmailService
-from ..services.whatsapp_service import WhatsAppService
+from ..services.whatsapp_service import whatsapp_service
 import logging
 
 logger = logging.getLogger(__name__)
@@ -70,37 +70,11 @@ class InstructorVerificationService:
         # Generate verification link
         verification_link = f"{frontend_url}/instructor-verify?token={verification_token.token}"
         
-        # Email and message content
+        # Instructor details
         instructor_name = instructor.user.full_name if instructor.user else "Instructor"
-        email_subject = f"New Instructor Verification Required - {instructor_name}"
-        
-        email_body = f"""
-<h2>New Instructor Registration</h2>
-<p>An instructor has registered and requires verification.</p>
-
-<h3>Instructor Details:</h3>
-<ul>
-    <li><strong>Name:</strong> {instructor_name}</li>
-    <li><strong>Email:</strong> {instructor.user.email}</li>
-    <li><strong>Phone:</strong> {instructor.user.phone}</li>
-    <li><strong>License Number:</strong> {instructor.license_number}</li>
-    <li><strong>License Types:</strong> {instructor.license_types}</li>
-    <li><strong>Vehicle:</strong> {instructor.vehicle_year} {instructor.vehicle_make} {instructor.vehicle_model}</li>
-    <li><strong>City:</strong> {instructor.city}</li>
-    <li><strong>Hourly Rate:</strong> ZAR {instructor.hourly_rate}</li>
-</ul>
-
-<h3>Verification Required:</h3>
-<p>Click the link below to verify this instructor:</p>
-<a href="{verification_link}" style="background-color: #007AFF; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block;">
-    ✅ Verify Instructor
-</a>
-
-<p>Or copy this link: {verification_link}</p>
-<p><em>This link expires in 60 minutes.</em></p>
-
-<p>You can also verify instructors from the admin dashboard.</p>
-"""
+        vehicle_info = f"{instructor.vehicle_year or ''} {instructor.vehicle_make or ''} {instructor.vehicle_model or ''}".strip() or "N/A"
+        city = getattr(instructor, 'city', None) or 'N/A'
+        hourly_rate = str(instructor.hourly_rate) if instructor.hourly_rate else 'N/A'
         
         whatsapp_message = f"""
 👤 New Instructor Verification Required
@@ -120,21 +94,30 @@ class InstructorVerificationService:
 
 You can also verify from the admin dashboard.
 """
-        
+
         # Send to each admin
         for admin in admins:
             # Send email if SMTP is configured
             if admin.smtp_email and admin.smtp_password:
                 try:
-                    from ..services.encryption_service import EncryptionService
+                    from ..utils.encryption import EncryptionService
                     smtp_password = EncryptionService.decrypt(admin.smtp_password)
-                    
-                    email_sent = EmailService.send_email(
-                        recipient_email=admin.email,
-                        subject=email_subject,
-                        body=email_body,
+
+                    admin_email_service = EmailService(
                         smtp_email=admin.smtp_email,
                         smtp_password=smtp_password,
+                    )
+                    email_sent = admin_email_service.send_admin_instructor_verification_notification(
+                        admin_email=admin.email,
+                        admin_name=admin.first_name or 'Admin',
+                        instructor_name=instructor_name,
+                        instructor_email=instructor.user.email,
+                        instructor_phone=instructor.user.phone or 'N/A',
+                        license_number=instructor.license_number or 'N/A',
+                        vehicle_info=vehicle_info,
+                        city=city,
+                        hourly_rate=hourly_rate,
+                        verification_link=verification_link,
                     )
                     if email_sent:
                         emails_sent += 1
@@ -145,7 +128,7 @@ You can also verify from the admin dashboard.
             # Send WhatsApp
             try:
                 if admin.phone:
-                    whatsapp_sent_result = WhatsAppService.send_message(
+                    whatsapp_sent_result = whatsapp_service.send_message(
                         phone=admin.phone,
                         message=whatsapp_message,
                     )
@@ -203,6 +186,13 @@ You can also verify from the admin dashboard.
         
         instructor.is_verified = True
         instructor.verified_at = datetime.now(timezone.utc)
+        
+        # Also activate the user account if still INACTIVE
+        # Admin verification of instructor credentials implies trust
+        from ..models.user import User, UserStatus
+        user = db.query(User).filter(User.id == instructor.user_id).first()
+        if user and user.status == UserStatus.INACTIVE:
+            user.status = UserStatus.ACTIVE
         
         db.commit()
         

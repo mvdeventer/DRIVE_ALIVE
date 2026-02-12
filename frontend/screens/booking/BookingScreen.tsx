@@ -2,24 +2,25 @@
  * Booking Screen - Book a driving lesson with selected instructor
  * Redesigned with step-by-step date and time selection
  */
-import { CommonActions, useFocusEffect, useNavigation, useRoute } from '@react-navigation/native';
-import * as SecureStore from 'expo-secure-store';
+import { useFocusEffect, useNavigation, useRoute } from '@react-navigation/native';
 import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Modal,
   Platform,
+  Pressable,
   ScrollView,
   StyleSheet,
   Text,
   TextInput,
-  TouchableOpacity,
   View,
 } from 'react-native';
 import AddressAutocomplete from '../../components/AddressAutocomplete';
 import CalendarPicker from '../../components/CalendarPicker';
 import InlineMessage from '../../components/InlineMessage';
 import WebNavigationHeader from '../../components/WebNavigationHeader';
+import { Button, Card, ThemedModal } from '../../components/ui';
+import { useTheme } from '../../theme/ThemeContext';
 import ApiService from '../../services/api';
 
 interface Instructor {
@@ -72,6 +73,7 @@ interface ExistingBooking {
 export default function BookingScreen({ navigation: navProp }: any) {
   const navigation = navProp || useNavigation();
   const route = useRoute();
+  const { colors } = useTheme();
   const instructor = (route.params as any)?.instructor as Instructor;
 
   const [formData, setFormData] = useState({
@@ -570,26 +572,6 @@ export default function BookingScreen({ navigation: navProp }: any) {
     }
   };
 
-  const handleLogout = async () => {
-    try {
-      if (Platform.OS === 'web') {
-        sessionStorage.clear(); // Changed from localStorage
-        window.location.reload();
-      } else {
-        await SecureStore.deleteItemAsync('access_token');
-        await SecureStore.deleteItemAsync('user_role');
-        navigation.dispatch(
-          CommonActions.reset({
-            index: 0,
-            routes: [{ name: 'Login' }],
-          })
-        );
-      }
-    } catch (error) {
-      console.error('Logout error:', error);
-    }
-  };
-
   const updateField = (field: string, value: string) => {
     const newFormData = { ...formData, [field]: value };
     setFormData(newFormData);
@@ -737,19 +719,19 @@ export default function BookingScreen({ navigation: navProp }: any) {
 
   if (!instructor) {
     return (
-      <View style={styles.container}>
+      <View style={[styles.container, { backgroundColor: colors.background }]}>
         <View style={styles.errorContainer}>
-          <Text style={styles.errorText}>No instructor selected</Text>
-          <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
-            <Text style={styles.backButtonText}>← Go Back</Text>
-          </TouchableOpacity>
+          <Text style={[styles.errorText, { color: colors.danger }]}>No instructor selected</Text>
+          <Button variant="primary" onPress={() => navigation.goBack()}>
+            ← Go Back
+          </Button>
         </View>
       </View>
     );
   }
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
       {/* Inline Message Display */}
       {message && (
         <View style={{ marginHorizontal: 16, marginTop: 8 }}>
@@ -764,9 +746,9 @@ export default function BookingScreen({ navigation: navProp }: any) {
 
       {/* Inline Confirmation for Cancellation */}
       {confirmCancel && (
-        <View style={styles.confirmCancelContainer}>
-          <Text style={styles.confirmCancelTitle}>⚠️ Cancel Lesson?</Text>
-          <Text style={styles.confirmCancelText}>
+        <View style={[styles.confirmCancelContainer, { backgroundColor: colors.backgroundSecondary, borderColor: colors.warning }]}>
+          <Text style={[styles.confirmCancelTitle, { color: colors.warning }]}>⚠️ Cancel Lesson?</Text>
+          <Text style={[styles.confirmCancelText, { color: colors.textSecondary }]}>
             {confirmCancel.fee > 0
               ? `Cancellation within 6 hours requires a 50% fee of R${confirmCancel.fee.toFixed(
                   2
@@ -774,18 +756,12 @@ export default function BookingScreen({ navigation: navProp }: any) {
               : 'Are you sure you want to cancel this lesson?'}
           </Text>
           <View style={styles.confirmCancelButtons}>
-            <TouchableOpacity
-              style={[styles.confirmButton, styles.confirmButtonNo]}
-              onPress={() => setConfirmCancel(null)}
-            >
-              <Text style={styles.confirmButtonTextNo}>No, Keep It</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.confirmButton, styles.confirmButtonYes]}
-              onPress={confirmCancellation}
-            >
-              <Text style={styles.confirmButtonTextYes}>Yes, Cancel</Text>
-            </TouchableOpacity>
+            <Button variant="secondary" onPress={() => setConfirmCancel(null)} style={{ flex: 1 }}>
+              No, Keep It
+            </Button>
+            <Button variant="danger" onPress={confirmCancellation} style={{ flex: 1 }}>
+              Yes, Cancel
+            </Button>
           </View>
         </View>
       )}
@@ -797,35 +773,35 @@ export default function BookingScreen({ navigation: navProp }: any) {
       />
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
         {/* Instructor Info Card */}
-        <View style={styles.instructorCard}>
-          <Text style={styles.sectionTitle}>Instructor Details</Text>
+        <Card variant="elevated" style={styles.instructorCard}>
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>Instructor Details</Text>
           <View style={styles.instructorInfo}>
-            <Text style={styles.instructorName}>
+            <Text style={[styles.instructorName, { color: colors.primary }]}>
               {instructor.first_name} {instructor.last_name}
               {instructor.is_verified && ' ✅'}
             </Text>
-            <Text style={styles.instructorDetail}>
+            <Text style={[styles.instructorDetail, { color: colors.textSecondary }]}>
               🚗 {instructor.vehicle_make} {instructor.vehicle_model} ({instructor.vehicle_year})
             </Text>
-            <Text style={styles.instructorDetail}>
+            <Text style={[styles.instructorDetail, { color: colors.textSecondary }]}>
               {'📍 '}
               {[instructor.province, instructor.city, instructor.suburb].filter(Boolean).join(', ')}
             </Text>
-            <Text style={styles.instructorDetail}>
+            <Text style={[styles.instructorDetail, { color: colors.textSecondary }]}>
               ⭐ {instructor.rating.toFixed(1)} ({instructor.total_reviews} reviews)
             </Text>
-            <Text style={styles.instructorDetail}>
+            <Text style={[styles.instructorDetail, { color: colors.textSecondary }]}>
               💰 R{((instructor.hourly_rate || 0) + (instructor.booking_fee || 20.0)).toFixed(2)}/hr
             </Text>
           </View>
-        </View>
+        </Card>
 
         {/* Pickup Address - MOVED TO TOP */}
-        <View style={[styles.formCard, styles.pickupFormCard]}>
-          <Text style={styles.sectionTitle}>Step 1: Pickup Details</Text>
+        <Card variant="elevated" style={[styles.formCard, styles.pickupFormCard]}>
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>Step 1: Pickup Details</Text>
           <View style={styles.formGroup}>
-            <Text style={styles.label}>
-              Pickup Address <Text style={styles.required}>*</Text>
+            <Text style={[styles.label, { color: colors.text }]}>
+              Pickup Address <Text style={{ color: colors.danger }}>*</Text>
             </Text>
             <AddressAutocomplete
               value={formData.pickup_address}
@@ -835,20 +811,20 @@ export default function BookingScreen({ navigation: navProp }: any) {
                 console.log('📍 Pickup location captured:', coords);
               }}
               placeholder="Start typing your street address... (e.g., 123 Main Road, Sandton)"
-              style={styles.textArea}
+              style={[styles.textArea, { backgroundColor: colors.backgroundSecondary, borderColor: colors.border, color: colors.text }]}
             />
           </View>
-        </View>
+        </Card>
 
         {/* Booking Form */}
-        <View style={[styles.formCard, styles.lessonFormCard]}>
-          <Text style={styles.sectionTitle}>Step 2: Lesson Details</Text>
+        <Card variant="elevated" style={[styles.formCard, styles.lessonFormCard]}>
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>Step 2: Lesson Details</Text>
 
           {/* Show warning if pickup address not filled */}
           {!formData.pickup_address.trim() && (
-            <View style={styles.pickupWarningContainer}>
+            <View style={[styles.pickupWarningContainer, { borderColor: colors.warning }]}>
               <Text style={styles.pickupWarningIcon}>📍</Text>
-              <Text style={styles.pickupWarningText}>
+              <Text style={[styles.pickupWarningText, { color: colors.warning }]}>
                 Please enter your pickup address above before selecting lesson dates and times.
               </Text>
             </View>
@@ -856,26 +832,27 @@ export default function BookingScreen({ navigation: navProp }: any) {
 
           {/* Duration Selection - Fixed at 60 minutes */}
           <View style={styles.formGroup}>
-            <Text style={styles.label}>Duration (minutes)</Text>
+            <Text style={[styles.label, { color: colors.text }]}>Duration (minutes)</Text>
             <View style={styles.durationButtons}>
-              <TouchableOpacity
-                style={[styles.durationButton, styles.durationButtonActive]}
+              <Pressable
+                style={[styles.durationButton, { backgroundColor: colors.primary, borderColor: colors.primary }]}
                 disabled
               >
-                <Text style={[styles.durationButtonText, styles.durationButtonTextActive]}>
+                <Text style={[styles.durationButtonText, { color: '#fff' }]}>
                   60 min (Standard)
                 </Text>
-              </TouchableOpacity>
+              </Pressable>
             </View>
           </View>
 
           {/* Date Selection - Above Title - DISABLED if no pickup address */}
           {!showSlotSelection && (
             <View style={styles.formGroup}>
-              <Text style={styles.instructionText}>Select a date</Text>
-              <TouchableOpacity
+              <Text style={[styles.instructionText, { color: colors.textSecondary }]}>Select a date</Text>
+              <Pressable
                 style={[
                   styles.datePickerButton,
+                  { borderColor: colors.primary, backgroundColor: colors.card },
                   !formData.pickup_address.trim() && styles.datePickerButtonDisabled,
                 ]}
                 onPress={() => {
@@ -889,7 +866,8 @@ export default function BookingScreen({ navigation: navProp }: any) {
                 <Text
                   style={[
                     styles.datePickerText,
-                    !formData.pickup_address.trim() && styles.datePickerTextDisabled,
+                    { color: colors.text },
+                    !formData.pickup_address.trim() && { color: colors.textMuted },
                   ]}
                 >
                   {selectedDate
@@ -903,29 +881,29 @@ export default function BookingScreen({ navigation: navProp }: any) {
                       ? 'Click to Select Date'
                       : 'Enter pickup address first'}
                 </Text>
-              </TouchableOpacity>
+              </Pressable>
             </View>
           )}
 
           {/* Step-by-Step Date and Time Selection */}
           <View style={styles.formGroup}>
             <Text style={styles.label}>
-              Add Lesson Date & Time <Text style={styles.required}>*</Text>
+              Add Lesson Date & Time <Text style={[styles.required, { color: colors.danger }]}>*</Text>
             </Text>
 
             {/* Loading Slots */}
             {loadingSlots && (
               <View style={styles.loadingSlotsContainer}>
-                <ActivityIndicator size="small" color="#007bff" />
-                <Text style={styles.loadingSlotsText}>Loading available times...</Text>
+                <ActivityIndicator size="small" color={colors.primary} />
+                <Text style={[styles.loadingSlotsText, { color: colors.textSecondary }]}>Loading available times...</Text>
               </View>
             )}
 
             {/* Time Slot Selection */}
             {showSlotSelection && !loadingSlots && (
-              <View style={styles.slotSelectionContainer}>
+              <View style={[styles.slotSelectionContainer, { backgroundColor: colors.backgroundSecondary, borderColor: colors.border }]}>
                 <View style={styles.selectedDateHeader}>
-                  <Text style={styles.selectedDateTitle}>
+                  <Text style={[styles.selectedDateTitle, { color: colors.text }]}>
                     📅{' '}
                     {selectedDate?.toLocaleDateString('en-ZA', {
                       weekday: 'long',
@@ -934,43 +912,43 @@ export default function BookingScreen({ navigation: navProp }: any) {
                       day: 'numeric',
                     })}
                   </Text>
-                  <TouchableOpacity
-                    style={styles.changeDateButton}
+                  <Pressable
+                    style={[styles.changeDateButton, { backgroundColor: colors.backgroundSecondary, borderColor: colors.primary }]}
                     onPress={() => {
                       setShowSlotSelection(false);
                       setSelectedDate(null);
                       setShowDatePicker(true);
                     }}
                   >
-                    <Text style={styles.changeDateButtonText}>Change Date</Text>
-                  </TouchableOpacity>
+                    <Text style={[styles.changeDateButtonText, { color: colors.primary }]}>Change Date</Text>
+                  </Pressable>
                 </View>
 
                 {availableSlotsForDate.length === 0 ? (
-                  <View style={styles.noSlotsContainer}>
-                    <Text style={styles.noSlotsTitle}>😔 No Available Time Slots</Text>
-                    <Text style={styles.noSlotsText}>No available time slots for this date.</Text>
-                    <TouchableOpacity
-                      style={styles.selectDateButton}
+                  <View style={[styles.noSlotsContainer, { backgroundColor: colors.backgroundSecondary }]}>
+                    <Text style={[styles.noSlotsTitle, { color: colors.warning }]}>😔 No Available Time Slots</Text>
+                    <Text style={[styles.noSlotsText, { color: colors.textSecondary }]}>No available time slots for this date.</Text>
+                    <Button
+                      variant="primary"
                       onPress={() => {
                         setShowSlotSelection(false);
                         setSelectedDate(null);
                         setShowDatePicker(true);
                       }}
                     >
-                      <Text style={styles.selectDateButtonText}>Try Another Date</Text>
-                    </TouchableOpacity>
+                      Try Another Date
+                    </Button>
                   </View>
                 ) : (
                   <View>
-                    <Text style={styles.instructionText}>Select a time slot</Text>
-                    <Text style={styles.slotCountText}>
+                    <Text style={[styles.instructionText, { color: colors.textSecondary }]}>Select a time slot</Text>
+                    <Text style={[styles.slotCountText, { color: colors.textMuted }]}>
                       {availableSlotsForDate.filter(s => !s.is_booked).length} available,{' '}
                       {availableSlotsForDate.filter(s => s.is_booked).length} booked (Total:{' '}
                       {availableSlotsForDate.length} slots)
                     </Text>
                     <ScrollView
-                      style={styles.slotsScrollView}
+                      style={[styles.slotsScrollView, { borderColor: colors.border }]}
                       contentContainerStyle={styles.slotsScrollViewContent}
                       nestedScrollEnabled
                       showsVerticalScrollIndicator={true}
@@ -1001,7 +979,7 @@ export default function BookingScreen({ navigation: navProp }: any) {
                           const isPast = startTime < now;
 
                           return (
-                            <TouchableOpacity
+                            <Pressable
                               key={index}
                               style={[
                                 styles.slotButton,
@@ -1077,7 +1055,7 @@ export default function BookingScreen({ navigation: navProp }: any) {
                                   )}
                                 {isPast && <Text style={styles.pastBadge}>⏰ Time Passed</Text>}
                               </View>
-                            </TouchableOpacity>
+                            </Pressable>
                           );
                         })}
                       </View>
@@ -1089,16 +1067,16 @@ export default function BookingScreen({ navigation: navProp }: any) {
 
             {/* Selected Bookings Display */}
             {selectedBookings.length > 0 && (
-              <View style={styles.selectedBookingsContainer}>
+              <View style={[styles.selectedBookingsContainer, { backgroundColor: colors.primaryLight, borderColor: colors.primary }]}>
                 <View style={styles.selectedBookingsHeader}>
-                  <Text style={styles.selectedBookingsTitle}>
+                  <Text style={[styles.selectedBookingsTitle, { color: colors.primary }]}>
                     📅 Selected Lessons ({selectedBookings.length})
                   </Text>
                 </View>
                 {selectedBookings.map((booking, index) => (
-                  <View key={index} style={styles.selectedBookingCard}>
+                  <View key={index} style={[styles.selectedBookingCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
                     <View style={styles.selectedBookingInfo}>
-                      <Text style={styles.selectedBookingDate}>
+                      <Text style={[styles.selectedBookingDate, { color: colors.text }]}>
                         {new Date(booking.date + 'T00:00:00').toLocaleDateString('en-ZA', {
                           weekday: 'short',
                           year: 'numeric',
@@ -1106,10 +1084,10 @@ export default function BookingScreen({ navigation: navProp }: any) {
                           day: 'numeric',
                         })}
                       </Text>
-                      <Text style={styles.selectedBookingTime}>
+                      <Text style={[styles.selectedBookingTime, { color: colors.textSecondary }]}>
                         🕐 {booking.time} ({booking.slot.duration_minutes} min)
                       </Text>
-                      <Text style={styles.selectedBookingDetails}>
+                      <Text style={[styles.selectedBookingDetails, { color: colors.success }]}>
                         💰 R
                         {(
                           (instructor.hourly_rate * booking.slot.duration_minutes) / 60 +
@@ -1117,57 +1095,59 @@ export default function BookingScreen({ navigation: navProp }: any) {
                         ).toFixed(2)}
                       </Text>
                       {booking.pickup_address && (
-                        <Text style={styles.selectedBookingAddress}>
+                        <Text style={[styles.selectedBookingAddress, { color: colors.textSecondary }]}>
                           📍 {booking.pickup_address}
                         </Text>
                       )}
                     </View>
-                    <TouchableOpacity
-                      style={styles.removeBookingButton}
+                    <Pressable
+                      style={[styles.removeBookingButton, { backgroundColor: colors.danger }]}
                       onPress={() => handleRemoveBooking(index)}
                     >
                       <Text style={styles.removeBookingButtonText}>✕</Text>
-                    </TouchableOpacity>
+                    </Pressable>
                   </View>
                 ))}
 
-                <TouchableOpacity
-                  style={styles.addAnotherButton}
+                <Button
+                  variant="primary"
+                  style={{ backgroundColor: colors.success }}
                   onPress={handleAddAnotherDateTime}
                 >
-                  <Text style={styles.addAnotherButtonText}>➕ Add Another Date/Time</Text>
-                </TouchableOpacity>
+                  ➕ Add Another Date/Time
+                </Button>
               </View>
             )}
           </View>
 
           <View style={styles.formGroup}>
-            <Text style={styles.label}>Additional Notes (Optional)</Text>
+            <Text style={[styles.label, { color: colors.text }]}>Additional Notes (Optional)</Text>
             <TextInput
-              style={[styles.input, styles.textArea]}
+              style={[styles.input, styles.textArea, { backgroundColor: colors.backgroundSecondary, borderColor: colors.border, color: colors.text }]}
               placeholder="Any special requests or information for the instructor"
+              placeholderTextColor={colors.textMuted}
               value={formData.notes}
               onChangeText={value => updateField('notes', value)}
               multiline
               numberOfLines={3}
             />
           </View>
-        </View>
+        </Card>
 
         {/* Price Summary */}
-        <View style={styles.priceCard}>
+        <Card variant="elevated" style={{ marginBottom: 16 }}>
           <View style={styles.priceRow}>
-            <Text style={styles.priceLabel}>Number of Lessons:</Text>
-            <Text style={styles.priceValue}>{selectedBookings.length}</Text>
+            <Text style={[styles.priceLabel, { color: colors.textSecondary }]}>Number of Lessons:</Text>
+            <Text style={[styles.priceValue, { color: colors.text }]}>{selectedBookings.length}</Text>
           </View>
           <View style={styles.priceRow}>
-            <Text style={styles.priceLabel}>Duration per Lesson:</Text>
-            <Text style={styles.priceValue}>{formData.duration_minutes} minutes</Text>
+            <Text style={[styles.priceLabel, { color: colors.textSecondary }]}>Duration per Lesson:</Text>
+            <Text style={[styles.priceValue, { color: colors.text }]}>{formData.duration_minutes} minutes</Text>
           </View>
           {selectedBookings.length > 0 && (
             <View style={styles.priceRow}>
-              <Text style={styles.priceLabel}>Price per Lesson:</Text>
-              <Text style={styles.priceValue}>
+              <Text style={[styles.priceLabel, { color: colors.textSecondary }]}>Price per Lesson:</Text>
+              <Text style={[styles.priceValue, { color: colors.text }]}>
                 R
                 {(
                   (instructor.hourly_rate * parseInt(formData.duration_minutes)) / 60 +
@@ -1176,22 +1156,23 @@ export default function BookingScreen({ navigation: navProp }: any) {
               </Text>
             </View>
           )}
-          <View style={[styles.priceRow, styles.totalRow]}>
-            <Text style={styles.totalLabel}>Total Price:</Text>
-            <Text style={styles.totalValue}>R{calculatePrice().toFixed(2)}</Text>
+          <View style={[styles.priceRow, styles.totalRow, { borderTopColor: colors.border }]}>
+            <Text style={[styles.totalLabel, { color: colors.text }]}>Total Price:</Text>
+            <Text style={[styles.totalValue, { color: colors.success }]}>R{calculatePrice().toFixed(2)}</Text>
           </View>
-        </View>
+        </Card>
 
         {/* Submit Button */}
-        <TouchableOpacity
-          style={[styles.submitButton, loading && styles.submitButtonDisabled]}
+        <Button
+          variant="primary"
+          style={{ backgroundColor: colors.success, marginBottom: 32 }}
           onPress={handleSubmitBooking}
+          loading={loading}
           disabled={loading}
+          fullWidth
         >
-          <Text style={styles.submitButtonText}>
-            {loading ? 'Processing...' : '� Proceed to Payment'}
-          </Text>
-        </TouchableOpacity>
+          Proceed to Payment
+        </Button>
       </ScrollView>
 
       {/* Calendar Modal */}
@@ -1201,16 +1182,16 @@ export default function BookingScreen({ navigation: navProp }: any) {
         animationType="slide"
         onRequestClose={() => setShowCalendarModal(false)}
       >
-        <View style={styles.modalOverlay}>
-          <View style={styles.calendarModalContent}>
+        <View style={[styles.modalOverlay, { backgroundColor: 'rgba(0,0,0,0.5)' }]}>
+          <View style={[styles.calendarModalContent, { backgroundColor: colors.card }]}>
             <View style={styles.calendarModalHeader}>
-              <Text style={styles.calendarModalTitle}>📅 Select Date</Text>
-              <TouchableOpacity
+              <Text style={[styles.calendarModalTitle, { color: colors.text }]}>📅 Select Date</Text>
+              <Pressable
                 onPress={() => setShowCalendarModal(false)}
-                style={styles.calendarModalClose}
+                style={[styles.calendarModalClose, { backgroundColor: colors.backgroundSecondary }]}
               >
-                <Text style={styles.calendarModalCloseText}>✕</Text>
-              </TouchableOpacity>
+                <Text style={[styles.calendarModalCloseText, { color: colors.textSecondary }]}>✕</Text>
+              </Pressable>
             </View>
             <CalendarPicker
               value={selectedDate || new Date()}
@@ -1225,46 +1206,37 @@ export default function BookingScreen({ navigation: navProp }: any) {
               noScheduleDates={unavailableDays}
               fullyBookedDates={fullyBookedDates}
             />
-            <View style={styles.calendarLegendContainer}>
-              <Text style={styles.noScheduleLegend}>⚫ Grey = No schedule</Text>
-              <Text style={styles.timeOffLegend}>🟧 Orange = Time-off</Text>
-              <Text style={styles.fullyBookedLegend}>🟥 Red = Fully booked</Text>
+            <View style={[styles.calendarLegendContainer, { borderTopColor: colors.border }]}>
+              <Text style={[styles.legendText, { color: colors.textSecondary }]}>⚫ Grey = No schedule</Text>
+              <Text style={[styles.legendText, { color: colors.textSecondary }]}>🟧 Orange = Time-off</Text>
+              <Text style={[styles.legendText, { color: colors.textSecondary }]}>🟥 Red = Fully booked</Text>
             </View>
           </View>
         </View>
       </Modal>
 
       {/* Unsaved Changes Confirmation Modal */}
-      <Modal
+      <ThemedModal
         visible={showUnsavedChangesModal}
-        transparent={true}
-        animationType="fade"
-        onRequestClose={() => setShowUnsavedChangesModal(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.confirmModalContent}>
-            <Text style={styles.confirmModalTitle}>⚠️ Unsaved Changes</Text>
-            <Text style={styles.confirmModalText}>
-              {unsavedChangesMessage}
-              {'\n\n'}Are you sure you want to leave? Your selections will be lost.
-            </Text>
-            <View style={styles.confirmModalButtons}>
-              <TouchableOpacity
-                style={[styles.confirmModalButton, styles.confirmStayButton]}
-                onPress={() => setShowUnsavedChangesModal(false)}
-              >
-                <Text style={styles.confirmStayButtonText}>Stay</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.confirmModalButton, styles.confirmLeaveButton]}
-                onPress={handleLeaveWithoutSaving}
-              >
-                <Text style={styles.confirmLeaveButtonText}>Leave</Text>
-              </TouchableOpacity>
-            </View>
+        onClose={() => setShowUnsavedChangesModal(false)}
+        title="⚠️ Unsaved Changes"
+        size="sm"
+        footer={
+          <View style={styles.modalFooterButtons}>
+            <Button variant="secondary" onPress={() => setShowUnsavedChangesModal(false)} style={{ flex: 1 }}>
+              Stay
+            </Button>
+            <Button variant="danger" onPress={handleLeaveWithoutSaving} style={{ flex: 1 }}>
+              Leave
+            </Button>
           </View>
-        </View>
-      </Modal>
+        }
+      >
+        <Text style={[styles.confirmModalText, { color: colors.textSecondary }]}>
+          {unsavedChangesMessage}
+          {'\n\n'}Are you sure you want to leave? Your selections will be lost.
+        </Text>
+      </ThemedModal>
     </View>
   );
 }
@@ -1272,7 +1244,6 @@ export default function BookingScreen({ navigation: navProp }: any) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
   },
   scrollView: {
     flex: 1,
@@ -1280,112 +1251,38 @@ const styles = StyleSheet.create({
   scrollContent: {
     padding: 16,
   },
-  instructorCard: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 16,
-    boxShadow: '0px 2px 4px rgba(0, 0, 0, 0.1)',
-    elevation: 3,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#333',
-    marginBottom: 12,
-  },
   instructorInfo: {
     marginTop: 4,
   },
-  instructorName: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#007bff',
-    marginBottom: 4,
-  },
-  instructorDetail: {
-    fontSize: 14,
-    color: '#666',
-    marginBottom: 2,
-  },
-  formCard: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: Platform.OS === 'web' ? 16 : 12,
-    marginBottom: Platform.OS === 'web' ? 16 : 12,
-    ...Platform.select({
-      web: { boxShadow: '0 2px 4px rgba(0,0,0,0.1)' },
-      default: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 4,
-        elevation: 3,
-      },
-    }),
-    overflow: 'visible', // Allow dropdown to show above other cards
-  },
   pickupFormCard: {
-    zIndex: 100, // Higher z-index for Step 1 (pickup address with dropdown)
+    zIndex: 100,
   },
   lessonFormCard: {
-    zIndex: 1, // Lower z-index for Step 2 (so dropdown appears above it)
+    zIndex: 1,
   },
   formGroup: {
     marginBottom: 16,
-    overflow: 'visible', // Allow dropdown to overflow
+    overflow: 'visible',
     zIndex: 1,
   },
   label: {
     fontSize: Platform.OS === 'web' ? 16 : 14,
-    fontWeight: '600',
-    color: '#333',
+    fontFamily: 'Inter_600SemiBold',
     marginBottom: 8,
   },
   required: {
-    color: '#dc3545',
+    // color applied inline via colors.danger
   },
   input: {
-    backgroundColor: '#f8f9fa',
     padding: 12,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#dee2e6',
     fontSize: 16,
+    fontFamily: 'Inter_400Regular',
   },
   textArea: {
     minHeight: 80,
     textAlignVertical: 'top',
-  },
-  checkboxContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 12,
-    paddingVertical: 8,
-  },
-  checkbox: {
-    width: 24,
-    height: 24,
-    borderWidth: 2,
-    borderColor: '#007bff',
-    borderRadius: 4,
-    marginRight: 10,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#fff',
-  },
-  checkboxChecked: {
-    backgroundColor: '#007bff',
-  },
-  checkboxCheckmark: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  checkboxLabel: {
-    fontSize: 14,
-    color: '#333',
-    flex: 1,
   },
   durationButtons: {
     flexDirection: 'row',
@@ -1395,37 +1292,25 @@ const styles = StyleSheet.create({
     flex: 1,
     padding: 12,
     borderRadius: 8,
-    backgroundColor: '#f8f9fa',
     borderWidth: 1,
-    borderColor: '#dee2e6',
     marginHorizontal: 4,
     alignItems: 'center',
   },
-  durationButtonActive: {
-    backgroundColor: '#007bff',
-    borderColor: '#007bff',
-  },
   durationButtonText: {
     fontSize: 14,
-    color: '#495057',
-    fontWeight: '600',
-  },
-  durationButtonTextActive: {
-    color: '#fff',
+    fontFamily: 'Inter_600SemiBold',
   },
   instructionText: {
     fontSize: 14,
-    color: '#666',
+    fontFamily: 'Inter_400Regular',
     marginBottom: 12,
     fontStyle: 'italic',
   },
   pickupWarningContainer: {
     flexDirection: 'row',
-    backgroundColor: '#fff3cd',
     padding: 12,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#ffc107',
     marginBottom: 16,
     alignItems: 'center',
   },
@@ -1436,72 +1321,28 @@ const styles = StyleSheet.create({
   pickupWarningText: {
     flex: 1,
     fontSize: 14,
-    color: '#856404',
+    fontFamily: 'Inter_400Regular',
     lineHeight: 20,
   },
   datePickerButtonDisabled: {
-    backgroundColor: '#e9ecef',
-    borderColor: '#ced4da',
     opacity: 0.6,
   },
-  datePickerTextDisabled: {
-    color: '#6c757d',
-  },
-  bigCalendarButton: {
+  datePickerButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#007bff',
-    padding: 20,
-    borderRadius: 12,
     borderWidth: 2,
-    borderColor: '#0056b3',
-    boxShadow: '0px 2px 4px rgba(0, 0, 0, 0.15)',
-    elevation: 4,
-  },
-  bigCalendarIcon: {
-    fontSize: Platform.OS === 'web' ? 36 : 28,
-    marginRight: 12,
-  },
-  bigCalendarText: {
-    fontSize: Platform.OS === 'web' ? 18 : 16,
-    color: '#fff',
-    fontWeight: '600',
-  },
-  selectDateButton: {
-    backgroundColor: '#007bff',
-    padding: 16,
     borderRadius: 8,
-    alignItems: 'center',
-  },
-  selectDateButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  calendarContainer: {
-    backgroundColor: '#f8f9fa',
     padding: 16,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#dee2e6',
+    marginTop: 12,
+    gap: 12,
   },
-  calendarTitle: {
+  datePickerIcon: {
+    fontSize: 24,
+  },
+  datePickerText: {
     fontSize: 16,
-    fontWeight: '600',
-    color: '#333',
-    marginBottom: 12,
-  },
-  cancelButton: {
-    backgroundColor: '#6c757d',
-    padding: 12,
-    borderRadius: 6,
-    alignItems: 'center',
-  },
-  cancelButtonText: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: '600',
+    fontFamily: 'Inter_400Regular',
+    flex: 1,
   },
   loadingSlotsContainer: {
     flexDirection: 'row',
@@ -1512,14 +1353,12 @@ const styles = StyleSheet.create({
   loadingSlotsText: {
     marginLeft: 10,
     fontSize: 14,
-    color: '#666',
+    fontFamily: 'Inter_400Regular',
   },
   slotSelectionContainer: {
-    backgroundColor: '#f8f9fa',
     padding: 16,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#dee2e6',
   },
   selectedDateHeader: {
     flexDirection: 'row',
@@ -1529,48 +1368,40 @@ const styles = StyleSheet.create({
   },
   selectedDateTitle: {
     fontSize: 16,
-    fontWeight: 'bold',
-    color: '#333',
+    fontFamily: 'Inter_700Bold',
     flex: 1,
   },
   changeDateButton: {
-    backgroundColor: '#6c757d',
     paddingHorizontal: 12,
     paddingVertical: 6,
-    borderRadius: 4,
+    borderRadius: 6,
+    borderWidth: 1,
   },
   changeDateButtonText: {
-    color: '#fff',
     fontSize: 12,
-    fontWeight: '600',
+    fontFamily: 'Inter_600SemiBold',
   },
   noSlotsContainer: {
     padding: 20,
-    backgroundColor: '#fff3cd',
     borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#ffc107',
     alignItems: 'center',
+    gap: 12,
   },
   noSlotsTitle: {
     fontSize: 16,
-    fontWeight: 'bold',
-    color: '#856404',
+    fontFamily: 'Inter_700Bold',
     textAlign: 'center',
-    marginBottom: 12,
   },
   noSlotsText: {
     fontSize: 14,
-    color: '#856404',
+    fontFamily: 'Inter_400Regular',
     textAlign: 'center',
-    marginBottom: 12,
     lineHeight: 20,
   },
   slotsScrollView: {
     maxHeight: 600,
     minHeight: 200,
     borderWidth: 1,
-    borderColor: '#dee2e6',
     borderRadius: 8,
   },
   slotsScrollViewContent: {
@@ -1579,7 +1410,7 @@ const styles = StyleSheet.create({
   },
   slotCountText: {
     fontSize: 13,
-    color: '#666',
+    fontFamily: 'Inter_400Regular',
     marginBottom: 8,
     fontStyle: 'italic',
   },
@@ -1590,10 +1421,10 @@ const styles = StyleSheet.create({
     paddingBottom: 20,
     alignItems: 'flex-start',
   },
+  // Slot buttons — keep semantic colors for functional color-coding
   slotButton: {
     paddingVertical: 10,
     paddingHorizontal: 14,
-    backgroundColor: '#fff',
     borderRadius: 6,
     borderWidth: 1,
     borderColor: '#dee2e6',
@@ -1631,24 +1462,24 @@ const styles = StyleSheet.create({
   },
   slotButtonText: {
     fontSize: 13,
+    fontFamily: 'Inter_500Medium',
     color: '#495057',
-    fontWeight: '500',
   },
   slotButtonTextSelected: {
     color: '#fff',
-    fontWeight: '600',
+    fontFamily: 'Inter_600SemiBold',
   },
   slotButtonTextConflict: {
     color: '#dc2626',
-    fontWeight: '600',
+    fontFamily: 'Inter_600SemiBold',
   },
   slotButtonTextOverlap: {
     color: '#7c3aed',
-    fontWeight: '600',
+    fontFamily: 'Inter_600SemiBold',
   },
   slotButtonTextBooked: {
     color: '#856404',
-    fontWeight: '500',
+    fontFamily: 'Inter_500Medium',
   },
   slotButtonTextPast: {
     color: '#721c24',
@@ -1657,82 +1488,75 @@ const styles = StyleSheet.create({
   bookedBadge: {
     fontSize: 9,
     color: '#856404',
-    fontWeight: '600',
+    fontFamily: 'Inter_600SemiBold',
     marginLeft: 6,
   },
   conflictBadge: {
     fontSize: 9,
     color: '#dc2626',
-    fontWeight: '600',
+    fontFamily: 'Inter_600SemiBold',
     marginLeft: 6,
   },
   overlapBadge: {
     fontSize: 9,
     color: '#7c3aed',
-    fontWeight: '600',
+    fontFamily: 'Inter_600SemiBold',
     marginLeft: 6,
   },
   pastBadge: {
     fontSize: 9,
     color: '#721c24',
-    fontWeight: '600',
+    fontFamily: 'Inter_600SemiBold',
     marginLeft: 6,
   },
+  // Selected bookings — colors applied inline
   selectedBookingsContainer: {
-    backgroundColor: '#e7f5ff',
     borderRadius: 12,
     padding: 16,
     marginTop: 16,
     borderWidth: 2,
-    borderColor: '#007bff',
   },
   selectedBookingsHeader: {
     marginBottom: 12,
   },
   selectedBookingsTitle: {
     fontSize: 16,
-    fontWeight: 'bold',
-    color: '#007bff',
+    fontFamily: 'Inter_700Bold',
     marginBottom: 4,
   },
   selectedBookingCard: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    backgroundColor: '#fff',
     padding: 12,
     borderRadius: 8,
     marginBottom: 8,
     borderWidth: 1,
-    borderColor: '#007bff',
   },
   selectedBookingInfo: {
     flex: 1,
   },
   selectedBookingDate: {
     fontSize: 14,
-    fontWeight: '600',
-    color: '#333',
+    fontFamily: 'Inter_600SemiBold',
     marginBottom: 2,
   },
   selectedBookingTime: {
     fontSize: 13,
-    color: '#666',
+    fontFamily: 'Inter_400Regular',
   },
   selectedBookingDetails: {
     fontSize: 12,
-    color: '#28a745',
+    fontFamily: 'Inter_600SemiBold',
     marginTop: 2,
-    fontWeight: '600',
   },
   selectedBookingAddress: {
     fontSize: 11,
-    color: '#666',
+    fontFamily: 'Inter_400Regular',
     marginTop: 4,
     fontStyle: 'italic',
   },
   removeBookingButton: {
-    backgroundColor: '#dc3545',
     width: 28,
     height: 28,
     borderRadius: 14,
@@ -1743,73 +1567,9 @@ const styles = StyleSheet.create({
   removeBookingButtonText: {
     color: '#fff',
     fontSize: 16,
-    fontWeight: 'bold',
+    fontFamily: 'Inter_700Bold',
   },
-  addAnotherButton: {
-    backgroundColor: '#28a745',
-    padding: 12,
-    borderRadius: 8,
-    alignItems: 'center',
-    marginTop: 8,
-  },
-  addAnotherButtonText: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  existingBookingsContainer: {
-    backgroundColor: '#fff3cd',
-    borderRadius: 12,
-    padding: 16,
-    marginTop: 16,
-    borderWidth: 2,
-    borderColor: '#ffc107',
-  },
-  existingBookingCard: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    backgroundColor: '#fff',
-    padding: 12,
-    borderRadius: 8,
-    marginBottom: 8,
-    borderWidth: 1,
-    borderColor: '#ffc107',
-  },
-  cancelBookingButton: {
-    backgroundColor: '#dc3545',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 6,
-    marginLeft: 8,
-  },
-  cancelBookingButtonText: {
-    color: '#fff',
-    fontSize: 13,
-    fontWeight: '600',
-  },
-  cancellationWarning: {
-    fontSize: 11,
-    color: '#dc3545',
-    marginTop: 4,
-    fontStyle: 'italic',
-  },
-  priceCard: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 16,
-    ...Platform.select({
-      web: { boxShadow: '0 2px 4px rgba(0,0,0,0.1)' },
-      default: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 4,
-        elevation: 3,
-      },
-    }),
-  },
+  // Price card — handled by Card component, colors inline
   priceRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -1817,45 +1577,26 @@ const styles = StyleSheet.create({
   },
   priceLabel: {
     fontSize: 14,
-    color: '#666',
+    fontFamily: 'Inter_400Regular',
   },
   priceValue: {
     fontSize: 14,
-    fontWeight: '600',
-    color: '#333',
+    fontFamily: 'Inter_600SemiBold',
   },
   totalRow: {
     marginTop: 8,
     paddingTop: 12,
     borderTopWidth: 1,
-    borderTopColor: '#e0e0e0',
   },
   totalLabel: {
     fontSize: 18,
-    fontWeight: 'bold',
-    color: '#333',
+    fontFamily: 'Inter_700Bold',
   },
   totalValue: {
     fontSize: 18,
-    fontWeight: 'bold',
-    color: '#28a745',
+    fontFamily: 'Inter_700Bold',
   },
-  submitButton: {
-    backgroundColor: '#28a745',
-    paddingVertical: Platform.OS === 'web' ? 16 : 14,
-    paddingHorizontal: Platform.OS === 'web' ? 32 : 24,
-    borderRadius: 8,
-    alignItems: 'center',
-    marginBottom: 32,
-  },
-  submitButtonDisabled: {
-    backgroundColor: '#6c757d',
-  },
-  submitButtonText: {
-    color: '#fff',
-    fontSize: 18,
-    fontWeight: '600',
-  },
+  // Error state — colors applied inline
   errorContainer: {
     flex: 1,
     justifyContent: 'center',
@@ -1864,40 +1605,26 @@ const styles = StyleSheet.create({
   },
   errorText: {
     fontSize: 18,
-    color: '#dc3545',
+    fontFamily: 'Inter_500Medium',
     marginBottom: 20,
   },
-  backButton: {
-    backgroundColor: '#007bff',
-    padding: 12,
-    borderRadius: 8,
-  },
-  backButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
-  },
+  // Confirm cancel — colors applied inline
   confirmCancelContainer: {
-    backgroundColor: '#fff3cd',
     borderRadius: 12,
     padding: 16,
     marginHorizontal: 16,
     marginTop: 8,
     marginBottom: 8,
     borderWidth: 2,
-    borderColor: '#ffc107',
-    boxShadow: '0px 2px 4px rgba(0, 0, 0, 0.1)',
-    elevation: 3,
   },
   confirmCancelTitle: {
     fontSize: 18,
-    fontWeight: 'bold',
-    color: '#856404',
+    fontFamily: 'Inter_700Bold',
     marginBottom: 8,
   },
   confirmCancelText: {
     fontSize: 14,
-    color: '#856404',
+    fontFamily: 'Inter_400Regular',
     marginBottom: 16,
     lineHeight: 20,
   },
@@ -1905,54 +1632,15 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: Platform.OS === 'web' ? 16 : 12,
   },
-  confirmButton: {
+  // Calendar modal
+  modalOverlay: {
     flex: 1,
-    paddingVertical: Platform.OS === 'web' ? 14 : 12,
-    paddingHorizontal: Platform.OS === 'web' ? 20 : 16,
-    borderRadius: 8,
+    justifyContent: 'center',
     alignItems: 'center',
-  },
-  confirmButtonNo: {
-    backgroundColor: '#6c757d',
-  },
-  confirmButtonYes: {
-    backgroundColor: '#dc3545',
-  },
-  confirmButtonTextNo: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  confirmButtonTextYes: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  datePickerButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#fff',
-    borderWidth: 2,
-    borderColor: '#007bff',
-    borderRadius: 8,
-    padding: 16,
-    marginTop: 12,
-    gap: 12,
-  },
-  datePickerIcon: {
-    fontSize: 24,
-  },
-  datePickerText: {
-    fontSize: 16,
-    color: '#333',
-    flex: 1,
+    padding: Platform.OS === 'web' ? 20 : 10,
   },
   calendarModalContent: {
-    backgroundColor: '#fff',
     borderRadius: 12,
-    padding: Platform.OS === 'web' ? 32 : 24,
-    width: Platform.OS === 'web' ? '45%' : '92%',
-    maxWidth: 550,
     padding: 20,
     maxWidth: 400,
     width: '90%',
@@ -1965,93 +1653,40 @@ const styles = StyleSheet.create({
   },
   calendarModalTitle: {
     fontSize: 18,
-    fontWeight: 'bold',
-    color: '#333',
+    fontFamily: 'Inter_700Bold',
   },
   calendarModalClose: {
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: '#f0f0f0',
     justifyContent: 'center',
     alignItems: 'center',
   },
   calendarModalCloseText: {
     fontSize: 20,
-    color: '#666',
-    fontWeight: 'bold',
+    fontFamily: 'Inter_700Bold',
   },
   calendarLegendContainer: {
     marginTop: 12,
+    borderTopWidth: 1,
+    paddingTop: 8,
     gap: 4,
   },
-  noScheduleLegend: {
+  legendText: {
     fontSize: 12,
-    color: '#666',
+    fontFamily: 'Inter_400Regular',
     textAlign: 'center',
     fontStyle: 'italic',
   },
-  timeOffLegend: {
-    fontSize: 12,
-    color: '#666',
-    textAlign: 'center',
-    fontStyle: 'italic',
-  },
-  fullyBookedLegend: {
-    fontSize: 12,
-    color: '#666',
-    textAlign: 'center',
-    fontStyle: 'italic',
-  },
-  confirmModalContent: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: Platform.OS === 'web' ? 32 : 24,
-    width: Platform.OS === 'web' ? '45%' : '92%',
-    maxWidth: 550,
-    padding: 24,
-    width: '90%',
-    maxWidth: 400,
-    boxShadow: '0px 4px 6px rgba(0,0,0,0.2)',
-  },
-  confirmModalTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#333',
-    marginBottom: 12,
-    textAlign: 'center',
-  },
+  // Unsaved changes modal (ThemedModal) — text style only
   confirmModalText: {
     fontSize: 16,
-    color: '#666',
-    marginBottom: 24,
+    fontFamily: 'Inter_400Regular',
     textAlign: 'center',
     lineHeight: 22,
   },
-  confirmModalButtons: {
+  modalFooterButtons: {
     flexDirection: 'row',
     gap: 12,
-  },
-  confirmModalButton: {
-    flex: 1,
-    padding: 14,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  confirmStayButton: {
-    backgroundColor: '#0066CC',
-  },
-  confirmStayButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  confirmLeaveButton: {
-    backgroundColor: '#DC3545',
-  },
-  confirmLeaveButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
   },
 });

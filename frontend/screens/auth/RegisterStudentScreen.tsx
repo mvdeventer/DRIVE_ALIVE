@@ -3,24 +3,25 @@
  */
 import React, { useRef, useState } from 'react';
 import {
-  ActivityIndicator,
-  Modal,
   Platform,
+  Pressable,
   ScrollView,
   StyleSheet,
   Text,
   TextInput,
-  TouchableOpacity,
   View,
 } from 'react-native';
 import AddressAutocomplete from '../../components/AddressAutocomplete';
 import FormFieldWithTip from '../../components/FormFieldWithTip';
 import InlineMessage from '../../components/InlineMessage';
+import { Button, Card, ThemedModal } from '../../components/ui';
+import { useTheme } from '../../theme/ThemeContext';
 import { DEBUG_CONFIG } from '../../config';
 import ApiService from '../../services/api';
 import { formatPhoneNumber } from '../../utils/phoneFormatter';
 
 export default function RegisterStudentScreen({ navigation }: any) {
+  const { colors } = useTheme();
   // Create refs for all input fields
   const firstNameRef = useRef<TextInput>(null);
   const lastNameRef = useRef<TextInput>(null);
@@ -156,8 +157,22 @@ export default function RegisterStudentScreen({ navigation }: any) {
 
   return (
     <>
-    <ScrollView ref={scrollViewRef} style={styles.container}>
-      <Text style={styles.title}>Student Registration</Text>
+    <ScrollView
+      ref={scrollViewRef}
+      style={[styles.container, { backgroundColor: colors.background }]}
+      contentContainerStyle={styles.contentContainer}
+      showsVerticalScrollIndicator={false}
+    >
+      {/* Header */}
+      <View style={styles.header}>
+        <View style={[styles.headerIcon, { backgroundColor: colors.primary + '15' }]}>
+          <Text style={styles.headerEmoji}>🎓</Text>
+        </View>
+        <Text style={[styles.title, { color: colors.text }]}>Student Registration</Text>
+        <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
+          Create your account to start booking driving lessons
+        </Text>
+      </View>
 
       {/* Message Display */}
       {message && (
@@ -169,367 +184,319 @@ export default function RegisterStudentScreen({ navigation }: any) {
         />
       )}
 
-      <Text style={styles.sectionTitle}>Personal Information</Text>
-      <FormFieldWithTip
-        ref={firstNameRef}
-        label="First Name"
-        placeholder="Enter your first name"
-        value={formData.first_name}
-        onChangeText={value => updateField('first_name', value)}
-        tip="Your legal first name as it appears on your ID"
-        returnKeyType="next"
-        onSubmitEditing={() => lastNameRef.current?.focus()}
-        blurOnSubmit={false}
-      />
-      <FormFieldWithTip
-        ref={lastNameRef}
-        label="Last Name"
-        placeholder="Enter your last name"
-        value={formData.last_name}
-        onChangeText={value => updateField('last_name', value)}
-        tip="Your legal last name as it appears on your ID"
-        returnKeyType="next"
-        onSubmitEditing={() => emailRef.current?.focus()}
-        blurOnSubmit={false}
-      />
-      <FormFieldWithTip
-        ref={emailRef}
-        label="Email Address"
-        placeholder="your.email@example.com"
-        value={formData.email}
-        onChangeText={value => updateField('email', value)}
-        keyboardType="email-address"
-        autoCapitalize="none"
-        tip="We'll use this to send booking confirmations and updates"
-        returnKeyType="next"
-        onSubmitEditing={() => phoneRef.current?.focus()}
-        blurOnSubmit={false}
-      />
-      <FormFieldWithTip
-        ref={phoneRef}
-        label="Phone Number"
-        placeholder="+27611234567"
-        value={formData.phone}
-        onChangeText={value => updateField('phone', value)}
-        keyboardType="phone-pad"
-        tip="South African format: +27 followed by 9 digits"
-        maxLength={12}
-        returnKeyType="next"
-        onSubmitEditing={() => idNumberRef.current?.focus()}
-        blurOnSubmit={false}
-      />
-      <FormFieldWithTip
-        ref={idNumberRef}
-        label="South African ID Number"
-        placeholder="Enter your 13-digit ID number"
-        value={formData.id_number}
-        onChangeText={value => updateField('id_number', value)}
-        keyboardType="numeric"
-        maxLength={13}
-        tip="Your 13-digit South African ID number for verification"
-        returnKeyType="next"
-        onSubmitEditing={() => learnersPermitRef.current?.focus()}
-        blurOnSubmit={false}
-      />
-      <FormFieldWithTip
-        ref={learnersPermitRef}
-        label="Learner's Permit Number (Optional)"
-        placeholder="Enter permit number if available"
-        value={formData.learners_permit_number}
-        onChangeText={value => updateField('learners_permit_number', value)}
-        tip="Optional - Provide if you already have a learner's permit"
-        returnKeyType="next"
-        onSubmitEditing={() => emergencyNameRef.current?.focus()}
-        blurOnSubmit={false}
-      />
-
-      <Text style={styles.sectionTitle}>Emergency Contact</Text>
-      <FormFieldWithTip
-        ref={emergencyNameRef}
-        label="Emergency Contact Name"
-        placeholder="Full name"
-        value={formData.emergency_contact_name}
-        onChangeText={value => updateField('emergency_contact_name', value)}
-        tip="Person to contact in case of emergency during lessons"
-        returnKeyType="next"
-        onSubmitEditing={() => emergencyPhoneRef.current?.focus()}
-        blurOnSubmit={false}
-      />
-      <FormFieldWithTip
-        ref={emergencyPhoneRef}
-        label="Emergency Contact Phone"
-        placeholder="+27821234567"
-        value={formData.emergency_contact_phone}
-        onChangeText={value => updateField('emergency_contact_phone', value)}
-        keyboardType="phone-pad"
-        tip="South African format: +27 followed by 9 digits"
-        maxLength={12}
-        returnKeyType="next"
-        onSubmitEditing={() => passwordRef.current?.focus()}
-        blurOnSubmit={false}
-      />
-
-      <Text style={styles.sectionTitle}>Address</Text>
-      <View style={styles.addressGpsContainer}>
-        <Text style={styles.addressGpsLabel}>Address with GPS</Text>
-        <AddressAutocomplete
-          value={addressValue}
-          onChangeText={handleAddressChange}
+      {/* Personal Information */}
+      <Card variant="outlined" padding="md" style={styles.section}>
+        <Text style={[styles.sectionTitle, { color: colors.primary }]}>Personal Information</Text>
+        <FormFieldWithTip
+          ref={firstNameRef}
+          label="First Name"
+          placeholder="Enter your first name"
+          value={formData.first_name}
+          onChangeText={value => updateField('first_name', value)}
+          tip="Your legal first name as it appears on your ID"
+          returnKeyType="next"
+          onSubmitEditing={() => lastNameRef.current?.focus()}
+          blurOnSubmit={false}
         />
-        <Text style={styles.addressGpsHint}>
-          📍 Use GPS to auto-fill your address and postal code. You can still edit
-          the fields below if needed.
-        </Text>
-      </View>
+        <FormFieldWithTip
+          ref={lastNameRef}
+          label="Last Name"
+          placeholder="Enter your last name"
+          value={formData.last_name}
+          onChangeText={value => updateField('last_name', value)}
+          tip="Your legal last name as it appears on your ID"
+          returnKeyType="next"
+          onSubmitEditing={() => emailRef.current?.focus()}
+          blurOnSubmit={false}
+        />
+        <FormFieldWithTip
+          ref={emailRef}
+          label="Email Address"
+          placeholder="your.email@example.com"
+          value={formData.email}
+          onChangeText={value => updateField('email', value)}
+          keyboardType="email-address"
+          autoCapitalize="none"
+          tip="We'll use this to send booking confirmations and updates"
+          returnKeyType="next"
+          onSubmitEditing={() => phoneRef.current?.focus()}
+          blurOnSubmit={false}
+        />
+        <FormFieldWithTip
+          ref={phoneRef}
+          label="Phone Number"
+          placeholder="+27611234567"
+          value={formData.phone}
+          onChangeText={value => updateField('phone', value)}
+          keyboardType="phone-pad"
+          tip="South African format: +27 followed by 9 digits"
+          maxLength={12}
+          returnKeyType="next"
+          onSubmitEditing={() => idNumberRef.current?.focus()}
+          blurOnSubmit={false}
+        />
+        <FormFieldWithTip
+          ref={idNumberRef}
+          label="South African ID Number"
+          placeholder="Enter your 13-digit ID number"
+          value={formData.id_number}
+          onChangeText={value => updateField('id_number', value)}
+          keyboardType="numeric"
+          maxLength={13}
+          tip="Your 13-digit South African ID number for verification"
+          returnKeyType="next"
+          onSubmitEditing={() => learnersPermitRef.current?.focus()}
+          blurOnSubmit={false}
+        />
+        <FormFieldWithTip
+          ref={learnersPermitRef}
+          label="Learner's Permit Number (Optional)"
+          placeholder="Enter permit number if available"
+          value={formData.learners_permit_number}
+          onChangeText={value => updateField('learners_permit_number', value)}
+          tip="Optional - Provide if you already have a learner's permit"
+          returnKeyType="next"
+          onSubmitEditing={() => emergencyNameRef.current?.focus()}
+          blurOnSubmit={false}
+        />
+      </Card>
 
-      <Text style={styles.sectionTitle}>Security</Text>
-      <FormFieldWithTip
-        key={`password-${showPassword}`}
-        ref={passwordRef}
-        label="Password"
-        placeholder="At least 6 characters"
-        value={formData.password}
-        onChangeText={value => updateField('password', value)}
-        secureTextEntry={!showPassword}
-        tip="Create a strong password (minimum 6 characters)"
-        returnKeyType="next"
-        onSubmitEditing={() => confirmPasswordRef.current?.focus()}
-        blurOnSubmit={false}
+      {/* Emergency Contact */}
+      <Card variant="outlined" padding="md" style={styles.section}>
+        <Text style={[styles.sectionTitle, { color: colors.primary }]}>Emergency Contact</Text>
+        <FormFieldWithTip
+          ref={emergencyNameRef}
+          label="Emergency Contact Name"
+          placeholder="Full name"
+          value={formData.emergency_contact_name}
+          onChangeText={value => updateField('emergency_contact_name', value)}
+          tip="Person to contact in case of emergency during lessons"
+          returnKeyType="next"
+          onSubmitEditing={() => emergencyPhoneRef.current?.focus()}
+          blurOnSubmit={false}
+        />
+        <FormFieldWithTip
+          ref={emergencyPhoneRef}
+          label="Emergency Contact Phone"
+          placeholder="+27821234567"
+          value={formData.emergency_contact_phone}
+          onChangeText={value => updateField('emergency_contact_phone', value)}
+          keyboardType="phone-pad"
+          tip="South African format: +27 followed by 9 digits"
+          maxLength={12}
+          returnKeyType="next"
+          onSubmitEditing={() => passwordRef.current?.focus()}
+          blurOnSubmit={false}
+        />
+      </Card>
+
+      {/* Address */}
+      <Card variant="outlined" padding="md" style={styles.section}>
+        <Text style={[styles.sectionTitle, { color: colors.primary }]}>Address</Text>
+        <View style={[styles.addressGpsContainer, { backgroundColor: colors.backgroundSecondary }]}>
+          <Text style={[styles.addressGpsLabel, { color: colors.text }]}>Address with GPS</Text>
+          <AddressAutocomplete
+            value={addressValue}
+            onChangeText={handleAddressChange}
+          />
+          <Text style={[styles.addressGpsHint, { color: colors.textSecondary }]}>
+            📍 Use GPS to auto-fill your address and postal code. You can still edit the fields below if needed.
+          </Text>
+        </View>
+      </Card>
+
+      {/* Security */}
+      <Card variant="outlined" padding="md" style={styles.section}>
+        <Text style={[styles.sectionTitle, { color: colors.primary }]}>Security</Text>
+        <FormFieldWithTip
+          key={`password-${showPassword}`}
+          ref={passwordRef}
+          label="Password"
+          placeholder="At least 6 characters"
+          value={formData.password}
+          onChangeText={value => updateField('password', value)}
+          secureTextEntry={!showPassword}
+          tip="Create a strong password (minimum 6 characters)"
+          returnKeyType="next"
+          onSubmitEditing={() => confirmPasswordRef.current?.focus()}
+          blurOnSubmit={false}
+        />
+        <FormFieldWithTip
+          key={`confirm-password-${showPassword}`}
+          ref={confirmPasswordRef}
+          label="Confirm Password"
+          placeholder="Re-enter password"
+          value={formData.confirmPassword}
+          onChangeText={value => updateField('confirmPassword', value)}
+          secureTextEntry={!showPassword}
+          tip="Re-enter your password to confirm"
+          returnKeyType="done"
+          onSubmitEditing={handleRegister}
+        />
+        <Pressable
+          style={styles.showPasswordButton}
+          onPress={() => setShowPassword(!showPassword)}
+        >
+          <Text style={[styles.showPasswordText, { color: colors.primary }]}>
+            {showPassword ? '🙈 Hide Password' : '👁️ Show Password'}
+          </Text>
+        </Pressable>
+      </Card>
+
+      {/* Register Button */}
+      <Button
+        label="Register"
+        onPress={handleRegister}
+        loading={loading}
+        disabled={loading}
+        fullWidth
+        size="lg"
       />
-      <FormFieldWithTip
-        key={`confirm-password-${showPassword}`}
-        ref={confirmPasswordRef}
-        label="Confirm Password"
-        placeholder="Re-enter password"
-        value={formData.confirmPassword}
-        onChangeText={value => updateField('confirmPassword', value)}
-        secureTextEntry={!showPassword}
-        tip="Re-enter your password to confirm"
-        returnKeyType="done"
-        onSubmitEditing={handleRegister}
-      />
 
-      <TouchableOpacity
-        style={styles.showPasswordButton}
-        onPress={() => setShowPassword(!showPassword)}
-      >
-        <Text style={styles.showPasswordText}>
-          {showPassword ? '🙈 Hide Password' : '👁️ Show Password'}
+      <Pressable onPress={() => navigation.navigate('Login')} style={[styles.linkButton, { padding: 12 }]}>
+        <Text style={[styles.linkText, { color: colors.primary }]}>
+          Already have an account? <Text style={{ fontWeight: '600' }}>Login</Text>
         </Text>
-      </TouchableOpacity>
-
-      <TouchableOpacity style={styles.button} onPress={handleRegister} disabled={loading}>
-        {loading ? (
-          <ActivityIndicator color="#fff" />
-        ) : (
-          <Text style={styles.buttonText}>Register</Text>
-        )}
-      </TouchableOpacity>
-
-      <TouchableOpacity onPress={() => navigation.navigate('Login')} style={styles.linkButton}>
-        <Text style={styles.linkText}>Already have an account? Login</Text>
-      </TouchableOpacity>
+      </Pressable>
 
       <View style={{ height: 40 }} />
     </ScrollView>
 
     {/* Confirmation Modal */}
-    <Modal
+    <ThemedModal
       visible={showConfirmModal}
-      transparent
-      animationType="fade"
-      onRequestClose={() => setShowConfirmModal(false)}
-    >
-      <View style={styles.modalOverlay}>
-        <View style={styles.modalContent}>
-          <Text style={styles.modalTitle}>✓ Confirm Registration Details</Text>
-          <Text style={styles.modalSubtitle}>Please review your information before creating your account</Text>
-          
-          <View style={styles.confirmDetails}>
-            <Text style={styles.confirmLabel}>Name:</Text>
-            <Text style={styles.confirmValue}>{formData.first_name} {formData.last_name}</Text>
-            
-            <Text style={styles.confirmLabel}>Email:</Text>
-            <Text style={styles.confirmValue}>{formData.email}</Text>
-            
-            <Text style={styles.confirmLabel}>Phone:</Text>
-            <Text style={styles.confirmValue}>{formData.phone}</Text>
-            
-            <Text style={styles.confirmLabel}>ID Number:</Text>
-            <Text style={styles.confirmValue}>{formData.id_number}</Text>
-            
-            <Text style={styles.confirmLabel}>Address:</Text>
-            <Text style={styles.confirmValue}>
-              {`${formData.address_line1}${
-                formData.address_line2 ? `, ${formData.address_line2}` : ''
-              }${formData.postal_code ? `, ${formData.postal_code}` : ''}`}
-            </Text>
-          </View>
-
-          <View style={styles.modalButtons}>
-            <TouchableOpacity
-              style={[styles.modalButton, styles.modalButtonSecondary]}
-              onPress={() => setShowConfirmModal(false)}
-            >
-              <Text style={styles.modalButtonTextSecondary}>✏️ Edit</Text>
-            </TouchableOpacity>
-            
-            <TouchableOpacity
-              style={[styles.modalButton, styles.modalButtonPrimary]}
-              onPress={confirmAndSubmit}
-            >
-              <Text style={styles.modalButtonText}>✓ Confirm & Create Account</Text>
-            </TouchableOpacity>
-          </View>
+      onClose={() => setShowConfirmModal(false)}
+      title="Confirm Registration"
+      size="md"
+      footer={
+        <View style={styles.modalButtons}>
+          <Button
+            label="✏️ Edit"
+            onPress={() => setShowConfirmModal(false)}
+            variant="outline"
+            style={{ flex: 1 }}
+          />
+          <Button
+            label="✓ Confirm & Create"
+            onPress={confirmAndSubmit}
+            variant="primary"
+            style={{ flex: 1 }}
+          />
         </View>
+      }
+    >
+      <Text style={[styles.modalSubtitle, { color: colors.textSecondary }]}>
+        Please review your information before creating your account
+      </Text>
+      <View style={[styles.confirmDetails, { backgroundColor: colors.backgroundSecondary }]}>
+        <Text style={[styles.confirmLabel, { color: colors.textSecondary }]}>Name:</Text>
+        <Text style={[styles.confirmValue, { color: colors.text }]}>
+          {formData.first_name} {formData.last_name}
+        </Text>
+        <Text style={[styles.confirmLabel, { color: colors.textSecondary }]}>Email:</Text>
+        <Text style={[styles.confirmValue, { color: colors.text }]}>{formData.email}</Text>
+        <Text style={[styles.confirmLabel, { color: colors.textSecondary }]}>Phone:</Text>
+        <Text style={[styles.confirmValue, { color: colors.text }]}>{formData.phone}</Text>
+        <Text style={[styles.confirmLabel, { color: colors.textSecondary }]}>ID Number:</Text>
+        <Text style={[styles.confirmValue, { color: colors.text }]}>{formData.id_number}</Text>
+        <Text style={[styles.confirmLabel, { color: colors.textSecondary }]}>Address:</Text>
+        <Text style={[styles.confirmValue, { color: colors.text }]}>
+          {`${formData.address_line1}${formData.address_line2 ? `, ${formData.address_line2}` : ''}${formData.postal_code ? `, ${formData.postal_code}` : ''}`}
+        </Text>
       </View>
-    </Modal>
+    </ThemedModal>
     </>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    padding: 20,
-    backgroundColor: '#fff',
+  container: { flex: 1 },
+  contentContainer: {
+    padding: Platform.OS === 'web' ? 40 : 20,
+    maxWidth: 600,
+    alignSelf: 'center',
+    width: '100%',
   },
+  header: {
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+  headerIcon: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 14,
+  },
+  headerEmoji: { fontSize: 36 },
   title: {
-    fontSize: Platform.OS === 'web' ? 24 : 20,
-    fontWeight: 'bold',
-    marginBottom: Platform.OS === 'web' ? 20 : 16,
-    color: '#333',
+    fontSize: Platform.OS === 'web' ? 28 : 24,
+    fontWeight: '800',
+    letterSpacing: -0.3,
+    marginBottom: 6,
+  },
+  subtitle: {
+    fontSize: Platform.OS === 'web' ? 15 : 13,
+    textAlign: 'center',
+  },
+  section: { marginBottom: 20 },
+  sectionTitle: {
+    fontSize: Platform.OS === 'web' ? 17 : 15,
+    fontWeight: '600',
+    marginBottom: 12,
   },
   addressGpsContainer: {
-    backgroundColor: '#F8F9FA',
     borderRadius: 8,
     padding: Platform.OS === 'web' ? 16 : 12,
-    marginBottom: 16,
   },
   addressGpsLabel: {
-    fontSize: Platform.OS === 'web' ? 16 : 14,
+    fontSize: Platform.OS === 'web' ? 15 : 13,
     fontWeight: '600',
     marginBottom: 8,
-    color: '#333',
   },
   addressGpsHint: {
     marginTop: 8,
-    fontSize: Platform.OS === 'web' ? 12 : 11,
-    color: '#666',
-  },
-  sectionTitle: {
-    fontSize: Platform.OS === 'web' ? 18 : 16,
-    fontWeight: '600',
-    marginTop: Platform.OS === 'web' ? 15 : 12,
-    marginBottom: Platform.OS === 'web' ? 10 : 8,
-    color: '#007AFF',
-  },
-  button: {
-    backgroundColor: '#007AFF',
-    paddingVertical: Platform.OS === 'web' ? 16 : 14,
-    paddingHorizontal: Platform.OS === 'web' ? 32 : 24,
-    borderRadius: 8,
-    alignItems: 'center',
-    marginTop: 20,
+    fontSize: 12,
+    lineHeight: 17,
   },
   showPasswordButton: {
-    marginBottom: 15,
+    marginTop: 4,
     padding: 8,
     alignItems: 'center',
   },
   showPasswordText: {
-    color: '#007bff',
-    fontSize: Platform.OS === 'web' ? 15 : 14,
+    fontSize: Platform.OS === 'web' ? 14 : 13,
     fontWeight: '600',
   },
-  buttonText: {
-    color: '#fff',
-    fontSize: Platform.OS === 'web' ? 18 : 16,
-    fontWeight: 'bold',
-  },
   linkButton: {
-    marginTop: 15,
+    marginTop: 16,
     alignItems: 'center',
   },
   linkText: {
-    color: '#007AFF',
-    fontSize: Platform.OS === 'web' ? 16 : 14,
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: Platform.OS === 'web' ? 20 : 10,
-  },
-  modalContent: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: Platform.OS === 'web' ? 32 : 24,
-    width: Platform.OS === 'web' ? '45%' : '92%',
-    maxWidth: 550,
-    maxHeight: '85%',
-  },
-  modalTitle: {
-    fontSize: Platform.OS === 'web' ? 24 : 20,
-    fontWeight: 'bold',
-    color: '#28a745',
-    marginBottom: 10,
-    textAlign: 'center',
-  },
-  modalSubtitle: {
     fontSize: Platform.OS === 'web' ? 15 : 13,
-    color: '#666',
-    marginBottom: 20,
-    textAlign: 'center',
-    lineHeight: 22,
-  },
-  confirmDetails: {
-    backgroundColor: '#f8f9fa',
-    borderRadius: 8,
-    padding: Platform.OS === 'web' ? 24 : 18,
-    marginBottom: 24,
-  },
-  confirmLabel: {
-    fontSize: Platform.OS === 'web' ? 14 : 13,
-    fontWeight: '600',
-    color: '#666',
-    marginTop: 10,
-  },
-  confirmValue: {
-    fontSize: Platform.OS === 'web' ? 16 : 15,
-    color: '#333',
-    marginBottom: 10,
-    fontWeight: '500',
   },
   modalButtons: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: Platform.OS === 'web' ? 16 : 12,
+    gap: 12,
   },
-  modalButton: {
-    flex: 1,
-    paddingVertical: Platform.OS === 'web' ? 14 : 12,
-    paddingHorizontal: Platform.OS === 'web' ? 20 : 16,
+  modalSubtitle: {
+    fontSize: 14,
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  confirmDetails: {
     borderRadius: 8,
-    alignItems: 'center',
+    padding: Platform.OS === 'web' ? 20 : 14,
   },
-  modalButtonPrimary: {
-    backgroundColor: '#28a745',
-  },
-  modalButtonSecondary: {
-    backgroundColor: '#fff',
-    borderWidth: 2,
-    borderColor: '#dc3545',
-  },
-  modalButtonText: {
-    color: '#fff',
-    fontSize: Platform.OS === 'web' ? 16 : 15,
+  confirmLabel: {
+    fontSize: 13,
     fontWeight: '600',
+    marginTop: 8,
   },
-  modalButtonTextSecondary: {
-    color: '#dc3545',
-    fontSize: Platform.OS === 'web' ? 16 : 15,
-    fontWeight: '600',
+  confirmValue: {
+    fontSize: 15,
+    fontWeight: '500',
+    marginBottom: 8,
   },
 });

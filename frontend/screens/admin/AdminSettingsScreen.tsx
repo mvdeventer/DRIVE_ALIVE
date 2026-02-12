@@ -5,24 +5,26 @@
 import React, { useCallback, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  Modal,
   Platform,
+  Pressable,
   RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
   TextInput,
-  TouchableOpacity,
   View,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import InlineMessage from '../../components/InlineMessage';
 import WebNavigationHeader from '../../components/WebNavigationHeader';
+import { Button, Card, ThemedModal } from '../../components';
+import { useTheme } from '../../theme/ThemeContext';
 import apiService from '../../services/api';
 
 const SCREEN_NAME = 'AdminSettingsScreen';
 
 export default function AdminSettingsScreen({ navigation }: any) {
+  const { colors } = useTheme();
   const scrollViewRef = useRef<ScrollView>(null);
   const pendingNavActionRef = useRef<any>(null);
   const [loading, setLoading] = useState(true);
@@ -211,36 +213,24 @@ export default function AdminSettingsScreen({ navigation }: any) {
     setSuccessMessage('');
 
     try {
-      const response = await fetch('http://localhost:8000/verify/test-email', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          smtp_email: formData.smtpEmail,
-          smtp_password: formData.smtpPassword,
-          test_recipient: formData.testRecipient,
-          verification_link_validity_minutes: parseInt(formData.linkValidity) || 30,
-        }),
+      const response = await apiService.post('/verify/test-email', {
+        smtp_email: formData.smtpEmail,
+        smtp_password: formData.smtpPassword,
+        test_recipient: formData.testRecipient,
+        verification_link_validity_minutes: parseInt(formData.linkValidity) || 30,
       });
 
-      if (response.ok) {
-        const data = await response.json();
-        scrollViewRef.current?.scrollTo({ y: 0, animated: true });
-        setSuccessMessage(`✅ ${data.message || 'Test email sent successfully! Check your inbox.'}`);
-        setTimeout(() => setSuccessMessage(''), 4000);
-        
-        // Reload settings to get the saved values from database
-        await loadSettings();
-      } else {
-        const errorData = await response.json();
-        scrollViewRef.current?.scrollTo({ y: 0, animated: true });
-        setErrorMessage(`❌ Test failed: ${errorData.detail || 'Unknown error'}`);
-        setTimeout(() => setErrorMessage(''), 5000);
-      }
-    } catch (error) {
+      const data = response.data;
       scrollViewRef.current?.scrollTo({ y: 0, animated: true });
-      setErrorMessage('❌ Network error while testing email. Please check your connection.');
+      setSuccessMessage(`✅ ${data.message || 'Test email sent successfully! Check your inbox.'}`);
+      setTimeout(() => setSuccessMessage(''), 4000);
+      
+      // Reload settings to get the saved values from database
+      await loadSettings();
+    } catch (error: any) {
+      scrollViewRef.current?.scrollTo({ y: 0, animated: true });
+      const detail = error?.response?.data?.detail || error?.message || 'Unknown error';
+      setErrorMessage(`❌ Test failed: ${detail}`);
       setTimeout(() => setErrorMessage(''), 5000);
       console.error('Test email error:', error);
     } finally {
@@ -261,32 +251,21 @@ export default function AdminSettingsScreen({ navigation }: any) {
     setSuccessMessage('');
 
     try {
-      const response = await fetch('http://localhost:8000/verify/test-whatsapp', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          phone: formData.adminPhoneNumber,
-          twilio_sender_phone_number: formData.twilioPhoneNumber,
-        }),
+      const response = await apiService.post('/verify/test-whatsapp', {
+        phone: formData.adminPhoneNumber,
+        twilio_sender_phone_number: formData.twilioPhoneNumber,
       });
 
-      if (response.ok) {
-        const data = await response.json();
-        scrollViewRef.current?.scrollTo({ y: 0, animated: true });
-        setSuccessMessage(`✅ ${data.message || 'Test WhatsApp sent successfully! Check your phone.'}`);
-        setTimeout(() => setSuccessMessage(''), 4000);        
-        // Reload settings to get the saved values from database
-        await loadSettings();      } else {
-        const errorData = await response.json();
-        scrollViewRef.current?.scrollTo({ y: 0, animated: true });
-        setErrorMessage(`❌ Test failed: ${errorData.detail || 'Unknown error'}`);
-        setTimeout(() => setErrorMessage(''), 5000);
-      }
-    } catch (error) {
+      const data = response.data;
       scrollViewRef.current?.scrollTo({ y: 0, animated: true });
-      setErrorMessage('❌ Network error while testing WhatsApp. Please check your connection.');
+      setSuccessMessage(`\u2705 ${data.message || 'Test WhatsApp sent successfully! Check your phone.'}`);
+      setTimeout(() => setSuccessMessage(''), 4000);
+      // Reload settings to get the saved values from database
+      await loadSettings();
+    } catch (error: any) {
+      scrollViewRef.current?.scrollTo({ y: 0, animated: true });
+      const detail = error?.response?.data?.detail || error?.message || 'Unknown error';
+      setErrorMessage(`\u274C Test failed: ${detail}`);
       setTimeout(() => setErrorMessage(''), 5000);
       console.error('Test WhatsApp error:', error);
     } finally {
@@ -310,42 +289,43 @@ export default function AdminSettingsScreen({ navigation }: any) {
 
   if (loading) {
     return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#007AFF" />
-        <Text style={styles.loadingText}>Loading settings...</Text>
+      <View style={[styles.loadingContainer, { backgroundColor: colors.background }]}>
+        <ActivityIndicator size="large" color={colors.primary} />
+        <Text style={[styles.loadingText, { color: colors.textSecondary }]}>Loading settings...</Text>
       </View>
     );
   }
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
       <WebNavigationHeader
         title="Admin Settings"
         onBack={() => navigation.goBack()}
-        showBackButton={true}
+        showBackButton={navigation.canGoBack()}
       />
 
       <ScrollView
         ref={scrollViewRef}
         style={styles.scrollContent}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
       >
         {successMessage ? <InlineMessage message={successMessage} type="success" /> : null}
         {errorMessage ? <InlineMessage message={errorMessage} type="error" /> : null}
 
         <View style={styles.content}>
           {/* Verification Settings Section */}
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>📧 Email Configuration</Text>
-            <Text style={styles.sectionSubtitle}>
-              Configure Gmail SMTP to send verification emails (🌍 Global setting - shared by all admins)
+          <Card variant="elevated" style={{ marginBottom: 16 }}>
+            <Text style={[styles.sectionTitle, { color: colors.text }]}>Email Configuration</Text>
+            <Text style={[styles.sectionSubtitle, { color: colors.textSecondary }]}>
+              Configure Gmail SMTP to send verification emails (global setting - shared by all admins)
             </Text>
 
             <View style={styles.formGroup}>
-              <Text style={styles.label}>Gmail Address</Text>
+              <Text style={[styles.label, { color: colors.textSecondary }]}>Gmail Address</Text>
               <TextInput
-                style={styles.input}
+                style={[styles.input, { borderColor: colors.border, backgroundColor: colors.card, color: colors.text }]}
                 placeholder="admin@gmail.com"
+                placeholderTextColor={colors.textMuted}
                 value={formData.smtpEmail}
                 onChangeText={(value) => handleChange('smtpEmail', value)}
                 keyboardType="email-address"
@@ -355,14 +335,14 @@ export default function AdminSettingsScreen({ navigation }: any) {
             </View>
 
             <View style={styles.formGroup}>
-              <Text style={styles.label}>Gmail App Password</Text>
-              <View style={styles.passwordContainer}>
+              <Text style={[styles.label, { color: colors.textSecondary }]}>Gmail App Password</Text>
+              <View style={[styles.passwordContainer, { borderColor: colors.border, backgroundColor: colors.card }]}>
                 <TextInput
-                  style={styles.passwordInput}
+                  style={[styles.passwordInput, { color: colors.text }]}
                   placeholder="xxxx xxxx xxxx xxxx"
-                  value={showPassword ? formData.smtpPassword : formData.smtpPassword.replace(/./g, '•')}
+                  placeholderTextColor={colors.textMuted}
+                  value={showPassword ? formData.smtpPassword : formData.smtpPassword.replace(/./g, '\u2022')}
                   onChangeText={(value) => {
-                    // Only allow editing when password is visible
                     if (showPassword) {
                       handleChange('smtpPassword', value);
                       setActualPassword(value);
@@ -370,71 +350,73 @@ export default function AdminSettingsScreen({ navigation }: any) {
                   }}
                   secureTextEntry={false}
                   autoCapitalize="none"
-                  editable={!saving && showPassword}  // Only editable when visible
+                  editable={!saving && showPassword}
                   selectTextOnFocus={showPassword}
                 />
-                <TouchableOpacity
+                <Pressable
                   style={styles.eyeButton}
-                  activeOpacity={0.6}
                   onPress={() => setShowPassword(!showPassword)}
                 >
-                  <Text style={styles.eyeIcon}>{showPassword ? '🙈' : '👁️'}</Text>
-                </TouchableOpacity>
+                  <Text style={styles.eyeIcon}>{showPassword ? 'Hide' : 'Show'}</Text>
+                </Pressable>
               </View>
-              <Text style={styles.hint}>
+              <Text style={[styles.hint, { color: colors.textMuted }]}>
                 {showPassword 
                   ? 'Generate at: myaccount.google.com/apppasswords'
-                  : '👁️ Click the eye icon to view or edit the password'
+                  : 'Click Show to view or edit the password'
                 }
               </Text>
             </View>
 
             <View style={styles.formGroup}>
-              <Text style={styles.label}>Verification Link Validity (Minutes)</Text>
+              <Text style={[styles.label, { color: colors.textSecondary }]}>Verification Link Validity (Minutes)</Text>
               <TextInput
-                style={styles.input}
+                style={[styles.input, { borderColor: colors.border, backgroundColor: colors.card, color: colors.text }]}
                 placeholder="30"
+                placeholderTextColor={colors.textMuted}
                 value={formData.linkValidity}
                 onChangeText={(value) => handleChange('linkValidity', value)}
                 keyboardType="number-pad"
                 editable={!saving}
               />
-              <Text style={styles.hint}>
+              <Text style={[styles.hint, { color: colors.textMuted }]}>
                 How long verification links remain valid (15-120 minutes recommended)
               </Text>
             </View>
 
             <View style={styles.formGroup}>
-              <Text style={styles.label}>⏱️ Auto-Logout Timeout (Minutes)</Text>
+              <Text style={[styles.label, { color: colors.textSecondary }]}>Auto-Logout Timeout (Minutes)</Text>
               <TextInput
-                style={styles.input}
+                style={[styles.input, { borderColor: colors.border, backgroundColor: colors.card, color: colors.text }]}
                 placeholder="15"
+                placeholderTextColor={colors.textMuted}
                 value={formData.inactivityTimeout}
                 onChangeText={(value) => handleChange('inactivityTimeout', value)}
                 keyboardType="number-pad"
                 editable={!saving}
               />
-              <Text style={styles.hint}>
+              <Text style={[styles.hint, { color: colors.textMuted }]}>
                 Automatically log out inactive users after this many minutes (1-120 minutes). 
                 Applies to all users (students, instructors, admins). Default: 15 minutes.
               </Text>
-              <Text style={[styles.hint, { marginTop: 5, fontWeight: '600', color: '#007AFF' }]}>
-                💡 On web browsers, closing the tab/window will also log out users immediately.
+              <Text style={[styles.hint, { marginTop: 5, fontFamily: 'Inter_600SemiBold', color: colors.primary }]}>
+                On web browsers, closing the tab/window will also log out users immediately.
               </Text>
             </View>
 
             {/* Test Email Section */}
-            <View style={styles.testEmailSection}>
-              <Text style={styles.testEmailTitle}>🧪 Test Email Configuration</Text>
-              <Text style={styles.testEmailSubtitle}>
+            <View style={[styles.testEmailSection, { borderTopColor: colors.border }]}>
+              <Text style={[styles.testEmailTitle, { color: colors.text }]}>Test Email Configuration</Text>
+              <Text style={[styles.testEmailSubtitle, { color: colors.textSecondary }]}>
                 Send a test email to verify your SMTP settings. Settings will be saved to database for all admin roles.
               </Text>
 
               <View style={styles.formGroup}>
-                <Text style={styles.label}>Test Recipient Email</Text>
+                <Text style={[styles.label, { color: colors.textSecondary }]}>Test Recipient Email</Text>
                 <TextInput
-                  style={styles.input}
+                  style={[styles.input, { borderColor: colors.border, backgroundColor: colors.card, color: colors.text }]}
                   placeholder="test@example.com"
+                  placeholderTextColor={colors.textMuted}
                   value={formData.testRecipient}
                   onChangeText={(value) => handleChange('testRecipient', value)}
                   keyboardType="email-address"
@@ -443,307 +425,281 @@ export default function AdminSettingsScreen({ navigation }: any) {
                 />
               </View>
 
-              <TouchableOpacity
-                style={[styles.testButton, testingEmail && styles.testButtonDisabled]}
+              <Button
+                variant="secondary"
                 onPress={handleTestEmail}
                 disabled={testingEmail}
+                loading={testingEmail}
+                fullWidth
               >
-                {testingEmail ? (
-                  <ActivityIndicator color="#fff" />
-                ) : (
-                  <Text style={styles.testButtonText}>📧 Send Test Email & Save Settings</Text>
-                )}
-              </TouchableOpacity>
+                Send Test Email & Save Settings
+              </Button>
               
-              <Text style={[styles.hint, { marginTop: 10, fontStyle: 'italic', color: '#666' }]}>
-                💾 Email credentials will be saved to database when test succeeds
+              <Text style={[styles.hint, { marginTop: 10, fontStyle: 'italic', color: colors.textMuted }]}>
+                Email credentials will be saved to database when test succeeds
               </Text>
             </View>
-          </View>
+          </Card>
 
           {/* Backup Configuration Section */}
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>💾 Backup Configuration</Text>
-            <Text style={styles.sectionSubtitle}>
+          <Card variant="elevated" style={{ marginBottom: 16 }}>
+            <Text style={[styles.sectionTitle, { color: colors.text }]}>Backup Configuration</Text>
+            <Text style={[styles.sectionSubtitle, { color: colors.textSecondary }]}>
               Configure automatic database backup settings and retention policies
             </Text>
 
             <View style={styles.formGroup}>
-              <Text style={styles.label}>Backup Interval (Minutes)</Text>
+              <Text style={[styles.label, { color: colors.textSecondary }]}>Backup Interval (Minutes)</Text>
               <TextInput
-                style={styles.input}
+                style={[styles.input, { borderColor: colors.border, backgroundColor: colors.card, color: colors.text }]}
                 placeholder="10"
+                placeholderTextColor={colors.textMuted}
                 value={formData.backupIntervalMinutes}
                 onChangeText={(value) => handleChange('backupIntervalMinutes', value)}
                 keyboardType="number-pad"
                 editable={!saving}
               />
-              <Text style={styles.hint}>
+              <Text style={[styles.hint, { color: colors.textMuted }]}>
                 How often to create automatic backups (5-60 minutes recommended)
               </Text>
             </View>
 
             <View style={styles.formGroup}>
-              <Text style={styles.label}>Retention Days</Text>
+              <Text style={[styles.label, { color: colors.textSecondary }]}>Retention Days</Text>
               <TextInput
-                style={styles.input}
+                style={[styles.input, { borderColor: colors.border, backgroundColor: colors.card, color: colors.text }]}
                 placeholder="30"
+                placeholderTextColor={colors.textMuted}
                 value={formData.retentionDays}
                 onChangeText={(value) => handleChange('retentionDays', value)}
                 keyboardType="number-pad"
                 editable={!saving}
               />
-              <Text style={styles.hint}>
+              <Text style={[styles.hint, { color: colors.textMuted }]}>
                 Keep uncompressed backups for this many days (default: 30 days)
               </Text>
             </View>
 
             <View style={styles.formGroup}>
-              <Text style={styles.label}>Auto-Archive After Days</Text>
+              <Text style={[styles.label, { color: colors.textSecondary }]}>Auto-Archive After Days</Text>
               <TextInput
-                style={styles.input}
+                style={[styles.input, { borderColor: colors.border, backgroundColor: colors.card, color: colors.text }]}
                 placeholder="14"
+                placeholderTextColor={colors.textMuted}
                 value={formData.autoArchiveAfterDays}
                 onChangeText={(value) => handleChange('autoArchiveAfterDays', value)}
                 keyboardType="number-pad"
                 editable={!saving}
               />
-              <Text style={styles.hint}>
+              <Text style={[styles.hint, { color: colors.textMuted }]}>
                 Compress old backups to ZIP after this many days (default: 14 days)
               </Text>
             </View>
-          </View>
+          </Card>
 
           {/* Twilio WhatsApp Configuration Section */}
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>💬 WhatsApp Configuration</Text>
-            <Text style={styles.sectionSubtitle}>
-              Configure Twilio sender number (🌍 Global for all admins) and test WhatsApp delivery
+          <Card variant="elevated" style={{ marginBottom: 16 }}>
+            <Text style={[styles.sectionTitle, { color: colors.text }]}>WhatsApp Configuration</Text>
+            <Text style={[styles.sectionSubtitle, { color: colors.textSecondary }]}>
+              Configure Twilio sender number (global for all admins) and test WhatsApp delivery
             </Text>
 
             <View style={styles.formGroup}>
-              <Text style={styles.label}>Twilio Sender Phone Number (FROM)</Text>
+              <Text style={[styles.label, { color: colors.textSecondary }]}>Twilio Sender Phone Number (FROM)</Text>
               <TextInput
-                style={styles.input}
+                style={[styles.input, { borderColor: colors.border, backgroundColor: colors.card, color: colors.text }]}
                 placeholder="+14155238886 (Twilio sandbox)"
+                placeholderTextColor={colors.textMuted}
                 value={formData.twilioPhoneNumber}
                 onChangeText={(value) => handleChange('twilioPhoneNumber', value)}
                 keyboardType="phone-pad"
                 autoCapitalize="none"
                 editable={!saving}
               />
-              <Text style={styles.hint}>
+              <Text style={[styles.hint, { color: colors.textMuted }]}>
                 This number sends all WhatsApp messages (sandbox: +14155238886 or your Twilio number)
               </Text>
             </View>
 
             <View style={styles.formGroup}>
-              <Text style={styles.label}>Your Phone Number (TO - for testing)</Text>
+              <Text style={[styles.label, { color: colors.textSecondary }]}>Your Phone Number (TO - for testing)</Text>
               <TextInput
-                style={styles.input}
+                style={[styles.input, { borderColor: colors.border, backgroundColor: colors.card, color: colors.text }]}
                 placeholder="+27611154598"
+                placeholderTextColor={colors.textMuted}
                 value={formData.adminPhoneNumber}
                 onChangeText={(value) => handleChange('adminPhoneNumber', value)}
                 keyboardType="phone-pad"
                 autoCapitalize="none"
                 editable={!saving}
               />
-              <Text style={styles.hint}>
+              <Text style={[styles.hint, { color: colors.textMuted }]}>
                 Your personal phone number to receive test WhatsApp messages
               </Text>
             </View>
 
-            <TouchableOpacity
-              style={[
-                styles.testWhatsAppButton,
-                (!formData.twilioPhoneNumber || !formData.adminPhoneNumber || testingWhatsApp) &&
-                  styles.buttonDisabled,
-              ]}
+            <Button
+              variant="primary"
+              style={{ backgroundColor: colors.success }}
               onPress={handleTestWhatsApp}
               disabled={!formData.twilioPhoneNumber || !formData.adminPhoneNumber || testingWhatsApp}
+              loading={testingWhatsApp}
+              fullWidth
             >
-              <Text style={styles.testWhatsAppButtonText}>
-                {testingWhatsApp ? '⏳ Sending WhatsApp...' : '💬 Send Test WhatsApp & Save Settings'}
-              </Text>
-            </TouchableOpacity>
+              Send Test WhatsApp & Save Settings
+            </Button>
             
-            <Text style={[styles.hint, { marginTop: 10, fontStyle: 'italic', color: '#666' }]}>
-              💾 Twilio credentials will be saved to database when test succeeds
+            <Text style={[styles.hint, { marginTop: 10, fontStyle: 'italic', color: colors.textMuted }]}>
+              Twilio credentials will be saved to database when test succeeds
             </Text>
-          </View>
+          </Card>
 
           {/* Info Box */}
-          <View style={styles.infoBox}>
-            <Text style={styles.infoTitle}>ℹ️ About These Settings</Text>
-            <Text style={styles.infoText}>
-              <Text style={{ fontWeight: 'bold' }}>Verification:</Text>{'\n'}
-              • New users receive verification emails/WhatsApp{'\n'}
-              • Verification links expire after the configured time{'\n'}
-              • Users cannot log in until they verify{'\n\n'}
-              <Text style={{ fontWeight: 'bold' }}>Backups:</Text>{'\n'}
-              • Automatic database backups on your schedule{'\n'}
-              • Old backups are compressed to save storage{'\n'}
-              • You can restore from any backup anytime
+          <View style={[styles.infoBox, { backgroundColor: colors.primaryLight }]}>
+            <Text style={[styles.infoTitle, { color: colors.primary }]}>About These Settings</Text>
+            <Text style={[styles.infoText, { color: colors.text }]}>
+              <Text style={{ fontFamily: 'Inter_700Bold' }}>Verification:</Text>{'\n'}
+              {'\u2022'} New users receive verification emails/WhatsApp{'\n'}
+              {'\u2022'} Verification links expire after the configured time{'\n'}
+              {'\u2022'} Users cannot log in until they verify{'\n\n'}
+              <Text style={{ fontFamily: 'Inter_700Bold' }}>Backups:</Text>{'\n'}
+              {'\u2022'} Automatic database backups on your schedule{'\n'}
+              {'\u2022'} Old backups are compressed to save storage{'\n'}
+              {'\u2022'} You can restore from any backup anytime
             </Text>
           </View>
 
           {/* Save Button */}
-          <TouchableOpacity
-            style={[
-              styles.saveButton,
-              (!hasUnsavedChanges() || saving) && styles.saveButtonDisabled,
-            ]}
+          <Button
+            variant="primary"
+            style={{ backgroundColor: hasUnsavedChanges() ? colors.success : colors.textMuted }}
             onPress={handleSave}
             disabled={!hasUnsavedChanges() || saving}
+            loading={saving}
+            fullWidth
           >
-            {saving ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <Text style={styles.saveButtonText}>
-                {hasUnsavedChanges() ? '💾 Save Changes' : '✅ No Changes'}
-              </Text>
-            )}
-          </TouchableOpacity>
+            {hasUnsavedChanges() ? 'Save Changes' : 'No Changes'}
+          </Button>
         </View>
       </ScrollView>
 
       {/* Confirmation Modal */}
-      <Modal
+      <ThemedModal
         visible={showConfirmModal}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setShowConfirmModal(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>✓ Confirm Settings Update</Text>
-            <Text style={styles.modalSubtitle}>Please review your changes</Text>
-
-            <View style={styles.confirmDetails}>
-              {formData.smtpEmail !== originalData.smtpEmail && (
-                <>
-                  <Text style={styles.confirmLabel}>Gmail Address:</Text>
-                  <Text style={styles.confirmValue}>{formData.smtpEmail || '(Not set)'}</Text>
-                </>
-              )}
-
-              {formData.smtpPassword !== originalData.smtpPassword && (
-                <>
-                  <Text style={styles.confirmLabel}>App Password:</Text>
-                  <Text style={styles.confirmValue}>
-                    {formData.smtpPassword ? '••••••••' : '(Not set)'}
-                  </Text>
-                </>
-              )}
-
-              {formData.linkValidity !== originalData.linkValidity && (
-                <>
-                  <Text style={styles.confirmLabel}>Link Validity:</Text>
-                  <Text style={styles.confirmValue}>{formData.linkValidity} minutes</Text>
-                </>
-              )}
-
-              {formData.inactivityTimeout !== originalData.inactivityTimeout && (
-                <>
-                  <Text style={styles.confirmLabel}>⏱️ Auto-Logout Timeout:</Text>
-                  <Text style={styles.confirmValue}>{formData.inactivityTimeout} minutes</Text>
-                </>
-              )}
-
-              {formData.backupIntervalMinutes !== originalData.backupIntervalMinutes && (
-                <>
-                  <Text style={styles.confirmLabel}>Backup Interval:</Text>
-                  <Text style={styles.confirmValue}>{formData.backupIntervalMinutes} minutes</Text>
-                </>
-              )}
-
-              {formData.retentionDays !== originalData.retentionDays && (
-                <>
-                  <Text style={styles.confirmLabel}>Retention Days:</Text>
-                  <Text style={styles.confirmValue}>{formData.retentionDays} days</Text>
-                </>
-              )}
-
-              {formData.autoArchiveAfterDays !== originalData.autoArchiveAfterDays && (
-                <>
-                  <Text style={styles.confirmLabel}>Auto-Archive After:</Text>
-                  <Text style={styles.confirmValue}>{formData.autoArchiveAfterDays} days</Text>
-                </>
-              )}
-
-              {formData.twilioPhoneNumber !== originalData.twilioPhoneNumber && (
-                <>
-                  <Text style={styles.confirmLabel}>Twilio Sender Phone:</Text>
-                  <Text style={styles.confirmValue}>{formData.twilioPhoneNumber || '(Not set)'}</Text>
-                </>
-              )}
-
-              {formData.adminPhoneNumber !== originalData.adminPhoneNumber && (
-                <>
-                  <Text style={styles.confirmLabel}>Your Phone Number:</Text>
-                  <Text style={styles.confirmValue}>{formData.adminPhoneNumber || '(Not set)'}</Text>
-                </>
-              )}
-            </View>
-
-            <View style={styles.modalButtons}>
-              <TouchableOpacity
-                style={[styles.modalButton, styles.modalButtonSecondary]}
-                onPress={() => setShowConfirmModal(false)}
-              >
-                <Text style={styles.modalButtonTextSecondary}>✏️ Edit</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[styles.modalButton, styles.modalButtonPrimary]}
-                onPress={confirmAndSave}
-              >
-                <Text style={styles.modalButtonTextPrimary}>✓ Confirm & Save</Text>
-              </TouchableOpacity>
-            </View>
+        onClose={() => setShowConfirmModal(false)}
+        title="Confirm Settings Update"
+        footer={
+          <View style={styles.modalButtons}>
+            <Button variant="secondary" onPress={() => setShowConfirmModal(false)} style={{ flex: 1 }}>
+              Edit
+            </Button>
+            <Button variant="primary" onPress={confirmAndSave} style={{ flex: 1, backgroundColor: colors.success }}>
+              Confirm & Save
+            </Button>
           </View>
+        }
+      >
+        <Text style={[styles.modalSubtitle, { color: colors.textSecondary }]}>Please review your changes</Text>
+
+        <View style={[styles.confirmDetails, { backgroundColor: colors.backgroundSecondary }]}>
+          {formData.smtpEmail !== originalData.smtpEmail && (
+            <>
+              <Text style={[styles.confirmLabel, { color: colors.textMuted }]}>Gmail Address:</Text>
+              <Text style={[styles.confirmValue, { color: colors.text }]}>{formData.smtpEmail || '(Not set)'}</Text>
+            </>
+          )}
+
+          {formData.smtpPassword !== originalData.smtpPassword && (
+            <>
+              <Text style={[styles.confirmLabel, { color: colors.textMuted }]}>App Password:</Text>
+              <Text style={[styles.confirmValue, { color: colors.text }]}>
+                {formData.smtpPassword ? '\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022' : '(Not set)'}
+              </Text>
+            </>
+          )}
+
+          {formData.linkValidity !== originalData.linkValidity && (
+            <>
+              <Text style={[styles.confirmLabel, { color: colors.textMuted }]}>Link Validity:</Text>
+              <Text style={[styles.confirmValue, { color: colors.text }]}>{formData.linkValidity} minutes</Text>
+            </>
+          )}
+
+          {formData.inactivityTimeout !== originalData.inactivityTimeout && (
+            <>
+              <Text style={[styles.confirmLabel, { color: colors.textMuted }]}>Auto-Logout Timeout:</Text>
+              <Text style={[styles.confirmValue, { color: colors.text }]}>{formData.inactivityTimeout} minutes</Text>
+            </>
+          )}
+
+          {formData.backupIntervalMinutes !== originalData.backupIntervalMinutes && (
+            <>
+              <Text style={[styles.confirmLabel, { color: colors.textMuted }]}>Backup Interval:</Text>
+              <Text style={[styles.confirmValue, { color: colors.text }]}>{formData.backupIntervalMinutes} minutes</Text>
+            </>
+          )}
+
+          {formData.retentionDays !== originalData.retentionDays && (
+            <>
+              <Text style={[styles.confirmLabel, { color: colors.textMuted }]}>Retention Days:</Text>
+              <Text style={[styles.confirmValue, { color: colors.text }]}>{formData.retentionDays} days</Text>
+            </>
+          )}
+
+          {formData.autoArchiveAfterDays !== originalData.autoArchiveAfterDays && (
+            <>
+              <Text style={[styles.confirmLabel, { color: colors.textMuted }]}>Auto-Archive After:</Text>
+              <Text style={[styles.confirmValue, { color: colors.text }]}>{formData.autoArchiveAfterDays} days</Text>
+            </>
+          )}
+
+          {formData.twilioPhoneNumber !== originalData.twilioPhoneNumber && (
+            <>
+              <Text style={[styles.confirmLabel, { color: colors.textMuted }]}>Twilio Sender Phone:</Text>
+              <Text style={[styles.confirmValue, { color: colors.text }]}>{formData.twilioPhoneNumber || '(Not set)'}</Text>
+            </>
+          )}
+
+          {formData.adminPhoneNumber !== originalData.adminPhoneNumber && (
+            <>
+              <Text style={[styles.confirmLabel, { color: colors.textMuted }]}>Your Phone Number:</Text>
+              <Text style={[styles.confirmValue, { color: colors.text }]}>{formData.adminPhoneNumber || '(Not set)'}</Text>
+            </>
+          )}
         </View>
-      </Modal>
+      </ThemedModal>
 
       {/* Unsaved Changes Modal */}
-      <Modal
+      <ThemedModal
         visible={showUnsavedModal}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setShowUnsavedModal(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitleWarning}>Unsaved Changes</Text>
-            <Text style={styles.modalSubtitle}>
-              You have unsaved changes. Do you want to discard them?
-            </Text>
-
-            <View style={styles.modalButtons}>
-              <TouchableOpacity
-                style={[styles.modalButton, styles.modalButtonSecondary]}
-                onPress={() => setShowUnsavedModal(false)}
-              >
-                <Text style={styles.modalButtonTextSecondary}>Stay</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[styles.modalButton, styles.modalButtonDanger]}
-                onPress={() => {
-                  setShowUnsavedModal(false);
-                  const action = pendingNavActionRef.current;
-                  pendingNavActionRef.current = null;
-                  if (action) {
-                    navigation.dispatch(action);
-                  }
-                }}
-              >
-                <Text style={styles.modalButtonTextPrimary}>Discard Changes</Text>
-              </TouchableOpacity>
-            </View>
+        onClose={() => setShowUnsavedModal(false)}
+        title="Unsaved Changes"
+        footer={
+          <View style={styles.modalButtons}>
+            <Button variant="secondary" onPress={() => setShowUnsavedModal(false)} style={{ flex: 1 }}>
+              Stay
+            </Button>
+            <Button
+              variant="danger"
+              onPress={() => {
+                setShowUnsavedModal(false);
+                const action = pendingNavActionRef.current;
+                pendingNavActionRef.current = null;
+                if (action) {
+                  navigation.dispatch(action);
+                }
+              }}
+              style={{ flex: 1 }}
+            >
+              Discard Changes
+            </Button>
           </View>
-        </View>
-      </Modal>
+        }
+      >
+        <Text style={[styles.modalSubtitle, { color: colors.textSecondary }]}>
+          You have unsaved changes. Do you want to discard them?
+        </Text>
+      </ThemedModal>
     </View>
   );
 }
@@ -751,7 +707,6 @@ export default function AdminSettingsScreen({ navigation }: any) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8F9FA',
   },
   scrollContent: {
     flex: 1,
@@ -760,47 +715,23 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#F8F9FA',
   },
   loadingText: {
     marginTop: 12,
     fontSize: Platform.OS === 'web' ? 16 : 14,
-    color: '#6C757D',
-  },
-  header: {
-    backgroundColor: '#fff',
-    padding: Platform.OS === 'web' ? 24 : 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E9ECEF',
-  },
-  title: {
-    fontSize: Platform.OS === 'web' ? 32 : 24,
-    fontWeight: 'bold',
-    color: '#212529',
-    marginBottom: 8,
-  },
-  subtitle: {
-    fontSize: Platform.OS === 'web' ? 16 : 14,
-    color: '#6C757D',
+    fontFamily: 'Inter_400Regular',
   },
   content: {
     padding: Platform.OS === 'web' ? 24 : 16,
   },
-  section: {
-    backgroundColor: '#fff',
-    borderRadius: 8,
-    padding: Platform.OS === 'web' ? 20 : 16,
-    marginBottom: 16,
-  },
   sectionTitle: {
     fontSize: Platform.OS === 'web' ? 20 : 18,
-    fontWeight: '600',
-    color: '#212529',
+    fontFamily: 'Inter_600SemiBold',
     marginBottom: 8,
   },
   sectionSubtitle: {
     fontSize: Platform.OS === 'web' ? 14 : 13,
-    color: '#6C757D',
+    fontFamily: 'Inter_400Regular',
     marginBottom: 20,
   },
   formGroup: {
@@ -808,191 +739,92 @@ const styles = StyleSheet.create({
   },
   label: {
     fontSize: Platform.OS === 'web' ? 14 : 13,
-    fontWeight: '500',
-    color: '#495057',
+    fontFamily: 'Inter_500Medium',
     marginBottom: 8,
   },
   input: {
     borderWidth: 1,
-    borderColor: '#CED4DA',
-    borderRadius: 6,
+    borderRadius: 8,
     padding: Platform.OS === 'web' ? 12 : 10,
     fontSize: Platform.OS === 'web' ? 16 : 14,
-    backgroundColor: '#fff',
+    fontFamily: 'Inter_400Regular',
   },
   passwordContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#CED4DA',
-    borderRadius: 6,
-    backgroundColor: '#fff',
+    borderRadius: 8,
   },
   passwordInput: {
     flex: 1,
     padding: Platform.OS === 'web' ? 12 : 10,
     fontSize: Platform.OS === 'web' ? 16 : 14,
+    fontFamily: 'Inter_400Regular',
   },
   eyeButton: {
     padding: Platform.OS === 'web' ? 12 : 10,
   },
   eyeIcon: {
-    fontSize: 20,
+    fontSize: Platform.OS === 'web' ? 14 : 12,
+    fontFamily: 'Inter_600SemiBold',
   },
   hint: {
     fontSize: Platform.OS === 'web' ? 12 : 11,
-    color: '#6C757D',
+    fontFamily: 'Inter_400Regular',
     marginTop: 4,
   },
   testEmailSection: {
     marginTop: 24,
     paddingTop: 24,
     borderTopWidth: 1,
-    borderTopColor: '#E9ECEF',
   },
   testEmailTitle: {
     fontSize: Platform.OS === 'web' ? 16 : 15,
-    fontWeight: '600',
-    color: '#212529',
+    fontFamily: 'Inter_600SemiBold',
     marginBottom: 4,
   },
   testEmailSubtitle: {
     fontSize: Platform.OS === 'web' ? 13 : 12,
-    color: '#6C757D',
+    fontFamily: 'Inter_400Regular',
     marginBottom: 16,
   },
-  testButton: {
-    backgroundColor: '#6C757D',
-    borderRadius: 6,
-    padding: Platform.OS === 'web' ? 14 : 12,
-    alignItems: 'center',
-  },
-  testButtonDisabled: {
-    opacity: 0.6,
-  },
-  testButtonText: {
-    color: '#fff',
-    fontSize: Platform.OS === 'web' ? 16 : 14,
-    fontWeight: '600',
-  },
-  testWhatsAppButton: {
-    backgroundColor: '#25D366',
-    borderRadius: 6,
-    padding: Platform.OS === 'web' ? 14 : 12,
-    alignItems: 'center',
-    marginTop: 16,
-  },
-  testWhatsAppButtonText: {
-    color: '#fff',
-    fontSize: Platform.OS === 'web' ? 16 : 14,
-    fontWeight: '600',
-  },
   infoBox: {
-    backgroundColor: '#E7F3FF',
     borderRadius: 8,
     padding: Platform.OS === 'web' ? 16 : 14,
     marginBottom: 24,
   },
   infoTitle: {
     fontSize: Platform.OS === 'web' ? 14 : 13,
-    fontWeight: '600',
-    color: '#0056B3',
+    fontFamily: 'Inter_600SemiBold',
     marginBottom: 8,
   },
   infoText: {
     fontSize: Platform.OS === 'web' ? 13 : 12,
-    color: '#004085',
+    fontFamily: 'Inter_400Regular',
     lineHeight: 20,
-  },
-  saveButton: {
-    backgroundColor: '#28A745',
-    borderRadius: 6,
-    padding: Platform.OS === 'web' ? 16 : 14,
-    alignItems: 'center',
-  },
-  saveButtonDisabled: {
-    opacity: 0.6,
-  },
-  saveButtonText: {
-    color: '#fff',
-    fontSize: Platform.OS === 'web' ? 18 : 16,
-    fontWeight: '600',
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: Platform.OS === 'web' ? 20 : 10,
-  },
-  modalContent: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: Platform.OS === 'web' ? 32 : 24,
-    width: Platform.OS === 'web' ? '45%' : '92%',
-    maxWidth: 550,
-  },
-  modalTitle: {
-    fontSize: Platform.OS === 'web' ? 20 : 18,
-    fontWeight: 'bold',
-    color: '#28A745',
-    marginBottom: 8,
-  },
-  modalTitleWarning: {
-    fontSize: Platform.OS === 'web' ? 20 : 18,
-    fontWeight: 'bold',
-    color: '#DC3545',
-    marginBottom: 8,
   },
   modalSubtitle: {
     fontSize: Platform.OS === 'web' ? 14 : 13,
-    color: '#6C757D',
+    fontFamily: 'Inter_400Regular',
     marginBottom: 20,
   },
   confirmDetails: {
-    backgroundColor: '#F8F9FA',
     borderRadius: 8,
     padding: Platform.OS === 'web' ? 16 : 14,
     marginBottom: 20,
   },
   confirmLabel: {
     fontSize: Platform.OS === 'web' ? 12 : 11,
-    fontWeight: '600',
-    color: '#6C757D',
+    fontFamily: 'Inter_600SemiBold',
     marginTop: 8,
     marginBottom: 4,
   },
   confirmValue: {
     fontSize: Platform.OS === 'web' ? 14 : 13,
-    color: '#212529',
+    fontFamily: 'Inter_500Medium',
   },
   modalButtons: {
     flexDirection: 'row',
     gap: 12,
-  },
-  modalButton: {
-    flex: 1,
-    padding: Platform.OS === 'web' ? 14 : 12,
-    borderRadius: 6,
-    alignItems: 'center',
-  },
-  modalButtonSecondary: {
-    backgroundColor: '#6C757D',
-  },
-  modalButtonPrimary: {
-    backgroundColor: '#28A745',
-  },
-  modalButtonDanger: {
-    backgroundColor: '#DC3545',
-  },
-  modalButtonTextSecondary: {
-    color: '#fff',
-    fontSize: Platform.OS === 'web' ? 16 : 14,
-    fontWeight: '600',
-  },
-  modalButtonTextPrimary: {
-    color: '#fff',
-    fontSize: Platform.OS === 'web' ? 16 : 14,
-    fontWeight: '600',
   },
 });

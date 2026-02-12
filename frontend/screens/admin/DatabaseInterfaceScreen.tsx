@@ -12,12 +12,13 @@ import {
   Text,
   StyleSheet,
   Platform,
-  TouchableOpacity,
+  Pressable,
   TextInput,
-  Modal,
   ActivityIndicator,
-  TouchableWithoutFeedback,
 } from 'react-native';
+import { useTheme } from '../../theme/ThemeContext';
+import ThemedModal from '../../components/ui/Modal';
+import { Button } from '../../components/ui';
 import { useQuery, useQueryClient, QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { useNavigation } from '@react-navigation/native';
@@ -59,6 +60,7 @@ interface TableState {
 }
 
 const DatabaseInterfaceScreen = ({ navigation }: any) => {
+  const { colors } = useTheme();
   const scrollViewRef = useRef<ScrollView>(null);
   const platformDetection = useWindowsDetection();
   const isDeletableTab = (tab: TabType): tab is DeletableTab => tab !== 'reviews' && tab !== 'schedules';
@@ -458,7 +460,7 @@ const DatabaseInterfaceScreen = ({ navigation }: any) => {
     setShowEditModal(false);
     setSelectedRecord(null);
     setSelectedRecordETag('');
-    setSuccessMessage(`✅ ${activeTab} record updated successfully`);
+    setSuccessMessage(`${activeTab} record updated successfully`);
     
     // Auto-dismiss success message
     setTimeout(() => setSuccessMessage(null), 4000);
@@ -491,7 +493,7 @@ const DatabaseInterfaceScreen = ({ navigation }: any) => {
     setShowDeleteModal(false);
     setSelectedDeleteRecord(null);
     setSelectedDeleteETag('');
-    setSuccessMessage(`✅ ${message}`);
+    setSuccessMessage(`${message}`);
 
     setTimeout(() => setSuccessMessage(null), 4000);
 
@@ -659,7 +661,7 @@ const DatabaseInterfaceScreen = ({ navigation }: any) => {
       
       // Show success message
       scrollViewRef.current?.scrollTo({ y: 0, animated: true });
-      setSuccessMessage(`✅ ${response.message}`);
+      setSuccessMessage(`${response.message}`);
       
       // Close menu and clear selections
       setBulkActionMenuVisible(false);
@@ -719,7 +721,7 @@ const DatabaseInterfaceScreen = ({ navigation }: any) => {
 
     // Add metadata header
     const now = new Date().toISOString();
-    const metadata = `# Exported from Drive Alive Database Interface\\n# Date: ${now}\\n# Table: ${activeTab}\\n# Total Records: ${currentData.length}\\n\\n`;
+    const metadata = `# Exported from RoadReady Database Interface\\n# Date: ${now}\\n# Table: ${activeTab}\\n# Total Records: ${currentData.length}\\n\\n`;
     csvContent = metadata + csvContent;
 
     // Download file
@@ -727,13 +729,13 @@ const DatabaseInterfaceScreen = ({ navigation }: any) => {
     const link = document.createElement('a');
     const url = URL.createObjectURL(blob);
     link.setAttribute('href', url);
-    link.setAttribute('download', `drive_alive_${activeTab}_${new Date().toISOString().split('T')[0]}.csv`);
+    link.setAttribute('download', `roadready_${activeTab}_${new Date().toISOString().split('T')[0]}.csv`);
     link.style.visibility = 'hidden';
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
 
-    setSuccessMessage(`✅ Exported ${currentData.length} ${activeTab} records to CSV`);
+    setSuccessMessage(`Exported ${currentData.length} ${activeTab} records to CSV`);
   };
 
   // Export to Excel (XLSX)
@@ -752,7 +754,7 @@ const DatabaseInterfaceScreen = ({ navigation }: any) => {
       const worksheet = workbook.addWorksheet(activeTab.toUpperCase());
 
       // Add metadata
-      worksheet.addRow(['Drive Alive Database Export']);
+      worksheet.addRow(['RoadReady Database Export']);
       worksheet.addRow(['Export Date:', new Date().toISOString()]);
       worksheet.addRow(['Table:', activeTab]);
       worksheet.addRow(['Total Records:', currentData.length]);
@@ -791,13 +793,13 @@ const DatabaseInterfaceScreen = ({ navigation }: any) => {
       const link = document.createElement('a');
       const url = URL.createObjectURL(blob);
       link.setAttribute('href', url);
-      link.setAttribute('download', `drive_alive_${activeTab}_${new Date().toISOString().split('T')[0]}.xlsx`);
+      link.setAttribute('download', `roadready_${activeTab}_${new Date().toISOString().split('T')[0]}.xlsx`);
       link.style.visibility = 'hidden';
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
 
-      setSuccessMessage(`✅ Exported ${currentData.length} ${activeTab} records to Excel`);
+      setSuccessMessage(`Exported ${currentData.length} ${activeTab} records to Excel`);
     } catch (error) {
       setErrorMessage('Failed to export Excel file');
       console.error('Excel export error:', error);
@@ -820,7 +822,7 @@ const DatabaseInterfaceScreen = ({ navigation }: any) => {
       
       // Add metadata
       doc.setFontSize(16);
-      doc.text('Drive Alive Database Export', 14, 20);
+      doc.text('RoadReady Database Export', 14, 20);
       
       doc.setFontSize(10);
       doc.text(`Export Date: ${new Date().toISOString()}`, 14, 30);
@@ -853,9 +855,9 @@ const DatabaseInterfaceScreen = ({ navigation }: any) => {
       });
 
       // Download
-      doc.save(`drive_alive_${activeTab}_${new Date().toISOString().split('T')[0]}.pdf`);
+      doc.save(`roadready_${activeTab}_${new Date().toISOString().split('T')[0]}.pdf`);
 
-      setSuccessMessage(`✅ Exported ${currentData.length} ${activeTab} records to PDF`);
+      setSuccessMessage(`Exported ${currentData.length} ${activeTab} records to PDF`);
     } catch (error) {
       setErrorMessage('Failed to export PDF file');
       console.error('PDF export error:', error);
@@ -877,11 +879,11 @@ const DatabaseInterfaceScreen = ({ navigation }: any) => {
         const url = window.URL.createObjectURL(new Blob([response.data]));
         const link = document.createElement('a');
         link.href = url;
-        link.setAttribute('download', `drive_alive_backup_${new Date().toISOString().split('T')[0]}.json`);
+        link.setAttribute('download', `roadready_backup_${new Date().toISOString().split('T')[0]}.json`);
         document.body.appendChild(link);
         link.click();
         link.remove();
-        setSuccessMessage('✅ Database backup downloaded successfully!');
+        setSuccessMessage('Database backup downloaded successfully!');
       }
       
       setShowDbModal(false);
@@ -902,7 +904,8 @@ const DatabaseInterfaceScreen = ({ navigation }: any) => {
       await apiService.logout();
       
       setShowDbModal(false);
-      alert('✅ Database reset successfully! Please create a new admin account.');
+      scrollViewRef.current?.scrollTo({ y: 0, animated: true });
+      setSuccessMessage('Database reset successfully! Please create a new admin account.');
       
       if (Platform.OS === 'web') {
         window.location.href = '/';
@@ -933,7 +936,7 @@ const DatabaseInterfaceScreen = ({ navigation }: any) => {
               const fileContent = event.target?.result as string;
               const blob = new Blob([fileContent], { type: 'application/json' });
               await apiService.restoreDatabase(blob);
-              setSuccessMessage('✅ Database restored successfully!');
+              setSuccessMessage('Database restored successfully!');
               setShowDbModal(false);
               // Refresh current table
               if (activeTab === 'users') fetchUsers(1);
@@ -1127,24 +1130,24 @@ const DatabaseInterfaceScreen = ({ navigation }: any) => {
   // Platform check - show access denied
   if (!platformDetection.isPlatformAllowed) {
     return (
-      <View style={styles.container}>
+      <View style={[styles.container, { backgroundColor: colors.background }]}>
         <WebNavigationHeader title="Database Interface" onBack={() => navigation.goBack()} showBackButton={true} />
         
         <View style={styles.accessDeniedContainer}>
-          <Text style={styles.accessDeniedIcon}>🚫</Text>
-          <Text style={styles.accessDeniedTitle}>Access Denied</Text>
-          <Text style={styles.accessDeniedMessage}>{platformDetection.platformWarning}</Text>
+          <Text style={styles.accessDeniedIcon}></Text>
+          <Text style={[styles.accessDeniedTitle, { color: colors.danger }]}>Access Denied</Text>
+          <Text style={[styles.accessDeniedMessage, { color: colors.textSecondary }]}>{platformDetection.platformWarning}</Text>
           
-          <View style={styles.platformInfo}>
-            <Text style={styles.platformInfoTitle}>Supported Platforms:</Text>
-            <Text style={styles.platformInfoText}>✅ Windows 10/11</Text>
-            <Text style={styles.platformInfoText}>✅ Chrome, Edge, Firefox</Text>
-            <Text style={styles.platformInfoText}>✅ Minimum resolution: 1366x768</Text>
+          <View style={[styles.platformInfo, { backgroundColor: colors.warningBg }]}>
+            <Text style={[styles.platformInfoTitle, { color: colors.text }]}>Supported Platforms:</Text>
+            <Text style={[styles.platformInfoText, { color: colors.textSecondary }]}>Windows 10/11</Text>
+            <Text style={[styles.platformInfoText, { color: colors.textSecondary }]}>Chrome, Edge, Firefox</Text>
+            <Text style={[styles.platformInfoText, { color: colors.textSecondary }]}>Minimum resolution: 1366x768</Text>
             
-            <Text style={[styles.platformInfoTitle, { marginTop: 16 }]}>Your System:</Text>
-            <Text style={styles.platformInfoText}>OS: {platformDetection.isWindows ? 'Windows' : 'Other'}</Text>
-            <Text style={styles.platformInfoText}>Device: {platformDetection.isMobile ? 'Mobile' : platformDetection.isTablet ? 'Tablet' : 'Desktop'}</Text>
-            <Text style={styles.platformInfoText}>Browser: {platformDetection.browserName}</Text>
+            <Text style={[styles.platformInfoTitle, { marginTop: 16, color: colors.text }]}>Your System:</Text>
+            <Text style={[styles.platformInfoText, { color: colors.textSecondary }]}>OS: {platformDetection.isWindows ? 'Windows' : 'Other'}</Text>
+            <Text style={[styles.platformInfoText, { color: colors.textSecondary }]}>Device: {platformDetection.isMobile ? 'Mobile' : platformDetection.isTablet ? 'Tablet' : 'Desktop'}</Text>
+            <Text style={[styles.platformInfoText, { color: colors.textSecondary }]}>Browser: {platformDetection.browserName}</Text>
           </View>
         </View>
       </View>
@@ -1153,53 +1156,53 @@ const DatabaseInterfaceScreen = ({ navigation }: any) => {
 
   // Main interface
   return (
-    <View style={styles.container}>
-      <WebNavigationHeader title="🗄️ Database Interface" onBack={() => navigation.goBack()} showBackButton={true} />
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
+      <WebNavigationHeader title="Database Interface" onBack={() => navigation.goBack()} showBackButton={true} />
 
       <ScrollView ref={scrollViewRef} style={styles.content}>
         {/* Success/Error Messages */}
         {successMessage && (
-          <View style={styles.successMessage}>
-            <Text style={styles.messageText}>✅ {successMessage}</Text>
+          <View style={[styles.successMessage, { backgroundColor: colors.successBg, borderColor: colors.success }]}>
+            <Text style={[styles.messageText, { color: colors.text }]}>{successMessage}</Text>
           </View>
         )}
         {errorMessage && (
-          <View style={styles.errorMessage}>
-            <Text style={styles.messageText}>❌ {errorMessage}</Text>
+          <View style={[styles.errorMessage, { backgroundColor: colors.dangerBg, borderColor: colors.danger }]}>
+            <Text style={[styles.messageText, { color: colors.text }]}>{errorMessage}</Text>
           </View>
         )}
 
         {/* Main Admin Protection Info (Users tab only) */}
         {activeTab === 'users' && (
-          <View style={styles.infoMessage}>
-            <Text style={styles.messageText}>
-              ℹ️ The original admin account (ID: 1, marked with 🛡️) cannot be suspended. 
+          <View style={[styles.infoMessage, { backgroundColor: colors.primaryLight, borderColor: colors.primary }]}>
+            <Text style={[styles.messageText, { color: colors.text }]}>
+              The original admin account (ID: 1) cannot be suspended. 
               You can still delete Student/Instructor profiles but the Admin role is protected.
             </Text>
           </View>
         )}
 
         {/* Tab Navigation */}
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.tabNavigation}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={[styles.tabNavigation, { borderBottomColor: colors.border }]}>
           {(['users', 'instructors', 'students', 'bookings', 'reviews', 'schedules'] as TabType[]).map((tab) => (
-            <TouchableOpacity
+            <Pressable
               key={tab}
-              style={[styles.tab, activeTab === tab && styles.tabActive]}
+              style={[styles.tab, activeTab === tab && { borderBottomColor: colors.primary }]}
               onPress={() => setActiveTab(tab)}
             >
-              <Text style={[styles.tabText, activeTab === tab && styles.tabTextActive]}>
+              <Text style={[styles.tabText, { color: colors.textSecondary }, activeTab === tab && { color: colors.primary, fontWeight: '600' }]}>
                 {tab.charAt(0).toUpperCase() + tab.slice(1)}
               </Text>
-            </TouchableOpacity>
+            </Pressable>
           ))}
         </ScrollView>
 
         {/* Search & Filter */}
         <View style={styles.filterSection}>
           <TextInput
-            style={styles.searchInput}
-            placeholder="🔍 Search..."
-            placeholderTextColor="#999"
+            style={[styles.searchInput, { backgroundColor: colors.card, borderColor: colors.border, color: colors.text }]}
+            placeholder="Search..."
+            placeholderTextColor={colors.inputPlaceholder}
             accessibilityLabel="Search database records"
             accessibilityHint="Type to search and results will update after 300ms"
             value={activeTab === 'users' ? usersTable.search :
@@ -1211,33 +1214,33 @@ const DatabaseInterfaceScreen = ({ navigation }: any) => {
 
           {activeTab === 'users' && (
             <View style={styles.filterRow}>
-              <Text style={styles.filterLabel}>Role</Text>
+              <Text style={[styles.filterLabel, { color: colors.textSecondary }]}>Role</Text>
               <View style={styles.filterChips}>
                 {(['ALL', 'ADMIN', 'INSTRUCTOR', 'STUDENT'] as const).map((role) => (
-                  <TouchableOpacity
+                  <Pressable
                     key={role}
-                    style={[styles.filterChip, userRoleFilter === role && styles.filterChipActive]}
+                    style={[styles.filterChip, { borderColor: colors.border, backgroundColor: colors.card }, userRoleFilter === role && { borderColor: colors.primary, backgroundColor: colors.primaryLight }]}
                     onPress={() => setUserRoleFilter(role)}
                   >
-                    <Text style={[styles.filterChipText, userRoleFilter === role && styles.filterChipTextActive]}>
+                    <Text style={[styles.filterChipText, { color: colors.textSecondary }, userRoleFilter === role && { color: colors.primary }]}>
                       {role}
                     </Text>
-                  </TouchableOpacity>
+                  </Pressable>
                 ))}
               </View>
 
-              <Text style={styles.filterLabel}>Status</Text>
+              <Text style={[styles.filterLabel, { color: colors.textSecondary }]}>Status</Text>
               <View style={styles.filterChips}>
                 {(['ALL', 'ACTIVE', 'INACTIVE', 'SUSPENDED'] as const).map((status) => (
-                  <TouchableOpacity
+                  <Pressable
                     key={status}
-                    style={[styles.filterChip, userStatusFilter === status && styles.filterChipActive]}
+                    style={[styles.filterChip, { borderColor: colors.border, backgroundColor: colors.card }, userStatusFilter === status && { borderColor: colors.primary, backgroundColor: colors.primaryLight }]}
                     onPress={() => setUserStatusFilter(status)}
                   >
-                    <Text style={[styles.filterChipText, userStatusFilter === status && styles.filterChipTextActive]}>
+                    <Text style={[styles.filterChipText, { color: colors.textSecondary }, userStatusFilter === status && { color: colors.primary }]}>
                       {status}
                     </Text>
-                  </TouchableOpacity>
+                  </Pressable>
                 ))}
               </View>
             </View>
@@ -1245,18 +1248,18 @@ const DatabaseInterfaceScreen = ({ navigation }: any) => {
 
           {activeTab === 'instructors' && (
             <View style={styles.filterRow}>
-              <Text style={styles.filterLabel}>Verified</Text>
+              <Text style={[styles.filterLabel, { color: colors.textSecondary }]}>Verified</Text>
               <View style={styles.filterChips}>
                 {(['ALL', 'VERIFIED', 'UNVERIFIED'] as const).map((status) => (
-                  <TouchableOpacity
+                  <Pressable
                     key={status}
-                    style={[styles.filterChip, instructorVerifiedFilter === status && styles.filterChipActive]}
+                    style={[styles.filterChip, { borderColor: colors.border, backgroundColor: colors.card }, instructorVerifiedFilter === status && { borderColor: colors.primary, backgroundColor: colors.primaryLight }]}
                     onPress={() => setInstructorVerifiedFilter(status)}
                   >
-                    <Text style={[styles.filterChipText, instructorVerifiedFilter === status && styles.filterChipTextActive]}>
+                    <Text style={[styles.filterChipText, { color: colors.textSecondary }, instructorVerifiedFilter === status && { color: colors.primary }]}>
                       {status}
                     </Text>
-                  </TouchableOpacity>
+                  </Pressable>
                 ))}
               </View>
             </View>
@@ -1264,66 +1267,68 @@ const DatabaseInterfaceScreen = ({ navigation }: any) => {
 
           {activeTab === 'bookings' && (
             <View style={styles.filterRow}>
-              <Text style={styles.filterLabel}>Booking Status</Text>
+              <Text style={[styles.filterLabel, { color: colors.textSecondary }]}>Booking Status</Text>
               <View style={styles.filterChips}>
                 {(['ALL', 'PENDING', 'CONFIRMED', 'COMPLETED', 'CANCELLED'] as const).map((status) => (
-                  <TouchableOpacity
+                  <Pressable
                     key={status}
-                    style={[styles.filterChip, bookingStatusFilter === status && styles.filterChipActive]}
+                    style={[styles.filterChip, { borderColor: colors.border, backgroundColor: colors.card }, bookingStatusFilter === status && { borderColor: colors.primary, backgroundColor: colors.primaryLight }]}
                     onPress={() => setBookingStatusFilter(status)}
                   >
-                    <Text style={[styles.filterChipText, bookingStatusFilter === status && styles.filterChipTextActive]}>
+                    <Text style={[styles.filterChipText, { color: colors.textSecondary }, bookingStatusFilter === status && { color: colors.primary }]}>
                       {status}
                     </Text>
-                  </TouchableOpacity>
+                  </Pressable>
                 ))}
               </View>
 
-              <Text style={styles.filterLabel}>Payment Status</Text>
+              <Text style={[styles.filterLabel, { color: colors.textSecondary }]}>Payment Status</Text>
               <View style={styles.filterChips}>
                 {(['ALL', 'PENDING', 'PAID', 'FAILED', 'REFUNDED'] as const).map((status) => (
-                  <TouchableOpacity
+                  <Pressable
                     key={status}
-                    style={[styles.filterChip, bookingPaymentFilter === status && styles.filterChipActive]}
+                    style={[styles.filterChip, { borderColor: colors.border, backgroundColor: colors.card }, bookingPaymentFilter === status && { borderColor: colors.primary, backgroundColor: colors.primaryLight }]}
                     onPress={() => setBookingPaymentFilter(status)}
                   >
-                    <Text style={[styles.filterChipText, bookingPaymentFilter === status && styles.filterChipTextActive]}>
+                    <Text style={[styles.filterChipText, { color: colors.textSecondary }, bookingPaymentFilter === status && { color: colors.primary }]}>
                       {status}
                     </Text>
-                  </TouchableOpacity>
+                  </Pressable>
                 ))}
               </View>
 
-              <Text style={styles.filterLabel}>Date Range</Text>
+              <Text style={[styles.filterLabel, { color: colors.textSecondary }]}>Date Range</Text>
               <View style={styles.dateRangeContainer}>
                 <View style={styles.dateInputWrapper}>
-                  <Text style={styles.dateInputLabel}>From:</Text>
+                  <Text style={[styles.dateInputLabel, { color: colors.text }]}>From:</Text>
                   <TextInput
-                    style={styles.dateInput}
+                    style={[styles.dateInput, { borderColor: colors.border, backgroundColor: colors.card, color: colors.text }]}
                     placeholder="YYYY-MM-DD"
+                    placeholderTextColor={colors.inputPlaceholder}
                     value={bookingStartDate}
                     onChangeText={setBookingStartDate}
                   />
                 </View>
                 <View style={styles.dateInputWrapper}>
-                  <Text style={styles.dateInputLabel}>To:</Text>
+                  <Text style={[styles.dateInputLabel, { color: colors.text }]}>To:</Text>
                   <TextInput
-                    style={styles.dateInput}
+                    style={[styles.dateInput, { borderColor: colors.border, backgroundColor: colors.card, color: colors.text }]}
                     placeholder="YYYY-MM-DD"
+                    placeholderTextColor={colors.inputPlaceholder}
                     value={bookingEndDate}
                     onChangeText={setBookingEndDate}
                   />
                 </View>
                 {(bookingStartDate || bookingEndDate) && (
-                  <TouchableOpacity
-                    style={styles.clearDatesButton}
+                  <Pressable
+                    style={[styles.clearDatesButton, { backgroundColor: colors.textSecondary }]}
                     onPress={() => {
                       setBookingStartDate('');
                       setBookingEndDate('');
                     }}
                   >
-                    <Text style={styles.clearDatesText}>✕ Clear</Text>
-                  </TouchableOpacity>
+                    <Text style={styles.clearDatesText}>Clear</Text>
+                  </Pressable>
                 )}
               </View>
             </View>
@@ -1331,41 +1336,41 @@ const DatabaseInterfaceScreen = ({ navigation }: any) => {
         </View>
 
         {/* PHASE 4: Export Toolbar & Bulk Operations */}
-        <View style={styles.toolbarSection}>
+        <View style={[styles.toolbarSection, { backgroundColor: colors.card }]}>
           {/* Export Buttons */}
           <View style={styles.exportButtons}>
-            <Text style={styles.toolbarTitle}>📥 Export:</Text>
-            <TouchableOpacity
-              style={styles.exportButton}
+            <Text style={[styles.toolbarTitle, { color: colors.text }]}>Export:</Text>
+            <Pressable
+              style={[styles.exportButton, { backgroundColor: colors.success }]}
               onPress={exportToCSV}
               accessibilityRole="button"
               accessibilityLabel="Export to CSV"
             >
-              <Text style={styles.exportButtonText}>📄 CSV</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.exportButton}
+              <Text style={styles.exportButtonText}>CSV</Text>
+            </Pressable>
+            <Pressable
+              style={[styles.exportButton, { backgroundColor: colors.success }]}
               onPress={exportToExcel}
               accessibilityRole="button"
               accessibilityLabel="Export to Excel"
             >
-              <Text style={styles.exportButtonText}>📊 Excel</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.exportButton}
+              <Text style={styles.exportButtonText}>Excel</Text>
+            </Pressable>
+            <Pressable
+              style={[styles.exportButton, { backgroundColor: colors.success }]}
               onPress={exportToPDF}
               accessibilityRole="button"
               accessibilityLabel="Export to PDF"
             >
-              <Text style={styles.exportButtonText}>📑 PDF</Text>
-            </TouchableOpacity>
+              <Text style={styles.exportButtonText}>PDF</Text>
+            </Pressable>
           </View>
 
           {/* Database Management Buttons */}
           <View style={styles.exportButtons}>
-            <Text style={styles.toolbarTitle}>💾 Database:</Text>
-            <TouchableOpacity
-              style={[styles.exportButton, styles.dbBackupButton]}
+            <Text style={[styles.toolbarTitle, { color: colors.text }]}>Database:</Text>
+            <Pressable
+              style={[styles.exportButton, { backgroundColor: colors.primary }]}
               onPress={handleBackupDatabase}
               disabled={!!dbAction}
               accessibilityRole="button"
@@ -1374,11 +1379,11 @@ const DatabaseInterfaceScreen = ({ navigation }: any) => {
               {dbAction === 'backup' ? (
                 <ActivityIndicator color="#fff" size="small" />
               ) : (
-                <Text style={styles.exportButtonText}>📥 Backup to PC</Text>
+                <Text style={styles.exportButtonText}>Backup to PC</Text>
               )}
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.exportButton, styles.dbRestoreButton]}
+            </Pressable>
+            <Pressable
+              style={[styles.exportButton, { backgroundColor: colors.success }]}
               onPress={handleRestoreFromPC}
               disabled={!!dbAction}
               accessibilityRole="button"
@@ -1387,16 +1392,12 @@ const DatabaseInterfaceScreen = ({ navigation }: any) => {
               {dbAction === 'restore' ? (
                 <ActivityIndicator color="#fff" size="small" />
               ) : (
-                <Text style={styles.exportButtonText}>📤 Restore from Backup</Text>
+                <Text style={styles.exportButtonText}>Restore from Backup</Text>
               )}
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.exportButton, styles.dbResetButton]}
-              onPress={() => {
-                if (confirm('⚠️ This will DELETE ALL DATA! Are you absolutely sure?')) {
-                  handleResetDatabase();
-                }
-              }}
+            </Pressable>
+            <Pressable
+              style={[styles.exportButton, { backgroundColor: colors.danger }]}
+              onPress={handleResetDatabase}
               disabled={!!dbAction}
               accessibilityRole="button"
               accessibilityLabel="Reset Database"
@@ -1404,93 +1405,93 @@ const DatabaseInterfaceScreen = ({ navigation }: any) => {
               {dbAction === 'reset' ? (
                 <ActivityIndicator color="#fff" size="small" />
               ) : (
-                <Text style={styles.exportButtonText}>🗑️ Reset Database</Text>
+                <Text style={styles.exportButtonText}>Reset Database</Text>
               )}
-            </TouchableOpacity>
+            </Pressable>
           </View>
 
           {/* Column Visibility Toggle */}
           <View style={styles.columnControls}>
-            <TouchableOpacity
-              style={styles.columnToggleButton}
+            <Pressable
+              style={[styles.columnToggleButton, { backgroundColor: colors.textSecondary }]}
               onPress={() => setShowColumnDropdown(!showColumnDropdown)}
               accessibilityRole="button"
               accessibilityLabel="Toggle column visibility"
             >
-              <Text style={styles.columnToggleButtonText}>👁️ Columns</Text>
-            </TouchableOpacity>
+              <Text style={styles.columnToggleButtonText}>Columns</Text>
+            </Pressable>
           </View>
 
           {/* Bulk Operations */}
           {getSelectedIds().length > 0 && (
             <View style={styles.bulkActions}>
-              <Text style={styles.bulkActionsText}>
+              <Text style={[styles.bulkActionsText, { color: colors.primary }]}>
                 {getSelectedIds().length} row{getSelectedIds().length > 1 ? 's' : ''} selected
               </Text>
-              <TouchableOpacity
-                style={styles.bulkActionButton}
+              <Pressable
+                style={[styles.bulkActionButton, { backgroundColor: colors.primary }]}
                 onPress={() => setBulkActionMenuVisible(!bulkActionMenuVisible)}
               >
-                <Text style={styles.bulkActionButtonText}>⚡ Bulk Actions</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.clearSelectionButton}
+                <Text style={styles.bulkActionButtonText}>Bulk Actions</Text>
+              </Pressable>
+              <Pressable
+                style={[styles.clearSelectionButton, { backgroundColor: colors.danger }]}
                 onPress={clearAllSelections}
               >
-                <Text style={styles.clearSelectionText}>✕ Clear</Text>
-              </TouchableOpacity>
+                <Text style={styles.clearSelectionText}>Clear</Text>
+              </Pressable>
             </View>
           )}
 
           {/* Select All Button */}
           {!getSelectedIds().length && (
-            <TouchableOpacity
-              style={styles.selectAllButton}
+            <Pressable
+              style={[styles.selectAllButton, { backgroundColor: colors.textSecondary }]}
               onPress={selectAllRows}
             >
-              <Text style={styles.selectAllText}>☑ Select All</Text>
-            </TouchableOpacity>
+              <Text style={styles.selectAllText}>Select All</Text>
+            </Pressable>
           )}
         </View>
 
         {/* Bulk Action Menu (conditional) */}
         {bulkActionMenuVisible && (
-          <View style={styles.bulkActionMenu}>
-            <TouchableOpacity
+          <View style={[styles.bulkActionMenu, { backgroundColor: colors.card }]}>
+            <Pressable
               style={styles.bulkMenuItem}
               onPress={() => handleBulkStatusUpdate('ACTIVE')}
             >
-              <Text style={styles.bulkMenuItemText}>✅ Activate Selected</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
+              <Text style={[styles.bulkMenuItemText, { color: colors.text }]}>Activate Selected</Text>
+            </Pressable>
+            <Pressable
               style={styles.bulkMenuItem}
               onPress={() => handleBulkStatusUpdate('INACTIVE')}
             >
-              <Text style={styles.bulkMenuItemText}>⏸️ Deactivate Selected</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
+              <Text style={[styles.bulkMenuItemText, { color: colors.text }]}>Deactivate Selected</Text>
+            </Pressable>
+            <Pressable
               style={styles.bulkMenuItem}
               onPress={() => handleBulkStatusUpdate('SUSPENDED')}
             >
-              <Text style={styles.bulkMenuItemText}>🚫 Suspend Selected</Text>
-            </TouchableOpacity>
+              <Text style={[styles.bulkMenuItemText, { color: colors.text }]}>Suspend Selected</Text>
+            </Pressable>
           </View>
         )}
 
         {/* Table Loading */}
         {(usersTable.loading || instructorsTable.loading || studentsTable.loading || bookingsTable.loading) && (
           <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color="#007AFF" />
-            <Text style={styles.loadingText}>Loading...</Text>
+            <ActivityIndicator size="large" color={colors.primary} />
+            <Text style={[styles.loadingText, { color: colors.textSecondary }]}>Loading...</Text>
           </View>
         )}
 
         {/* Table Data */}
         {activeTab === 'users' && !usersTable.loading && usersTable.data.length > 0 && (
-          <View style={styles.table}>
-            <View style={styles.tableHeader}>
+          <View style={[styles.table, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <View style={[styles.tableHeader, { backgroundColor: colors.backgroundSecondary, borderBottomColor: colors.border }]}>
               <View style={{ flex: 0.5 }}>
-                <TouchableOpacity
+                <Pressable
                   onPress={selectAllRows}
                   style={styles.headerCheckbox}
                   accessibilityRole="checkbox"
@@ -1498,28 +1499,29 @@ const DatabaseInterfaceScreen = ({ navigation }: any) => {
                 >
                   <View style={[
                     styles.checkbox,
-                    getSelectedIds().length === usersTable.data.length && styles.checkboxChecked
+                    { borderColor: colors.primary },
+                    getSelectedIds().length === usersTable.data.length && { backgroundColor: colors.primary }
                   ]}>
                     {getSelectedIds().length === usersTable.data.length && (
                       <Text style={styles.checkboxIcon}>✓</Text>
                     )}
                   </View>
-                </TouchableOpacity>
+                </Pressable>
               </View>
-              <Text style={[styles.tableCell, { flex: 1 }]}>ID</Text>
-              <Text style={[styles.tableCell, { flex: 3 }]}>Name</Text>
-              <Text style={[styles.tableCell, { flex: 2 }]}>Email</Text>
-              <Text style={[styles.tableCell, { flex: 1 }]}>Role</Text>
-              <Text style={[styles.tableCell, { flex: 1 }]}>Status</Text>
-              <Text style={[styles.tableCell, { flex: 1 }]}>Actions</Text>
+              <Text style={[styles.tableCell, { color: colors.text, flex: 1 }]}>ID</Text>
+              <Text style={[styles.tableCell, { color: colors.text, flex: 3 }]}>Name</Text>
+              <Text style={[styles.tableCell, { color: colors.text, flex: 2 }]}>Email</Text>
+              <Text style={[styles.tableCell, { color: colors.text, flex: 1 }]}>Role</Text>
+              <Text style={[styles.tableCell, { color: colors.text, flex: 1 }]}>Status</Text>
+              <Text style={[styles.tableCell, { color: colors.text, flex: 1 }]}>Actions</Text>
             </View>
             {usersTable.data.map((user, idx) => {
               const userStatus = String(user.status || '').toUpperCase();
 
               return (
-              <View key={idx} style={styles.tableRow}>
+              <View key={idx} style={[styles.tableRow, { borderBottomColor: colors.border }]}>
                 <View style={{ flex: 0.5 }}>
-                  <TouchableOpacity
+                  <Pressable
                     onPress={() => toggleRowSelection(user.id)}
                     style={styles.rowCheckbox}
                     accessibilityRole="checkbox"
@@ -1527,62 +1529,65 @@ const DatabaseInterfaceScreen = ({ navigation }: any) => {
                   >
                     <View style={[
                       styles.checkbox,
-                      selectedRows[user.id] && styles.checkboxChecked
+                      { borderColor: colors.primary },
+                      selectedRows[user.id] && { backgroundColor: colors.primary }
                     ]}>
                       {selectedRows[user.id] && (
                         <Text style={styles.checkboxIcon}>✓</Text>
                       )}
                     </View>
-                  </TouchableOpacity>
+                  </Pressable>
                 </View>
-                <Text style={[styles.tableCell, { flex: 1 }]}>{user.id}</Text>
-                <Text style={[styles.tableCell, { flex: 3 }]}>{user.first_name} {user.last_name}</Text>
-                <Text style={[styles.tableCell, { flex: 2 }]} numberOfLines={1}>{user.email}</Text>
-                <Text style={[styles.tableCell, { flex: 1 }]}>
+                <Text style={[styles.tableCell, { color: colors.text, flex: 1 }]}>{user.id}</Text>
+                <Text style={[styles.tableCell, { color: colors.text, flex: 3 }]}>{user.first_name} {user.last_name}</Text>
+                <Text style={[styles.tableCell, { color: colors.text, flex: 2 }]} numberOfLines={1}>{user.email}</Text>
+                <Text style={[styles.tableCell, { color: colors.text, flex: 1 }]}>
                   {user.role}
-                  {user.id === 1 && user.role === 'admin' && (!user.row_type || user.row_type === 'primary') && ' 🛡️'}
+                  {user.id === 1 && user.role === 'admin' && (!user.row_type || user.row_type === 'primary') && ' '}
                 </Text>
                 <Text
                   style={[
                     styles.tableCell,
                     {
                       flex: 1,
+                      fontWeight: '600',
                       color:
                         userStatus === 'SUSPENDED'
-                          ? '#ffc107'
+                          ? colors.warning
                           : userStatus === 'INACTIVE'
-                            ? '#6c757d'
-                            : '#28a745',
+                            ? colors.textSecondary
+                            : colors.success,
                     },
                   ]}
                 >
                   {userStatus === 'SUSPENDED'
-                    ? '🚫 SUSPENDED'
+                    ? 'SUSPENDED'
                     : userStatus === 'INACTIVE'
-                      ? '⏸️ INACTIVE'
-                      : '✅ ACTIVE'}
+                      ? 'INACTIVE'
+                      : 'ACTIVE'}
                 </Text>
                 <View style={styles.actionButtons}>
-                  <TouchableOpacity
-                    style={styles.editButton}
+                  <Pressable
+                    style={[styles.editButton, { backgroundColor: colors.primary }]}
                     onPress={() => openEditModal(user.id)}
                   >
-                    <Text style={styles.editButtonText}>✏️ Edit</Text>
-                  </TouchableOpacity>
+                    <Text style={styles.editButtonText}>Edit</Text>
+                  </Pressable>
                   {/* Hide suspend button for main admin (ID=1, role=admin, primary row) */}
                   {!(user.id === 1 && user.role === 'admin' && (!user.row_type || user.row_type === 'primary')) ? (
-                    <TouchableOpacity
+                    <Pressable
                       style={[
                         styles.deleteButton,
-                        userStatus === 'ACTIVE' && styles.activateButton,
-                        userStatus === 'SUSPENDED' && styles.suspendedButton
+                        { backgroundColor: colors.danger },
+                        userStatus === 'ACTIVE' && { backgroundColor: colors.success },
+                        userStatus === 'SUSPENDED' && { backgroundColor: colors.warning }
                       ]}
                       onPress={() => openDeleteModal(user.id, user.row_type)}
                     >
                       <Text style={styles.deleteButtonText}>
-                        {userStatus === 'SUSPENDED' ? '🟡 Suspended' : '🟢 Active'}
+                        {userStatus === 'SUSPENDED' ? 'Suspended' : 'Active'}
                       </Text>
-                    </TouchableOpacity>
+                    </Pressable>
                   ) : (
                     <View style={{ minWidth: 80 }} />
                   )}
@@ -1593,12 +1598,12 @@ const DatabaseInterfaceScreen = ({ navigation }: any) => {
           </View>
         )}
 
-        {/* Students Table */}
-        {activeTab === 'students' && !studentsTable.loading && studentsTable.data.length > 0 && (
-          <View style={styles.table}>
-            <View style={styles.tableHeader}>
+        {/* Instructors Table */}
+        {activeTab === 'instructors' && !instructorsTable.loading && instructorsTable.data.length > 0 && (
+          <View style={[styles.table, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <View style={[styles.tableHeader, { backgroundColor: colors.backgroundSecondary, borderBottomColor: colors.border }]}>
               <View style={{ flex: 0.5 }}>
-                <TouchableOpacity
+                <Pressable
                   onPress={selectAllRows}
                   style={styles.headerCheckbox}
                   accessibilityRole="checkbox"
@@ -1606,24 +1611,115 @@ const DatabaseInterfaceScreen = ({ navigation }: any) => {
                 >
                   <View style={[
                     styles.checkbox,
-                    getSelectedIds().length === studentsTable.data.length && styles.checkboxChecked
+                    { borderColor: colors.primary },
+                    getSelectedIds().length === instructorsTable.data.length && { backgroundColor: colors.primary }
+                  ]}>
+                    {getSelectedIds().length === instructorsTable.data.length && (
+                      <Text style={styles.checkboxIcon}>✓</Text>
+                    )}
+                  </View>
+                </Pressable>
+              </View>
+              <Text style={[styles.tableCell, { color: colors.text, flex: 1 }]}>ID</Text>
+              <Text style={[styles.tableCell, { color: colors.text, flex: 3 }]}>Name</Text>
+              <Text style={[styles.tableCell, { color: colors.text, flex: 2 }]}>License #</Text>
+              <Text style={[styles.tableCell, { color: colors.text, flex: 2 }]}>Vehicle</Text>
+              <Text style={[styles.tableCell, { color: colors.text, flex: 1 }]}>Rate</Text>
+              <Text style={[styles.tableCell, { color: colors.text, flex: 1 }]}>Verified</Text>
+              <Text style={[styles.tableCell, { color: colors.text, flex: 1 }]}>Actions</Text>
+            </View>
+            {instructorsTable.data.map((instructor: any, idx: number) => (
+              <View key={idx} style={[styles.tableRow, { borderBottomColor: colors.border }]}>
+                <View style={{ flex: 0.5 }}>
+                  <Pressable
+                    onPress={() => toggleRowSelection(instructor.id)}
+                    style={styles.rowCheckbox}
+                    accessibilityRole="checkbox"
+                    accessibilityState={{ checked: !!selectedRows[instructor.id] }}
+                  >
+                    <View style={[
+                      styles.checkbox,
+                      { borderColor: colors.primary },
+                      selectedRows[instructor.id] && { backgroundColor: colors.primary }
+                    ]}>
+                      {selectedRows[instructor.id] && (
+                        <Text style={styles.checkboxIcon}>✓</Text>
+                      )}
+                    </View>
+                  </Pressable>
+                </View>
+                <Text style={[styles.tableCell, { color: colors.text, flex: 1 }]}>{instructor.id}</Text>
+                <Text style={[styles.tableCell, { color: colors.text, flex: 3 }]}>{instructor.instructor_name}</Text>
+                <Text style={[styles.tableCell, { color: colors.text, flex: 2 }]} numberOfLines={1}>{instructor.license_number || 'N/A'}</Text>
+                <Text style={[styles.tableCell, { color: colors.text, flex: 2 }]} numberOfLines={1}>
+                  {instructor.vehicle_make ? `${instructor.vehicle_make} ${instructor.vehicle_model || ''}`.trim() : 'N/A'}
+                </Text>
+                <Text style={[styles.tableCell, { color: colors.text, flex: 1 }]}>
+                  {instructor.hourly_rate ? `R${instructor.hourly_rate}` : 'N/A'}
+                </Text>
+                <Text
+                  style={[
+                    styles.tableCell,
+                    {
+                      flex: 1,
+                      fontWeight: '600',
+                      color: instructor.is_verified ? colors.success : colors.warning,
+                    },
+                  ]}
+                >
+                  {instructor.is_verified ? 'Yes' : 'No'}
+                </Text>
+                <View style={styles.actionButtons}>
+                  <Pressable
+                    style={[styles.editButton, { backgroundColor: colors.primary }]}
+                    onPress={() => openEditModal(instructor.id)}
+                  >
+                    <Text style={styles.editButtonText}>Edit</Text>
+                  </Pressable>
+                  <Pressable
+                    style={[styles.deleteButton, { backgroundColor: colors.danger }]}
+                    onPress={() => openDeleteModal(instructor.id)}
+                  >
+                    <Text style={styles.deleteButtonText}>Delete</Text>
+                  </Pressable>
+                </View>
+              </View>
+            ))}
+          </View>
+        )}
+
+        {/* Students Table */}
+        {activeTab === 'students' && !studentsTable.loading && studentsTable.data.length > 0 && (
+          <View style={[styles.table, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <View style={[styles.tableHeader, { backgroundColor: colors.backgroundSecondary, borderBottomColor: colors.border }]}>
+              <View style={{ flex: 0.5 }}>
+                <Pressable
+                  onPress={selectAllRows}
+                  style={styles.headerCheckbox}
+                  accessibilityRole="checkbox"
+                  accessibilityLabel="Select all rows"
+                >
+                  <View style={[
+                    styles.checkbox,
+                    { borderColor: colors.primary },
+                    getSelectedIds().length === studentsTable.data.length && { backgroundColor: colors.primary }
                   ]}>
                     {getSelectedIds().length === studentsTable.data.length && (
                       <Text style={styles.checkboxIcon}>✓</Text>
                     )}
                   </View>
-                </TouchableOpacity>
+                </Pressable>
               </View>
-              <Text style={[styles.tableCell, { flex: 1 }]}>ID</Text>
-              <Text style={[styles.tableCell, { flex: 3 }]}>Name</Text>
-              <Text style={[styles.tableCell, { flex: 2 }]}>Email</Text>
-              <Text style={[styles.tableCell, { flex: 2 }]}>City</Text>
-              <Text style={[styles.tableCell, { flex: 1 }]}>Actions</Text>
+              <Text style={[styles.tableCell, { color: colors.text, flex: 1 }]}>ID</Text>
+              <Text style={[styles.tableCell, { color: colors.text, flex: 3 }]}>Name</Text>
+              <Text style={[styles.tableCell, { color: colors.text, flex: 2 }]}>Email</Text>
+              <Text style={[styles.tableCell, { color: colors.text, flex: 2 }]}>City</Text>
+              <Text style={[styles.tableCell, { color: colors.text, flex: 1 }]}>Actions</Text>
             </View>
             {studentsTable.data.map((student, idx) => (
-              <View key={idx} style={styles.tableRow}>
+              <View key={idx} style={[styles.tableRow, { borderBottomColor: colors.border }]}>
                 <View style={{ flex: 0.5 }}>
-                  <TouchableOpacity
+                  <Pressable
                     onPress={() => toggleRowSelection(student.id)}
                     style={styles.rowCheckbox}
                     accessibilityRole="checkbox"
@@ -1631,31 +1727,32 @@ const DatabaseInterfaceScreen = ({ navigation }: any) => {
                   >
                     <View style={[
                       styles.checkbox,
-                      selectedRows[student.id] && styles.checkboxChecked
+                      { borderColor: colors.primary },
+                      selectedRows[student.id] && { backgroundColor: colors.primary }
                     ]}>
                       {selectedRows[student.id] && (
                         <Text style={styles.checkboxIcon}>✓</Text>
                       )}
                     </View>
-                  </TouchableOpacity>
+                  </Pressable>
                 </View>
-                <Text style={[styles.tableCell, { flex: 1 }]}>{student.id}</Text>
-                <Text style={[styles.tableCell, { flex: 3 }]}>{student.student_name}</Text>
-                <Text style={[styles.tableCell, { flex: 2 }]} numberOfLines={1}>{student.email}</Text>
-                <Text style={[styles.tableCell, { flex: 2 }]}>{student.city || 'N/A'}</Text>
+                <Text style={[styles.tableCell, { color: colors.text, flex: 1 }]}>{student.id}</Text>
+                <Text style={[styles.tableCell, { color: colors.text, flex: 3 }]}>{student.student_name}</Text>
+                <Text style={[styles.tableCell, { color: colors.text, flex: 2 }]} numberOfLines={1}>{student.email}</Text>
+                <Text style={[styles.tableCell, { color: colors.text, flex: 2 }]}>{student.city || 'N/A'}</Text>
                 <View style={styles.actionButtons}>
-                  <TouchableOpacity
-                    style={styles.editButton}
+                  <Pressable
+                    style={[styles.editButton, { backgroundColor: colors.primary }]}
                     onPress={() => openEditModal(student.id)}
                   >
-                    <Text style={styles.editButtonText}>✏️ Edit</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={styles.deleteButton}
+                    <Text style={styles.editButtonText}>Edit</Text>
+                  </Pressable>
+                  <Pressable
+                    style={[styles.deleteButton, { backgroundColor: colors.danger }]}
                     onPress={() => openDeleteModal(student.id)}
                   >
-                    <Text style={styles.deleteButtonText}>🗑️ Delete</Text>
-                  </TouchableOpacity>
+                    <Text style={styles.deleteButtonText}>Delete</Text>
+                  </Pressable>
                 </View>
               </View>
             ))}
@@ -1665,62 +1762,76 @@ const DatabaseInterfaceScreen = ({ navigation }: any) => {
         {/* Empty State */}
         {activeTab === 'users' && !usersTable.loading && usersTable.data.length === 0 && (
           <View style={styles.emptyState}>
-            <Text style={styles.emptyStateIcon}>📭</Text>
-            <Text style={styles.emptyStateText}>No users found</Text>
+            <Text style={styles.emptyStateIcon}></Text>
+            <Text style={[styles.emptyStateText, { color: colors.textSecondary }]}>No users found</Text>
+          </View>
+        )}
+        {activeTab === 'instructors' && !instructorsTable.loading && instructorsTable.data.length === 0 && (
+          <View style={styles.emptyState}>
+            <Text style={styles.emptyStateIcon}></Text>
+            <Text style={[styles.emptyStateText, { color: colors.textSecondary }]}>No instructors found</Text>
           </View>
         )}
         {activeTab === 'students' && !studentsTable.loading && studentsTable.data.length === 0 && (
           <View style={styles.emptyState}>
-            <Text style={styles.emptyStateIcon}>📭</Text>
-            <Text style={styles.emptyStateText}>No students found</Text>
+            <Text style={styles.emptyStateIcon}></Text>
+            <Text style={[styles.emptyStateText, { color: colors.textSecondary }]}>No students found</Text>
           </View>
         )}
 
         {/* Pagination */}
         <View style={styles.paginationContainer}>
-          <TouchableOpacity
+          <Pressable
             disabled={
               (activeTab === 'users' && usersTable.page <= 1) ||
+              (activeTab === 'instructors' && instructorsTable.page <= 1) ||
               (activeTab === 'students' && studentsTable.page <= 1)
             }
             onPress={() => {
               if (activeTab === 'users') fetchUsers(usersTable.page - 1);
+              else if (activeTab === 'instructors') fetchInstructors(instructorsTable.page - 1);
               else if (activeTab === 'students') fetchStudents(studentsTable.page - 1);
             }}
             style={[
               styles.paginationButton,
+              { backgroundColor: colors.primary },
               ((activeTab === 'users' && usersTable.page <= 1) ||
-               (activeTab === 'students' && studentsTable.page <= 1)) && styles.paginationButtonDisabled
+               (activeTab === 'instructors' && instructorsTable.page <= 1) ||
+               (activeTab === 'students' && studentsTable.page <= 1)) && { backgroundColor: colors.border }
             ]}
             accessibilityRole="button"
             accessibilityLabel="Go to previous page"
           >
             <Text style={styles.paginationButtonText}>◀ Previous</Text>
-          </TouchableOpacity>
+          </Pressable>
 
-          <Text style={styles.paginationInfo}>
-            Page {activeTab === 'users' ? usersTable.page : studentsTable.page} of {activeTab === 'users' ? usersTable.totalPages : studentsTable.totalPages}
+          <Text style={[styles.paginationInfo, { color: colors.textSecondary }]}>
+            Page {activeTab === 'users' ? usersTable.page : activeTab === 'instructors' ? instructorsTable.page : studentsTable.page} of {activeTab === 'users' ? usersTable.totalPages : activeTab === 'instructors' ? instructorsTable.totalPages : studentsTable.totalPages}
           </Text>
 
-          <TouchableOpacity
+          <Pressable
             disabled={
               (activeTab === 'users' && usersTable.page >= usersTable.totalPages) ||
+              (activeTab === 'instructors' && instructorsTable.page >= instructorsTable.totalPages) ||
               (activeTab === 'students' && studentsTable.page >= studentsTable.totalPages)
             }
             onPress={() => {
               if (activeTab === 'users') fetchUsers(usersTable.page + 1);
+              else if (activeTab === 'instructors') fetchInstructors(instructorsTable.page + 1);
               else if (activeTab === 'students') fetchStudents(studentsTable.page + 1);
             }}
             style={[
               styles.paginationButton,
+              { backgroundColor: colors.primary },
               ((activeTab === 'users' && usersTable.page >= usersTable.totalPages) ||
-               (activeTab === 'students' && studentsTable.page >= studentsTable.totalPages)) && styles.paginationButtonDisabled
+               (activeTab === 'instructors' && instructorsTable.page >= instructorsTable.totalPages) ||
+               (activeTab === 'students' && studentsTable.page >= studentsTable.totalPages)) && { backgroundColor: colors.border }
             ]}
             accessibilityRole="button"
             accessibilityLabel="Go to next page"
           >
             <Text style={styles.paginationButtonText}>Next ▶</Text>
-          </TouchableOpacity>
+          </Pressable>
         </View>
       </ScrollView>
 
@@ -1743,58 +1854,49 @@ const DatabaseInterfaceScreen = ({ navigation }: any) => {
       )}
 
       {/* Column Visibility Dropdown Modal */}
-      <Modal
+      <ThemedModal
         visible={showColumnDropdown}
-        transparent={true}
-        animationType="fade"
-        onRequestClose={() => setShowColumnDropdown(false)}
+        onClose={() => setShowColumnDropdown(false)}
+        title="Column Visibility"
+        size="sm"
+        footer={
+          <Button
+            variant="secondary"
+            onPress={() => setShowColumnDropdown(false)}
+          >
+            Close
+          </Button>
+        }
       >
-        <TouchableWithoutFeedback onPress={() => setShowColumnDropdown(false)}>
-          <View style={styles.modalOverlay}>
-            <TouchableWithoutFeedback onPress={(e) => e.stopPropagation()}>
-              <View style={styles.columnDropdownModal}>
-                <Text style={styles.columnDropdownTitle}>👁️ Column Visibility</Text>
-                <Text style={styles.columnDropdownSubtitle}>
-                  Select columns to display in the table
-                </Text>
-                
-                <ScrollView style={styles.columnCheckboxList}>
-                  {getColumnDefinitions(activeTab).map((column) => (
-                    <TouchableOpacity
-                      key={column.key}
-                      style={styles.columnCheckboxItem}
-                      onPress={() => toggleColumnVisibility(column.key)}
-                      accessibilityRole="checkbox"
-                      accessibilityState={{ checked: visibleColumns[column.key] }}
-                    >
-                      <View style={styles.columnCheckboxRow}>
-                        <View style={[
-                          styles.checkbox,
-                          visibleColumns[column.key] && styles.checkboxChecked
-                        ]}>
-                          {visibleColumns[column.key] && (
-                            <Text style={styles.checkboxIcon}>✓</Text>
-                          )}
-                        </View>
-                        <Text style={styles.columnCheckboxLabel}>{column.label}</Text>
-                      </View>
-                    </TouchableOpacity>
-                  ))}
-                </ScrollView>
-
-                <View style={styles.columnDropdownButtons}>
-                  <TouchableOpacity
-                    style={[styles.columnButton, styles.columnButtonSecondary]}
-                    onPress={() => setShowColumnDropdown(false)}
-                  >
-                    <Text style={styles.columnButtonTextSecondary}>Close</Text>
-                  </TouchableOpacity>
+        <Text style={{ fontSize: 14, color: colors.textSecondary, marginBottom: 16, textAlign: 'center', fontFamily: 'Inter_400Regular' }}>
+          Select columns to display in the table
+        </Text>
+        
+        <ScrollView style={{ maxHeight: 300 }}>
+          {getColumnDefinitions(activeTab).map((column) => (
+            <Pressable
+              key={column.key}
+              style={[styles.columnCheckboxItem, { borderBottomColor: colors.border }]}
+              onPress={() => toggleColumnVisibility(column.key)}
+              accessibilityRole="checkbox"
+              accessibilityState={{ checked: visibleColumns[column.key] }}
+            >
+              <View style={styles.columnCheckboxRow}>
+                <View style={[
+                  styles.checkbox,
+                  { borderColor: colors.primary },
+                  visibleColumns[column.key] && { backgroundColor: colors.primary }
+                ]}>
+                  {visibleColumns[column.key] && (
+                    <Text style={styles.checkboxIcon}>✓</Text>
+                  )}
                 </View>
+                <Text style={[styles.columnCheckboxLabel, { color: colors.text }]}>{column.label}</Text>
               </View>
-            </TouchableWithoutFeedback>
-          </View>
-        </TouchableWithoutFeedback>
-      </Modal>
+            </Pressable>
+          ))}
+        </ScrollView>
+      </ThemedModal>
 
       {selectedDeleteRecord && isDeletableTab(activeTab) && (
         <DatabaseDeleteConfirm
@@ -1818,7 +1920,6 @@ const DatabaseInterfaceScreen = ({ navigation }: any) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
   },
   content: {
     flex: 1,
@@ -1836,53 +1937,46 @@ const styles = StyleSheet.create({
   },
   accessDeniedTitle: {
     fontSize: 24,
-    fontWeight: 'bold',
-    color: '#dc3545',
+    fontWeight: 'bold' as const,
+    fontFamily: 'Inter_700Bold',
     marginBottom: 12,
-    textAlign: 'center',
+    textAlign: 'center' as const,
   },
   accessDeniedMessage: {
     fontSize: 16,
-    color: '#666',
+    fontFamily: 'Inter_400Regular',
     marginBottom: 24,
-    textAlign: 'center',
+    textAlign: 'center' as const,
   },
   platformInfo: {
-    backgroundColor: '#fff3cd',
     borderRadius: 8,
     padding: 16,
-    width: '100%',
+    width: '100%' as const,
   },
   platformInfoTitle: {
     fontSize: 14,
-    fontWeight: '600',
-    color: '#333',
+    fontWeight: '600' as const,
+    fontFamily: 'Inter_600SemiBold',
     marginBottom: 8,
   },
   platformInfoText: {
     fontSize: 13,
-    color: '#555',
+    fontFamily: 'Inter_400Regular',
     marginBottom: 4,
   },
   successMessage: {
-    backgroundColor: '#d4edda',
-    borderColor: '#28a745',
     borderWidth: 1,
     borderRadius: 4,
     padding: 12,
     marginBottom: 12,
   },
   errorMessage: {
-    backgroundColor: '#f8d7da',
-    borderColor: '#dc3545',
     borderWidth: 1,
     borderRadius: 4,
     padding: 12,
     marginBottom: 12,
   },
   infoMessage: {
-    backgroundColor: '#d1ecf1',
-    borderColor: '#0c5460',
     borderWidth: 1,
     borderRadius: 4,
     padding: 12,
@@ -1890,12 +1984,11 @@ const styles = StyleSheet.create({
   },
   messageText: {
     fontSize: 14,
-    color: '#333',
+    fontFamily: 'Inter_400Regular',
   },
   tabNavigation: {
-    flexDirection: 'row',
+    flexDirection: 'row' as const,
     borderBottomWidth: 1,
-    borderBottomColor: '#ddd',
     marginBottom: 16,
   },
   tab: {
@@ -1904,16 +1997,9 @@ const styles = StyleSheet.create({
     borderBottomWidth: 2,
     borderBottomColor: 'transparent',
   },
-  tabActive: {
-    borderBottomColor: '#007AFF',
-  },
   tabText: {
     fontSize: Platform.OS === 'web' ? 14 : 12,
-    color: '#666',
-  },
-  tabTextActive: {
-    color: '#007AFF',
-    fontWeight: '600',
+    fontFamily: 'Inter_500Medium',
   },
   filterSection: {
     marginBottom: 16,
@@ -1924,63 +2010,52 @@ const styles = StyleSheet.create({
   },
   filterLabel: {
     fontSize: Platform.OS === 'web' ? 13 : 12,
-    fontWeight: '600',
-    color: '#555',
+    fontWeight: '600' as const,
+    fontFamily: 'Inter_600SemiBold',
   },
   filterChips: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
+    flexDirection: 'row' as const,
+    flexWrap: 'wrap' as const,
     gap: Platform.OS === 'web' ? 8 : 6,
   },
   filterChip: {
     borderWidth: 1,
-    borderColor: '#ddd',
     borderRadius: 16,
     paddingHorizontal: Platform.OS === 'web' ? 12 : 10,
     paddingVertical: Platform.OS === 'web' ? 6 : 5,
-    backgroundColor: '#fff',
-  },
-  filterChipActive: {
-    borderColor: '#007AFF',
-    backgroundColor: '#e7f1ff',
   },
   filterChipText: {
     fontSize: Platform.OS === 'web' ? 12 : 11,
-    color: '#555',
-    fontWeight: '600',
-  },
-  filterChipTextActive: {
-    color: '#007AFF',
+    fontWeight: '600' as const,
+    fontFamily: 'Inter_600SemiBold',
   },
   dateRangeContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
     gap: Platform.OS === 'web' ? 12 : 8,
-    flexWrap: 'wrap',
+    flexWrap: 'wrap' as const,
     marginTop: 8,
   },
   dateInputWrapper: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
     gap: 8,
   },
   dateInputLabel: {
     fontSize: 14,
-    fontWeight: '500',
-    color: '#333',
+    fontWeight: '500' as const,
+    fontFamily: 'Inter_500Medium',
   },
   dateInput: {
     borderWidth: 1,
-    borderColor: '#ddd',
     borderRadius: 6,
     paddingHorizontal: 12,
     paddingVertical: 8,
     fontSize: 14,
-    backgroundColor: '#fff',
+    fontFamily: 'Inter_400Regular',
     minWidth: 130,
   },
   clearDatesButton: {
-    backgroundColor: '#6c757d',
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 6,
@@ -1989,101 +2064,89 @@ const styles = StyleSheet.create({
   clearDatesText: {
     color: '#fff',
     fontSize: 13,
-    fontWeight: '600',
+    fontWeight: '600' as const,
+    fontFamily: 'Inter_600SemiBold',
   },
   searchInput: {
-    backgroundColor: '#fff',
     borderRadius: 4,
     borderWidth: 1,
-    borderColor: '#ddd',
     paddingHorizontal: 12,
     paddingVertical: 10,
     fontSize: 14,
+    fontFamily: 'Inter_400Regular',
   },
   loadingContainer: {
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: 'center' as const,
+    alignItems: 'center' as const,
     paddingVertical: 32,
   },
   loadingText: {
     marginTop: 8,
     fontSize: 14,
-    color: '#666',
+    fontFamily: 'Inter_400Regular',
   },
   table: {
-    backgroundColor: '#fff',
     borderRadius: 4,
-    overflow: 'hidden',
+    overflow: 'hidden' as const,
     borderWidth: 1,
-    borderColor: '#ddd',
     marginBottom: 16,
   },
   tableHeader: {
-    flexDirection: 'row',
-    backgroundColor: '#f8f9fa',
+    flexDirection: 'row' as const,
     borderBottomWidth: 1,
-    borderBottomColor: '#ddd',
     paddingHorizontal: 12,
     paddingVertical: 10,
   },
   tableRow: {
-    flexDirection: 'row',
+    flexDirection: 'row' as const,
     borderBottomWidth: 1,
-    borderBottomColor: '#eee',
     paddingHorizontal: 12,
     paddingVertical: 10,
-    alignItems: 'center',
+    alignItems: 'center' as const,
   },
   tableCell: {
     fontSize: 13,
-    color: '#333',
+    fontFamily: 'Inter_400Regular',
   },
   editButton: {
-    backgroundColor: '#007AFF',
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 4,
     minWidth: 70,
   },
   actionButtons: {
-    flexDirection: 'row',
+    flexDirection: 'row' as const,
     gap: Platform.OS === 'web' ? 8 : 6,
-    justifyContent: 'flex-start',
-    minWidth: 180, // Fixed width to maintain consistent spacing
+    justifyContent: 'flex-start' as const,
+    minWidth: 180,
   },
   deleteButton: {
-    backgroundColor: '#dc3545',
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 4,
     minWidth: 80,
   },
-  activateButton: {
-    backgroundColor: '#28a745', // Green for active users (safe to suspend)
-  },
-  suspendedButton: {
-    backgroundColor: '#ffc107', // Yellow for suspended users (can unsuspend)
-  },
   editButtonText: {
     color: '#fff',
     fontSize: 12,
-    fontWeight: '600',
-    textAlign: 'center',
+    fontWeight: '600' as const,
+    fontFamily: 'Inter_600SemiBold',
+    textAlign: 'center' as const,
   },
   deleteButtonText: {
     color: '#fff',
     fontSize: 12,
-    fontWeight: '600',
-    textAlign: 'center',
+    fontWeight: '600' as const,
+    fontFamily: 'Inter_600SemiBold',
+    textAlign: 'center' as const,
   },
   protectedBadge: {
     fontSize: 14,
-    color: '#28a745',
     marginLeft: 4,
   },
   emptyState: {
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: 'center' as const,
+    alignItems: 'center' as const,
     paddingVertical: 48,
   },
   emptyStateIcon: {
@@ -2092,68 +2155,31 @@ const styles = StyleSheet.create({
   },
   emptyStateText: {
     fontSize: 16,
-    color: '#999',
+    fontFamily: 'Inter_400Regular',
   },
   paginationContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: 'row' as const,
+    justifyContent: 'space-between' as const,
+    alignItems: 'center' as const,
     paddingVertical: 16,
   },
   paginationButton: {
-    backgroundColor: '#007AFF',
     paddingHorizontal: 16,
     paddingVertical: 10,
     borderRadius: 4,
   },
-  paginationButtonDisabled: {
-    backgroundColor: '#ccc',
-  },
   paginationButtonText: {
     color: '#fff',
     fontSize: 14,
-    fontWeight: '600',
+    fontWeight: '600' as const,
+    fontFamily: 'Inter_600SemiBold',
   },
   paginationInfo: {
     fontSize: 14,
-    color: '#666',
+    fontFamily: 'Inter_400Regular',
   },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  modalContent: {
-    backgroundColor: '#fff',
-    borderRadius: 8,
-    padding: 20,
-    width: Platform.OS === 'web' ? '40%' : '90%',
-    maxWidth: 500,
-  },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    marginBottom: 12,
-  },
-  modalText: {
-    fontSize: 14,
-    color: '#666',
-    marginBottom: 16,
-  },
-  modalButton: {
-    backgroundColor: '#007AFF',
-    paddingVertical: 10,
-    borderRadius: 4,
-    alignItems: 'center',
-  },
-  modalButtonText: {
-    color: '#fff',
-    fontWeight: '600',
-  },
-  // PHASE 4 Styles
+  // Toolbar & Export Styles
   toolbarSection: {
-    backgroundColor: '#fff',
     padding: 12,
     borderRadius: 8,
     marginBottom: 12,
@@ -2169,19 +2195,18 @@ const styles = StyleSheet.create({
     }),
   },
   exportButtons: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flexWrap: 'wrap',
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    flexWrap: 'wrap' as const,
     gap: 8,
   },
   toolbarTitle: {
     fontSize: 14,
-    fontWeight: '600',
-    color: '#333',
+    fontWeight: '600' as const,
+    fontFamily: 'Inter_600SemiBold',
     marginRight: 8,
   },
   exportButton: {
-    backgroundColor: '#28a745',
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 4,
@@ -2189,30 +2214,21 @@ const styles = StyleSheet.create({
   exportButtonText: {
     color: '#fff',
     fontSize: 12,
-    fontWeight: '600',
-  },
-  dbBackupButton: {
-    backgroundColor: '#0066CC',
-  },
-  dbRestoreButton: {
-    backgroundColor: '#28a745',
-  },
-  dbResetButton: {
-    backgroundColor: '#dc3545',
+    fontWeight: '600' as const,
+    fontFamily: 'Inter_600SemiBold',
   },
   bulkActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
     gap: 8,
     marginTop: 12,
   },
   bulkActionsText: {
     fontSize: 13,
-    fontWeight: '600',
-    color: '#007AFF',
+    fontWeight: '600' as const,
+    fontFamily: 'Inter_600SemiBold',
   },
   bulkActionButton: {
-    backgroundColor: '#007AFF',
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 4,
@@ -2220,10 +2236,10 @@ const styles = StyleSheet.create({
   bulkActionButtonText: {
     color: '#fff',
     fontSize: 12,
-    fontWeight: '600',
+    fontWeight: '600' as const,
+    fontFamily: 'Inter_600SemiBold',
   },
   clearSelectionButton: {
-    backgroundColor: '#dc3545',
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 4,
@@ -2231,10 +2247,10 @@ const styles = StyleSheet.create({
   clearSelectionText: {
     color: '#fff',
     fontSize: 12,
-    fontWeight: '600',
+    fontWeight: '600' as const,
+    fontFamily: 'Inter_600SemiBold',
   },
   selectAllButton: {
-    backgroundColor: '#6c757d',
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 4,
@@ -2243,10 +2259,10 @@ const styles = StyleSheet.create({
   selectAllText: {
     color: '#fff',
     fontSize: 12,
-    fontWeight: '600',
+    fontWeight: '600' as const,
+    fontFamily: 'Inter_600SemiBold',
   },
   bulkActionMenu: {
-    backgroundColor: '#fff',
     borderRadius: 8,
     padding: 8,
     marginBottom: 12,
@@ -2269,15 +2285,14 @@ const styles = StyleSheet.create({
   },
   bulkMenuItemText: {
     fontSize: 14,
-    fontWeight: '600',
-    color: '#333',
+    fontWeight: '600' as const,
+    fontFamily: 'Inter_600SemiBold',
   },
   // Column Visibility Styles
   columnControls: {
     marginLeft: 8,
   },
   columnToggleButton: {
-    backgroundColor: '#6c757d',
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 4,
@@ -2285,104 +2300,44 @@ const styles = StyleSheet.create({
   columnToggleButtonText: {
     color: '#fff',
     fontSize: 12,
-    fontWeight: '600',
-  },
-  columnDropdownModal: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: Platform.OS === 'web' ? 24 : 18,
-    width: Platform.OS === 'web' ? '40%' : '85%',
-    maxWidth: 500,
-    maxHeight: '80%',
-    ...Platform.select({
-      web: {
-        boxShadow: '0px 4px 12px rgba(0, 0, 0, 0.15)',
-      },
-      default: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.25,
-        shadowRadius: 4,
-        elevation: 5,
-      },
-    }),
-  },
-  columnDropdownTitle: {
-    fontSize: Platform.OS === 'web' ? 20 : 18,
-    fontWeight: 'bold',
-    color: '#007AFF',
-    marginBottom: 8,
-    textAlign: 'center',
-  },
-  columnDropdownSubtitle: {
-    fontSize: Platform.OS === 'web' ? 14 : 13,
-    color: '#666',
-    marginBottom: 20,
-    textAlign: 'center',
-  },
-  columnCheckboxList: {
-    maxHeight: 300,
-    marginBottom: 20,
+    fontWeight: '600' as const,
+    fontFamily: 'Inter_600SemiBold',
   },
   columnCheckboxItem: {
     paddingVertical: 10,
     borderBottomWidth: 1,
-    borderBottomColor: '#eee',
   },
   columnCheckboxRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
   },
   checkbox: {
     width: 24,
     height: 24,
     borderWidth: 2,
-    borderColor: '#007AFF',
     borderRadius: 4,
     marginRight: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  checkboxChecked: {
-    backgroundColor: '#007AFF',
+    justifyContent: 'center' as const,
+    alignItems: 'center' as const,
   },
   checkboxIcon: {
     color: '#fff',
     fontSize: 16,
-    fontWeight: 'bold',
+    fontWeight: 'bold' as const,
   },
   headerCheckbox: {
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
     padding: 4,
   },
   rowCheckbox: {
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
     padding: 4,
   },
   columnCheckboxLabel: {
     fontSize: 15,
-    color: '#333',
-  },
-  columnDropdownButtons: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-  },
-  columnButton: {
-    paddingVertical: Platform.OS === 'web' ? 12 : 10,
-    paddingHorizontal: Platform.OS === 'web' ? 24 : 20,
-    borderRadius: 8,
-    alignItems: 'center',
-    minWidth: 120,
-  },
-  columnButtonSecondary: {
-    backgroundColor: '#6c757d',
-  },
-  columnButtonTextSecondary: {
-    color: '#fff',
-    fontSize: Platform.OS === 'web' ? 16 : 14,
-    fontWeight: '600',
+    fontFamily: 'Inter_400Regular',
   },
 });
 
@@ -2395,32 +2350,35 @@ const TableRow = React.memo(({
   user: any; 
   onEdit: (id: number) => void; 
   onDelete: (id: number) => void;
-}) => (
-  <View style={styles.tableRow}>
-    <Text style={[styles.tableCell, { flex: 1 }]}>{user.id}</Text>
-    <Text style={[styles.tableCell, { flex: 3 }]}>{user.first_name} {user.last_name}</Text>
-    <Text style={[styles.tableCell, { flex: 2 }]} numberOfLines={1}>{user.email}</Text>
-    <Text style={[styles.tableCell, { flex: 1 }]}>{user.role}</Text>
+}) => {
+  const { colors } = useTheme();
+  return (
+  <View style={[styles.tableRow, { borderBottomColor: colors.border }]}>
+    <Text style={[styles.tableCell, { color: colors.text, flex: 1 }]}>{user.id}</Text>
+    <Text style={[styles.tableCell, { color: colors.text, flex: 3 }]}>{user.first_name} {user.last_name}</Text>
+    <Text style={[styles.tableCell, { color: colors.text, flex: 2 }]} numberOfLines={1}>{user.email}</Text>
+    <Text style={[styles.tableCell, { color: colors.text, flex: 1 }]}>{user.role}</Text>
     <View style={styles.actionButtons}>
-      <TouchableOpacity
-        style={styles.editButton}
+      <Pressable
+        style={[styles.editButton, { backgroundColor: colors.primary }]}
         onPress={() => onEdit(user.id)}
         accessibilityRole="button"
         accessibilityLabel={`Edit ${user.first_name} ${user.last_name}`}
       >
-        <Text style={styles.editButtonText}>✏️ Edit</Text>
-      </TouchableOpacity>
-      <TouchableOpacity
-        style={styles.deleteButton}
+        <Text style={styles.editButtonText}>Edit</Text>
+      </Pressable>
+      <Pressable
+        style={[styles.deleteButton, { backgroundColor: colors.danger }]}
         onPress={() => onDelete(user.id)}
         accessibilityRole="button"
         accessibilityLabel={`Delete ${user.first_name} ${user.last_name}`}
       >
-        <Text style={styles.deleteButtonText}>🗑️ Delete</Text>
-      </TouchableOpacity>
+        <Text style={styles.deleteButtonText}>Delete</Text>
+      </Pressable>
     </View>
   </View>
-));
+  );
+});
 
 // Create QueryClient instance
 const queryClient = new QueryClient({

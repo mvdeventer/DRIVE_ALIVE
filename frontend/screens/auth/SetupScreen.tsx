@@ -3,16 +3,16 @@ import {
   StyleSheet,
   View,
   Text,
-  TextInput,
-  TouchableOpacity,
+  Pressable,
   ScrollView,
-  ActivityIndicator,
   Platform,
-  Modal,
 } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import AddressAutocomplete from '../../components/AddressAutocomplete';
+import { Button, Card, Input, ThemedModal } from '../../components/ui';
+import { useTheme } from '../../theme/ThemeContext';
 import { formatPhoneNumber } from '../../utils/phoneFormatter';
+import { API_BASE_URL } from '../../config';
 
 interface FormData {
   firstName: string;
@@ -36,6 +36,7 @@ interface SetupScreenProps {
 }
 
 export default function SetupScreen({ navigation }: SetupScreenProps) {
+  const { colors } = useTheme();
   const [formData, setFormData] = useState<FormData>({
     firstName: '',
     lastName: '',
@@ -124,7 +125,7 @@ export default function SetupScreen({ navigation }: SetupScreenProps) {
     setLoading(true);
 
     try {
-      const response = await fetch('http://localhost:8000/setup/create-initial-admin', {
+      const response = await fetch(`${API_BASE_URL}/setup/create-initial-admin`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -149,32 +150,16 @@ export default function SetupScreen({ navigation }: SetupScreenProps) {
 
       if (response.ok) {
         const data = await response.json();
-        const validityTime = formData.linkValidity || '30';
         setSuccessMessage(
-          `✅ Registration successful!\n\n` +
-          `Please check your email and WhatsApp to verify your account.\n` +
-          `Complete registration by clicking the verification link.\n\n` +
-          `⏰ Link expires in ${validityTime} minutes.\n\n` +
-          `You can change this setting anytime in Admin Dashboard → Settings.`
+          `✅ Admin account created successfully!\n\n` +
+          `You can now log in with your credentials.\n\n` +
+          `No verification needed — your admin account is active immediately.`
         );
 
-        const verificationData = data.verification_sent || {
-          email_sent: false,
-          whatsapp_sent: false,
-          expires_in_minutes: parseInt(validityTime, 10) || 30,
-        };
-
-        // Navigate to verification pending screen
+        // Navigate to login screen after a short delay
         setTimeout(() => {
-          navigation.replace('VerificationPending', {
-            email: formData.email,
-            phone: formData.phone,
-            firstName: formData.firstName,
-            emailSent: verificationData.email_sent,
-            whatsappSent: verificationData.whatsapp_sent,
-            expiryMinutes: verificationData.expires_in_minutes || 30,
-          });
-        }, 500);
+          navigation.replace('Login');
+        }, 2000);
       } else {
         const errorData = await response.json();
         setErrorMessage(
@@ -200,7 +185,7 @@ export default function SetupScreen({ navigation }: SetupScreenProps) {
     setSuccessMessage('');
 
     try {
-      const response = await fetch('http://localhost:8000/verify/test-email', {
+      const response = await fetch(`${API_BASE_URL}/verify/test-email`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -209,7 +194,7 @@ export default function SetupScreen({ navigation }: SetupScreenProps) {
           smtp_email: formData.smtpEmail,
           smtp_password: formData.smtpPassword,
           test_recipient: formData.testRecipient,
-          verification_link_validity_minutes: parseInt(formData.verificationLinkValidityMinutes) || 30,
+          verification_link_validity_minutes: parseInt(formData.linkValidity) || 30,
         }),
       });
 
@@ -251,7 +236,7 @@ export default function SetupScreen({ navigation }: SetupScreenProps) {
       };
       console.log('Sending WhatsApp test request:', requestBody);
       
-      const response = await fetch('http://localhost:8000/verify/test-whatsapp', {
+      const response = await fetch(`${API_BASE_URL}/verify/test-whatsapp`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -295,688 +280,435 @@ export default function SetupScreen({ navigation }: SetupScreenProps) {
 
   return (
     <>
-    <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
-      <View style={styles.content}>
-        {/* Header */}
-        <View style={styles.header}>
-          <Text style={styles.title}>🚀 System Setup</Text>
-          <Text style={styles.subtitle}>
-            Welcome! This is the first run of the system. Please create the initial admin account.
-          </Text>
+    <ScrollView
+      style={[styles.container, { backgroundColor: colors.background }]}
+      contentContainerStyle={styles.contentContainer}
+      showsVerticalScrollIndicator={false}
+    >
+      {/* Header */}
+      <View style={styles.header}>
+        <View style={[styles.headerIcon, { backgroundColor: colors.primary + '15' }]}>
+          <Text style={styles.headerEmoji}>🚀</Text>
         </View>
-
-        {/* Success Message */}
-        {successMessage ? (
-          <View style={styles.successMessage}>
-            <Text style={styles.successText}>{successMessage}</Text>
-          </View>
-        ) : null}
-
-        {/* Error Message */}
-        {errorMessage ? (
-          <View style={styles.errorMessage}>
-            <Text style={styles.errorText}>❌ {errorMessage}</Text>
-          </View>
-        ) : null}
-
-        {/* Form */}
-        <View style={styles.form}>
-          {/* First Name */}
-          <View style={styles.formGroup}>
-            <Text style={styles.label}>First Name *</Text>
-            <TextInput
-              style={[styles.input, errors.firstName && styles.inputError]}
-              placeholder="Enter first name"
-              value={formData.firstName}
-              onChangeText={(value) => handleChange('firstName', value)}
-              editable={!loading}
-            />
-            {errors.firstName ? (
-              <Text style={styles.fieldError}>{errors.firstName}</Text>
-            ) : null}
-          </View>
-
-          {/* Last Name */}
-          <View style={styles.formGroup}>
-            <Text style={styles.label}>Last Name *</Text>
-            <TextInput
-              style={[styles.input, errors.lastName && styles.inputError]}
-              placeholder="Enter last name"
-              value={formData.lastName}
-              onChangeText={(value) => handleChange('lastName', value)}
-              editable={!loading}
-            />
-            {errors.lastName ? (
-              <Text style={styles.fieldError}>{errors.lastName}</Text>
-            ) : null}
-          </View>
-
-          {/* Email */}
-          <View style={styles.formGroup}>
-            <Text style={styles.label}>Email Address *</Text>
-            <TextInput
-              style={[styles.input, errors.email && styles.inputError]}
-              placeholder="admin@example.com"
-              value={formData.email}
-              onChangeText={(value) => handleChange('email', value)}
-              keyboardType="email-address"
-              autoCapitalize="none"
-              editable={!loading}
-            />
-            {errors.email ? (
-              <Text style={styles.fieldError}>{errors.email}</Text>
-            ) : null}
-          </View>
-
-          {/* Phone Number */}
-          <View style={styles.formGroup}>
-            <Text style={styles.label}>Phone Number *</Text>
-            <TextInput
-              style={[styles.input, errors.phone && styles.inputError]}
-              placeholder="+27123456789"
-              value={formData.phone}
-              onChangeText={(value) => handleChange('phone', value)}
-              keyboardType="phone-pad"
-              editable={!loading}
-            />
-            {errors.phone ? (
-              <Text style={styles.fieldError}>{errors.phone}</Text>
-            ) : null}
-          </View>
-
-          {/* ID Number */}
-          <View style={styles.formGroup}>
-            <Text style={styles.label}>ID Number *</Text>
-            <TextInput
-              style={[styles.input, errors.idNumber && styles.inputError]}
-              placeholder="13-digit SA ID number"
-              value={formData.idNumber}
-              onChangeText={(value) => handleChange('idNumber', value)}
-              keyboardType="numeric"
-              maxLength={13}
-              editable={!loading}
-            />
-            {errors.idNumber ? (
-              <Text style={styles.fieldError}>{errors.idNumber}</Text>
-            ) : null}
-            <Text style={styles.hint}>South African ID number (13 digits)</Text>
-          </View>
-
-          {/* Address with GPS */}
-          <View style={styles.formGroup}>
-            <Text style={styles.label}>Address *</Text>
-            <AddressAutocomplete
-              value={formData.address}
-              onChangeText={(value) => handleChange('address', value)}
-              onLocationCapture={(coords) => setPickupCoordinates(coords)}
-            />
-            {errors.address ? (
-              <Text style={styles.fieldError}>{errors.address}</Text>
-            ) : null}
-          </View>
-
-          {/* Password */}
-          <View style={styles.formGroup}>
-            <Text style={styles.label}>Password *</Text>
-            <TextInput
-              key={`password-${showPassword}`}
-              style={[styles.input, errors.password && styles.inputError]}
-              placeholder="Enter a strong password"
-              value={formData.password}
-              onChangeText={(value) => handleChange('password', value)}
-              secureTextEntry={!showPassword}
-              editable={!loading}
-            />
-            {errors.password ? (
-              <Text style={styles.fieldError}>{errors.password}</Text>
-            ) : null}
-            <Text style={styles.hint}>At least 8 characters recommended</Text>
-          </View>
-
-          {/* Confirm Password */}
-          <View style={styles.formGroup}>
-            <Text style={styles.label}>Confirm Password *</Text>
-            <TextInput
-              key={`confirm-password-${showPassword}`}
-              style={[styles.input, errors.confirmPassword && styles.inputError]}
-              placeholder="Confirm password"
-              value={formData.confirmPassword}
-              onChangeText={(value) => handleChange('confirmPassword', value)}
-              secureTextEntry={!showPassword}
-              editable={!loading}
-            />
-            {errors.confirmPassword ? (
-              <Text style={styles.fieldError}>{errors.confirmPassword}</Text>
-            ) : null}
-          </View>
-
-          <TouchableOpacity
-            style={styles.showPasswordButton}
-            onPress={() => setShowPassword(!showPassword)}
-          >
-            <Text style={styles.showPasswordText}>
-              {showPassword ? '🙈 Hide Password' : '👁️ Show Password'}
-            </Text>
-          </TouchableOpacity>
-
-          {/* Email Configuration Section */}
-          <View style={styles.sectionDivider} />
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>📧 Email Configuration (Optional)</Text>
-            <Text style={styles.sectionSubtitle}>
-              Configure Gmail SMTP to send verification emails to users. You can skip this and configure later in settings.
-            </Text>
-          </View>
-
-          {/* Gmail Address */}
-          <View style={styles.formGroup}>
-            <Text style={styles.label}>Gmail Address</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="admin@gmail.com"
-              value={formData.smtpEmail}
-              onChangeText={(value) => handleChange('smtpEmail', value)}
-              keyboardType="email-address"
-              autoCapitalize="none"
-              editable={!loading}
-            />
-            <Text style={styles.hint}>Your Gmail address for sending verification emails</Text>
-          </View>
-
-          {/* Gmail App Password */}
-          <View style={styles.formGroup}>
-            <Text style={styles.label}>Gmail App Password</Text>
-            <TextInput
-              key={`smtp-password-${showSmtpPassword}`}
-              style={styles.input}
-              placeholder="16-character app password (no spaces)"
-              value={formData.smtpPassword}
-              onChangeText={(value) => handleChange('smtpPassword', value)}
-              secureTextEntry={!showSmtpPassword}
-              autoCapitalize="none"
-              editable={!loading}
-            />
-            <Text style={styles.hint}>
-              Generate at: myaccount.google.com/apppasswords (requires 2FA enabled)
-            </Text>
-            <TouchableOpacity
-              style={styles.showPasswordButton}
-              onPress={() => setShowSmtpPassword(!showSmtpPassword)}
-            >
-              <Text style={styles.showPasswordText}>
-                {showSmtpPassword ? '🙈 Hide' : '👁️ Show'}
-              </Text>
-            </TouchableOpacity>
-          </View>
-
-          {/* Link Validity */}
-          <View style={styles.formGroup}>
-            <Text style={styles.label}>Verification Link Validity (minutes)</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="30"
-              value={formData.linkValidity}
-              onChangeText={(value) => handleChange('linkValidity', value)}
-              keyboardType="numeric"
-              editable={!loading}
-            />
-            <Text style={styles.hint}>How long verification links remain valid (default: 30 minutes)</Text>
-          </View>
-
-          {/* Test Email Section */}
-          {formData.smtpEmail && formData.smtpPassword && (
-            <View style={styles.testEmailSection}>
-              <View style={styles.formGroup}>
-                <Text style={styles.label}>Test Email Recipient</Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder="test@example.com"
-                  value={formData.testRecipient}
-                  onChangeText={(value) => handleChange('testRecipient', value)}
-                  keyboardType="email-address"
-                  autoCapitalize="none"
-                  editable={!loading && !testingEmail}
-                />
-                <Text style={styles.hint}>Send a test email to verify your Gmail configuration</Text>
-              </View>
-              <TouchableOpacity
-                style={[styles.testEmailButton, (!formData.testRecipient || testingEmail) && styles.buttonDisabled]}
-                onPress={handleTestEmail}
-                disabled={!formData.testRecipient || testingEmail}
-              >
-                <Text style={styles.testEmailButtonText}>
-                  {testingEmail ? '⏳ Sending Test Email...' : '📧 Send Test Email'}
-                </Text>
-              </TouchableOpacity>
-            </View>
-          )}
-
-          {/* Twilio WhatsApp Configuration Section */}
-          <View style={styles.testWhatsAppSection}>
-            <Text style={styles.sectionTitle}>💬 Twilio WhatsApp Configuration (Optional)</Text>
-            
-            {/* Twilio Sender Number */}
-            <View style={styles.formGroup}>
-              <Text style={styles.label}>Twilio Sender Phone Number</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="e.g., +14155238886 (sandbox) or your business number"
-                value={formData.twilioSenderPhoneNumber}
-                onChangeText={(value) => handleChange('twilioSenderPhoneNumber', value)}
-                keyboardType="phone-pad"
-                autoCapitalize="none"
-                editable={!loading && !testingWhatsApp}
-              />
-              <Text style={styles.hint}>
-                📱 This is your Twilio account's phone number. Used as the FROM number in all messages. Example: +14155238886 for sandbox.
-              </Text>
-            </View>
-
-            {/* Test Recipient Number */}
-            <View style={styles.formGroup}>
-              <Text style={styles.label}>Your Phone Number (For Testing)</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="Enter your phone to receive test messages (e.g., +27123456789)"
-                value={formData.twilioPhoneNumber}
-                onChangeText={(value) => handleChange('twilioPhoneNumber', value)}
-                keyboardType="phone-pad"
-                autoCapitalize="none"
-                editable={!loading && !testingWhatsApp}
-              />
-              <Text style={styles.hint}>
-                🔔 Enter YOUR phone number to receive test messages. If using sandbox, first register at twilio.com/console/sms/whatsapp/learn
-              </Text>
-            </View>
-
-            {/* Send Test Button */}
-            <TouchableOpacity
-              style={[styles.testWhatsAppButton, (!formData.twilioSenderPhoneNumber || !formData.twilioPhoneNumber || testingWhatsApp) && styles.buttonDisabled]}
-              onPress={handleTestWhatsApp}
-              disabled={!formData.twilioSenderPhoneNumber || !formData.twilioPhoneNumber || testingWhatsApp}
-            >
-              <Text style={styles.testWhatsAppButtonText}>
-                {testingWhatsApp ? '⏳ Sending WhatsApp...' : '💬 Send Test WhatsApp'}
-              </Text>
-            </TouchableOpacity>
-          </View>
-
-          {/* Submit Button */}
-          <TouchableOpacity
-            style={[styles.submitButton, loading && styles.submitButtonDisabled]}
-            onPress={handleCreateAdmin}
-            disabled={loading}
-          >
-            {loading ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <Text style={styles.submitButtonText}>Create Admin Account</Text>
-            )}
-          </TouchableOpacity>
-
-          {/* Info Box */}
-          <View style={styles.infoBox}>
-            <Text style={styles.infoTitle}>ℹ️ Important Information</Text>
-            <Text style={styles.infoText}>
-              • This admin account will be the first administrator of the system{'\n'}
-              • Only admin accounts can create other admin, instructor, and student accounts{'\n'}
-              • Keep your admin credentials secure{'\n'}
-              • You can change your password after logging in
-            </Text>
-          </View>
-        </View>
+        <Text style={[styles.title, { color: colors.text }]}>System Setup</Text>
+        <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
+          Welcome! Create the initial admin account to get started.
+        </Text>
       </View>
+
+      {/* Success/Error Messages */}
+      {successMessage ? (
+        <View style={[styles.messageBanner, { backgroundColor: colors.successBg, borderLeftColor: colors.success }]}>
+          <Text style={[styles.messageText, { color: colors.text }]}>{successMessage}</Text>
+        </View>
+      ) : null}
+      {errorMessage ? (
+        <View style={[styles.messageBanner, { backgroundColor: colors.dangerBg, borderLeftColor: colors.danger }]}>
+          <Text style={[styles.messageText, { color: colors.text }]}>❌ {errorMessage}</Text>
+        </View>
+      ) : null}
+
+      {/* Personal Information */}
+      <Card variant="outlined" padding="md" style={styles.section}>
+        <Text style={[styles.sectionTitle, { color: colors.primary }]}>Personal Information</Text>
+
+        <Input
+          label="First Name *"
+          placeholder="Enter first name"
+          value={formData.firstName}
+          onChangeText={(v) => handleChange('firstName', v)}
+          error={errors.firstName}
+          editable={!loading}
+        />
+        <Input
+          label="Last Name *"
+          placeholder="Enter last name"
+          value={formData.lastName}
+          onChangeText={(v) => handleChange('lastName', v)}
+          error={errors.lastName}
+          editable={!loading}
+        />
+        <Input
+          label="Email Address *"
+          placeholder="admin@example.com"
+          value={formData.email}
+          onChangeText={(v) => handleChange('email', v)}
+          error={errors.email}
+          keyboardType="email-address"
+          autoCapitalize="none"
+          editable={!loading}
+        />
+        <Input
+          label="Phone Number *"
+          placeholder="+27123456789"
+          value={formData.phone}
+          onChangeText={(v) => handleChange('phone', v)}
+          error={errors.phone}
+          keyboardType="phone-pad"
+          editable={!loading}
+        />
+        <Input
+          label="ID Number *"
+          placeholder="13-digit SA ID number"
+          value={formData.idNumber}
+          onChangeText={(v) => handleChange('idNumber', v)}
+          error={errors.idNumber}
+          hint="South African ID number (13 digits)"
+          keyboardType="numeric"
+          maxLength={13}
+          editable={!loading}
+        />
+      </Card>
+
+      {/* Address */}
+      <Card variant="outlined" padding="md" style={styles.section}>
+        <Text style={[styles.sectionTitle, { color: colors.primary }]}>Address</Text>
+        <AddressAutocomplete
+          value={formData.address}
+          onChangeText={(v) => handleChange('address', v)}
+          onLocationCapture={(coords) => setPickupCoordinates(coords)}
+        />
+        {errors.address ? (
+          <Text style={[styles.fieldError, { color: colors.danger }]}>{errors.address}</Text>
+        ) : null}
+      </Card>
+
+      {/* Security */}
+      <Card variant="outlined" padding="md" style={styles.section}>
+        <Text style={[styles.sectionTitle, { color: colors.primary }]}>Security</Text>
+
+        <Input
+          key={`password-${showPassword}`}
+          label="Password *"
+          placeholder="Enter a strong password"
+          value={formData.password}
+          onChangeText={(v) => handleChange('password', v)}
+          error={errors.password}
+          hint="At least 8 characters recommended"
+          secureTextEntry={!showPassword}
+          editable={!loading}
+        />
+        <Input
+          key={`confirm-password-${showPassword}`}
+          label="Confirm Password *"
+          placeholder="Confirm password"
+          value={formData.confirmPassword}
+          onChangeText={(v) => handleChange('confirmPassword', v)}
+          error={errors.confirmPassword}
+          secureTextEntry={!showPassword}
+          editable={!loading}
+        />
+        <Pressable style={styles.showPasswordButton} onPress={() => setShowPassword(!showPassword)}>
+          <Text style={[styles.showPasswordText, { color: colors.primary }]}>
+            {showPassword ? '🙈 Hide Password' : '👁️ Show Password'}
+          </Text>
+        </Pressable>
+      </Card>
+
+      {/* Email Configuration */}
+      <Card variant="outlined" padding="md" style={styles.section}>
+        <Text style={[styles.sectionTitle, { color: colors.primary }]}>📧 Email Configuration (Optional)</Text>
+        <Text style={[styles.sectionSubtitle, { color: colors.textSecondary }]}>
+          Configure Gmail SMTP to send verification emails. You can skip this and configure later in settings.
+        </Text>
+
+        <Input
+          label="Gmail Address"
+          placeholder="admin@gmail.com"
+          value={formData.smtpEmail}
+          onChangeText={(v) => handleChange('smtpEmail', v)}
+          hint="Your Gmail address for sending verification emails"
+          keyboardType="email-address"
+          autoCapitalize="none"
+          editable={!loading}
+        />
+        <Input
+          key={`smtp-password-${showSmtpPassword}`}
+          label="Gmail App Password"
+          placeholder="16-character app password"
+          value={formData.smtpPassword}
+          onChangeText={(v) => handleChange('smtpPassword', v)}
+          hint="Generate at: myaccount.google.com/apppasswords (requires 2FA)"
+          secureTextEntry={!showSmtpPassword}
+          editable={!loading}
+        />
+        <Pressable style={styles.showPasswordButton} onPress={() => setShowSmtpPassword(!showSmtpPassword)}>
+          <Text style={[styles.showPasswordText, { color: colors.primary }]}>
+            {showSmtpPassword ? '🙈 Hide' : '👁️ Show'}
+          </Text>
+        </Pressable>
+
+        <Input
+          label="Verification Link Validity (minutes)"
+          placeholder="30"
+          value={formData.linkValidity}
+          onChangeText={(v) => handleChange('linkValidity', v)}
+          hint="How long verification links stay valid (default: 30 min)"
+          keyboardType="numeric"
+          editable={!loading}
+        />
+
+        {/* Test Email */}
+        {formData.smtpEmail && formData.smtpPassword ? (
+          <View style={[styles.testBox, { backgroundColor: colors.infoBg, borderColor: colors.primary }]}>
+            <Input
+              label="Test Email Recipient"
+              placeholder="test@example.com"
+              value={formData.testRecipient}
+              onChangeText={(v) => handleChange('testRecipient', v)}
+              hint="Send a test email to verify your Gmail configuration"
+              keyboardType="email-address"
+              autoCapitalize="none"
+              editable={!loading && !testingEmail}
+            />
+            <Button
+              label={testingEmail ? '⏳ Sending…' : '📧 Send Test Email'}
+              onPress={handleTestEmail}
+              loading={testingEmail}
+              disabled={!formData.testRecipient || testingEmail}
+              fullWidth
+            />
+          </View>
+        ) : null}
+      </Card>
+
+      {/* WhatsApp Configuration */}
+      <Card variant="outlined" padding="md" style={styles.section}>
+        <Text style={[styles.sectionTitle, { color: colors.primary }]}>💬 WhatsApp Configuration (Optional)</Text>
+
+        <Input
+          label="Twilio Sender Phone Number"
+          placeholder="e.g., +14155238886 (sandbox)"
+          value={formData.twilioSenderPhoneNumber}
+          onChangeText={(v) => handleChange('twilioSenderPhoneNumber', v)}
+          hint="📱 Your Twilio FROM number for all messages"
+          keyboardType="phone-pad"
+          editable={!loading && !testingWhatsApp}
+        />
+        <Input
+          label="Your Phone Number (For Testing)"
+          placeholder="e.g., +27123456789"
+          value={formData.twilioPhoneNumber}
+          onChangeText={(v) => handleChange('twilioPhoneNumber', v)}
+          hint="🔔 Enter YOUR phone number to receive test messages"
+          keyboardType="phone-pad"
+          editable={!loading && !testingWhatsApp}
+        />
+        <Button
+          label={testingWhatsApp ? '⏳ Sending…' : '💬 Send Test WhatsApp'}
+          onPress={handleTestWhatsApp}
+          loading={testingWhatsApp}
+          disabled={!formData.twilioSenderPhoneNumber || !formData.twilioPhoneNumber || testingWhatsApp}
+          variant="accent"
+          fullWidth
+        />
+      </Card>
+
+      {/* Submit */}
+      <Button
+        label="Create Admin Account"
+        onPress={handleCreateAdmin}
+        loading={loading}
+        disabled={loading}
+        fullWidth
+        size="lg"
+      />
+
+      {/* Info Box */}
+      <View style={[styles.infoBox, { backgroundColor: colors.infoBg, borderLeftColor: colors.primary }]}>
+        <Text style={[styles.infoTitle, { color: colors.primary }]}>ℹ️ Important Information</Text>
+        <Text style={[styles.infoText, { color: colors.textSecondary }]}>
+          • This will be the first administrator of the system{'\n'}
+          • Only admins can create other admin, instructor, and student accounts{'\n'}
+          • Keep your admin credentials secure{'\n'}
+          • You can change your password after logging in
+        </Text>
+      </View>
+
+      <View style={{ height: 40 }} />
     </ScrollView>
 
     {/* Confirmation Modal */}
-    <Modal
+    <ThemedModal
       visible={showConfirmModal}
-      transparent
-      animationType="fade"
-      onRequestClose={() => setShowConfirmModal(false)}
-    >
-      <View style={styles.modalOverlay}>
-        <View style={styles.modalContent}>
-          <Text style={styles.modalTitle}>✓ Confirm Admin Account Details</Text>
-          <Text style={styles.modalSubtitle}>Please review your information before creating the admin account</Text>
-          
-          <View style={styles.confirmDetails}>
-            <Text style={styles.confirmLabel}>Name:</Text>
-            <Text style={styles.confirmValue}>{formData.firstName} {formData.lastName}</Text>
-            
-            <Text style={styles.confirmLabel}>Email:</Text>
-            <Text style={styles.confirmValue}>{formData.email}</Text>
-            
-            <Text style={styles.confirmLabel}>Phone:</Text>
-            <Text style={styles.confirmValue}>{formData.phone}</Text>
-            
-            <Text style={styles.confirmLabel}>ID Number:</Text>
-            <Text style={styles.confirmValue}>{formData.idNumber}</Text>
-            
-            <Text style={styles.confirmLabel}>Address:</Text>
-            <Text style={styles.confirmValue}>{formData.address}</Text>
-            
-            {pickupCoordinates && (
-              <>
-                <Text style={styles.confirmLabel}>GPS Coordinates:</Text>
-                <Text style={styles.confirmValue}>
-                  Lat: {pickupCoordinates.latitude.toFixed(4)}, Lng: {pickupCoordinates.longitude.toFixed(4)}
-                </Text>
-              </>
-            )}
-
-            {formData.smtpEmail && formData.smtpPassword && (
-              <>
-                <Text style={styles.confirmLabel}>📧 Email Configuration:</Text>
-                <Text style={styles.confirmValue}>Gmail: {formData.smtpEmail}</Text>
-                <Text style={styles.confirmValue}>Link Validity: {formData.linkValidity} minutes</Text>
-              </>
-            )}
-
-            {(formData.twilioSenderPhoneNumber || formData.twilioPhoneNumber) && (
-              <>
-                <Text style={styles.confirmLabel}>💬 WhatsApp Configuration:</Text>
-                {formData.twilioSenderPhoneNumber && (
-                  <Text style={styles.confirmValue}>Sender Phone: {formData.twilioSenderPhoneNumber}</Text>
-                )}
-                {formData.twilioPhoneNumber && (
-                  <Text style={styles.confirmValue}>Test Recipient: {formData.twilioPhoneNumber}</Text>
-                )}
-              </>
-            )}
-          </View>
-
-          <View style={styles.modalButtons}>
-            <TouchableOpacity
-              style={[styles.modalButton, styles.modalButtonSecondary]}
-              onPress={() => setShowConfirmModal(false)}
-            >
-              <Text style={styles.modalButtonTextSecondary}>✏️ Edit</Text>
-            </TouchableOpacity>
-            
-            <TouchableOpacity
-              style={[styles.modalButton, styles.modalButtonPrimary]}
-              onPress={confirmAndSubmit}
-            >
-              <Text style={styles.modalButtonText}>✓ Confirm & Create Admin</Text>
-            </TouchableOpacity>
-          </View>
+      onClose={() => setShowConfirmModal(false)}
+      title="Confirm Admin Account"
+      size="md"
+      footer={
+        <View style={styles.modalButtons}>
+          <Button
+            label="✏️ Edit"
+            onPress={() => setShowConfirmModal(false)}
+            variant="outline"
+            style={{ flex: 1 }}
+          />
+          <Button
+            label="✓ Confirm & Create"
+            onPress={confirmAndSubmit}
+            variant="primary"
+            style={{ flex: 1 }}
+          />
         </View>
+      }
+    >
+      <Text style={[styles.modalSubtitle, { color: colors.textSecondary }]}>
+        Please review your information before creating the admin account
+      </Text>
+      <View style={[styles.confirmDetails, { backgroundColor: colors.backgroundSecondary }]}>
+        <Text style={[styles.confirmLabel, { color: colors.textSecondary }]}>Name:</Text>
+        <Text style={[styles.confirmValue, { color: colors.text }]}>
+          {formData.firstName} {formData.lastName}
+        </Text>
+        <Text style={[styles.confirmLabel, { color: colors.textSecondary }]}>Email:</Text>
+        <Text style={[styles.confirmValue, { color: colors.text }]}>{formData.email}</Text>
+        <Text style={[styles.confirmLabel, { color: colors.textSecondary }]}>Phone:</Text>
+        <Text style={[styles.confirmValue, { color: colors.text }]}>{formData.phone}</Text>
+        <Text style={[styles.confirmLabel, { color: colors.textSecondary }]}>ID Number:</Text>
+        <Text style={[styles.confirmValue, { color: colors.text }]}>{formData.idNumber}</Text>
+        <Text style={[styles.confirmLabel, { color: colors.textSecondary }]}>Address:</Text>
+        <Text style={[styles.confirmValue, { color: colors.text }]}>{formData.address}</Text>
+
+        {pickupCoordinates ? (
+          <>
+            <Text style={[styles.confirmLabel, { color: colors.textSecondary }]}>GPS:</Text>
+            <Text style={[styles.confirmValue, { color: colors.text }]}>
+              {pickupCoordinates.latitude.toFixed(4)}, {pickupCoordinates.longitude.toFixed(4)}
+            </Text>
+          </>
+        ) : null}
+
+        {formData.smtpEmail && formData.smtpPassword ? (
+          <>
+            <Text style={[styles.confirmLabel, { color: colors.textSecondary }]}>📧 Email Config:</Text>
+            <Text style={[styles.confirmValue, { color: colors.text }]}>
+              Gmail: {formData.smtpEmail} | Validity: {formData.linkValidity} min
+            </Text>
+          </>
+        ) : null}
+
+        {formData.twilioSenderPhoneNumber || formData.twilioPhoneNumber ? (
+          <>
+            <Text style={[styles.confirmLabel, { color: colors.textSecondary }]}>💬 WhatsApp Config:</Text>
+            {formData.twilioSenderPhoneNumber ? (
+              <Text style={[styles.confirmValue, { color: colors.text }]}>
+                Sender: {formData.twilioSenderPhoneNumber}
+              </Text>
+            ) : null}
+          </>
+        ) : null}
       </View>
-    </Modal>
+    </ThemedModal>
     </>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#f5f5f5',
-  },
-  content: {
+  container: { flex: 1 },
+  contentContainer: {
     padding: Platform.OS === 'web' ? 40 : 20,
-    paddingTop: Platform.OS === 'web' ? 60 : 40,
+    maxWidth: 600,
+    alignSelf: 'center',
+    width: '100%',
   },
   header: {
-    marginBottom: 30,
     alignItems: 'center',
+    marginBottom: 28,
   },
+  headerIcon: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 14,
+  },
+  headerEmoji: { fontSize: 36 },
   title: {
-    fontSize: Platform.OS === 'web' ? 40 : 32,
-    fontWeight: 'bold',
-    color: '#333',
-    marginBottom: 10,
+    fontSize: Platform.OS === 'web' ? 28 : 24,
+    fontWeight: '800',
+    letterSpacing: -0.3,
+    marginBottom: 6,
   },
   subtitle: {
-    fontSize: Platform.OS === 'web' ? 18 : 16,
-    color: '#666',
+    fontSize: Platform.OS === 'web' ? 15 : 13,
     textAlign: 'center',
-    lineHeight: 24,
+    lineHeight: 21,
   },
-  form: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: Platform.OS === 'web' ? 40 : 20,
-    boxShadow: Platform.OS === 'web' ? '0 2px 8px rgba(0, 0, 0, 0.1)' : undefined,
-    elevation: 3,
-  },
-  formGroup: {
-    marginBottom: 20,
-  },
-  label: {
-    fontSize: Platform.OS === 'web' ? 16 : 14,
-    fontWeight: '600',
-    color: '#333',
-    marginBottom: 8,
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: '#ddd',
+  messageBanner: {
+    borderLeftWidth: 4,
+    padding: Platform.OS === 'web' ? 16 : 12,
     borderRadius: 8,
-    padding: Platform.OS === 'web' ? 12 : 10,
-    fontSize: Platform.OS === 'web' ? 16 : 14,
-    backgroundColor: '#f9f9f9',
+    marginBottom: 16,
   },
-  inputError: {
-    borderColor: '#ff6b6b',
-    backgroundColor: '#fff5f5',
+  messageText: {
+    fontSize: Platform.OS === 'web' ? 14 : 13,
+    lineHeight: 20,
+  },
+  section: { marginBottom: 20 },
+  sectionTitle: {
+    fontSize: Platform.OS === 'web' ? 17 : 15,
+    fontWeight: '600',
+    marginBottom: 12,
+  },
+  sectionSubtitle: {
+    fontSize: 13,
+    lineHeight: 19,
+    marginBottom: 12,
   },
   fieldError: {
-    color: '#ff6b6b',
-    fontSize: Platform.OS === 'web' ? 14 : 12,
+    fontSize: 12,
     marginTop: 4,
-  },
-  hint: {
-    fontSize: Platform.OS === 'web' ? 13 : 11,
-    color: '#999',
-    marginTop: 4,
-  },
-  submitButton: {
-    backgroundColor: '#007AFF',
-    paddingVertical: Platform.OS === 'web' ? 14 : 12,
-    borderRadius: 8,
-    alignItems: 'center',
-    marginTop: 30,
   },
   showPasswordButton: {
-    marginBottom: 15,
     padding: 8,
     alignItems: 'center',
   },
   showPasswordText: {
-    color: '#007bff',
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  submitButtonDisabled: {
-    opacity: 0.6,
-  },
-  submitButtonText: {
-    color: '#fff',
-    fontSize: Platform.OS === 'web' ? 16 : 14,
-    fontWeight: '600',
-  },
-  successMessage: {
-    backgroundColor: '#d4edda',
-    borderLeftWidth: 4,
-    borderLeftColor: '#28a745',
-    padding: 15,
-    borderRadius: 4,
-    marginBottom: 20,
-  },
-  successText: {
-    color: '#155724',
-    fontSize: Platform.OS === 'web' ? 16 : 14,
-  },
-  errorMessage: {
-    backgroundColor: '#f8d7da',
-    borderLeftWidth: 4,
-    borderLeftColor: '#dc3545',
-    padding: 15,
-    borderRadius: 4,
-    marginBottom: 20,
-  },
-  errorText: {
-    color: '#721c24',
-    fontSize: Platform.OS === 'web' ? 16 : 14,
-  },
-  infoBox: {
-    backgroundColor: '#e7f3ff',
-    borderLeftWidth: 4,
-    borderLeftColor: '#007AFF',
-    padding: 15,
-    borderRadius: 4,
-    marginTop: 25,
-  },
-  infoTitle: {
-    fontSize: Platform.OS === 'web' ? 15 : 13,
-    fontWeight: '600',
-    color: '#0056b3',
-    marginBottom: 8,
-  },
-  infoText: {
-    fontSize: Platform.OS === 'web' ? 14 : 12,
-    color: '#004085',
-    lineHeight: 20,
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: Platform.OS === 'web' ? 20 : 10,
-  },
-  modalContent: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: Platform.OS === 'web' ? 32 : 24,
-    width: Platform.OS === 'web' ? '45%' : '92%',
-    maxWidth: 550,
-    maxHeight: '85%',
-  },
-  modalTitle: {
-    fontSize: Platform.OS === 'web' ? 24 : 20,
-    fontWeight: 'bold',
-    color: '#28a745',
-    marginBottom: 10,
-    textAlign: 'center',
-  },
-  modalSubtitle: {
-    fontSize: Platform.OS === 'web' ? 15 : 13,
-    color: '#666',
-    marginBottom: 20,
-    textAlign: 'center',
-    lineHeight: 22,
-  },
-  confirmDetails: {
-    backgroundColor: '#f8f9fa',
-    borderRadius: 8,
-    padding: Platform.OS === 'web' ? 24 : 18,
-    marginBottom: 24,
-  },
-  confirmLabel: {
     fontSize: Platform.OS === 'web' ? 14 : 13,
     fontWeight: '600',
-    color: '#666',
-    marginTop: 10,
   },
-  confirmValue: {
-    fontSize: Platform.OS === 'web' ? 16 : 15,
-    color: '#333',
-    marginBottom: 10,
-    fontWeight: '500',
+  testBox: {
+    borderRadius: 8,
+    padding: Platform.OS === 'web' ? 16 : 12,
+    borderWidth: 1,
+    marginTop: 12,
+  },
+  infoBox: {
+    borderLeftWidth: 4,
+    padding: Platform.OS === 'web' ? 16 : 12,
+    borderRadius: 8,
+    marginTop: 24,
+  },
+  infoTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    marginBottom: 6,
+  },
+  infoText: {
+    fontSize: 13,
+    lineHeight: 20,
   },
   modalButtons: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: Platform.OS === 'web' ? 16 : 12,
+    gap: 12,
   },
-  modalButton: {
-    flex: 1,
-    paddingVertical: Platform.OS === 'web' ? 14 : 12,
-    paddingHorizontal: Platform.OS === 'web' ? 20 : 16,
+  modalSubtitle: {
+    fontSize: 14,
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  confirmDetails: {
     borderRadius: 8,
-    alignItems: 'center',
+    padding: Platform.OS === 'web' ? 20 : 14,
   },
-  modalButtonPrimary: {
-    backgroundColor: '#28a745',
-  },
-  modalButtonSecondary: {
-    backgroundColor: '#fff',
-    borderWidth: 2,
-    borderColor: '#dc3545',
-  },
-  modalButtonText: {
-    color: '#fff',
-    fontSize: Platform.OS === 'web' ? 16 : 15,
+  confirmLabel: {
+    fontSize: 13,
     fontWeight: '600',
+    marginTop: 8,
   },
-  modalButtonTextSecondary: {
-    color: '#dc3545',
-    fontSize: Platform.OS === 'web' ? 16 : 15,
-    fontWeight: '600',
-  },
-  sectionDivider: {
-    height: 1,
-    backgroundColor: '#e0e0e0',
-    marginVertical: Platform.OS === 'web' ? 24 : 20,
-  },
-  sectionHeader: {
-    marginBottom: Platform.OS === 'web' ? 20 : 16,
-  },
-  sectionTitle: {
-    fontSize: Platform.OS === 'web' ? 20 : 18,
-    fontWeight: 'bold',
-    color: '#333',
+  confirmValue: {
+    fontSize: 15,
+    fontWeight: '500',
     marginBottom: 8,
-  },
-  sectionSubtitle: {
-    fontSize: Platform.OS === 'web' ? 14 : 12,
-    color: '#666',
-    lineHeight: 20,
-  },
-  testEmailSection: {
-    backgroundColor: '#f0f8ff',
-    borderRadius: 8,
-    padding: Platform.OS === 'web' ? 16 : 12,
-    borderWidth: 1,
-    borderColor: '#007AFF',
-    marginTop: 12,
-  },
-  testEmailButton: {
-    backgroundColor: '#007AFF',
-    paddingVertical: Platform.OS === 'web' ? 14 : 12,
-    borderRadius: 8,
-    marginTop: 12,
-    alignItems: 'center',
-  },
-  testEmailButtonText: {
-    color: '#fff',
-    fontSize: Platform.OS === 'web' ? 16 : 14,
-    fontWeight: '600',
-  },
-  testWhatsAppSection: {
-    backgroundColor: '#e8f5e9',
-    borderRadius: 8,
-    padding: Platform.OS === 'web' ? 16 : 12,
-    borderWidth: 1,
-    borderColor: '#25D366',
-    marginTop: 12,
-  },
-  testWhatsAppButton: {
-    backgroundColor: '#25D366',
-    paddingVertical: Platform.OS === 'web' ? 14 : 12,
-    borderRadius: 8,
-    marginTop: 12,
-    alignItems: 'center',
-  },
-  testWhatsAppButtonText: {
-    color: '#fff',
-    fontSize: Platform.OS === 'web' ? 16 : 14,
-    fontWeight: '600',
-  },
-  buttonDisabled: {
-    backgroundColor: '#ccc',
-    opacity: 0.6,
   },
 });

@@ -199,12 +199,14 @@ async def register_instructor(
     """
     Register a new instructor
     - Creates instructor with pending verification status
-    - Sends verification link to all admins (email + WhatsApp)
+    - Sends user account verification link to the instructor (email + WhatsApp)
+    - Sends instructor credential verification link to all admins (email + WhatsApp)
     - Instructor can setup schedule immediately (before admin verification)
-    - Admin can verify via link or manually from dashboard
+    - Admin can verify instructor credentials via link or manually from dashboard
     """
     from ..services.initialization import InitializationService
     from ..services.instructor_verification_service import InstructorVerificationService
+    from ..services.verification_service import VerificationService
     from ..config import settings
     
     # Check if admin exists
@@ -224,31 +226,52 @@ async def register_instructor(
         admin = db.query(User).filter(User.role == UserRole.ADMIN).first()
         validity_minutes = admin.verification_link_validity_minutes if admin else 60
         
-        # Create instructor verification token
-        verification_token = InstructorVerificationService.create_verification_token(
+        # 1. Send USER ACCOUNT verification to the instructor (to activate their login)
+        user_verification_token = VerificationService.create_verification_token(
+            db=db,
+            user_id=user.id,
+            token_type="email",
+            validity_minutes=validity_minutes,
+        )
+        
+        smtp_password = EncryptionService.decrypt(admin.smtp_password) if admin and admin.smtp_password else None
+        
+        user_verification_result = VerificationService.send_verification_messages(
+            db=db,
+            user=user,
+            verification_token=user_verification_token,
+            frontend_url=settings.FRONTEND_URL,
+            admin_smtp_email=admin.smtp_email if admin else None,
+            admin_smtp_password=smtp_password,
+        )
+        
+        # 2. Send INSTRUCTOR CREDENTIAL verification to all admins
+        instructor_verification_token = InstructorVerificationService.create_verification_token(
             db=db,
             instructor_id=instructor.id,
             validity_minutes=validity_minutes
         )
         
-        # Send verification to ALL admins (not to instructor)
-        verification_result = InstructorVerificationService.send_verification_to_all_admins(
+        admin_verification_result = InstructorVerificationService.send_verification_to_all_admins(
             db=db,
             instructor=instructor,
-            verification_token=verification_token,
+            verification_token=instructor_verification_token,
             frontend_url=settings.FRONTEND_URL,
         )
         
         return {
-            "message": "Registration successful! Admins have been notified to verify your instructor profile. You can start creating your schedule while waiting for verification.",
+            "message": "Registration successful! Please verify your account via email/WhatsApp. Admins have also been notified to verify your instructor credentials.",
             "user_id": user.id,
             "instructor_id": instructor.id,
             "verification_sent": {
-                "emails_sent": verification_result["emails_sent"],
-                "whatsapp_sent": verification_result["whatsapp_sent"],
-                "total_admins": verification_result["total_admins"],
+                "email_sent": user_verification_result.get("email_sent", False),
+                "whatsapp_sent": user_verification_result.get("whatsapp_sent", False),
+                "expires_in_minutes": validity_minutes,
+                "emails_sent": admin_verification_result["emails_sent"],
+                "whatsapp_sent_to_admins": admin_verification_result["whatsapp_sent"],
+                "total_admins": admin_verification_result["total_admins"],
             },
-            "note": f"Verification link sent to {verification_result['total_admins']} admin(s). You can start setting up your schedule immediately.",
+            "note": f"Please verify your account to log in. Admins ({admin_verification_result['total_admins']}) have been notified to verify your instructor credentials.",
         }
     except Exception as e:
         print(f"[ERROR] Registration failed: {type(e).__name__}: {str(e)}")
@@ -479,6 +502,7 @@ async def change_password(
 @limiter.limit("3/hour")  # Max 3 password reset requests per hour per IP
 async def forgot_password(
     request: Request,  # Required for rate limiter
+    response: Response,  # Required for rate limiter to inject headers
     password_request: ForgotPasswordRequest,
     db: Session = Depends(get_db),
 ):
@@ -529,6 +553,7 @@ async def forgot_password(
 @limiter.limit("5/hour")  # Max 5 password resets per hour per IP
 async def reset_password(
     request: Request,  # Required for rate limiter
+    response: Response,  # Required for rate limiter to inject headers
     reset_data: ResetPasswordRequest,
     db: Session = Depends(get_db),
 ):

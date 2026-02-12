@@ -1,21 +1,23 @@
 /**
- * Login Screen
+ * Login Screen — RoadReady Modern UI
  */
 import * as SecureStore from 'expo-secure-store';
 import React, { useState } from 'react';
 import {
-  ActivityIndicator,
-  Modal,
+  KeyboardAvoidingView,
   Platform,
+  Pressable,
+  ScrollView,
   StyleSheet,
   Text,
-  TextInput,
-  TouchableOpacity,
   View,
 } from 'react-native';
 import InlineMessage from '../../components/InlineMessage';
+import { Button, Card, Input } from '../../components/ui';
+import ThemedModal from '../../components/ui/Modal';
 import { API_CONFIG } from '../../config';
 import ApiService from '../../services/api';
+import { useTheme } from '../../theme/ThemeContext';
 
 // Storage wrapper for web compatibility
 // Web: HTTP-only cookies (no JS access)
@@ -39,6 +41,7 @@ const storage = {
 };
 
 export default function LoginScreen({ navigation, onAuthChange }: any) {
+  const { colors, isDark } = useTheme();
   const [emailOrPhone, setEmailOrPhone] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -114,17 +117,11 @@ export default function LoginScreen({ navigation, onAuthChange }: any) {
     console.log('[LoginScreen] Storing user_role in AsyncStorage:', userRole);
     await storage.setItem('user_role', userRole);
 
+    // Trigger auth state change — the conditional navigator in App.tsx
+    // will automatically switch from auth screens to the MainTabs navigator
     if (onAuthChange) {
-      onAuthChange();
-    }
-
-    console.log('[LoginScreen] Navigating based on role:', userRole);
-    if (userRole === 'admin') {
-      navigation.replace('AdminDashboard');
-    } else if (userRole === 'student') {
-      navigation.replace('StudentHome');
-    } else if (userRole === 'instructor') {
-      navigation.replace('InstructorHome');
+      console.log('[LoginScreen] Calling onAuthChange to switch navigator');
+      await onAuthChange();
     }
   };
 
@@ -200,264 +197,247 @@ export default function LoginScreen({ navigation, onAuthChange }: any) {
   };
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>Driving School</Text>
-      <Text style={styles.subtitle}>Login to your account</Text>
-
-      {/* Debug: Show API URL */}
-      <View style={styles.debugBox}>
-        <Text style={styles.debugText}>API: {API_CONFIG.BASE_URL}</Text>
-        <Text style={styles.debugText}>Platform: {Platform.OS}</Text>
-        {Platform.OS === 'web' && typeof window !== 'undefined' && (
-          <Text style={styles.debugText}>
-            Page URL: {window.location.protocol}//{window.location.host}
-          </Text>
-        )}
-        <TouchableOpacity
-          onPress={async () => {
-            try {
-              const response = await fetch(`${API_CONFIG.BASE_URL}/docs`);
-              const text = await response.text();
-              alert(`Fetch test: ${response.status} - ${text.substring(0, 50)}`);
-            } catch (err: any) {
-              alert(`Fetch error: ${err.message}`);
-            }
-          }}
-          style={{ marginTop: 5, padding: 5, backgroundColor: '#ddd' }}
-        >
-          <Text style={{ fontSize: 10 }}>Test Connection</Text>
-        </TouchableOpacity>
-      </View>
-
-      {message && (
-        <View style={{ marginBottom: 16 }}>
-          <InlineMessage
-            type={message.type}
-            message={message.text}
-            onDismiss={() => setMessage(null)}
-            autoDismissMs={0}
-          />
-        </View>
-      )}
-
-      <Modal
-        visible={showRoleModal}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setShowRoleModal(false)}
+    <KeyboardAvoidingView
+      style={[styles.screen, { backgroundColor: colors.background }]}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+    >
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
       >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Select Profile</Text>
-            <Text style={styles.modalSubtitle}>
-              This account has multiple profiles. Choose which one to use.
-            </Text>
-
-            {roleOptions.map(role => (
-              <TouchableOpacity
-                key={role}
-                style={styles.roleOption}
-                onPress={() => handleRoleSelect(role)}
-              >
-                <Text style={styles.roleOptionText}>{getRoleLabel(role)}</Text>
-              </TouchableOpacity>
-            ))}
-
-            <TouchableOpacity
-              style={styles.modalCancelButton}
-              onPress={() => setShowRoleModal(false)}
-            >
-              <Text style={styles.modalCancelText}>Cancel</Text>
-            </TouchableOpacity>
+        {/* Brand Header */}
+        <View style={styles.brandArea}>
+          <View style={[styles.logoCircle, { backgroundColor: colors.primary + '15' }]}>
+            <Text style={styles.logoEmoji}>🚗</Text>
           </View>
+          <Text style={[styles.appName, { color: colors.primary }]}>RoadReady</Text>
+          <Text style={[styles.tagline, { color: colors.textSecondary }]}>
+            Login to your account
+          </Text>
         </View>
-      </Modal>
 
-      <TextInput
-        style={styles.input}
-        placeholder="Email or Phone Number"
-        value={emailOrPhone}
-        onChangeText={setEmailOrPhone}
-        autoCapitalize="none"
-        autoCorrect={false}
-        onSubmitEditing={handleLogin}
-        returnKeyType="next"
-      />
+        {/* Login Card */}
+        <Card variant="elevated" padding="lg" style={styles.formCard}>
+          {message && (
+            <View style={styles.messageWrap}>
+              <InlineMessage
+                type={message.type}
+                message={message.text}
+                onDismiss={() => setMessage(null)}
+                autoDismissMs={0}
+              />
+            </View>
+          )}
 
-      <TextInput
-        key={`password-${showPassword}`}
-        style={styles.input}
-        placeholder="Password"
-        value={password}
-        onChangeText={setPassword}
-        secureTextEntry={!showPassword}
-        onSubmitEditing={handleLogin}
-        returnKeyType="go"
-      />
+          <Input
+            label="Email or Phone"
+            placeholder="Email or phone number"
+            value={emailOrPhone}
+            onChangeText={setEmailOrPhone}
+            autoCapitalize="none"
+            autoCorrect={false}
+            onSubmitEditing={handleLogin}
+            returnKeyType="next"
+            keyboardType="email-address"
+          />
 
-      <TouchableOpacity
-        style={styles.showPasswordButton}
-        onPress={() => setShowPassword(!showPassword)}
-      >
-        <Text style={styles.showPasswordText}>
-          {showPassword ? '🙈 Hide Password' : '👁️ Show Password'}
-        </Text>
-      </TouchableOpacity>
+          <View style={styles.passwordRow}>
+            <Input
+              label="Password"
+              placeholder="Enter your password"
+              value={password}
+              onChangeText={setPassword}
+              secureTextEntry={!showPassword}
+              onSubmitEditing={handleLogin}
+              returnKeyType="go"
+            />
+            <Pressable
+              onPress={() => setShowPassword(!showPassword)}
+              style={styles.togglePassword}
+              hitSlop={8}
+            >
+              <Text style={[styles.toggleText, { color: colors.primary }]}>
+                {showPassword ? 'Hide' : 'Show'}
+              </Text>
+            </Pressable>
+          </View>
 
-      <TouchableOpacity style={styles.button} onPress={handleLogin} disabled={loading}>
-        {loading ? (
-          <ActivityIndicator color="#fff" />
-        ) : (
-          <Text style={styles.buttonText}>Login</Text>
+          <Pressable
+            onPress={() => navigation.navigate('ForgotPassword' as never)}
+            style={styles.forgotLink}
+          >
+            <Text style={[styles.forgotText, { color: colors.textSecondary }]}>
+              Forgot password?
+            </Text>
+          </Pressable>
+
+          <Button
+            label="Login"
+            onPress={handleLogin}
+            loading={loading}
+            disabled={loading}
+            fullWidth
+            size="lg"
+          />
+        </Card>
+
+        {/* Register link */}
+        <View style={styles.registerRow}>
+          <Text style={[styles.registerLabel, { color: colors.textSecondary }]}>
+            Don't have an account?{' '}
+          </Text>
+          <Pressable onPress={() => navigation.navigate('RegisterChoice')} style={{ padding: 8 }}>
+            <Text style={[styles.registerLink, { color: colors.primary }]}>Register</Text>
+          </Pressable>
+        </View>
+
+        {/* Debug Box (dev only) */}
+        {__DEV__ && (
+          <View style={[styles.debugBox, { backgroundColor: colors.backgroundSecondary }]}>
+            <Text style={[styles.debugText, { color: colors.textTertiary }]}>
+              API: {API_CONFIG.BASE_URL} | {Platform.OS}
+            </Text>
+          </View>
         )}
-      </TouchableOpacity>
+      </ScrollView>
 
-      <TouchableOpacity
-        onPress={() => navigation.navigate('ForgotPassword' as never)}
-        style={styles.forgotPasswordButton}
+      {/* Role Selection Modal */}
+      <ThemedModal
+        visible={showRoleModal}
+        onClose={() => setShowRoleModal(false)}
+        title="Select Profile"
+        subtitle="This account has multiple profiles. Choose which one to use."
+        size="sm"
       >
-        <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
-      </TouchableOpacity>
+        {roleOptions.map(role => (
+          <Pressable
+            key={role}
+            onPress={() => handleRoleSelect(role)}
+            style={({ pressed }) => [
+              styles.roleOption,
+              {
+                backgroundColor: pressed
+                  ? colors.primary + '20'
+                  : colors.primary + '10',
+                borderColor: colors.primary + '30',
+              },
+            ]}
+          >
+            <Text style={[styles.roleOptionText, { color: colors.primary }]}>
+              {getRoleLabel(role)}
+            </Text>
+          </Pressable>
+        ))}
 
-      <TouchableOpacity
-        onPress={() => navigation.navigate('RegisterChoice')}
-        style={styles.linkButton}
-      >
-        <Text style={styles.linkText}>Don't have an account? Register</Text>
-      </TouchableOpacity>
-    </View>
+        <Button
+          label="Cancel"
+          variant="ghost"
+          onPress={() => setShowRoleModal(false)}
+          fullWidth
+          style={{ marginTop: 4 }}
+        />
+      </ThemedModal>
+    </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
+  screen: {
     flex: 1,
-    padding: 20,
+  },
+  scrollContent: {
+    flexGrow: 1,
     justifyContent: 'center',
-    backgroundColor: '#fff',
+    paddingHorizontal: Platform.OS === 'web' ? '20%' : 24,
+    paddingVertical: 40,
   },
-  title: {
-    fontSize: Platform.OS === 'web' ? 32 : 24,
-    fontWeight: 'bold',
-    textAlign: 'center',
-    marginBottom: Platform.OS === 'web' ? 10 : 8,
-    color: '#007AFF',
-  },
-  subtitle: {
-    fontSize: 16,
-    textAlign: 'center',
-    marginBottom: 30,
-    color: '#666',
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 8,
-    padding: 15,
-    marginBottom: 15,
-    fontSize: 16,
-  },
-  button: {
-    backgroundColor: '#007AFF',
-    padding: 15,
-    borderRadius: 8,
+  brandArea: {
     alignItems: 'center',
-    marginTop: 10,
+    marginBottom: 32,
   },
-  buttonText: {
-    color: '#fff',
-    fontSize: Platform.OS === 'web' ? 18 : 16,
-    fontWeight: 'bold',
-  },
-  showPasswordButton: {
-    marginBottom: 15,
-    padding: 8,
+  logoCircle: {
+    width: Platform.OS === 'web' ? 80 : 68,
+    height: Platform.OS === 'web' ? 80 : 68,
+    borderRadius: 40,
     alignItems: 'center',
-  },
-  showPasswordText: {
-    color: '#007bff',
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  forgotPasswordButton: {
-    marginTop: 12,
-    alignItems: 'center',
-    padding: 8,
-  },
-  forgotPasswordText: {
-    color: '#666',
-    fontSize: 14,
-    textDecorationLine: 'underline',
-  },
-  linkButton: {
-    marginTop: 20,
-    alignItems: 'center',
-  },
-  linkText: {
-    color: '#007AFF',
-    fontSize: Platform.OS === 'web' ? 16 : 14,
-  },
-  debugBox: {
-    backgroundColor: '#f0f0f0',
-    padding: 10,
-    borderRadius: 5,
-    marginBottom: 20,
-  },
-  debugText: {
-    fontSize: 12,
-    color: '#666',
-    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
     justifyContent: 'center',
-    alignItems: 'center',
-    padding: Platform.OS === 'web' ? 20 : 10,
-  },
-  modalContent: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: Platform.OS === 'web' ? 32 : 24,
-    width: Platform.OS === 'web' ? '45%' : '92%',
-    maxWidth: 550,
-  },
-  modalTitle: {
-    fontSize: Platform.OS === 'web' ? 22 : 18,
-    fontWeight: '700',
-    marginBottom: 8,
-    textAlign: 'center',
-  },
-  modalSubtitle: {
-    fontSize: Platform.OS === 'web' ? 14 : 12,
-    color: '#666',
-    textAlign: 'center',
     marginBottom: 16,
   },
+  logoEmoji: {
+    fontSize: Platform.OS === 'web' ? 40 : 34,
+  },
+  appName: {
+    fontSize: Platform.OS === 'web' ? 34 : 28,
+    fontWeight: '800',
+    letterSpacing: -1,
+    marginBottom: 6,
+  },
+  tagline: {
+    fontSize: Platform.OS === 'web' ? 16 : 14,
+  },
+  formCard: {
+    marginBottom: 20,
+  },
+  messageWrap: {
+    marginBottom: 12,
+  },
+  passwordRow: {
+    position: 'relative',
+  },
+  togglePassword: {
+    position: 'absolute',
+    right: 0,
+    top: 0,
+    paddingVertical: 10,
+    paddingHorizontal: 10,
+  },
+  toggleText: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  forgotLink: {
+    alignSelf: 'flex-end',
+    marginBottom: 20,
+    marginTop: -4,
+    padding: 6,
+  },
+  forgotText: {
+    fontSize: 13,
+  },
+  registerRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  registerLabel: {
+    fontSize: Platform.OS === 'web' ? 15 : 14,
+  },
+  registerLink: {
+    fontSize: Platform.OS === 'web' ? 15 : 14,
+    fontWeight: '700',
+  },
+  debugBox: {
+    marginTop: 24,
+    padding: 8,
+    borderRadius: 6,
+    alignItems: 'center',
+  },
+  debugText: {
+    fontSize: 11,
+    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+  },
   roleOption: {
-    backgroundColor: '#F0F6FF',
-    paddingVertical: Platform.OS === 'web' ? 12 : 10,
-    paddingHorizontal: 14,
-    borderRadius: 8,
+    paddingVertical: Platform.OS === 'web' ? 14 : 12,
+    paddingHorizontal: 16,
+    borderRadius: 10,
     marginBottom: 10,
     borderWidth: 1,
-    borderColor: '#D6E4FF',
   },
   roleOptionText: {
     fontSize: Platform.OS === 'web' ? 16 : 14,
-    color: '#0057D9',
     fontWeight: '600',
     textAlign: 'center',
-  },
-  modalCancelButton: {
-    marginTop: 4,
-    paddingVertical: 10,
-    borderRadius: 8,
-    backgroundColor: '#F1F3F5',
-  },
-  modalCancelText: {
-    textAlign: 'center',
-    color: '#555',
-    fontWeight: '600',
   },
 });

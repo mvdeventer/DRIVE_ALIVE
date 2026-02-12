@@ -3,6 +3,8 @@
  * Captures and logs all console messages for debugging
  */
 
+import { API_BASE_URL } from '../config';
+
 interface ConsoleLog {
   timestamp: string;
   type: 'log' | 'warn' | 'error' | 'info' | 'debug';
@@ -13,6 +15,7 @@ interface ConsoleLog {
 class ConsoleMonitor {
   private logs: ConsoleLog[] = [];
   private maxLogs = 1000;
+  private apiBaseUrl = API_BASE_URL;
   private originalConsole = {
     log: console.log,
     warn: console.warn,
@@ -91,7 +94,7 @@ class ConsoleMonitor {
   private async sendToBackend(log: ConsoleLog) {
     // Optional: Send errors to backend for logging
     try {
-      await fetch('http://10.0.0.121:8000/api/client-logs', {
+      await fetch(`${this.apiBaseUrl}/api/client-logs`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(log),

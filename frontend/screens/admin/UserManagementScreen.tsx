@@ -8,18 +8,19 @@ import React, { useCallback, useState } from 'react';
 import {
   ActivityIndicator,
   Dimensions,
-  Modal,
   Platform,
+  Pressable,
   RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
   TextInput,
-  TouchableOpacity,
   View,
 } from 'react-native';
+import { Button, Card, ThemedModal } from '../../components';
 import InlineMessage from '../../components/InlineMessage';
 import WebNavigationHeader from '../../components/WebNavigationHeader';
+import { useTheme } from '../../theme/ThemeContext';
 import apiService from '../../services/api';
 import { showMessage } from '../../utils/messageConfig';
 
@@ -44,6 +45,7 @@ interface BookingSummary {
 }
 
 export default function UserManagementScreen({ navigation }: any) {
+  const { colors } = useTheme();
   const [users, setUsers] = useState<User[]>([]);
   const [currentUserId, setCurrentUserId] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
@@ -359,41 +361,33 @@ export default function UserManagementScreen({ navigation }: any) {
     }
   };
 
-  const getStatusBadgeStyle = (status: string) => {
+  const getStatusColor = (status: string) => {
     switch (status) {
-      case 'active':
-        return styles.statusActive;
-      case 'inactive':
-        return styles.statusInactive;
-      case 'suspended':
-        return styles.statusSuspended;
-      default:
-        return styles.statusDefault;
+      case 'active': return colors.success;
+      case 'inactive': return colors.textMuted;
+      case 'suspended': return colors.warning;
+      default: return colors.textMuted;
     }
   };
 
-  const getRoleBadgeStyle = (role: string) => {
+  const getRoleColor = (role: string) => {
     switch (role) {
-      case 'admin':
-        return styles.roleAdmin;
-      case 'instructor':
-        return styles.roleInstructor;
-      case 'student':
-        return styles.roleStudent;
-      default:
-        return styles.roleDefault;
+      case 'admin': return colors.danger;
+      case 'instructor': return colors.primary;
+      case 'student': return colors.success;
+      default: return colors.textMuted;
     }
   };
 
   const handleEditUser = (user: User) => {
-    // Navigate to the appropriate profile edit screen based on user role
-    if (user.role === 'instructor') {
-      (navigation as any).navigate('EditInstructorProfile', { userId: user.id });
-    } else if (user.role === 'student') {
-      (navigation as any).navigate('EditStudentProfile', { userId: user.id });
-    } else if (user.role === 'admin') {
-      (navigation as any).navigate('EditAdminProfile', { userId: user.id });
-    }
+    // Open inline edit modal for all user roles
+    setSelectedUser(user);
+    setEditFormData({
+      first_name: user.first_name || '',
+      last_name: user.last_name || '',
+      phone: user.phone || '',
+    });
+    setEditModalVisible(true);
   };
 
   const handleSaveUserEdit = async () => {
@@ -653,236 +647,160 @@ export default function UserManagementScreen({ navigation }: any) {
     const isOriginalAdmin = isAdminTab && item.role === 'admin' && item.id === firstAdminId;
 
     return (
-      <View style={styles.userCard}>
-        <View style={styles.userIdBadge}>
-          <Text style={styles.userIdText}>User ID: #{item.id}</Text>
+      <Card variant="elevated" style={{ width: '100%' }}>
+        <View style={[styles.userIdBadge, { backgroundColor: colors.primaryLight }]}>
+          <Text style={[styles.userIdText, { color: colors.primary, fontFamily: 'Inter_700Bold' }]}>User ID: #{item.id}</Text>
         </View>
         <View style={styles.userHeader}>
           <View style={styles.userInfo}>
-            <Text style={styles.userName}>{item.full_name}</Text>
-            <Text style={styles.userEmail}>{item.email}</Text>
-            <Text style={styles.userPhone}>{item.phone}</Text>
-            {item.id_number && <Text style={styles.userIdNumber}>SA ID: {item.id_number}</Text>}
+            <Text style={[styles.userName, { color: colors.text, fontFamily: 'Inter_700Bold' }]}>{item.full_name}</Text>
+            <Text style={[styles.userEmail, { color: colors.textSecondary, fontFamily: 'Inter_400Regular' }]}>{item.email}</Text>
+            <Text style={[styles.userPhone, { color: colors.textSecondary, fontFamily: 'Inter_400Regular' }]}>{item.phone}</Text>
+            {item.id_number && <Text style={[styles.userIdNumber, { color: colors.primary, fontFamily: 'Inter_600SemiBold' }]}>SA ID: {item.id_number}</Text>}
           </View>
           <View style={styles.badges}>
-            <View style={[styles.badge, getRoleBadgeStyle(item.role)]}>
-              <Text style={styles.badgeText}>{item.role.toUpperCase()}</Text>
+            <View style={[styles.badge, { backgroundColor: getRoleColor(item.role) }]}>
+              <Text style={[styles.badgeText, { fontFamily: 'Inter_700Bold' }]}>{item.role.toUpperCase()}</Text>
             </View>
-            <View style={[styles.badge, getStatusBadgeStyle(item.status)]}>
-              <Text style={styles.badgeText}>{item.status.toUpperCase()}</Text>
+            <View style={[styles.badge, { backgroundColor: getStatusColor(item.status) }]}>
+              <Text style={[styles.badgeText, { fontFamily: 'Inter_700Bold' }]}>{item.status.toUpperCase()}</Text>
             </View>
           </View>
         </View>
 
-      <View style={styles.userDetails}>
-        <Text style={styles.userDetailText}>
+      <View style={[styles.userDetails, { borderTopColor: colors.border }]}>
+        <Text style={[styles.userDetailText, { color: colors.textSecondary, fontFamily: 'Inter_400Regular' }]}>
           Joined: {new Date(item.created_at).toLocaleDateString()}
         </Text>
         {item.last_login && (
-          <Text style={styles.userDetailText}>
+          <Text style={[styles.userDetailText, { color: colors.textSecondary, fontFamily: 'Inter_400Regular' }]}>
             Last Login: {new Date(item.last_login).toLocaleDateString()}
           </Text>
         )}
         {isInstructorTab && item.booking_fee !== undefined && item.booking_fee !== null && (
-          <Text style={styles.userDetailText}>Booking Fee: R{item.booking_fee.toFixed(2)}</Text>
+          <Text style={[styles.userDetailText, { color: colors.textSecondary, fontFamily: 'Inter_400Regular' }]}>Booking Fee: R{item.booking_fee.toFixed(2)}</Text>
         )}
       </View>
 
       <View style={styles.actionButtons}>
         {isOriginalAdmin && (
-          <View style={styles.originalAdminActionBadge}>
-            <Text style={styles.originalAdminActionBadgeText} numberOfLines={1} ellipsizeMode="tail">
-              🛡️ ORIGINAL ADMIN - PROTECTED
+          <View style={[styles.originalAdminActionBadge, { backgroundColor: colors.warning, borderColor: colors.accent }]}>
+            <Text style={[styles.originalAdminActionBadgeText, { fontFamily: 'Inter_700Bold' }]} numberOfLines={1} ellipsizeMode="tail">
+              ORIGINAL ADMIN - PROTECTED
             </Text>
           </View>
         )}
         {(() => {
           if (isAdminTab) {
-            const adminUsers = users.filter(u => u.role === 'admin');
-            if (adminUsers.length > 0) {
-              const firstAdminId = Math.min(...adminUsers.map(u => u.id));
-              const isCurrentUserOriginalAdmin = currentUserId === firstAdminId;
-
-              // If viewing original admin and current user is NOT the original admin, hide Edit button
-              if (item.id === firstAdminId && !isCurrentUserOriginalAdmin) {
+            const adminUsers2 = users.filter(u => u.role === 'admin');
+            if (adminUsers2.length > 0) {
+              const firstId = Math.min(...adminUsers2.map(u => u.id));
+              const isCurrentUserOriginalAdmin = currentUserId === firstId;
+              if (item.id === firstId && !isCurrentUserOriginalAdmin) {
                 return null;
               }
             }
           }
-
           return (
-            <TouchableOpacity
-              style={[styles.actionButton, styles.editButton]}
-              onPress={() => handleEditUser(item)}
-            >
-              <Text style={styles.actionButtonText}>✏️ Edit</Text>
-            </TouchableOpacity>
+            <Button variant="primary" size="sm" onPress={() => handleEditUser(item)}>Edit</Button>
           );
         })()}
-        <TouchableOpacity
-          style={[styles.actionButton, styles.passwordButton]}
-          onPress={() => handleOpenResetPassword(item)}
-        >
-          <Text style={styles.actionButtonText}>🔑 Reset PW</Text>
-        </TouchableOpacity>
+        <Button variant="secondary" size="sm" onPress={() => handleOpenResetPassword(item)}>Reset PW</Button>
         {isAdminTab && (() => {
-          const adminUsers = users.filter(u => u.role === 'admin');
-          if (adminUsers.length === 0) return null;
-
-          const firstAdminId = Math.min(...adminUsers.map(u => u.id));
-
-          // NEVER show delete button for the first admin (they are protected forever)
-          if (item.id === firstAdminId) return null;
-
+          const adminUsers2 = users.filter(u => u.role === 'admin');
+          if (adminUsers2.length === 0) return null;
+          const firstId = Math.min(...adminUsers2.map(u => u.id));
+          if (item.id === firstId) return null;
           return (
-            <TouchableOpacity
-              style={[styles.actionButton, styles.deactivateButton]}
-              onPress={() => handleDeleteAdmin(item)}
-            >
-              <Text style={styles.actionButtonText}>🗑️ Delete</Text>
-            </TouchableOpacity>
+            <Button variant="danger" size="sm" onPress={() => handleDeleteAdmin(item)}>Delete</Button>
           );
         })()}
         {isInstructorTab && (
           <>
-            <TouchableOpacity
-              style={[styles.actionButton, styles.scheduleButton]}
-              onPress={() => handleViewSchedule(item)}
-            >
-              <Text style={styles.scheduleButtonLabel}>Schedule</Text>
-              <Text style={styles.scheduleButtonText}>📅</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.actionButton, styles.feeButton]}
-              onPress={() => handleOpenEditBookingFee(item)}
-            >
-              <Text style={styles.actionButtonText}>💰 Manage Fee</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.actionButton, styles.deleteButton]}
-              onPress={() => handleDeleteInstructor(item)}
-            >
-              <Text style={styles.actionButtonText}>🗑️ Delete</Text>
-            </TouchableOpacity>
+            <Button variant="outline" size="sm" onPress={() => handleViewSchedule(item)}>Schedule</Button>
+            <Button variant="accent" size="sm" onPress={() => handleOpenEditBookingFee(item)}>Manage Fee</Button>
+            <Button variant="danger" size="sm" onPress={() => handleDeleteInstructor(item)}>Delete</Button>
           </>
         )}
         {isStudentTab && (
-          <TouchableOpacity
-            style={[styles.actionButton, styles.deleteButton]}
-            onPress={() => handleDeleteStudent(item)}
-          >
-            <Text style={styles.actionButtonText}>🗑️ Delete</Text>
-          </TouchableOpacity>
+          <Button variant="danger" size="sm" onPress={() => handleDeleteStudent(item)}>Delete</Button>
         )}
         {item.status === 'suspended' ? (
-          <TouchableOpacity
-            style={[styles.actionButton, styles.activateButton]}
-            onPress={() => handleStatusChange(item, 'active')}
-          >
-            <Text style={styles.actionButtonText}>✅ Unsuspend</Text>
-          </TouchableOpacity>
+          <Button variant="primary" size="sm" style={{ backgroundColor: colors.success }} onPress={() => handleStatusChange(item, 'active')}>Unsuspend</Button>
         ) : item.status === 'inactive' ? (
-          <TouchableOpacity
-            style={[styles.actionButton, styles.activateButton]}
-            onPress={() => handleStatusChange(item, 'active')}
-          >
-            <Text style={styles.actionButtonText}>✅ Activate</Text>
-          </TouchableOpacity>
+          <Button variant="primary" size="sm" style={{ backgroundColor: colors.success }} onPress={() => handleStatusChange(item, 'active')}>Activate</Button>
         ) : null}
         {item.status === 'active' && !isOriginalAdmin && (
           <>
-            <TouchableOpacity
-              style={[styles.actionButton, styles.deactivateButton]}
-              onPress={() => handleStatusChange(item, 'inactive')}
-            >
-              <Text style={styles.actionButtonText}>❌ Deactivate</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.actionButton, styles.suspendButton]}
-              onPress={() => handleStatusChange(item, 'suspended')}
-            >
-              <Text style={styles.actionButtonText}>🚫 Suspend</Text>
-            </TouchableOpacity>
+            <Button variant="danger" size="sm" onPress={() => handleStatusChange(item, 'inactive')}>Deactivate</Button>
+            <Button variant="danger" size="sm" onPress={() => handleStatusChange(item, 'suspended')}>Suspend</Button>
           </>
         )}
       </View>
-    </View>
+    </Card>
     );
   };
 
   if (loading) {
     return (
-      <View style={styles.centerContainer}>
-        <ActivityIndicator size="large" color="#0066CC" />
-        <Text style={styles.loadingText}>Loading users...</Text>
+      <View style={[styles.centerContainer, { backgroundColor: colors.background }]}>
+        <ActivityIndicator size="large" color={colors.primary} />
+        <Text style={[styles.loadingText, { color: colors.textSecondary, fontFamily: 'Inter_400Regular' }]}>Loading users...</Text>
       </View>
     );
   }
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
       <WebNavigationHeader
         title="User Management"
         onBack={() => navigation.goBack()}
-        showBackButton={true}
+        showBackButton={navigation.canGoBack()}
       />
 
       {error && <InlineMessage message={error} type="error" />}
       {success && <InlineMessage message={success} type="success" />}
 
       {/* Tab Navigation */}
-      <View style={styles.tabContainer}>
-        <TouchableOpacity
-          style={[styles.tab, activeTab === 'admin' && styles.activeTab]}
-          onPress={() => handleTabChange('admin')}
-        >
-          <Text style={[styles.tabText, activeTab === 'admin' && styles.activeTabText]}>
-            👤 Admins
-          </Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.tab, activeTab === 'instructor' && styles.activeTab]}
-          onPress={() => handleTabChange('instructor')}
-        >
-          <Text style={[styles.tabText, activeTab === 'instructor' && styles.activeTabText]}>
-            🚗 Instructors
-          </Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.tab, activeTab === 'student' && styles.activeTab]}
-          onPress={() => handleTabChange('student')}
-        >
-          <Text style={[styles.tabText, activeTab === 'student' && styles.activeTabText]}>
-            📚 Students
-          </Text>
-        </TouchableOpacity>
+      <View style={[styles.tabContainer, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
+        {(['admin', 'instructor', 'student'] as const).map(tab => (
+          <Pressable
+            key={tab}
+            style={[styles.tab, activeTab === tab && { borderBottomColor: colors.primary, backgroundColor: colors.primaryLight }]}
+            onPress={() => handleTabChange(tab)}
+          >
+            <Text style={[styles.tabText, { color: colors.textSecondary, fontFamily: 'Inter_600SemiBold' }, activeTab === tab && { color: colors.primary, fontFamily: 'Inter_700Bold' }]}>
+              {tab === 'admin' ? 'Admins' : tab === 'instructor' ? 'Instructors' : 'Students'}
+            </Text>
+          </Pressable>
+        ))}
       </View>
 
       {/* Search Bar */}
-      <View style={styles.searchContainer}>
+      <View style={[styles.searchContainer, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
         <TextInput
-          style={styles.searchInput}
+          style={[styles.searchInput, { borderColor: colors.border, backgroundColor: colors.backgroundSecondary, color: colors.text, fontFamily: 'Inter_400Regular' }]}
           placeholder={`Search ${activeTab}s by name, ID, phone, or email...`}
           value={searchQuery}
           onChangeText={setSearchQuery}
-          placeholderTextColor="#999"
+          placeholderTextColor={colors.textMuted}
         />
         {searchQuery.length > 0 && (
-          <TouchableOpacity style={styles.clearSearchButton} onPress={() => setSearchQuery('')}>
-            <Text style={styles.clearSearchText}>✕</Text>
-          </TouchableOpacity>
+          <Pressable style={[styles.clearSearchButton, { backgroundColor: colors.danger }]} onPress={() => setSearchQuery('')}>
+            <Text style={[styles.clearSearchText, { fontFamily: 'Inter_700Bold' }]}>X</Text>
+          </Pressable>
         )}
       </View>
 
       {/* Status Filter */}
-      <View style={styles.filters}>
+      <View style={[styles.filters, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
         <View style={styles.filterGroup}>
-          <Text style={styles.filterLabel}>Filter by Status:</Text>
-          <View style={styles.pickerContainer}>
+          <Text style={[styles.filterLabel, { color: colors.text, fontFamily: 'Inter_600SemiBold' }]}>Filter by Status:</Text>
+          <View style={[styles.pickerContainer, { borderColor: colors.border, backgroundColor: colors.card }]}>
             <Picker
               selectedValue={statusFilter}
               onValueChange={value => setStatusFilter(value)}
-              style={styles.picker}
+              style={[styles.picker, { color: colors.text }]}
             >
               <Picker.Item label="All Statuses" value="" />
               <Picker.Item label="Active" value="active" />
@@ -907,582 +825,398 @@ export default function UserManagementScreen({ navigation }: any) {
       </ScrollView>
 
       {/* Edit User Modal */}
-      <Modal
+      <ThemedModal
         visible={editModalVisible}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setEditModalVisible(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContainer}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Edit User: {selectedUser?.full_name}</Text>
-              <TouchableOpacity
-                onPress={() => setEditModalVisible(false)}
-                style={styles.closeButton}
-              >
-                <Text style={styles.closeButtonText}>✕</Text>
-              </TouchableOpacity>
-            </View>
-
-            <ScrollView style={styles.modalContent}>
-              <View style={styles.formGroup}>
-                <Text style={styles.label}>First Name *</Text>
-                <TextInput
-                  style={styles.input}
-                  value={editFormData.first_name}
-                  onChangeText={text => setEditFormData({ ...editFormData, first_name: text })}
-                  placeholder="Enter first name"
-                />
-              </View>
-
-              <View style={styles.formGroup}>
-                <Text style={styles.label}>Last Name *</Text>
-                <TextInput
-                  style={styles.input}
-                  value={editFormData.last_name}
-                  onChangeText={text => setEditFormData({ ...editFormData, last_name: text })}
-                  placeholder="Enter last name"
-                />
-              </View>
-
-              <View style={styles.formGroup}>
-                <Text style={styles.label}>Phone Number *</Text>
-                <TextInput
-                  style={styles.input}
-                  value={editFormData.phone}
-                  onChangeText={text => setEditFormData({ ...editFormData, phone: text })}
-                  placeholder="+27..."
-                  keyboardType="phone-pad"
-                />
-              </View>
-
-              <View style={styles.formGroup}>
-                <Text style={styles.infoText}>Email: {selectedUser?.email}</Text>
-                <Text style={styles.infoText}>Role: {selectedUser?.role.toUpperCase()}</Text>
-                <Text style={styles.infoText}>Status: {selectedUser?.status.toUpperCase()}</Text>
-              </View>
-            </ScrollView>
-
-            <View style={styles.modalFooter}>
-              <TouchableOpacity
-                style={styles.cancelModalButton}
-                onPress={() => setEditModalVisible(false)}
-              >
-                <Text style={styles.cancelModalButtonText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.saveModalButton} onPress={handleSaveUserEdit}>
-                <Text style={styles.saveModalButtonText}>Save Changes</Text>
-              </TouchableOpacity>
-            </View>
+        onClose={() => setEditModalVisible(false)}
+        title={`Edit User: ${selectedUser?.full_name || ''}`}
+        footer={
+          <View style={{ flexDirection: 'row', gap: 12 }}>
+            <Button variant="secondary" onPress={() => setEditModalVisible(false)}>Cancel</Button>
+            <Button variant="primary" onPress={handleSaveUserEdit}>Save Changes</Button>
           </View>
-        </View>
-      </Modal>
+        }
+      >
+        <ScrollView>
+          <View style={styles.formGroup}>
+            <Text style={[styles.label, { color: colors.text }]}>First Name *</Text>
+            <TextInput
+              style={[styles.input, { borderColor: colors.border, backgroundColor: colors.backgroundSecondary, color: colors.text }]}
+              value={editFormData.first_name}
+              onChangeText={text => setEditFormData({ ...editFormData, first_name: text })}
+              placeholder="Enter first name"
+              placeholderTextColor={colors.textMuted}
+            />
+          </View>
+
+          <View style={styles.formGroup}>
+            <Text style={[styles.label, { color: colors.text }]}>Last Name *</Text>
+            <TextInput
+              style={[styles.input, { borderColor: colors.border, backgroundColor: colors.backgroundSecondary, color: colors.text }]}
+              value={editFormData.last_name}
+              onChangeText={text => setEditFormData({ ...editFormData, last_name: text })}
+              placeholder="Enter last name"
+              placeholderTextColor={colors.textMuted}
+            />
+          </View>
+
+          <View style={styles.formGroup}>
+            <Text style={[styles.label, { color: colors.text }]}>Phone Number *</Text>
+            <TextInput
+              style={[styles.input, { borderColor: colors.border, backgroundColor: colors.backgroundSecondary, color: colors.text }]}
+              value={editFormData.phone}
+              onChangeText={text => setEditFormData({ ...editFormData, phone: text })}
+              placeholder="+27..."
+              placeholderTextColor={colors.textMuted}
+              keyboardType="phone-pad"
+            />
+          </View>
+
+          <View style={styles.formGroup}>
+            <Text style={[styles.infoText, { color: colors.textSecondary }]}>Email: {selectedUser?.email}</Text>
+            <Text style={[styles.infoText, { color: colors.textSecondary }]}>Role: {selectedUser?.role.toUpperCase()}</Text>
+            <Text style={[styles.infoText, { color: colors.textSecondary }]}>Status: {selectedUser?.status.toUpperCase()}</Text>
+          </View>
+        </ScrollView>
+      </ThemedModal>
 
       {/* Reset Password Modal */}
-      <Modal
+      <ThemedModal
         visible={resetPasswordModalVisible}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setResetPasswordModalVisible(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContainer}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Reset Password: {selectedUser?.full_name}</Text>
-              <TouchableOpacity
-                onPress={() => setResetPasswordModalVisible(false)}
-                style={styles.closeButton}
-              >
-                <Text style={styles.closeButtonText}>✕</Text>
-              </TouchableOpacity>
-            </View>
-
-            <View style={styles.modalContent}>
-              <View style={styles.formGroup}>
-                <Text style={styles.label}>New Password *</Text>
-                <TextInput
-                  style={styles.input}
-                  value={newPassword}
-                  onChangeText={setNewPassword}
-                  placeholder="Enter new password"
-                  secureTextEntry={!showPassword}
-                />
-              </View>
-
-              <View style={styles.formGroup}>
-                <Text style={styles.label}>Confirm Password *</Text>
-                <TextInput
-                  style={styles.input}
-                  value={confirmPassword}
-                  onChangeText={setConfirmPassword}
-                  placeholder="Confirm new password"
-                  secureTextEntry={!showPassword}
-                />
-              </View>
-
-              <TouchableOpacity
-                style={styles.showPasswordButton}
-                onPress={() => setShowPassword(!showPassword)}
-              >
-                <Text style={styles.showPasswordText}>
-                  {showPassword ? '🙈 Hide Password' : '👁️ Show Password'}
-                </Text>
-              </TouchableOpacity>
-
-              <Text style={styles.infoText}>Password must be at least 6 characters long</Text>
-            </View>
-
-            <View style={styles.modalFooter}>
-              <TouchableOpacity
-                style={styles.cancelModalButton}
-                onPress={() => setResetPasswordModalVisible(false)}
-              >
-                <Text style={styles.cancelModalButtonText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.saveModalButton} onPress={handleResetPassword}>
-                <Text style={styles.saveModalButtonText}>Reset Password</Text>
-              </TouchableOpacity>
-            </View>
+        onClose={() => setResetPasswordModalVisible(false)}
+        title={`Reset Password: ${selectedUser?.full_name || ''}`}
+        footer={
+          <View style={{ flexDirection: 'row', gap: 12 }}>
+            <Button variant="secondary" onPress={() => setResetPasswordModalVisible(false)}>Cancel</Button>
+            <Button variant="primary" onPress={handleResetPassword}>Reset Password</Button>
           </View>
+        }
+      >
+        <View style={styles.formGroup}>
+          <Text style={[styles.label, { color: colors.text }]}>New Password *</Text>
+          <TextInput
+            style={[styles.input, { borderColor: colors.border, backgroundColor: colors.backgroundSecondary, color: colors.text }]}
+            value={newPassword}
+            onChangeText={setNewPassword}
+            placeholder="Enter new password"
+            placeholderTextColor={colors.textMuted}
+            secureTextEntry={!showPassword}
+          />
         </View>
-      </Modal>
+
+        <View style={styles.formGroup}>
+          <Text style={[styles.label, { color: colors.text }]}>Confirm Password *</Text>
+          <TextInput
+            style={[styles.input, { borderColor: colors.border, backgroundColor: colors.backgroundSecondary, color: colors.text }]}
+            value={confirmPassword}
+            onChangeText={setConfirmPassword}
+            placeholder="Confirm new password"
+            placeholderTextColor={colors.textMuted}
+            secureTextEntry={!showPassword}
+          />
+        </View>
+
+        <Pressable
+          style={styles.showPasswordButton}
+          onPress={() => setShowPassword(!showPassword)}
+        >
+          <Text style={[styles.showPasswordText, { color: colors.primary }]}>
+            {showPassword ? 'Hide Password' : 'Show Password'}
+          </Text>
+        </Pressable>
+
+        <Text style={[styles.infoText, { color: colors.textSecondary }]}>Password must be at least 6 characters long</Text>
+      </ThemedModal>
 
       {/* Confirmation Modal */}
-      <Modal
-        animationType="fade"
-        transparent={true}
+      <ThemedModal
         visible={!!confirmAction}
-        onRequestClose={() => setConfirmAction(null)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>
-                {confirmAction?.newStatus.toUpperCase() === 'ACTIVE'
-                  ? '✅ Confirm Activation'
-                  : confirmAction?.newStatus.toUpperCase() === 'INACTIVE'
-                    ? '⚠️ Confirm Deactivation'
-                    : '⚠️ Confirm Suspension'}
-              </Text>
-            </View>
-
-            <View style={styles.modalBody}>
-              <Text style={styles.confirmText}>
-                Are you sure you want to change{'\n'}
-                <Text style={styles.boldText}>{confirmAction?.user?.full_name}'s</Text>
-                {'\n'}status to{' '}
-                <Text style={styles.boldText}>{confirmAction?.newStatus.toUpperCase()}</Text>?
-              </Text>
-
-              {confirmAction?.newStatus.toUpperCase() === 'INACTIVE' && (
-                <Text style={styles.warningText}>
-                  ⚠️ User will not be able to log in until reactivated.
-                </Text>
-              )}
-
-              {confirmAction?.newStatus.toUpperCase() === 'SUSPENDED' && (
-                <Text style={styles.warningText}>
-                  This will set the user status to SUSPENDED. The record will remain in the database.
-                </Text>
-              )}
-            </View>
-
-            <View style={styles.modalFooter}>
-              <TouchableOpacity
-                style={styles.cancelModalButton}
-                onPress={() => setConfirmAction(null)}
-              >
-                <Text style={styles.cancelModalButtonText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[
-                  styles.saveModalButton,
-                  confirmAction?.newStatus === 'ACTIVE'
-                    ? styles.activateButton
-                    : styles.deactivateButton,
-                ]}
-                onPress={confirmStatusChange}
-              >
-                <Text style={styles.saveModalButtonText}>
-                  {confirmAction?.newStatus === 'ACTIVE' ? 'Confirm' : 'Confirm'}
-                </Text>
-              </TouchableOpacity>
-            </View>
+        onClose={() => setConfirmAction(null)}
+        title={
+          confirmAction?.newStatus.toUpperCase() === 'ACTIVE'
+            ? 'Confirm Activation'
+            : confirmAction?.newStatus.toUpperCase() === 'INACTIVE'
+              ? 'Confirm Deactivation'
+              : 'Confirm Suspension'
+        }
+        footer={
+          <View style={{ flexDirection: 'row', gap: 12 }}>
+            <Button variant="secondary" onPress={() => setConfirmAction(null)}>Cancel</Button>
+            <Button
+              variant={confirmAction?.newStatus === 'ACTIVE' ? 'primary' : 'danger'}
+              onPress={confirmStatusChange}
+              style={confirmAction?.newStatus === 'ACTIVE' ? { backgroundColor: colors.success } : undefined}
+            >
+              Confirm
+            </Button>
           </View>
-        </View>
-      </Modal>
+        }
+      >
+        <Text style={{ fontSize: 16, color: colors.text, textAlign: 'center', lineHeight: 24, fontFamily: 'Inter_400Regular' }}>
+          Are you sure you want to change{'\n'}
+          <Text style={{ fontWeight: 'bold', color: colors.primary, fontFamily: 'Inter_700Bold' }}>{confirmAction?.user?.full_name}'s</Text>
+          {'\n'}status to{' '}
+          <Text style={{ fontWeight: 'bold', color: colors.primary, fontFamily: 'Inter_700Bold' }}>{confirmAction?.newStatus.toUpperCase()}</Text>?
+        </Text>
+
+        {confirmAction?.newStatus.toUpperCase() === 'INACTIVE' && (
+          <Text style={{ fontSize: 14, color: colors.danger, textAlign: 'center', marginTop: 15, fontStyle: 'italic', fontFamily: 'Inter_400Regular' }}>
+            User will not be able to log in until reactivated.
+          </Text>
+        )}
+
+        {confirmAction?.newStatus.toUpperCase() === 'SUSPENDED' && (
+          <Text style={{ fontSize: 14, color: colors.danger, textAlign: 'center', marginTop: 15, fontStyle: 'italic', fontFamily: 'Inter_400Regular' }}>
+            This will set the user status to SUSPENDED. The record will remain in the database.
+          </Text>
+        )}
+      </ThemedModal>
 
       {/* Delete Admin Confirmation Modal */}
-      <Modal
-        animationType="fade"
-        transparent={true}
+      <ThemedModal
         visible={!!confirmDeleteAdmin}
-        onRequestClose={() => setConfirmDeleteAdmin(null)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>🗑️ Confirm Admin Deletion</Text>
-            </View>
-
-            <View style={styles.modalBody}>
-              <Text style={styles.confirmText}>
-                Are you sure you want to delete{'\n'}
-                <Text style={styles.boldText}>{confirmDeleteAdmin?.full_name}</Text>?
-              </Text>
-              <Text style={styles.warningText}>
-                ⚠️ This permanently removes the admin account.
-              </Text>
-            </View>
-            <View style={styles.modalFooter}>
-              <TouchableOpacity
-                style={styles.cancelModalButton}
-                onPress={() => setConfirmDeleteAdmin(null)}
-              >
-                <Text style={styles.cancelModalButtonText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.saveModalButton, styles.deactivateButton]}
-                onPress={confirmDeleteAdminAction}
-              >
-                <Text style={styles.saveModalButtonText}>Delete</Text>
-              </TouchableOpacity>
-            </View>
+        onClose={() => setConfirmDeleteAdmin(null)}
+        title="Confirm Admin Deletion"
+        footer={
+          <View style={{ flexDirection: 'row', gap: 12 }}>
+            <Button variant="secondary" onPress={() => setConfirmDeleteAdmin(null)}>Cancel</Button>
+            <Button variant="danger" onPress={confirmDeleteAdminAction}>Delete</Button>
           </View>
-        </View>
-      </Modal>
+        }
+      >
+        <Text style={{ fontSize: 16, color: colors.text, textAlign: 'center', lineHeight: 24, fontFamily: 'Inter_400Regular' }}>
+          Are you sure you want to delete{'\n'}
+          <Text style={{ fontWeight: 'bold', color: colors.primary, fontFamily: 'Inter_700Bold' }}>{confirmDeleteAdmin?.full_name}</Text>?
+        </Text>
+        <Text style={{ fontSize: 14, color: colors.danger, textAlign: 'center', marginTop: 15, fontStyle: 'italic', fontFamily: 'Inter_400Regular' }}>
+          This permanently removes the admin account.
+        </Text>
+      </ThemedModal>
 
       {/* Delete Instructor Confirmation Modal */}
-      <Modal
-        animationType="fade"
-        transparent={true}
+      <ThemedModal
         visible={!!confirmDeleteInstructor}
-        onRequestClose={() => setConfirmDeleteInstructor(null)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>🗑️ Confirm Instructor Deletion</Text>
-            </View>
-
-            <View style={styles.modalBody}>
-              <Text style={styles.confirmText}>
-                Are you sure you want to delete the instructor profile for{'\n'}
-                <Text style={styles.boldText}>{confirmDeleteInstructor?.full_name}</Text>?
-              </Text>
-              {instructorBookingSummary && instructorBookingSummary.active_bookings > 0 && (
-                <Text style={styles.warningText}>
-                  ⚠️ This instructor has {instructorBookingSummary.active_bookings} active
-                  booking{instructorBookingSummary.active_bookings === 1 ? '' : 's'}. Deleting
-                  will cancel and remove them.
-                </Text>
-              )}
-              {instructorBookingSummary && (
-                <Text style={styles.warningText}>
-                  Total bookings on record: {instructorBookingSummary.total_bookings}
-                </Text>
-              )}
-              <Text style={styles.warningText}>
-                ⚠️ This removes the instructor profile and all related bookings. The user account
-                remains intact and they can re-register as an instructor later.
-              </Text>
-            </View>
-            <View style={styles.modalFooter}>
-              <TouchableOpacity
-                style={styles.cancelModalButton}
-                onPress={() => {
-                  setConfirmDeleteInstructor(null);
-                  setInstructorBookingSummary(null);
-                }}
-              >
-                <Text style={styles.cancelModalButtonText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.saveModalButton, styles.deactivateButton]}
-                onPress={confirmDeleteInstructorAction}
-              >
-                <Text style={styles.saveModalButtonText}>Delete Profile</Text>
-              </TouchableOpacity>
-            </View>
+        onClose={() => { setConfirmDeleteInstructor(null); setInstructorBookingSummary(null); }}
+        title="Confirm Instructor Deletion"
+        footer={
+          <View style={{ flexDirection: 'row', gap: 12 }}>
+            <Button variant="secondary" onPress={() => { setConfirmDeleteInstructor(null); setInstructorBookingSummary(null); }}>Cancel</Button>
+            <Button variant="danger" onPress={confirmDeleteInstructorAction}>Delete Profile</Button>
           </View>
-        </View>
-      </Modal>
+        }
+      >
+        <Text style={{ fontSize: 16, color: colors.text, textAlign: 'center', lineHeight: 24, fontFamily: 'Inter_400Regular' }}>
+          Are you sure you want to delete the instructor profile for{'\n'}
+          <Text style={{ fontWeight: 'bold', color: colors.primary, fontFamily: 'Inter_700Bold' }}>{confirmDeleteInstructor?.full_name}</Text>?
+        </Text>
+        {instructorBookingSummary && instructorBookingSummary.active_bookings > 0 && (
+          <Text style={{ fontSize: 14, color: colors.danger, textAlign: 'center', marginTop: 15, fontStyle: 'italic', fontFamily: 'Inter_400Regular' }}>
+            This instructor has {instructorBookingSummary.active_bookings} active
+            booking{instructorBookingSummary.active_bookings === 1 ? '' : 's'}. Deleting
+            will cancel and remove them.
+          </Text>
+        )}
+        {instructorBookingSummary && (
+          <Text style={{ fontSize: 14, color: colors.textSecondary, textAlign: 'center', marginTop: 8, fontFamily: 'Inter_400Regular' }}>
+            Total bookings on record: {instructorBookingSummary.total_bookings}
+          </Text>
+        )}
+        <Text style={{ fontSize: 14, color: colors.danger, textAlign: 'center', marginTop: 15, fontStyle: 'italic', fontFamily: 'Inter_400Regular' }}>
+          This removes the instructor profile and all related bookings. The user account
+          remains intact and they can re-register as an instructor later.
+        </Text>
+      </ThemedModal>
 
       {/* Delete Student Confirmation Modal */}
-      <Modal
-        animationType="fade"
-        transparent={true}
+      <ThemedModal
         visible={!!confirmDeleteStudent}
-        onRequestClose={() => setConfirmDeleteStudent(null)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>🗑️ Confirm Student Deletion</Text>
-            </View>
-
-            <View style={styles.modalBody}>
-              <Text style={styles.confirmText}>
-                Are you sure you want to delete the student profile for{'\n'}
-                <Text style={styles.boldText}>{confirmDeleteStudent?.full_name}</Text>?
-              </Text>
-              {studentBookingSummary && studentBookingSummary.active_bookings > 0 && (
-                <Text style={styles.warningText}>
-                  ⚠️ This student has {studentBookingSummary.active_bookings} active
-                  booking{studentBookingSummary.active_bookings === 1 ? '' : 's'}. Deleting
-                  will cancel and remove them.
-                </Text>
-              )}
-              {studentBookingSummary && (
-                <Text style={styles.warningText}>
-                  Total bookings on record: {studentBookingSummary.total_bookings}
-                </Text>
-              )}
-              <Text style={styles.warningText}>
-                ⚠️ This removes the student profile and all related bookings. The user account
-                remains intact and they can re-register as a student later.
-              </Text>
-            </View>
-            <View style={styles.modalFooter}>
-              <TouchableOpacity
-                style={styles.cancelModalButton}
-                onPress={() => {
-                  setConfirmDeleteStudent(null);
-                  setStudentBookingSummary(null);
-                }}
-              >
-                <Text style={styles.cancelModalButtonText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.saveModalButton, styles.deactivateButton]}
-                onPress={confirmDeleteStudentAction}
-              >
-                <Text style={styles.saveModalButtonText}>Delete Profile</Text>
-              </TouchableOpacity>
-            </View>
+        onClose={() => { setConfirmDeleteStudent(null); setStudentBookingSummary(null); }}
+        title="Confirm Student Deletion"
+        footer={
+          <View style={{ flexDirection: 'row', gap: 12 }}>
+            <Button variant="secondary" onPress={() => { setConfirmDeleteStudent(null); setStudentBookingSummary(null); }}>Cancel</Button>
+            <Button variant="danger" onPress={confirmDeleteStudentAction}>Delete Profile</Button>
           </View>
-        </View>
-      </Modal>
+        }
+      >
+        <Text style={{ fontSize: 16, color: colors.text, textAlign: 'center', lineHeight: 24, fontFamily: 'Inter_400Regular' }}>
+          Are you sure you want to delete the student profile for{'\n'}
+          <Text style={{ fontWeight: 'bold', color: colors.primary, fontFamily: 'Inter_700Bold' }}>{confirmDeleteStudent?.full_name}</Text>?
+        </Text>
+        {studentBookingSummary && studentBookingSummary.active_bookings > 0 && (
+          <Text style={{ fontSize: 14, color: colors.danger, textAlign: 'center', marginTop: 15, fontStyle: 'italic', fontFamily: 'Inter_400Regular' }}>
+            This student has {studentBookingSummary.active_bookings} active
+            booking{studentBookingSummary.active_bookings === 1 ? '' : 's'}. Deleting
+            will cancel and remove them.
+          </Text>
+        )}
+        {studentBookingSummary && (
+          <Text style={{ fontSize: 14, color: colors.textSecondary, textAlign: 'center', marginTop: 8, fontFamily: 'Inter_400Regular' }}>
+            Total bookings on record: {studentBookingSummary.total_bookings}
+          </Text>
+        )}
+        <Text style={{ fontSize: 14, color: colors.danger, textAlign: 'center', marginTop: 15, fontStyle: 'italic', fontFamily: 'Inter_400Regular' }}>
+          This removes the student profile and all related bookings. The user account
+          remains intact and they can re-register as a student later.
+        </Text>
+      </ThemedModal>
 
       {/* View Schedule Modal */}
-      <Modal
+      <ThemedModal
         visible={scheduleModalVisible}
-        transparent
-        animationType="slide"
-        onRequestClose={closeScheduleModal}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContainer}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>📅 {selectedUser?.full_name}'s Schedule</Text>
-              <View style={styles.headerButtons}>
-                <TouchableOpacity
-                  onPress={refreshScheduleData}
-                  style={styles.refreshButton}
-                  disabled={loadingSchedule}
-                >
-                  <Text style={styles.refreshButtonText}>🔄 Refresh</Text>
-                </TouchableOpacity>
-                <TouchableOpacity onPress={closeScheduleModal} style={styles.closeButton}>
-                  <Text style={styles.closeButtonText}>✕</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-
-            <ScrollView style={styles.modalContent}>
-              {loadingSchedule ? (
-                <View style={styles.loadingContainer}>
-                  <ActivityIndicator size="large" color="#0066CC" />
-                  <Text style={styles.loadingText}>Loading schedule...</Text>
-                </View>
-              ) : instructorSchedule ? (
-                <>
-                  {/* Weekly Schedule */}
-                  <View style={styles.scheduleSection}>
-                    <Text style={styles.scheduleSectionTitle}>📅 Weekly Schedule</Text>
-                    {instructorSchedule.schedule && instructorSchedule.schedule.length > 0 ? (
-                      instructorSchedule.schedule.map((day: any) => (
-                        <View key={day.day_of_week} style={styles.scheduleItem}>
-                          <Text style={styles.scheduleDay}>
-                            {day.day_of_week.charAt(0).toUpperCase() + day.day_of_week.slice(1)}
-                          </Text>
-                          <Text style={styles.scheduleTime}>
-                            {day.is_active ? `${day.start_time} - ${day.end_time}` : 'Unavailable'}
-                          </Text>
-                        </View>
-                      ))
-                    ) : (
-                      <Text style={styles.emptyText}>No weekly schedule set</Text>
-                    )}
-                  </View>
-
-                  {/* Time Off */}
-                  <View style={styles.scheduleSection}>
-                    <Text style={styles.scheduleSectionTitle}>🚫 Time Off (All Dates)</Text>
-                    {instructorSchedule.timeOff && instructorSchedule.timeOff.length > 0 ? (
-                      instructorSchedule.timeOff.map((timeOff: any, index: number) => (
-                        <View key={index} style={styles.timeOffItem}>
-                          <Text style={styles.timeOffDates}>
-                            {timeOff.start_date} to {timeOff.end_date}
-                          </Text>
-                          {timeOff.reason && (
-                            <Text style={styles.timeOffReason}>{timeOff.reason}</Text>
-                          )}
-                        </View>
-                      ))
-                    ) : (
-                      <Text style={styles.emptyText}>No time off scheduled</Text>
-                    )}
-                  </View>
-
-                  {/* Recent Bookings */}
-                  <View style={styles.scheduleSection}>
-                    <Text style={styles.scheduleSectionTitle}>📚 Recent Bookings</Text>
-                    {instructorSchedule.bookings && instructorSchedule.bookings.length > 0 ? (
-                      instructorSchedule.bookings
-                        .sort((a: any, b: any) => {
-                          // Sort by lesson_date from earliest to latest
-                          const dateA = a.lesson_date ? new Date(a.lesson_date).getTime() : 0;
-                          const dateB = b.lesson_date ? new Date(b.lesson_date).getTime() : 0;
-                          return dateA - dateB;
-                        })
-                        .slice(0, 10)
-                        .map((booking: any) => {
-                          // Parse the lesson_date field
-                          const lessonDate = booking.lesson_date
-                            ? new Date(booking.lesson_date)
-                            : null;
-
-                          const dateStr =
-                            lessonDate && !isNaN(lessonDate.getTime())
-                              ? lessonDate.toLocaleDateString()
-                              : 'Invalid Date';
-                          const timeStr =
-                            lessonDate && !isNaN(lessonDate.getTime())
-                              ? lessonDate.toLocaleTimeString([], {
-                                  hour: '2-digit',
-                                  minute: '2-digit',
-                                })
-                              : 'Invalid Time';
-
-                          // Determine status color
-                          const status = booking.status ? booking.status.toUpperCase() : 'UNKNOWN';
-                          let statusColor = '#6c757d'; // Default gray
-
-                          if (status === 'COMPLETED') {
-                            statusColor = '#28a745'; // Green
-                          } else if (status === 'PENDING' || status === 'CONFIRMED') {
-                            statusColor = '#ffc107'; // Yellow/Orange
-                          } else if (status === 'CANCELLED' || status === 'NO_SHOW') {
-                            statusColor = '#dc3545'; // Red
-                          } else if (status === 'IN_PROGRESS') {
-                            statusColor = '#007bff'; // Blue
-                          }
-
-                          return (
-                            <View key={booking.id} style={styles.bookingItem}>
-                              <View style={styles.bookingHeader}>
-                                <Text style={styles.bookingDate}>
-                                  📅 {dateStr} at {timeStr}
-                                </Text>
-                                <Text
-                                  style={[styles.bookingStatus, { backgroundColor: statusColor }]}
-                                >
-                                  {status}
-                                </Text>
-                              </View>
-                              <View style={styles.bookingDetails}>
-                                <Text style={styles.bookingStudent}>
-                                  👤 {booking.student_name || 'Unknown'}
-                                </Text>
-                                {booking.student_phone && (
-                                  <Text style={styles.bookingPhone}>
-                                    📞 {booking.student_phone}
-                                  </Text>
-                                )}
-                                {booking.student_id_number && (
-                                  <Text style={styles.bookingIdNumber}>
-                                    🆔 {booking.student_id_number}
-                                  </Text>
-                                )}
-                              </View>
-                            </View>
-                          );
-                        })
-                    ) : (
-                      <Text style={styles.emptyText}>No bookings found</Text>
-                    )}
-                  </View>
-                </>
-              ) : (
-                <Text style={styles.emptyText}>Failed to load schedule</Text>
-              )}
-            </ScrollView>
-
-            <View style={styles.modalFooter}>
-              <TouchableOpacity style={styles.cancelModalButton} onPress={closeScheduleModal}>
-                <Text style={styles.cancelModalButtonText}>Close</Text>
-              </TouchableOpacity>
-            </View>
+        onClose={closeScheduleModal}
+        title={`${selectedUser?.full_name || ''}'s Schedule`}
+        size="lg"
+        footer={
+          <View style={{ flexDirection: 'row', gap: 12 }}>
+            <Button
+              variant="primary"
+              size="sm"
+              style={{ backgroundColor: colors.success }}
+              onPress={refreshScheduleData}
+              disabled={loadingSchedule}
+            >
+              Refresh
+            </Button>
+            <Button variant="secondary" onPress={closeScheduleModal}>Close</Button>
           </View>
-        </View>
-      </Modal>
+        }
+      >
+        <ScrollView>
+          {loadingSchedule ? (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="large" color={colors.primary} />
+              <Text style={[styles.loadingText, { color: colors.textSecondary }]}>Loading schedule...</Text>
+            </View>
+          ) : instructorSchedule ? (
+            <>
+              {/* Weekly Schedule */}
+              <View style={[styles.scheduleSection, { backgroundColor: colors.backgroundSecondary }]}>
+                <Text style={[styles.scheduleSectionTitle, { color: colors.text, fontFamily: 'Inter_600SemiBold' }]}>Weekly Schedule</Text>
+                {instructorSchedule.schedule && instructorSchedule.schedule.length > 0 ? (
+                  instructorSchedule.schedule.map((day: any) => (
+                    <View key={day.day_of_week} style={[styles.scheduleItem, { borderBottomColor: colors.border }]}>
+                      <Text style={[styles.scheduleDay, { color: colors.text, fontFamily: 'Inter_600SemiBold' }]}>
+                        {day.day_of_week.charAt(0).toUpperCase() + day.day_of_week.slice(1)}
+                      </Text>
+                      <Text style={[styles.scheduleTime, { color: day.is_active ? colors.success : colors.textMuted, fontFamily: 'Inter_400Regular' }]}>
+                        {day.is_active ? `${day.start_time} - ${day.end_time}` : 'Unavailable'}
+                      </Text>
+                    </View>
+                  ))
+                ) : (
+                  <Text style={[styles.emptyText, { color: colors.textMuted }]}>No weekly schedule set</Text>
+                )}
+              </View>
+
+              {/* Time Off */}
+              <View style={[styles.scheduleSection, { backgroundColor: colors.backgroundSecondary }]}>
+                <Text style={[styles.scheduleSectionTitle, { color: colors.text, fontFamily: 'Inter_600SemiBold' }]}>Time Off (All Dates)</Text>
+                {instructorSchedule.timeOff && instructorSchedule.timeOff.length > 0 ? (
+                  instructorSchedule.timeOff.map((timeOff: any, index: number) => (
+                    <View key={index} style={[styles.timeOffItem, { borderBottomColor: colors.border }]}>
+                      <Text style={[styles.timeOffDates, { color: colors.text, fontFamily: 'Inter_600SemiBold' }]}>
+                        {timeOff.start_date} to {timeOff.end_date}
+                      </Text>
+                      {timeOff.reason && (
+                        <Text style={[styles.timeOffReason, { color: colors.textSecondary }]}>{timeOff.reason}</Text>
+                      )}
+                    </View>
+                  ))
+                ) : (
+                  <Text style={[styles.emptyText, { color: colors.textMuted }]}>No time off scheduled</Text>
+                )}
+              </View>
+
+              {/* Recent Bookings */}
+              <View style={[styles.scheduleSection, { backgroundColor: colors.backgroundSecondary }]}>
+                <Text style={[styles.scheduleSectionTitle, { color: colors.text, fontFamily: 'Inter_600SemiBold' }]}>Recent Bookings</Text>
+                {instructorSchedule.bookings && instructorSchedule.bookings.length > 0 ? (
+                  instructorSchedule.bookings
+                    .sort((a: any, b: any) => {
+                      const dateA = a.lesson_date ? new Date(a.lesson_date).getTime() : 0;
+                      const dateB = b.lesson_date ? new Date(b.lesson_date).getTime() : 0;
+                      return dateA - dateB;
+                    })
+                    .slice(0, 10)
+                    .map((booking: any) => {
+                      const lessonDate = booking.lesson_date ? new Date(booking.lesson_date) : null;
+                      const dateStr = lessonDate && !isNaN(lessonDate.getTime())
+                        ? lessonDate.toLocaleDateString() : 'Invalid Date';
+                      const timeStr = lessonDate && !isNaN(lessonDate.getTime())
+                        ? lessonDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Invalid Time';
+
+                      const status = booking.status ? booking.status.toUpperCase() : 'UNKNOWN';
+                      let statusColor = colors.textMuted;
+                      if (status === 'COMPLETED') statusColor = colors.success;
+                      else if (status === 'PENDING' || status === 'CONFIRMED') statusColor = colors.warning;
+                      else if (status === 'CANCELLED' || status === 'NO_SHOW') statusColor = colors.danger;
+                      else if (status === 'IN_PROGRESS') statusColor = colors.primary;
+
+                      return (
+                        <View key={booking.id} style={[styles.bookingItem, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
+                          <View style={styles.bookingHeader}>
+                            <Text style={[styles.bookingDate, { color: colors.text, fontFamily: 'Inter_600SemiBold' }]}>
+                              {dateStr} at {timeStr}
+                            </Text>
+                            <Text style={[styles.bookingStatus, { backgroundColor: statusColor }]}>{status}</Text>
+                          </View>
+                          <View style={styles.bookingDetails}>
+                            <Text style={[styles.bookingStudent, { color: colors.primary, fontFamily: 'Inter_600SemiBold' }]}>
+                              {booking.student_name || 'Unknown'}
+                            </Text>
+                            {booking.student_phone && (
+                              <Text style={[styles.bookingPhone, { color: colors.textSecondary }]}>{booking.student_phone}</Text>
+                            )}
+                            {booking.student_id_number && (
+                              <Text style={[styles.bookingIdNumber, { color: colors.textSecondary }]}>{booking.student_id_number}</Text>
+                            )}
+                          </View>
+                        </View>
+                      );
+                    })
+                ) : (
+                  <Text style={[styles.emptyText, { color: colors.textMuted }]}>No bookings found</Text>
+                )}
+              </View>
+            </>
+          ) : (
+            <Text style={[styles.emptyText, { color: colors.textMuted }]}>Failed to load schedule</Text>
+          )}
+        </ScrollView>
+      </ThemedModal>
 
       {/* Edit Booking Fee Modal */}
-      <Modal
+      <ThemedModal
         visible={editBookingFeeModalVisible}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setEditBookingFeeModalVisible(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContainer}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>💰 Manage Booking Fee</Text>
-              <TouchableOpacity
-                onPress={() => setEditBookingFeeModalVisible(false)}
-                style={styles.closeButton}
-              >
-                <Text style={styles.closeButtonText}>✕</Text>
-              </TouchableOpacity>
-            </View>
-
-            <View style={styles.modalContent}>
-              <Text style={styles.infoText}>Instructor: {selectedUser?.full_name}</Text>
-              <Text style={styles.infoText} style={{ marginBottom: 20 }}>
-                This fee is added to the instructor's rate when students book lessons.
-              </Text>
-
-              <View style={styles.formGroup}>
-                <Text style={styles.label}>Booking Fee (ZAR) *</Text>
-                <TextInput
-                  style={styles.input}
-                  value={bookingFeeValue}
-                  onChangeText={setBookingFeeValue}
-                  placeholder="20.00"
-                  keyboardType="decimal-pad"
-                />
-                <Text style={styles.helperText}>
-                  Students will pay: Instructor Rate + R{bookingFeeValue || '0.00'}
-                </Text>
-              </View>
-            </View>
-
-            <View style={styles.modalFooter}>
-              <TouchableOpacity
-                style={styles.cancelModalButton}
-                onPress={() => setEditBookingFeeModalVisible(false)}
-              >
-                <Text style={styles.cancelModalButtonText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.saveModalButton} onPress={handleSaveBookingFee}>
-                <Text style={styles.saveModalButtonText}>Save Fee</Text>
-              </TouchableOpacity>
-            </View>
+        onClose={() => setEditBookingFeeModalVisible(false)}
+        title="Manage Booking Fee"
+        footer={
+          <View style={{ flexDirection: 'row', gap: 12 }}>
+            <Button variant="secondary" onPress={() => setEditBookingFeeModalVisible(false)}>Cancel</Button>
+            <Button variant="primary" onPress={handleSaveBookingFee}>Save Fee</Button>
           </View>
+        }
+      >
+        <Text style={{ fontSize: 14, color: colors.textSecondary, marginBottom: 5, fontFamily: 'Inter_400Regular' }}>Instructor: {selectedUser?.full_name}</Text>
+        <Text style={{ fontSize: 14, color: colors.textSecondary, marginBottom: 20, fontFamily: 'Inter_400Regular' }}>
+          This fee is added to the instructor's rate when students book lessons.
+        </Text>
+
+        <View style={styles.formGroup}>
+          <Text style={[styles.label, { color: colors.text }]}>Booking Fee (ZAR) *</Text>
+          <TextInput
+            style={[styles.input, { borderColor: colors.border, backgroundColor: colors.backgroundSecondary, color: colors.text }]}
+            value={bookingFeeValue}
+            onChangeText={setBookingFeeValue}
+            placeholder="20.00"
+            placeholderTextColor={colors.textMuted}
+            keyboardType="decimal-pad"
+          />
+          <Text style={[styles.helperText, { color: colors.textMuted }]}>
+            Students will pay: Instructor Rate + R{bookingFeeValue || '0.00'}
+          </Text>
         </View>
-      </Modal>
+      </ThemedModal>
     </View>
   );
 }
@@ -1490,57 +1224,24 @@ export default function UserManagementScreen({ navigation }: any) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F5F5F5',
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: 16,
-    backgroundColor: '#FFF',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E0E0E0',
-  },
-  backButton: {
-    width: 150,
-  },
-  backButtonText: {
-    fontSize: 16,
-    color: '#007bff',
-    fontWeight: '600',
-  },
-  headerTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#333',
   },
   centerContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#F5F5F5',
   },
   loadingText: {
     marginTop: 10,
     fontSize: 16,
-    color: '#666',
-  },
-  logoutButtonText: {
-    color: '#FFF',
-    fontSize: 14,
-    fontWeight: '600',
+    fontFamily: 'Inter_400Regular',
   },
   filters: {
-    backgroundColor: '#FFF',
     padding: 10,
     borderBottomWidth: 1,
-    borderBottomColor: '#E0E0E0',
   },
   tabContainer: {
     flexDirection: 'row',
-    backgroundColor: '#FFF',
     borderBottomWidth: 1,
-    borderBottomColor: '#E0E0E0',
   },
   tab: {
     flex: 1,
@@ -1550,33 +1251,25 @@ const styles = StyleSheet.create({
     borderBottomWidth: 2,
     borderBottomColor: 'transparent',
   },
-  activeTab: {
-    borderBottomColor: '#0066CC',
-    backgroundColor: '#F0F8FF',
-  },
+  activeTab: {},
   tabText: {
     fontSize: 13,
-    fontWeight: '600',
-    color: '#666',
+    fontFamily: 'Inter_600SemiBold',
   },
   activeTabText: {
-    color: '#0066CC',
-    fontWeight: 'bold',
+    fontFamily: 'Inter_700Bold',
   },
   filterGroup: {
     width: '100%',
   },
   filterLabel: {
     fontSize: 12,
-    fontWeight: '600',
-    color: '#333',
+    fontFamily: 'Inter_600SemiBold',
     marginBottom: 4,
   },
   pickerContainer: {
     borderWidth: 1,
-    borderColor: '#CCC',
     borderRadius: 8,
-    backgroundColor: '#FFF',
     overflow: 'hidden',
   },
   picker: {
@@ -1584,26 +1277,22 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   searchContainer: {
-    backgroundColor: '#FFF',
     padding: 10,
     borderBottomWidth: 1,
-    borderBottomColor: '#E0E0E0',
     flexDirection: 'row',
     alignItems: 'center',
   },
   searchInput: {
     flex: 1,
     borderWidth: 1,
-    borderColor: '#CCC',
     borderRadius: 6,
     padding: 8,
     fontSize: 14,
-    backgroundColor: '#F8F9FA',
+    fontFamily: 'Inter_400Regular',
   },
   clearSearchButton: {
     marginLeft: 8,
     padding: 6,
-    backgroundColor: '#DC3545',
     borderRadius: 16,
     width: 28,
     height: 28,
@@ -1613,7 +1302,7 @@ const styles = StyleSheet.create({
   clearSearchText: {
     color: '#FFF',
     fontSize: 14,
-    fontWeight: 'bold',
+    fontFamily: 'Inter_700Bold',
   },
   listContainer: {
     padding: 8,
@@ -1630,15 +1319,7 @@ const styles = StyleSheet.create({
     maxWidth: Platform.OS === 'web' ? '48%' : '100%',
     flexGrow: 1,
   },
-  userCard: {
-    backgroundColor: '#FFF',
-    borderRadius: 8,
-    padding: 12,
-    boxShadow: '0px 1px 3px rgba(0,0,0,0.1)',
-    width: '100%',
-  },
   userIdBadge: {
-    backgroundColor: '#E3F2FD',
     borderRadius: 4,
     paddingVertical: 4,
     paddingHorizontal: 8,
@@ -1650,25 +1331,11 @@ const styles = StyleSheet.create({
   },
   userIdText: {
     fontSize: 11,
-    fontWeight: 'bold',
-    color: '#1976D2',
     fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
   },
-  originalAdminBadgeContainer: {
-    backgroundColor: '#FFD700',
-    borderWidth: 1,
-    borderColor: '#FFA500',
-  },
-  originalAdminBadgeText: {
-    fontSize: Platform.OS === 'web' ? 10 : 9,
-    fontWeight: 'bold',
-    color: '#8B4513',
-  },
   originalAdminActionBadge: {
-    backgroundColor: '#FFD700',
     borderRadius: 6,
     borderWidth: 1,
-    borderColor: '#FFA500',
     paddingVertical: Platform.OS === 'web' ? 6 : 4,
     paddingHorizontal: Platform.OS === 'web' ? 10 : 6,
     marginRight: Platform.OS === 'web' ? 8 : 6,
@@ -1679,24 +1346,7 @@ const styles = StyleSheet.create({
   },
   originalAdminActionBadgeText: {
     fontSize: Platform.OS === 'web' ? 11 : 9,
-    fontWeight: 'bold',
-    color: '#8B4513',
-  },
-  originalAdminBadge: {
-    backgroundColor: '#FFD700',
-    borderRadius: 6,
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    marginBottom: 12,
-    borderWidth: 2,
-    borderColor: '#FFA500',
-    alignItems: 'center',
-  },
-  originalAdminText: {
-    fontSize: Platform.OS === 'web' ? 14 : 12,
-    fontWeight: 'bold',
-    color: '#8B4513',
-    textAlign: 'center',
+    fontFamily: 'Inter_700Bold',
   },
   userHeader: {
     flexDirection: 'row',
@@ -1706,38 +1356,19 @@ const styles = StyleSheet.create({
   userInfo: {
     flex: 1,
   },
-  userIdBadge: {
-    fontSize: Platform.OS === 'web' ? 12 : 11,
-    fontWeight: '700',
-    color: '#007AFF',
-    backgroundColor: '#E3F2FD',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 4,
-    alignSelf: 'flex-start',
-    marginBottom: 6,
-    borderWidth: 1,
-    borderColor: '#90CAF9',
-  },
   userName: {
     fontSize: 16,
-    fontWeight: 'bold',
-    color: '#333',
     marginBottom: 3,
   },
   userEmail: {
     fontSize: 13,
-    color: '#666',
     marginBottom: 2,
   },
   userPhone: {
     fontSize: 13,
-    color: '#666',
   },
   userIdNumber: {
     fontSize: 12,
-    color: '#0066CC',
-    fontWeight: '600',
     marginTop: 3,
   },
   badges: {
@@ -1751,42 +1382,15 @@ const styles = StyleSheet.create({
   },
   badgeText: {
     fontSize: 10,
-    fontWeight: 'bold',
     color: '#FFF',
-  },
-  roleAdmin: {
-    backgroundColor: '#DC3545',
-  },
-  roleInstructor: {
-    backgroundColor: '#0066CC',
-  },
-  roleStudent: {
-    backgroundColor: '#28A745',
-  },
-  roleDefault: {
-    backgroundColor: '#6C757D',
-  },
-  statusActive: {
-    backgroundColor: '#28A745',
-  },
-  statusInactive: {
-    backgroundColor: '#6C757D',
-  },
-  statusSuspended: {
-    backgroundColor: '#FFC107',
-  },
-  statusDefault: {
-    backgroundColor: '#6C757D',
   },
   userDetails: {
     paddingTop: 6,
     borderTopWidth: 1,
-    borderTopColor: '#E0E0E0',
     marginBottom: 6,
   },
   userDetailText: {
     fontSize: 11,
-    color: '#666',
     marginBottom: 2,
   },
   actionButtons: {
@@ -1796,134 +1400,25 @@ const styles = StyleSheet.create({
     marginTop: 6,
     gap: 6,
   },
-  actionButton: {
-    paddingHorizontal: 8,
-    paddingVertical: 6,
-    borderRadius: 5,
-    minWidth: 65,
-    alignItems: 'center',
-  },
-  editButton: {
-    backgroundColor: '#17A2B8',
-  },
-  passwordButton: {
-    backgroundColor: '#6610F2',
-  },
-  scheduleButton: {
-    backgroundColor: '#FF6B35',
-    flexDirection: 'column',
-    paddingVertical: 8,
-    paddingHorizontal: 10,
-    minWidth: 70,
-    borderWidth: 1.5,
-    borderColor: '#FF8C5A',
-  },
-  scheduleButtonText: {
-    fontSize: 24,
-    marginBottom: 2,
-  },
-  scheduleButtonLabel: {
-    color: '#FFF',
-    fontSize: 10,
-    fontWeight: 'bold',
-  },
-  feeButton: {
-    backgroundColor: '#FFC107',
-  },
-  activateButton: {
-    backgroundColor: '#28A745',
-  },
-  deactivateButton: {
-    backgroundColor: '#DC3545',
-  },
-  suspendButton: {
-    backgroundColor: '#DC3545',
-  },
-  deleteButton: {
-    backgroundColor: '#DC3545',
-  },
-  actionButtonText: {
-    color: '#FFF',
-    fontSize: 12,
-    fontWeight: 'bold',
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: Platform.OS === 'web' ? 20 : 10,
-  },
-  modalContainer: {
-    backgroundColor: '#FFF',
-    borderRadius: 12,
-    padding: Platform.OS === 'web' ? 32 : 24,
-    width: Platform.OS === 'web' ? '50%' : '92%',
-    maxWidth: 650,
-    maxHeight: '85%',
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingBottom: Platform.OS === 'web' ? 20 : 16,
-    marginBottom: Platform.OS === 'web' ? 20 : 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E0E0E0',
-  },
-  modalTitle: {
-    fontSize: Platform.OS === 'web' ? 24 : 20,
-    fontWeight: 'bold',
-    color: '#333',
-    flex: 1,
-  },
-  headerButtons: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  refreshButton: {
-    backgroundColor: '#28a745',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 6,
-  },
-  refreshButtonText: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  closeButton: {
-    padding: 5,
-  },
-  closeButtonText: {
-    fontSize: 24,
-    color: '#999',
-  },
-  modalContent: {
-    padding: 20,
-  },
   formGroup: {
     marginBottom: 20,
   },
   label: {
     fontSize: 14,
-    fontWeight: '600',
-    color: '#333',
+    fontFamily: 'Inter_600SemiBold',
     marginBottom: 8,
   },
   input: {
     borderWidth: 1,
-    borderColor: '#CCC',
     borderRadius: 8,
     padding: 12,
     fontSize: 16,
-    backgroundColor: '#FFF',
+    fontFamily: 'Inter_400Regular',
   },
   infoText: {
     fontSize: 14,
-    color: '#666',
     marginBottom: 5,
+    fontFamily: 'Inter_400Regular',
   },
   showPasswordButton: {
     marginBottom: 15,
@@ -1931,55 +1426,22 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   showPasswordText: {
-    color: '#007bff',
     fontSize: 14,
-    fontWeight: '600',
+    fontFamily: 'Inter_600SemiBold',
   },
   helperText: {
     fontSize: 12,
-    color: '#999',
     marginTop: 6,
     fontStyle: 'italic',
-  },
-  modalFooter: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingTop: Platform.OS === 'web' ? 20 : 16,
-    marginTop: Platform.OS === 'web' ? 20 : 16,
-    borderTopWidth: 1,
-    borderTopColor: '#E0E0E0',
-    gap: Platform.OS === 'web' ? 16 : 12,
-  },
-  modalBody: {
-    padding: 20,
-  },
-  confirmText: {
-    fontSize: 16,
-    color: '#333',
-    textAlign: 'center',
-    lineHeight: 24,
-  },
-  boldText: {
-    fontWeight: 'bold',
-    color: '#0066CC',
-  },
-  warningText: {
-    fontSize: 14,
-    color: '#DC3545',
-    textAlign: 'center',
-    marginTop: 15,
-    fontStyle: 'italic',
+    fontFamily: 'Inter_400Regular',
   },
   scheduleSection: {
     marginBottom: 20,
     padding: 15,
-    backgroundColor: '#F8F9FA',
     borderRadius: 8,
   },
   scheduleSectionTitle: {
     fontSize: 18,
-    fontWeight: '700',
-    color: '#333',
     marginBottom: 12,
   },
   scheduleItem: {
@@ -1988,39 +1450,30 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 8,
     borderBottomWidth: 1,
-    borderBottomColor: '#E0E0E0',
   },
   scheduleDay: {
     fontSize: 16,
-    fontWeight: '600',
-    color: '#333',
   },
   scheduleTime: {
     fontSize: 16,
-    color: '#666',
   },
   timeOffItem: {
     paddingVertical: 10,
     borderBottomWidth: 1,
-    borderBottomColor: '#E0E0E0',
   },
   timeOffDates: {
     fontSize: 16,
-    fontWeight: '600',
-    color: '#333',
     marginBottom: 4,
   },
   timeOffReason: {
     fontSize: 14,
-    color: '#666',
     fontStyle: 'italic',
+    fontFamily: 'Inter_400Regular',
   },
   bookingItem: {
     paddingVertical: 12,
     paddingHorizontal: 8,
     borderBottomWidth: 1,
-    borderBottomColor: '#E0E0E0',
-    backgroundColor: '#F9F9F9',
     borderRadius: 6,
     marginBottom: 8,
   },
@@ -2032,41 +1485,36 @@ const styles = StyleSheet.create({
   },
   bookingDate: {
     fontSize: 15,
-    fontWeight: '600',
-    color: '#333',
   },
   bookingStatus: {
     fontSize: 13,
-    fontWeight: '600',
+    fontFamily: 'Inter_600SemiBold',
     color: '#fff',
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 4,
+    overflow: 'hidden',
   },
   bookingDetails: {
     marginTop: 4,
   },
   bookingStudent: {
     fontSize: 14,
-    fontWeight: '600',
-    color: '#0066CC',
     marginBottom: 4,
   },
   bookingPhone: {
     fontSize: 13,
-    color: '#666',
     marginBottom: 2,
   },
   bookingIdNumber: {
     fontSize: 13,
-    color: '#666',
   },
   emptyText: {
     fontSize: 14,
-    color: '#999',
     fontStyle: 'italic',
     textAlign: 'center',
     paddingVertical: 10,
+    fontFamily: 'Inter_400Regular',
   },
   loadingContainer: {
     alignItems: 'center',
