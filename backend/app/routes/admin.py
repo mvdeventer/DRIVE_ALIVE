@@ -13,6 +13,7 @@ from ..database import get_db
 from ..middleware.admin import require_admin
 from ..models.availability import InstructorSchedule, TimeOffException
 from ..models.booking import Booking, BookingStatus
+from ..models.booking_credit import BookingCredit, CreditStatus
 from ..models.user import Instructor, Student, User, UserRole, UserStatus
 from ..schemas.admin import (
     AdminCreateRequest,
@@ -358,50 +359,112 @@ async def get_all_users(
     users = query.offset(skip).limit(limit).all()
 
     result = []
+
+    def _make_entry(user, display_role, id_number=None, booking_fee=None,
+                    available_credit=None, pending_credit=None):
+        """Helper to build a UserManagementResponse entry."""
+        resolved_id_number = id_number or user.id_number
+        return UserManagementResponse(
+            id=user.id,
+            email=user.email,
+            phone=user.phone,
+            first_name=user.first_name,
+            last_name=user.last_name,
+            full_name=user.full_name,
+            role=display_role,
+            status=user.status,
+            id_number=resolved_id_number,
+            address=user.address,
+            booking_fee=booking_fee,
+            available_credit=available_credit,
+            pending_credit=pending_credit,
+            created_at=user.created_at,
+            last_login=user.last_login,
+        )
+
+    def _get_student_credits(student_id):
+        """Get available and pending credit totals for a student."""
+        available = db.query(func.coalesce(func.sum(BookingCredit.credit_amount), 0.0)).filter(
+            BookingCredit.student_id == student_id,
+            BookingCredit.status == CreditStatus.AVAILABLE,
+        ).scalar()
+        pending = db.query(func.coalesce(func.sum(BookingCredit.credit_amount), 0.0)).filter(
+            BookingCredit.student_id == student_id,
+            BookingCredit.status == CreditStatus.PENDING,
+        ).scalar()
+        return float(available), float(pending)
+
     for user in users:
-        # Get id_number and booking_fee from instructor or student profile
-        id_number = None
-        booking_fee = None
-        
-        # When filtering by role, get data from the corresponding profile
-        if role == UserRole.INSTRUCTOR:
-            instructor = (
-                db.query(Instructor).filter(Instructor.user_id == user.id).first()
-            )
-            if instructor:
-                id_number = instructor.id_number
-                booking_fee = instructor.booking_fee
-        elif role == UserRole.STUDENT:
-            student = db.query(Student).filter(Student.user_id == user.id).first()
-            if student:
-                id_number = student.id_number
-        else:
-            # No specific role filter - check both profiles
-            instructor = (
-                db.query(Instructor).filter(Instructor.user_id == user.id).first()
-            )
-            if instructor:
-                id_number = instructor.id_number
-                booking_fee = instructor.booking_fee
-            else:
-                student = db.query(Student).filter(Student.user_id == user.id).first()
+        if role:
+            # Role-specific tab: return one entry with the *filtered* role
+            # so Instructor tab always shows "INSTRUCTOR" badge, etc.
+            id_number = None
+            booking_fee = None
+            available_credit = None
+            pending_credit = None
+
+            if role == UserRole.INSTRUCTOR:
+                instructor = db.query(Instructor).filter(
+                    Instructor.user_id == user.id
+                ).first()
+                if instructor:
+                    id_number = instructor.id_number
+                    booking_fee = instructor.booking_fee
+            elif role == UserRole.STUDENT:
+                student = db.query(Student).filter(
+                    Student.user_id == user.id
+                ).first()
                 if student:
                     id_number = student.id_number
+                    available_credit, pending_credit = _get_student_credits(student.id)
+            else:
+                # Admin tab
+                id_number = user.id_number
 
-        result.append(
-            UserManagementResponse(
-                id=user.id,
-                email=user.email,
-                phone=user.phone,
-                full_name=user.full_name,
-                role=user.role,
-                status=user.status,
-                id_number=id_number,
-                booking_fee=booking_fee,
-                created_at=user.created_at,
-                last_login=user.last_login,
-            )
-        )
+            result.append(_make_entry(user, role, id_number, booking_fee,
+                                      available_credit, pending_credit))
+        else:
+            # All Users tab: return a separate entry for EACH role the user has
+            has_entry = False
+
+            # 1) Admin entry (if user's base role is admin)
+            if user.role == UserRole.ADMIN:
+                result.append(
+                    _make_entry(user, UserRole.ADMIN, user.id_number)
+                )
+                has_entry = True
+
+            # 2) Instructor entry (if user has an instructor profile)
+            instructor = db.query(Instructor).filter(
+                Instructor.user_id == user.id
+            ).first()
+            if instructor:
+                result.append(
+                    _make_entry(
+                        user,
+                        UserRole.INSTRUCTOR,
+                        instructor.id_number,
+                        instructor.booking_fee,
+                    )
+                )
+                has_entry = True
+
+            # 3) Student entry (if user has a student profile)
+            student = db.query(Student).filter(
+                Student.user_id == user.id
+            ).first()
+            if student:
+                avail_cr, pend_cr = _get_student_credits(student.id)
+                result.append(
+                    _make_entry(user, UserRole.STUDENT, student.id_number,
+                                available_credit=avail_cr,
+                                pending_credit=pend_cr)
+                )
+                has_entry = True
+
+            # Fallback: user has no recognised profiles
+            if not has_entry:
+                result.append(_make_entry(user, user.role, user.id_number))
 
     return result
 
@@ -902,7 +965,7 @@ async def get_all_bookings(
                 pickup_address=booking.pickup_address,
                 dropoff_address=booking.dropoff_address,
                 status=booking.status,
-                amount=booking.amount,
+                amount=booking.amount + (booking.booking_fee or 0.0),
                 created_at=booking.created_at,
             )
         )
@@ -1168,9 +1231,12 @@ async def update_user_details(
     first_name: Optional[str] = Query(None),
     last_name: Optional[str] = Query(None),
     phone: Optional[str] = Query(None),
+    email: Optional[str] = Query(None),
+    id_number: Optional[str] = Query(None),
+    address: Optional[str] = Query(None),
 ):
     """
-    Update user basic details (name, phone)
+    Update user basic details (name, phone, email, id_number, address)
     """
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
@@ -1179,13 +1245,41 @@ async def update_user_details(
             detail="User not found",
         )
 
-    # Update fields if provided
+    # Check email uniqueness if being changed
+    if email is not None and email != user.email:
+        existing = db.query(User).filter(
+            User.email == email,
+            User.id != user_id
+        ).first()
+        if existing:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="This email is already in use by another user",
+            )
+        user.email = email
+
+    # Check id_number uniqueness if being changed
+    if id_number is not None and id_number != user.id_number:
+        existing = db.query(User).filter(
+            User.id_number == id_number,
+            User.id != user_id
+        ).first()
+        if existing:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="This ID number is already in use by another user",
+            )
+        user.id_number = id_number
+
+    # Update other fields if provided
     if first_name is not None:
         user.first_name = first_name
     if last_name is not None:
         user.last_name = last_name
     if phone is not None:
         user.phone = phone
+    if address is not None:
+        user.address = address
 
     db.commit()
     db.refresh(user)
@@ -1196,7 +1290,10 @@ async def update_user_details(
             "id": user.id,
             "first_name": user.first_name,
             "last_name": user.last_name,
+            "email": user.email,
             "phone": user.phone,
+            "id_number": user.id_number,
+            "address": user.address,
         },
     }
 
@@ -1632,11 +1729,16 @@ async def admin_update_student(
     student_id: int,
     current_admin: Annotated[User, Depends(require_admin)],
     db: Session = Depends(get_db),
-    address: Optional[str] = Query(None),
+    address_line1: Optional[str] = Query(None),
+    address_line2: Optional[str] = Query(None),
     city: Optional[str] = Query(None),
     province: Optional[str] = Query(None),
+    suburb: Optional[str] = Query(None),
+    postal_code: Optional[str] = Query(None),
     emergency_contact_name: Optional[str] = Query(None),
     emergency_contact_phone: Optional[str] = Query(None),
+    learners_permit_number: Optional[str] = Query(None),
+    id_number: Optional[str] = Query(None),
 ):
     """
     Admin update student profile details
@@ -1649,16 +1751,26 @@ async def admin_update_student(
         )
 
     # Update fields if provided
-    if address is not None:
-        student.address = address
+    if address_line1 is not None:
+        student.address_line1 = address_line1
+    if address_line2 is not None:
+        student.address_line2 = address_line2
     if city is not None:
         student.city = city
     if province is not None:
         student.province = province
+    if suburb is not None:
+        student.suburb = suburb
+    if postal_code is not None:
+        student.postal_code = postal_code
     if emergency_contact_name is not None:
         student.emergency_contact_name = emergency_contact_name
     if emergency_contact_phone is not None:
         student.emergency_contact_phone = emergency_contact_phone
+    if learners_permit_number is not None:
+        student.learners_permit_number = learners_permit_number
+    if id_number is not None:
+        student.id_number = id_number
 
     db.commit()
     db.refresh(student)

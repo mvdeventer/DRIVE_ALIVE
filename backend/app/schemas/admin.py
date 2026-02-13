@@ -176,11 +176,16 @@ class UserManagementResponse(BaseModel):
     id: int
     email: str
     phone: str
+    first_name: str
+    last_name: str
     full_name: str
     role: UserRole
     status: UserStatus
     id_number: Optional[str] = None
+    address: Optional[str] = None
     booking_fee: Optional[float] = None  # Only for instructors
+    available_credit: Optional[float] = None  # Only for students
+    pending_credit: Optional[float] = None  # Only for students
     created_at: datetime
     last_login: Optional[datetime] = None
 

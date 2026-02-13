@@ -221,7 +221,9 @@ const styles = StyleSheet.create({
   },
   body: {
     paddingHorizontal: Platform.OS === 'web' ? 28 : 20,
-    paddingVertical: 12,
+    paddingTop: 12,
+    paddingBottom: 16,
+    flexShrink: 1,
   },
   footer: {
     paddingHorizontal: Platform.OS === 'web' ? 28 : 20,

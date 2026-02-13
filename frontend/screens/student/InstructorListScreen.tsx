@@ -15,6 +15,7 @@ import {
   View,
 } from 'react-native';
 import WebNavigationHeader from '../../components/WebNavigationHeader';
+import CreditBanner from '../../components/CreditBanner';
 import InlineMessage from '../../components/InlineMessage';
 import { Badge, Button, Card, Input, ThemedModal } from '../../components/ui';
 import { useTheme } from '../../theme/ThemeContext';
@@ -456,6 +457,8 @@ ${studentName}`;
         onBack={() => navigation.goBack()}
         showBackButton={true}
       />
+
+      <CreditBanner compact />
 
       {/* Search Bar and Filter Toggles */}
       <View style={[styles.searchAndFilterRow, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>

@@ -468,6 +468,17 @@ if "%CLEAR_DB%"=="1" (
     )
 )
 
+REM Run bootstrap if first-time setup needed
+if not exist "%ROOT_DIR%\.installed" (
+    echo %COLOR_YELLOW%First-run detected - running bootstrap setup...%COLOR_RESET%
+    cd /d "%ROOT_DIR%"
+    python bootstrap.py
+    if errorlevel 1 (
+        echo %COLOR_RED%Bootstrap failed. Falling back to manual dependency check...%COLOR_RESET%
+    )
+    cd /d "%SCRIPT_DIR%"
+)
+
 call :check_and_setup_dependencies
 if errorlevel 1 (
     echo %COLOR_RED%Failed to setup dependencies.%COLOR_RESET%
@@ -1755,6 +1766,14 @@ if errorlevel 1 (
     exit /b 1
 )
 echo [DEBUG] Step 2: Python OK
+
+:: Check .env file exists
+if not exist "%BACKEND_DIR%\.env" (
+    echo %COLOR_YELLOW%.env file not found. Running bootstrap to generate...%COLOR_RESET%
+    cd /d "%ROOT_DIR%"
+    python bootstrap.py --force
+    cd /d "%SCRIPT_DIR%"
+)
 
 :: Check Node.js
 node --version >nul 2>&1

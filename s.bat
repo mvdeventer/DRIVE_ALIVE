@@ -5,6 +5,21 @@ if "%~1"=="-h" goto :show_help
 if "%~1"=="--help" goto :show_help
 if "%~1"=="/?" goto :show_help
 
+REM First-run bootstrap: auto-setup if .installed marker is missing
+if not exist "%~dp0.installed" (
+    echo.
+    echo ============================================
+    echo  First-run detected - running auto-setup...
+    echo ============================================
+    echo.
+    python "%~dp0bootstrap.py"
+    if errorlevel 1 (
+        echo.
+        echo [WARN] Bootstrap had issues - attempting to continue...
+        echo.
+    )
+)
+
 REM Run with arguments passed through, or default to standard start
 if "%~1"=="" (
     .\scripts\drive-alive.bat start

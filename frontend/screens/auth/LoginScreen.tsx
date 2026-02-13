@@ -44,6 +44,7 @@ export default function LoginScreen({ navigation, onAuthChange }: any) {
   const { colors, isDark } = useTheme();
   const [emailOrPhone, setEmailOrPhone] = useState('');
   const [password, setPassword] = useState('');
+  const [fieldErrors, setFieldErrors] = useState<{ emailOrPhone?: string; password?: string }>({});
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showRoleModal, setShowRoleModal] = useState(false);
@@ -126,11 +127,16 @@ export default function LoginScreen({ navigation, onAuthChange }: any) {
   };
 
   const performLogin = async (selectedRole?: string) => {
-    if (!emailOrPhone || !password) {
+    const errors: { emailOrPhone?: string; password?: string } = {};
+    if (!emailOrPhone) errors.emailOrPhone = 'Email or phone is required';
+    if (!password) errors.password = 'Password is required';
+    if (Object.keys(errors).length > 0) {
+      setFieldErrors(errors);
       setMessage({ type: 'error', text: 'Please fill in all fields' });
       setTimeout(() => setMessage(null), 3000);
       return;
     }
+    setFieldErrors({});
 
     try {
       setLoading(true);
@@ -234,12 +240,13 @@ export default function LoginScreen({ navigation, onAuthChange }: any) {
             label="Email or Phone"
             placeholder="Email or phone number"
             value={emailOrPhone}
-            onChangeText={setEmailOrPhone}
+            onChangeText={(text) => { setEmailOrPhone(text); setFieldErrors(prev => ({ ...prev, emailOrPhone: undefined })); }}
             autoCapitalize="none"
             autoCorrect={false}
             onSubmitEditing={handleLogin}
             returnKeyType="next"
             keyboardType="email-address"
+            error={fieldErrors.emailOrPhone}
           />
 
           <View style={styles.passwordRow}>
@@ -247,10 +254,11 @@ export default function LoginScreen({ navigation, onAuthChange }: any) {
               label="Password"
               placeholder="Enter your password"
               value={password}
-              onChangeText={setPassword}
+              onChangeText={(text) => { setPassword(text); setFieldErrors(prev => ({ ...prev, password: undefined })); }}
               secureTextEntry={!showPassword}
               onSubmitEditing={handleLogin}
               returnKeyType="go"
+              error={fieldErrors.password}
             />
             <Pressable
               onPress={() => setShowPassword(!showPassword)}

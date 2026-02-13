@@ -95,6 +95,7 @@ export default function EarningsReportScreen({ navigation }: any) {
       setDetailedBookings(bookingsRes.data || []);
     } catch (error: any) {
       console.error('Error loading earnings data:', error);
+      setErrorMessage(error.response?.data?.detail || 'Failed to load earnings data');
     } finally {
       setLoading(false);
       setRefreshing(false);

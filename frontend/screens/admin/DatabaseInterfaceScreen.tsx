@@ -99,14 +99,14 @@ const DatabaseInterfaceScreen = ({ navigation }: any) => {
       ],
       bookings: [
         { key: 'id', label: 'ID' },
+        { key: 'booking_reference', label: 'Reference' },
         { key: 'student_id', label: 'Student ID' },
         { key: 'instructor_id', label: 'Instructor ID' },
         { key: 'lesson_date', label: 'Lesson Date' },
-        { key: 'start_time', label: 'Start Time' },
-        { key: 'duration', label: 'Duration' },
+        { key: 'duration_minutes', label: 'Duration' },
         { key: 'status', label: 'Status' },
         { key: 'payment_status', label: 'Payment Status' },
-        { key: 'total_amount', label: 'Total Amount' },
+        { key: 'amount', label: 'Amount' },
       ],
       reviews: [
         { key: 'id', label: 'ID' },
@@ -1142,7 +1142,7 @@ const DatabaseInterfaceScreen = ({ navigation }: any) => {
             <Text style={[styles.platformInfoTitle, { color: colors.text }]}>Supported Platforms:</Text>
             <Text style={[styles.platformInfoText, { color: colors.textSecondary }]}>Windows 10/11</Text>
             <Text style={[styles.platformInfoText, { color: colors.textSecondary }]}>Chrome, Edge, Firefox</Text>
-            <Text style={[styles.platformInfoText, { color: colors.textSecondary }]}>Minimum resolution: 1366x768</Text>
+            <Text style={[styles.platformInfoText, { color: colors.textSecondary }]}>Minimum resolution: 1024x600</Text>
             
             <Text style={[styles.platformInfoTitle, { marginTop: 16, color: colors.text }]}>Your System:</Text>
             <Text style={[styles.platformInfoText, { color: colors.textSecondary }]}>OS: {platformDetection.isWindows ? 'Windows' : 'Other'}</Text>
@@ -1539,7 +1539,12 @@ const DatabaseInterfaceScreen = ({ navigation }: any) => {
                   </Pressable>
                 </View>
                 <Text style={[styles.tableCell, { color: colors.text, flex: 1 }]}>{user.id}</Text>
-                <Text style={[styles.tableCell, { color: colors.text, flex: 3 }]}>{user.first_name} {user.last_name}</Text>
+                <View style={{ flex: 3, flexDirection: 'column' }}>
+                  <Text style={[styles.tableCell, { color: colors.text }]}>{user.first_name} {user.last_name}</Text>
+                  {user.id === 1 && user.role === 'admin' && (!user.row_type || user.row_type === 'primary') && (
+                    <Text style={{ fontSize: 11, fontFamily: 'Inter_700Bold', color: '#D97706', marginTop: 2 }}>PROTECTED ADMIN</Text>
+                  )}
+                </View>
                 <Text style={[styles.tableCell, { color: colors.text, flex: 2 }]} numberOfLines={1}>{user.email}</Text>
                 <Text style={[styles.tableCell, { color: colors.text, flex: 1 }]}>
                   {user.role}
@@ -1759,6 +1764,129 @@ const DatabaseInterfaceScreen = ({ navigation }: any) => {
           </View>
         )}
 
+        {/* Bookings Table */}
+        {activeTab === 'bookings' && !bookingsTable.loading && bookingsTable.data.length > 0 && (
+          <View style={[styles.table, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <View style={[styles.tableHeader, { backgroundColor: colors.backgroundSecondary, borderBottomColor: colors.border }]}>
+              <View style={{ flex: 0.5 }}>
+                <Pressable
+                  onPress={selectAllRows}
+                  style={styles.headerCheckbox}
+                  accessibilityRole="checkbox"
+                  accessibilityLabel="Select all rows"
+                >
+                  <View style={[
+                    styles.checkbox,
+                    { borderColor: colors.primary },
+                    getSelectedIds().length === bookingsTable.data.length && { backgroundColor: colors.primary }
+                  ]}>
+                    {getSelectedIds().length === bookingsTable.data.length && (
+                      <Text style={styles.checkboxIcon}>✓</Text>
+                    )}
+                  </View>
+                </Pressable>
+              </View>
+              <Text style={[styles.tableCell, { color: colors.text, flex: 0.5 }]}>ID</Text>
+              <Text style={[styles.tableCell, { color: colors.text, flex: 1.5 }]}>Reference</Text>
+              <Text style={[styles.tableCell, { color: colors.text, flex: 1 }]}>Student</Text>
+              <Text style={[styles.tableCell, { color: colors.text, flex: 1 }]}>Instructor</Text>
+              <Text style={[styles.tableCell, { color: colors.text, flex: 2 }]}>Lesson Date</Text>
+              <Text style={[styles.tableCell, { color: colors.text, flex: 1 }]}>Status</Text>
+              <Text style={[styles.tableCell, { color: colors.text, flex: 1 }]}>Payment</Text>
+              <Text style={[styles.tableCell, { color: colors.text, flex: 1 }]}>Amount</Text>
+              <Text style={[styles.tableCell, { color: colors.text, flex: 1 }]}>Actions</Text>
+            </View>
+            {bookingsTable.data.map((booking: any, idx: number) => {
+              const bStatus = String(booking.status || '').toUpperCase();
+              const pStatus = String(booking.payment_status || '').toUpperCase();
+              return (
+                <View key={idx} style={[styles.tableRow, { borderBottomColor: colors.border }]}>
+                  <View style={{ flex: 0.5 }}>
+                    <Pressable
+                      onPress={() => toggleRowSelection(booking.id)}
+                      style={styles.rowCheckbox}
+                      accessibilityRole="checkbox"
+                      accessibilityState={{ checked: !!selectedRows[booking.id] }}
+                    >
+                      <View style={[
+                        styles.checkbox,
+                        { borderColor: colors.primary },
+                        selectedRows[booking.id] && { backgroundColor: colors.primary }
+                      ]}>
+                        {selectedRows[booking.id] && (
+                          <Text style={styles.checkboxIcon}>✓</Text>
+                        )}
+                      </View>
+                    </Pressable>
+                  </View>
+                  <Text style={[styles.tableCell, { color: colors.text, flex: 0.5 }]}>{booking.id}</Text>
+                  <Text style={[styles.tableCell, { color: colors.text, flex: 1.5 }]} numberOfLines={1}>{booking.booking_reference || '-'}</Text>
+                  <Text style={[styles.tableCell, { color: colors.text, flex: 1 }]}>{booking.student_id}</Text>
+                  <Text style={[styles.tableCell, { color: colors.text, flex: 1 }]}>{booking.instructor_id}</Text>
+                  <Text style={[styles.tableCell, { color: colors.text, flex: 2 }]} numberOfLines={1}>
+                    {booking.lesson_date ? new Date(booking.lesson_date).toLocaleDateString() + ' ' + new Date(booking.lesson_date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '-'}
+                  </Text>
+                  <Text
+                    style={[
+                      styles.tableCell,
+                      {
+                        flex: 1,
+                        fontWeight: '600',
+                        color:
+                          bStatus === 'CANCELLED' || bStatus === 'NO_SHOW'
+                            ? colors.danger
+                            : bStatus === 'COMPLETED'
+                              ? colors.success
+                              : bStatus === 'CONFIRMED'
+                                ? colors.primary
+                                : colors.warning,
+                      },
+                    ]}
+                  >
+                    {bStatus || '-'}
+                  </Text>
+                  <Text
+                    style={[
+                      styles.tableCell,
+                      {
+                        flex: 1,
+                        fontWeight: '600',
+                        color:
+                          pStatus === 'PAID'
+                            ? colors.success
+                            : pStatus === 'FAILED'
+                              ? colors.danger
+                              : pStatus === 'REFUNDED'
+                                ? colors.primary
+                                : colors.warning,
+                      },
+                    ]}
+                  >
+                    {pStatus || '-'}
+                  </Text>
+                  <Text style={[styles.tableCell, { color: colors.text, flex: 1 }]}>
+                    {booking.amount != null ? `R${Number(booking.amount).toFixed(2)}` : '-'}
+                  </Text>
+                  <View style={styles.actionButtons}>
+                    <Pressable
+                      style={[styles.editButton, { backgroundColor: colors.primary }]}
+                      onPress={() => openEditModal(booking.id)}
+                    >
+                      <Text style={styles.editButtonText}>Edit</Text>
+                    </Pressable>
+                    <Pressable
+                      style={[styles.deleteButton, { backgroundColor: colors.danger }]}
+                      onPress={() => openDeleteModal(booking.id)}
+                    >
+                      <Text style={styles.deleteButtonText}>Delete</Text>
+                    </Pressable>
+                  </View>
+                </View>
+              );
+            })}
+          </View>
+        )}
+
         {/* Empty State */}
         {activeTab === 'users' && !usersTable.loading && usersTable.data.length === 0 && (
           <View style={styles.emptyState}>
@@ -1778,6 +1906,12 @@ const DatabaseInterfaceScreen = ({ navigation }: any) => {
             <Text style={[styles.emptyStateText, { color: colors.textSecondary }]}>No students found</Text>
           </View>
         )}
+        {activeTab === 'bookings' && !bookingsTable.loading && bookingsTable.data.length === 0 && (
+          <View style={styles.emptyState}>
+            <Text style={styles.emptyStateIcon}></Text>
+            <Text style={[styles.emptyStateText, { color: colors.textSecondary }]}>No bookings found</Text>
+          </View>
+        )}
 
         {/* Pagination */}
         <View style={styles.paginationContainer}>
@@ -1785,19 +1919,22 @@ const DatabaseInterfaceScreen = ({ navigation }: any) => {
             disabled={
               (activeTab === 'users' && usersTable.page <= 1) ||
               (activeTab === 'instructors' && instructorsTable.page <= 1) ||
-              (activeTab === 'students' && studentsTable.page <= 1)
+              (activeTab === 'students' && studentsTable.page <= 1) ||
+              (activeTab === 'bookings' && bookingsTable.page <= 1)
             }
             onPress={() => {
               if (activeTab === 'users') fetchUsers(usersTable.page - 1);
               else if (activeTab === 'instructors') fetchInstructors(instructorsTable.page - 1);
               else if (activeTab === 'students') fetchStudents(studentsTable.page - 1);
+              else if (activeTab === 'bookings') fetchBookings(bookingsTable.page - 1);
             }}
             style={[
               styles.paginationButton,
               { backgroundColor: colors.primary },
               ((activeTab === 'users' && usersTable.page <= 1) ||
                (activeTab === 'instructors' && instructorsTable.page <= 1) ||
-               (activeTab === 'students' && studentsTable.page <= 1)) && { backgroundColor: colors.border }
+               (activeTab === 'students' && studentsTable.page <= 1) ||
+               (activeTab === 'bookings' && bookingsTable.page <= 1)) && { backgroundColor: colors.border }
             ]}
             accessibilityRole="button"
             accessibilityLabel="Go to previous page"
@@ -1806,26 +1943,29 @@ const DatabaseInterfaceScreen = ({ navigation }: any) => {
           </Pressable>
 
           <Text style={[styles.paginationInfo, { color: colors.textSecondary }]}>
-            Page {activeTab === 'users' ? usersTable.page : activeTab === 'instructors' ? instructorsTable.page : studentsTable.page} of {activeTab === 'users' ? usersTable.totalPages : activeTab === 'instructors' ? instructorsTable.totalPages : studentsTable.totalPages}
+            Page {activeTab === 'users' ? usersTable.page : activeTab === 'instructors' ? instructorsTable.page : activeTab === 'bookings' ? bookingsTable.page : studentsTable.page} of {activeTab === 'users' ? usersTable.totalPages : activeTab === 'instructors' ? instructorsTable.totalPages : activeTab === 'bookings' ? bookingsTable.totalPages : studentsTable.totalPages}
           </Text>
 
           <Pressable
             disabled={
               (activeTab === 'users' && usersTable.page >= usersTable.totalPages) ||
               (activeTab === 'instructors' && instructorsTable.page >= instructorsTable.totalPages) ||
-              (activeTab === 'students' && studentsTable.page >= studentsTable.totalPages)
+              (activeTab === 'students' && studentsTable.page >= studentsTable.totalPages) ||
+              (activeTab === 'bookings' && bookingsTable.page >= bookingsTable.totalPages)
             }
             onPress={() => {
               if (activeTab === 'users') fetchUsers(usersTable.page + 1);
               else if (activeTab === 'instructors') fetchInstructors(instructorsTable.page + 1);
               else if (activeTab === 'students') fetchStudents(studentsTable.page + 1);
+              else if (activeTab === 'bookings') fetchBookings(bookingsTable.page + 1);
             }}
             style={[
               styles.paginationButton,
               { backgroundColor: colors.primary },
               ((activeTab === 'users' && usersTable.page >= usersTable.totalPages) ||
                (activeTab === 'instructors' && instructorsTable.page >= instructorsTable.totalPages) ||
-               (activeTab === 'students' && studentsTable.page >= studentsTable.totalPages)) && { backgroundColor: colors.border }
+               (activeTab === 'students' && studentsTable.page >= studentsTable.totalPages) ||
+               (activeTab === 'bookings' && bookingsTable.page >= bookingsTable.totalPages)) && { backgroundColor: colors.border }
             ]}
             accessibilityRole="button"
             accessibilityLabel="Go to next page"

@@ -10,12 +10,14 @@ interface FormFieldWithTipProps extends TextInputProps {
   label?: string;
   tooltip: string;
   required?: boolean;
+  error?: string;
 }
 
 export default function FormFieldWithTip({
   label,
   tooltip,
   required = false,
+  error,
   ...textInputProps
 }: FormFieldWithTipProps) {
   const { colors } = useTheme();
@@ -29,7 +31,7 @@ export default function FormFieldWithTip({
             style={{
               fontSize: 14,
               fontFamily: 'Inter_600SemiBold',
-              color: colors.text,
+              color: error ? colors.danger : colors.text,
               flex: 1,
             }}
           >
@@ -65,8 +67,8 @@ export default function FormFieldWithTip({
             backgroundColor: colors.inputBackground,
             padding: 15,
             borderRadius: 10,
-            borderWidth: 1,
-            borderColor: colors.inputBorder,
+            borderWidth: error ? 2 : 1,
+            borderColor: error ? colors.danger : colors.inputBorder,
             fontSize: 16,
             fontFamily: 'Inter_400Regular',
             color: colors.inputText,
@@ -74,6 +76,19 @@ export default function FormFieldWithTip({
           textInputProps.style,
         ]}
       />
+
+      {error && (
+        <Text
+          style={{
+            fontSize: 12,
+            fontFamily: 'Inter_500Medium',
+            color: colors.danger,
+            marginTop: 4,
+          }}
+        >
+          {error}
+        </Text>
+      )}
 
       <Modal
         visible={showTooltip}

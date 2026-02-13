@@ -77,10 +77,23 @@ Source: "..\PCI_DSS_COMPLIANCE.md"; DestDir: "{app}\docs"; Flags: ignoreversion
 ; Scripts
 Source: "..\scripts\*.bat"; DestDir: "{app}\scripts"; Flags: ignoreversion
 
+; Bootstrap script
+Source: "..\bootstrap.py"; DestDir: "{app}"; Flags: ignoreversion
+
+; Backend requirements (for bootstrap auto-install)
+Source: "..\backend\requirements.txt"; DestDir: "{app}\backend"; Flags: ignoreversion
+Source: "..\backend\.env.example"; DestDir: "{app}\backend"; Flags: ignoreversion
+
+; Vendor packages for offline installation (if bundled)
+Source: "..\vendor\python\*"; DestDir: "{app}\vendor\python"; Flags: ignoreversion recursesubdirs createallsubdirs skipifsourcedoesntexist
+Source: "..\vendor\node\*"; DestDir: "{app}\vendor\node"; Flags: ignoreversion recursesubdirs createallsubdirs skipifsourcedoesntexist
+Source: "..\vendor\installers\*"; DestDir: "{app}\vendor\installers"; Flags: ignoreversion skipifsourcedoesntexist
+
 [Dirs]
 Name: "{app}\backend\database"; Permissions: users-full
 Name: "{app}\backend\logs"; Permissions: users-full
 Name: "{app}\frontend\static"; Permissions: users-full
+Name: "{app}\vendor"; Permissions: users-full
 
 [Icons]
 Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"
@@ -89,8 +102,11 @@ Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: de
 Name: "{commonstartmenu}\Programs\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: startmenuicon
 
 [Run]
+; Run bootstrap for first-time setup (installs dependencies, creates DB)
+Filename: "python"; Parameters: """{app}\bootstrap.py"" --offline"; WorkingDir: "{app}"; Description: "Setup application (install dependencies, create database)"; Flags: postinstall runascurrentuser skipifsilent
+
 ; Open README after installation
-Filename: "{app}\README.md"; Description: "View README"; Flags: postinstall shellexec skipifsilent
+Filename: "{app}\README.md"; Description: "View README"; Flags: postinstall shellexec skipifsilent unchecked
 
 ; Optionally start the API server
 Filename: "{app}\backend\{#MyAppExeName}"; Description: "Start Drive Alive API Server"; Flags: postinstall nowait skipifsilent

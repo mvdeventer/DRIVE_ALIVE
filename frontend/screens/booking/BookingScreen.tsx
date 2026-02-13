@@ -3,9 +3,10 @@
  * Redesigned with step-by-step date and time selection
  */
 import { useFocusEffect, useNavigation, useRoute } from '@react-navigation/native';
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   Modal,
   Platform,
   Pressable,
@@ -17,6 +18,7 @@ import {
 } from 'react-native';
 import AddressAutocomplete from '../../components/AddressAutocomplete';
 import CalendarPicker from '../../components/CalendarPicker';
+import CreditBanner from '../../components/CreditBanner';
 import InlineMessage from '../../components/InlineMessage';
 import WebNavigationHeader from '../../components/WebNavigationHeader';
 import { Button, Card, ThemedModal } from '../../components/ui';
@@ -76,9 +78,15 @@ export default function BookingScreen({ navigation: navProp }: any) {
   const { colors } = useTheme();
   const instructor = (route.params as any)?.instructor as Instructor;
 
+  // Reschedule mode: pre-populate from existing booking
+  const rescheduleBookingId = (route.params as any)?.rescheduleBookingId as number | undefined;
+  const reschedulePickupAddress = (route.params as any)?.reschedulePickupAddress as string | undefined;
+  const isInstructorReschedule = (route.params as any)?.isInstructorReschedule as boolean | undefined;
+  const isRescheduleMode = !!rescheduleBookingId;
+
   const [formData, setFormData] = useState({
     duration_minutes: '60',
-    pickup_address: '',
+    pickup_address: reschedulePickupAddress || '',
     notes: '',
   });
   const [pickupCoordinates, setPickupCoordinates] = useState<{
@@ -104,6 +112,7 @@ export default function BookingScreen({ navigation: navProp }: any) {
   const [pendingNavigation, setPendingNavigation] = useState<any>(null);
   const [unsavedChangesMessage, setUnsavedChangesMessage] = useState('');
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const skipNavigationGuardRef = useRef(false);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<{
     type: 'success' | 'error' | 'warning' | 'info';
@@ -149,7 +158,7 @@ export default function BookingScreen({ navigation: navProp }: any) {
   // Prevent navigation if there are unsaved changes
   useEffect(() => {
     const unsubscribe = navigation.addListener('beforeRemove', e => {
-      if (!hasUnsavedChanges) {
+      if (!hasUnsavedChanges || skipNavigationGuardRef.current) {
         return;
       }
       e.preventDefault();
@@ -307,9 +316,12 @@ export default function BookingScreen({ navigation: navProp }: any) {
       const response = await ApiService.get('/bookings/my-bookings');
 
       // Get ALL future bookings (not filtered by instructor) to check for conflicts across all instructors
+      // Exclude cancelled and rescheduled bookings so those slots are freed up
       const allFutureBookings = response.data.filter(
         (booking: ExistingBooking) =>
-          booking.status !== 'cancelled' && new Date(booking.scheduled_time) > new Date()
+          booking.status !== 'cancelled' &&
+          booking.status !== 'rescheduled' &&
+          new Date(booking.scheduled_time) > new Date()
       );
 
       setExistingBookings(allFutureBookings);
@@ -405,8 +417,8 @@ export default function BookingScreen({ navigation: navProp }: any) {
       }
     } catch (error: any) {
       console.error('Error loading available slots:', error);
-      setMessage({ type: 'error', text: 'Failed to load available slots. Please try again.' });
-      setTimeout(() => setMessage(null), 3000);
+      setMessage({ type: 'error', text: error.response?.data?.detail || 'Failed to load available slots. Please try again.' });
+      setTimeout(() => setMessage(null), 5000);
       setAvailableSlotsForDate([]);
       setShowSlotSelection(false);
     } finally {
@@ -646,8 +658,8 @@ export default function BookingScreen({ navigation: navProp }: any) {
       }
     } catch (error: any) {
       console.error('Error loading available slots:', error);
-      setMessage({ type: 'error', text: 'Failed to load available slots. Please try again.' });
-      setTimeout(() => setMessage(null), 3000);
+      setMessage({ type: 'error', text: error.response?.data?.detail || 'Failed to load available slots. Please try again.' });
+      setTimeout(() => setMessage(null), 5000);
       setAvailableSlotsForDate([]);
       setShowSlotSelection(false);
     } finally {
@@ -691,6 +703,64 @@ export default function BookingScreen({ navigation: navProp }: any) {
     const bookingFee = instructorBookingFee * selectedBookings.length;
     const totalAmount = lessonAmount + bookingFee;
 
+    // Instructor reschedule: call backend directly (no payment needed)
+    if (isInstructorReschedule && rescheduleBookingId) {
+      setLoading(true);
+      try {
+        const firstSlot = selectedBookings[0];
+        const newLessonDate = `${firstSlot.date}T${firstSlot.time}:00`;
+
+        const response = await ApiService.post(
+          `/bookings/${rescheduleBookingId}/instructor-reschedule`,
+          {
+            new_lesson_date: newLessonDate,
+            duration_minutes: parseInt(formData.duration_minutes),
+            pickup_address: formData.pickup_address,
+            pickup_latitude: pickupCoordinates?.latitude || -33.9249,
+            pickup_longitude: pickupCoordinates?.longitude || 18.4241,
+          }
+        );
+
+        const result = response.data;
+        const creditInfo = result.credit_applied > 0
+          ? `\nFull credit applied: R${result.credit_applied.toFixed(2)} (100%)`
+          : '';
+
+        if (Platform.OS === 'web') {
+          alert(
+            `✅ Lesson rescheduled successfully!\n\n` +
+            `Old booking: ${result.old_booking_reference}\n` +
+            `New booking: ${result.new_booking.booking_reference}` +
+            creditInfo +
+            `\n\nNo penalty applied. No additional payment required.` +
+            `\nBoth you and the student have been notified.`
+          );
+        } else {
+          Alert.alert(
+            'Lesson Rescheduled',
+            `Old booking: ${result.old_booking_reference}\n` +
+            `New ref: ${result.new_booking.booking_reference}` +
+            creditInfo +
+            `\n\nNo penalty applied. No additional payment required.` +
+            `\nBoth you and the student have been notified.`
+          );
+        }
+
+        setSelectedBookings([]);
+        setHasUnsavedChanges(false);
+        skipNavigationGuardRef.current = true;
+        navigation.goBack();
+      } catch (error: any) {
+        console.error('Instructor reschedule error:', error);
+        const errorMsg = error.response?.data?.detail || 'Failed to reschedule booking';
+        setMessage({ type: 'error', text: `❌ ${errorMsg}` });
+        setTimeout(() => setMessage(null), 5000);
+      } finally {
+        setLoading(false);
+      }
+      return;
+    }
+
     // Prepare bookings with pickup addresses and coordinates
     const bookingsWithPickup = selectedBookings.map(booking => ({
       date: booking.date,
@@ -710,6 +780,7 @@ export default function BookingScreen({ navigation: navProp }: any) {
         total_amount: totalAmount,
         booking_fee: bookingFee,
         lesson_amount: lessonAmount,
+        ...(rescheduleBookingId ? { reschedule_booking_id: rescheduleBookingId } : {}),
       } as never
     );
 
@@ -767,11 +838,25 @@ export default function BookingScreen({ navigation: navProp }: any) {
       )}
 
       <WebNavigationHeader
-        title="Book Lesson"
+        title={isRescheduleMode ? 'Reschedule Lesson' : 'Book Lesson'}
         onBack={() => navigation.goBack()}
         showBackButton={true}
       />
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
+        <CreditBanner compact />
+
+        {/* Reschedule Banner */}
+        {isRescheduleMode && (
+          <Card variant="elevated" style={[styles.instructorCard, { borderLeftWidth: 4, borderLeftColor: colors.warning }]}>
+            <Text style={[styles.sectionTitle, { color: colors.warning }]}>📅 Rescheduling Lesson</Text>
+            <Text style={{ color: colors.textSecondary, fontSize: 14, lineHeight: 20 }}>
+              Select a new date and time for your lesson with {instructor.first_name} {instructor.last_name}.
+              Your pickup address has been pre-filled from the original booking.
+              The original booking will be marked as rescheduled once payment is confirmed.
+            </Text>
+          </Card>
+        )}
+
         {/* Instructor Info Card */}
         <Card variant="elevated" style={styles.instructorCard}>
           <Text style={[styles.sectionTitle, { color: colors.text }]}>Instructor Details</Text>
@@ -1171,7 +1256,11 @@ export default function BookingScreen({ navigation: navProp }: any) {
           disabled={loading}
           fullWidth
         >
-          Proceed to Payment
+          {isInstructorReschedule
+            ? 'Confirm Reschedule'
+            : isRescheduleMode
+              ? 'Proceed to Reschedule Payment'
+              : 'Proceed to Payment'}
         </Button>
       </ScrollView>
 

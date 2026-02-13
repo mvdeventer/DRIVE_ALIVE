@@ -46,6 +46,11 @@ class BookingCancel(BaseModel):
     """Booking cancellation schema"""
 
     cancellation_reason: str
+    replacement_booking_id: Optional[int] = Field(
+        None,
+        description="ID of the new booking that replaces this one. "
+        "Required for students — they must book a new lesson before cancelling."
+    )
 
 
 class BookingResponse(BookingBase):
@@ -59,6 +64,12 @@ class BookingResponse(BookingBase):
     amount: float
     booking_fee: float
     payment_status: PaymentStatus
+    credit_applied_amount: Optional[float] = 0.0
+    replacement_booking_id: Optional[int] = None
+    refund_amount: Optional[float] = None
+    cancellation_fee: Optional[float] = None
+    cancellation_reason: Optional[str] = None
+    cancelled_by: Optional[str] = None
     created_at: datetime
 
     class Config:
@@ -92,3 +103,15 @@ class BookingReschedule(BaseModel):
     new_datetime: str = Field(
         ..., description="New date and time in ISO format (YYYY-MM-DDTHH:MM:SS)"
     )
+
+
+class InstructorRescheduleRequest(BaseModel):
+    """Instructor-initiated reschedule: picks a new slot for the student"""
+
+    new_lesson_date: str = Field(
+        ..., description="New lesson date/time in ISO format (YYYY-MM-DDTHH:MM:SS)"
+    )
+    duration_minutes: int = Field(60, ge=30, le=180)
+    pickup_address: str = Field(..., description="Pickup address for the new lesson")
+    pickup_latitude: float = Field(-33.9249, ge=-90, le=90)
+    pickup_longitude: float = Field(18.4241, ge=-180, le=180)

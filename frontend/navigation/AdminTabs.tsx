@@ -26,6 +26,8 @@ import InstructorEarningsOverviewScreen from '../screens/admin/InstructorEarning
 import InstructorVerificationScreen from '../screens/admin/InstructorVerificationScreen';
 import RevenueAnalyticsScreen from '../screens/admin/RevenueAnalyticsScreen';
 import UserManagementScreen from '../screens/admin/UserManagementScreen';
+import EditInstructorProfileScreen from '../screens/instructor/EditInstructorProfileScreen';
+import EditStudentProfileScreen from '../screens/student/EditStudentProfileScreen';
 
 // Lazy-loaded heavy screen
 const DatabaseInterfaceScreen = React.lazy(
@@ -140,6 +142,21 @@ function DashboardStackScreen() {
         options={{ title: 'User Management' }}
       />
       <DashboardStack.Screen
+        name="EditStudentProfile"
+        component={EditStudentProfileScreen}
+        options={{ title: 'Edit Student' }}
+      />
+      <DashboardStack.Screen
+        name="EditInstructorProfile"
+        component={EditInstructorProfileScreen}
+        options={{ title: 'Edit Instructor' }}
+      />
+      <DashboardStack.Screen
+        name="EditAdminProfileFromUsers"
+        component={EditAdminProfileScreen}
+        options={{ title: 'Edit Admin' }}
+      />
+      <DashboardStack.Screen
         name="BookingOversight"
         component={BookingOversightScreen}
         options={{ title: 'Booking Oversight' }}
@@ -174,6 +191,21 @@ function UsersStackScreen() {
         name="UserManagement"
         component={UserManagementScreen}
         options={{ title: 'Users' }}
+      />
+      <UsersStack.Screen
+        name="EditStudentProfile"
+        component={EditStudentProfileScreen}
+        options={{ title: 'Edit Student' }}
+      />
+      <UsersStack.Screen
+        name="EditInstructorProfile"
+        component={EditInstructorProfileScreen}
+        options={{ title: 'Edit Instructor' }}
+      />
+      <UsersStack.Screen
+        name="EditAdminProfileFromUsers"
+        component={EditAdminProfileScreen}
+        options={{ title: 'Edit Admin' }}
       />
     </UsersStack.Navigator>
   );

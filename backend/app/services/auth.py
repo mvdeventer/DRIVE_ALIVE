@@ -2,7 +2,7 @@
 Authentication service
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 
 from fastapi import HTTPException, status
@@ -137,7 +137,7 @@ class AuthService:
             # Auto-verify only in debug mode
             if settings.should_auto_verify_instructors:
                 instructor.is_verified = True
-                instructor.verified_at = datetime.utcnow()
+                instructor.verified_at = datetime.now(timezone.utc)
                 print(f"[DEBUG] Auto-verified instructor {instructor.id} (debug mode enabled)")
             else:
                 print(f"[INFO] Instructor {instructor.id} created - requires manual verification")
@@ -324,7 +324,7 @@ class AuthService:
             )
 
         # Update last login
-        user.last_login = datetime.utcnow()
+        user.last_login = datetime.now(timezone.utc)
         db.commit()
 
         return user

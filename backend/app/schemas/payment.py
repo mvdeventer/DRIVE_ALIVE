@@ -16,6 +16,11 @@ class PaymentInitiateRequest(BaseModel):
     payment_gateway: str = Field(
         default="payfast", description="Payment gateway: 'payfast' or 'stripe'"
     )
+    reschedule_booking_id: Optional[int] = Field(
+        None,
+        description="ID of the original booking being rescheduled. "
+        "If set, the old booking will be marked as RESCHEDULED after payment.",
+    )
 
     @validator("payment_gateway")
     def validate_gateway(cls, v):
@@ -33,6 +38,8 @@ class PaymentInitiateResponse(BaseModel):
     booking_fee: float
     total_amount: float
     bookings_count: int
+    credit_applied: float = 0.0
+    original_total: float = 0.0
 
 
 class PayFastNotification(BaseModel):

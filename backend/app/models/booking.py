@@ -22,6 +22,7 @@ class BookingStatus(str, enum.Enum):
     COMPLETED = "completed"
     CANCELLED = "cancelled"
     NO_SHOW = "no_show"
+    RESCHEDULED = "rescheduled"
 
 
 class PaymentStatus(str, enum.Enum):
@@ -81,7 +82,7 @@ class Booking(Base):
     refund_amount = Column(Float, nullable=True)
     cancellation_fee = Column(
         Float, nullable=True, default=0.0
-    )  # 50% fee if cancelled/rescheduled within 6 hours
+    )  # 50% fee if cancelled/rescheduled within 24 hours
 
     # Reschedule tracking
     rebooking_count = Column(
@@ -90,6 +91,21 @@ class Booking(Base):
     original_lesson_date = Column(
         DateTime(timezone=True), nullable=True
     )  # Original booking date
+
+    # Cancellation policy: link to replacement booking
+    replacement_booking_id = Column(
+        Integer, ForeignKey("bookings.id"), nullable=True
+    )  # New booking made before cancelling this one
+
+    # Reschedule: link to the new booking that replaced this one
+    rescheduled_to_booking_id = Column(
+        Integer, ForeignKey("bookings.id"), nullable=True
+    )  # Points to the new booking created during reschedule
+
+    # Credit applied to this booking from a previous cancellation
+    credit_applied_amount = Column(
+        Float, nullable=True, default=0.0
+    )  # Amount of credit discount applied
 
     # WhatsApp reminders
     reminder_sent = Column(

@@ -61,6 +61,7 @@ export default function CreateAdminScreen({ navigation }: any) {
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
+  const [fieldErrors, setFieldErrors] = useState<Partial<Record<keyof FormData, string>>>({});
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [loadingSettings, setLoadingSettings] = useState(true);
   const [pickupCoordinates, setPickupCoordinates] = useState<{
@@ -93,41 +94,42 @@ export default function CreateAdminScreen({ navigation }: any) {
 
   const handleChange = (field: keyof FormData, value: string | number) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
+    if (fieldErrors[field]) {
+      setFieldErrors((prev) => ({ ...prev, [field]: undefined }));
+    }
   };
 
   const validateForm = (): boolean => {
-    if (
-      !formData.first_name ||
-      !formData.last_name ||
-      !formData.email ||
-      !formData.phone ||
-      !formData.id_number ||
-      !formData.password ||
-      !formData.confirmPassword
-    ) {
+    const errors: Partial<Record<keyof FormData, string>> = {};
+
+    if (!formData.first_name) errors.first_name = 'First name is required';
+    if (!formData.last_name) errors.last_name = 'Last name is required';
+    if (!formData.email) {
+      errors.email = 'Email is required';
+    } else if (!formData.email.includes('@')) {
+      errors.email = 'Please enter a valid email address';
+    }
+    if (!formData.phone) errors.phone = 'Phone number is required';
+    if (!formData.id_number) errors.id_number = 'ID number is required';
+    if (!formData.password) {
+      errors.password = 'Password is required';
+    } else if (formData.password.length < 6) {
+      errors.password = 'Password must be at least 6 characters';
+    }
+    if (!formData.confirmPassword) {
+      errors.confirmPassword = 'Please confirm your password';
+    } else if (formData.password !== formData.confirmPassword) {
+      errors.confirmPassword = 'Passwords do not match';
+    }
+
+    if (Object.keys(errors).length > 0) {
+      setFieldErrors(errors);
       scrollViewRef.current?.scrollTo({ y: 0, animated: true });
-      setErrorMessage('Please fill in all required fields');
+      setErrorMessage('Please fix the highlighted errors');
       return false;
     }
 
-    if (!formData.email.includes('@')) {
-      scrollViewRef.current?.scrollTo({ y: 0, animated: true });
-      setErrorMessage('Please enter a valid email address');
-      return false;
-    }
-
-    if (formData.password.length < 6) {
-      scrollViewRef.current?.scrollTo({ y: 0, animated: true });
-      setErrorMessage('Password must be at least 6 characters');
-      return false;
-    }
-
-    if (formData.password !== formData.confirmPassword) {
-      scrollViewRef.current?.scrollTo({ y: 0, animated: true });
-      setErrorMessage('Passwords do not match');
-      return false;
-    }
-
+    setFieldErrors({});
     return true;
   };
 
@@ -178,7 +180,7 @@ export default function CreateAdminScreen({ navigation }: any) {
       setTimeout(() => navigation.goBack(), 2500);
     } catch (error: any) {
       scrollViewRef.current?.scrollTo({ y: 0, animated: true });
-      setErrorMessage(error.message || 'Failed to create admin account');
+      setErrorMessage(error.response?.data?.detail || error.message || 'Failed to create admin account');
     } finally {
       setLoading(false);
     }
@@ -203,49 +205,54 @@ export default function CreateAdminScreen({ navigation }: any) {
         <View style={[styles.formSection, { borderBottomColor: colors.border }]}>
           <Text style={[styles.sectionTitle, { color: colors.text }]}>Personal Information</Text>
 
-          <Text style={[styles.label, { color: colors.textSecondary }]}>First Name *</Text>
+          <Text style={[styles.label, { color: fieldErrors.first_name ? colors.danger : colors.textSecondary }]}>First Name *</Text>
           <TextInput
-            style={[styles.input, { borderColor: colors.border, backgroundColor: colors.backgroundSecondary, color: colors.text }]}
+            style={[styles.input, { borderColor: fieldErrors.first_name ? colors.danger : colors.border, borderWidth: fieldErrors.first_name ? 2 : 1, backgroundColor: colors.backgroundSecondary, color: colors.text }]}
             value={formData.first_name}
             onChangeText={(text) => handleChange('first_name', text)}
             placeholder="John"
           />
+          {fieldErrors.first_name && <Text style={[styles.fieldError, { color: colors.danger }]}>{fieldErrors.first_name}</Text>}
 
-          <Text style={[styles.label, { color: colors.textSecondary }]}>Last Name *</Text>
+          <Text style={[styles.label, { color: fieldErrors.last_name ? colors.danger : colors.textSecondary }]}>Last Name *</Text>
           <TextInput
-            style={[styles.input, { borderColor: colors.border, backgroundColor: colors.backgroundSecondary, color: colors.text }]}
+            style={[styles.input, { borderColor: fieldErrors.last_name ? colors.danger : colors.border, borderWidth: fieldErrors.last_name ? 2 : 1, backgroundColor: colors.backgroundSecondary, color: colors.text }]}
             value={formData.last_name}
             onChangeText={(text) => handleChange('last_name', text)}
             placeholder="Doe"
           />
+          {fieldErrors.last_name && <Text style={[styles.fieldError, { color: colors.danger }]}>{fieldErrors.last_name}</Text>}
 
-          <Text style={[styles.label, { color: colors.textSecondary }]}>Email *</Text>
+          <Text style={[styles.label, { color: fieldErrors.email ? colors.danger : colors.textSecondary }]}>Email *</Text>
           <TextInput
-            style={[styles.input, { borderColor: colors.border, backgroundColor: colors.backgroundSecondary, color: colors.text }]}
+            style={[styles.input, { borderColor: fieldErrors.email ? colors.danger : colors.border, borderWidth: fieldErrors.email ? 2 : 1, backgroundColor: colors.backgroundSecondary, color: colors.text }]}
             value={formData.email}
             onChangeText={(text) => handleChange('email', text)}
             placeholder="admin@example.com"
             keyboardType="email-address"
             autoCapitalize="none"
           />
+          {fieldErrors.email && <Text style={[styles.fieldError, { color: colors.danger }]}>{fieldErrors.email}</Text>}
 
-          <Text style={[styles.label, { color: colors.textSecondary }]}>Phone Number *</Text>
+          <Text style={[styles.label, { color: fieldErrors.phone ? colors.danger : colors.textSecondary }]}>Phone Number *</Text>
           <TextInput
-            style={[styles.input, { borderColor: colors.border, backgroundColor: colors.backgroundSecondary, color: colors.text }]}
+            style={[styles.input, { borderColor: fieldErrors.phone ? colors.danger : colors.border, borderWidth: fieldErrors.phone ? 2 : 1, backgroundColor: colors.backgroundSecondary, color: colors.text }]}
             value={formData.phone}
             onChangeText={(text) => handleChange('phone', text)}
             placeholder="0611154598 or +27611154598"
             keyboardType="phone-pad"
           />
+          {fieldErrors.phone && <Text style={[styles.fieldError, { color: colors.danger }]}>{fieldErrors.phone}</Text>}
 
-          <Text style={[styles.label, { color: colors.textSecondary }]}>ID Number *</Text>
+          <Text style={[styles.label, { color: fieldErrors.id_number ? colors.danger : colors.textSecondary }]}>ID Number *</Text>
           <TextInput
-            style={[styles.input, { borderColor: colors.border, backgroundColor: colors.backgroundSecondary, color: colors.text }]}
+            style={[styles.input, { borderColor: fieldErrors.id_number ? colors.danger : colors.border, borderWidth: fieldErrors.id_number ? 2 : 1, backgroundColor: colors.backgroundSecondary, color: colors.text }]}
             value={formData.id_number}
             onChangeText={(text) => handleChange('id_number', text)}
             placeholder="9001015009087"
             keyboardType="numeric"
           />
+          {fieldErrors.id_number && <Text style={[styles.fieldError, { color: colors.danger }]}>{fieldErrors.id_number}</Text>}
 
           <Text style={[styles.label, { color: colors.textSecondary }]}>Address (Optional)</Text>
           <AddressAutocomplete
@@ -262,8 +269,8 @@ export default function CreateAdminScreen({ navigation }: any) {
         <View style={[styles.formSection, { borderBottomColor: colors.border }]}>
           <Text style={[styles.sectionTitle, { color: colors.text }]}>Security</Text>
 
-          <Text style={[styles.label, { color: colors.textSecondary }]}>Password *</Text>
-          <View style={[styles.passwordContainer, { borderColor: colors.border, backgroundColor: colors.backgroundSecondary }]}>
+          <Text style={[styles.label, { color: fieldErrors.password ? colors.danger : colors.textSecondary }]}>Password *</Text>
+          <View style={[styles.passwordContainer, { borderColor: fieldErrors.password ? colors.danger : colors.border, borderWidth: fieldErrors.password ? 2 : 1, backgroundColor: colors.backgroundSecondary }]}>
             <TextInput
               style={[styles.passwordInput, { color: colors.text }]}
               value={formData.password}
@@ -278,9 +285,10 @@ export default function CreateAdminScreen({ navigation }: any) {
               <Text style={styles.eyeButtonText}>{showPassword ? '👁️' : '👁️‍🗨️'}</Text>
             </Pressable>
           </View>
+          {fieldErrors.password && <Text style={[styles.fieldError, { color: colors.danger }]}>{fieldErrors.password}</Text>}
 
-          <Text style={[styles.label, { color: colors.textSecondary }]}>Confirm Password *</Text>
-          <View style={[styles.passwordContainer, { borderColor: colors.border, backgroundColor: colors.backgroundSecondary }]}>
+          <Text style={[styles.label, { color: fieldErrors.confirmPassword ? colors.danger : colors.textSecondary }]}>Confirm Password *</Text>
+          <View style={[styles.passwordContainer, { borderColor: fieldErrors.confirmPassword ? colors.danger : colors.border, borderWidth: fieldErrors.confirmPassword ? 2 : 1, backgroundColor: colors.backgroundSecondary }]}>
             <TextInput
               style={[styles.passwordInput, { color: colors.text }]}
               value={formData.confirmPassword}
@@ -297,6 +305,7 @@ export default function CreateAdminScreen({ navigation }: any) {
               </Text>
             </Pressable>
           </View>
+          {fieldErrors.confirmPassword && <Text style={[styles.fieldError, { color: colors.danger }]}>{fieldErrors.confirmPassword}</Text>}
         </View>
 
         {loadingSettings && (
@@ -490,7 +499,13 @@ const styles = StyleSheet.create({
     padding: Platform.OS === 'web' ? 12 : 10,
     fontSize: Platform.OS === 'web' ? 16 : 14,
     fontFamily: 'Inter_400Regular',
-    marginBottom: 16,
+    marginBottom: 4,
+  },
+  fieldError: {
+    fontSize: 12,
+    fontFamily: 'Inter_500Medium',
+    marginBottom: 12,
+    marginTop: 0,
   },
   passwordContainer: {
     flexDirection: 'row',

@@ -1,0 +1,18 @@
+{
+  "installed_at": "2026-02-13T08:18:25",
+  "python_version": "3.14.2",
+  "platform": "Windows",
+  "machine": "AMD64",
+  "results": {
+    "python": "ok",
+    "postgresql": "manual_required",
+    "venv": "ok",
+    "python_packages": "ok",
+    "nodejs": "ok",
+    "npm_packages": "ok",
+    "env_file": "ok",
+    "database": "skipped_no_postgresql",
+    "tables": "skipped"
+  },
+  "node_version": "v24.12.0"
+}

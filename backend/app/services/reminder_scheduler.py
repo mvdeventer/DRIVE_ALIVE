@@ -279,8 +279,9 @@ class ReminderScheduler:
                 lesson_time = booking.lesson_date.strftime("%I:%M %p")
                 student_user = booking.student.user
                 student_name = f"{student_user.first_name} {student_user.last_name}"
+                maps_link = f"https://www.google.com/maps/search/?api=1&query={booking.pickup_address.replace(' ', '+')}"
                 summary_lines.append(
-                    f"{idx}. {lesson_time} - {student_name} (Ref: {booking.booking_reference})\n   📍 {booking.pickup_address}\n   📞 {student_user.phone}"
+                    f"{idx}. {lesson_time} - {student_name} (Ref: {booking.booking_reference})\n   📍 {booking.pickup_address}\n   📞 {student_user.phone}\n   🗺️ {maps_link}"
                 )
 
             bookings_summary = "\n\n".join(summary_lines)

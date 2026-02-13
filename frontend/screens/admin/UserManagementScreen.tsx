@@ -7,6 +7,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import React, { useCallback, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   Dimensions,
   Platform,
   Pressable,
@@ -31,10 +32,15 @@ interface User {
   email: string;
   phone: string;
   full_name: string;
+  first_name?: string;
+  last_name?: string;
   role: string;
   status: string;
   id_number?: string;
+  address?: string;
   booking_fee?: number; // Only for instructors
+  available_credit?: number | null; // Only for students
+  pending_credit?: number | null; // Only for students
   created_at: string;
   last_login: string | null;
 }
@@ -52,17 +58,11 @@ export default function UserManagementScreen({ navigation }: any) {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
-  const [activeTab, setActiveTab] = useState<'admin' | 'instructor' | 'student'>('instructor');
-  const [roleFilter, setRoleFilter] = useState('instructor');
+  const [activeTab, setActiveTab] = useState<'all' | 'admin' | 'instructor' | 'student'>('all');
+  const [roleFilter, setRoleFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
-  const [editModalVisible, setEditModalVisible] = useState(false);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
-  const [editFormData, setEditFormData] = useState({
-    first_name: '',
-    last_name: '',
-    phone: '',
-  });
   const [resetPasswordModalVisible, setResetPasswordModalVisible] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [newPassword, setNewPassword] = useState('');
@@ -81,6 +81,8 @@ export default function UserManagementScreen({ navigation }: any) {
   const [loadingSchedule, setLoadingSchedule] = useState(false);
   const [editBookingFeeModalVisible, setEditBookingFeeModalVisible] = useState(false);
   const [bookingFeeValue, setBookingFeeValue] = useState('20.00');
+  const [confirmResetCredit, setConfirmResetCredit] = useState<User | null>(null);
+  const [resetCreditLoading, setResetCreditLoading] = useState(false);
 
   const loadUsers = async () => {
     try {
@@ -121,9 +123,9 @@ export default function UserManagementScreen({ navigation }: any) {
     (navigation as any).replace('Login');
   };
 
-  const handleTabChange = (tab: 'admin' | 'instructor' | 'student') => {
+  const handleTabChange = (tab: 'all' | 'admin' | 'instructor' | 'student') => {
     setActiveTab(tab);
-    setRoleFilter(tab);
+    setRoleFilter(tab === 'all' ? '' : tab);
     setSearchQuery('');
   };
 
@@ -156,19 +158,26 @@ export default function UserManagementScreen({ navigation }: any) {
       return statusMatch && searchMatch;
     })
     .sort((a, b) => {
-      // Special sorting for admins: original admin first, then alphabetical
-      if (activeTab === 'admin') {
+      // Special sorting: original admin first, then by role group, then alphabetical
+      if (activeTab === 'admin' || activeTab === 'all') {
         const adminUsers = users.filter(u => u.role === 'admin');
         const firstAdminId = adminUsers.length > 0 ? Math.min(...adminUsers.map(u => u.id)) : null;
         
-        // If 'a' is the original admin, it comes first
-        if (a.id === firstAdminId) return -1;
-        // If 'b' is the original admin, it comes first
-        if (b.id === firstAdminId) return 1;
-        // Otherwise, sort alphabetically
+        // Original admin always comes first
+        if (a.id === firstAdminId && a.role === 'admin') return -1;
+        if (b.id === firstAdminId && b.role === 'admin') return 1;
+
+        if (activeTab === 'all') {
+          // Group by role: admin > instructor > student
+          const roleOrder: Record<string, number> = { admin: 0, instructor: 1, student: 2 };
+          const roleA = roleOrder[a.role] ?? 3;
+          const roleB = roleOrder[b.role] ?? 3;
+          if (roleA !== roleB) return roleA - roleB;
+        }
+
         return a.full_name.localeCompare(b.full_name);
       }
-      // For non-admin tabs, just sort alphabetically
+      // For specific role tabs, just sort alphabetically
       return a.full_name.localeCompare(b.full_name);
     });
 
@@ -361,6 +370,37 @@ export default function UserManagementScreen({ navigation }: any) {
     }
   };
 
+  const handleResetCredit = async () => {
+    if (!confirmResetCredit) return;
+    setResetCreditLoading(true);
+    try {
+      setError('');
+      const response = await apiService.post(
+        `/bookings/credits/reset/${confirmResetCredit.id}`,
+        {}
+      );
+      const result = response.data;
+      setConfirmResetCredit(null);
+
+      const msg = result.credits_reset > 0
+        ? `Reset ${result.credits_reset} credit(s) totalling R${result.total_amount_reset.toFixed(2)} for ${confirmResetCredit.full_name}.`
+        : `No active credits found for ${confirmResetCredit.full_name}.`;
+
+      showMessage(setSuccess, msg, SCREEN_NAME, 'creditReset', 'success');
+      loadUsers(); // Refresh to update credit badges
+    } catch (err: any) {
+      showMessage(
+        setError,
+        err.response?.data?.detail || 'Failed to reset credits',
+        SCREEN_NAME,
+        'creditReset',
+        'error'
+      );
+    } finally {
+      setResetCreditLoading(false);
+    }
+  };
+
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'active': return colors.success;
@@ -380,43 +420,14 @@ export default function UserManagementScreen({ navigation }: any) {
   };
 
   const handleEditUser = (user: User) => {
-    // Open inline edit modal for all user roles
-    setSelectedUser(user);
-    setEditFormData({
-      first_name: user.first_name || '',
-      last_name: user.last_name || '',
-      phone: user.phone || '',
-    });
-    setEditModalVisible(true);
-  };
-
-  const handleSaveUserEdit = async () => {
-    if (!selectedUser) return;
-
-    if (!editFormData.first_name || !editFormData.last_name || !editFormData.phone) {
-      showMessage(setError, 'Please fill in all fields', SCREEN_NAME, 'userEdit', 'error');
-      return;
-    }
-
-    try {
-      await apiService.updateUserDetails(selectedUser.id, editFormData);
-      showMessage(
-        setSuccess,
-        'User details updated successfully',
-        SCREEN_NAME,
-        'userEdit',
-        'success'
-      );
-      setEditModalVisible(false);
-      loadUsers();
-    } catch (err: any) {
-      showMessage(
-        setError,
-        err.response?.data?.detail || 'Failed to update user',
-        SCREEN_NAME,
-        'userEdit',
-        'error'
-      );
+    // Navigate to the appropriate edit screen based on user role
+    const role = user.role?.toLowerCase();
+    if (role === 'student') {
+      navigation.navigate('EditStudentProfile', { userId: user.id });
+    } else if (role === 'instructor') {
+      navigation.navigate('EditInstructorProfile', { userId: user.id });
+    } else if (role === 'admin') {
+      navigation.navigate('EditAdminProfileFromUsers', { userId: user.id });
     }
   };
 
@@ -637,14 +648,14 @@ export default function UserManagementScreen({ navigation }: any) {
   };
 
   const renderUser = ({ item }: { item: User }) => {
-    const isAdminTab = activeTab === 'admin';
-    const isInstructorTab = activeTab === 'instructor';
-    const isStudentTab = activeTab === 'student';
+    const isAdminItem = activeTab === 'admin' || (activeTab === 'all' && item.role === 'admin');
+    const isInstructorItem = activeTab === 'instructor' || (activeTab === 'all' && item.role === 'instructor');
+    const isStudentItem = activeTab === 'student' || (activeTab === 'all' && item.role === 'student');
 
-    // Check if this is the original admin (only relevant on admin tab)
+    // Check if this is the original admin
     const adminUsers = users.filter(u => u.role === 'admin');
     const firstAdminId = adminUsers.length > 0 ? Math.min(...adminUsers.map(u => u.id)) : null;
-    const isOriginalAdmin = isAdminTab && item.role === 'admin' && item.id === firstAdminId;
+    const isOriginalAdmin = isAdminItem && item.role === 'admin' && item.id === firstAdminId;
 
     return (
       <Card variant="elevated" style={{ width: '100%' }}>
@@ -677,8 +688,34 @@ export default function UserManagementScreen({ navigation }: any) {
             Last Login: {new Date(item.last_login).toLocaleDateString()}
           </Text>
         )}
-        {isInstructorTab && item.booking_fee !== undefined && item.booking_fee !== null && (
+        {(isInstructorItem) && item.booking_fee !== undefined && item.booking_fee !== null && (
           <Text style={[styles.userDetailText, { color: colors.textSecondary, fontFamily: 'Inter_400Regular' }]}>Booking Fee: R{item.booking_fee.toFixed(2)}</Text>
+        )}
+        {isStudentItem && (
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 4 }}>
+            {((item.available_credit ?? 0) > 0 || (item.pending_credit ?? 0) > 0) ? (
+              <>
+                {(item.available_credit ?? 0) > 0 && (
+                  <View style={{ backgroundColor: '#059669', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 }}>
+                    <Text style={{ color: '#fff', fontSize: 12, fontFamily: 'Inter_700Bold' }}>
+                      Credit: R{(item.available_credit ?? 0).toFixed(2)}
+                    </Text>
+                  </View>
+                )}
+                {(item.pending_credit ?? 0) > 0 && (
+                  <View style={{ backgroundColor: '#D97706', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 }}>
+                    <Text style={{ color: '#fff', fontSize: 12, fontFamily: 'Inter_700Bold' }}>
+                      Pending: R{(item.pending_credit ?? 0).toFixed(2)}
+                    </Text>
+                  </View>
+                )}
+              </>
+            ) : (
+              <Text style={{ color: colors.textSecondary, fontSize: 12, fontFamily: 'Inter_400Regular', fontStyle: 'italic' }}>
+                No credits available
+              </Text>
+            )}
+          </View>
         )}
       </View>
 
@@ -691,7 +728,7 @@ export default function UserManagementScreen({ navigation }: any) {
           </View>
         )}
         {(() => {
-          if (isAdminTab) {
+          if (isAdminItem) {
             const adminUsers2 = users.filter(u => u.role === 'admin');
             if (adminUsers2.length > 0) {
               const firstId = Math.min(...adminUsers2.map(u => u.id));
@@ -706,7 +743,7 @@ export default function UserManagementScreen({ navigation }: any) {
           );
         })()}
         <Button variant="secondary" size="sm" onPress={() => handleOpenResetPassword(item)}>Reset PW</Button>
-        {isAdminTab && (() => {
+        {isAdminItem && (() => {
           const adminUsers2 = users.filter(u => u.role === 'admin');
           if (adminUsers2.length === 0) return null;
           const firstId = Math.min(...adminUsers2.map(u => u.id));
@@ -715,15 +752,22 @@ export default function UserManagementScreen({ navigation }: any) {
             <Button variant="danger" size="sm" onPress={() => handleDeleteAdmin(item)}>Delete</Button>
           );
         })()}
-        {isInstructorTab && (
+        {isInstructorItem && (
           <>
             <Button variant="outline" size="sm" onPress={() => handleViewSchedule(item)}>Schedule</Button>
             <Button variant="accent" size="sm" onPress={() => handleOpenEditBookingFee(item)}>Manage Fee</Button>
             <Button variant="danger" size="sm" onPress={() => handleDeleteInstructor(item)}>Delete</Button>
           </>
         )}
-        {isStudentTab && (
-          <Button variant="danger" size="sm" onPress={() => handleDeleteStudent(item)}>Delete</Button>
+        {isStudentItem && (
+          <>
+            {((item.available_credit ?? 0) > 0 || (item.pending_credit ?? 0) > 0) ? (
+              <Button variant="primary" size="sm" style={{ backgroundColor: '#7C3AED' }} onPress={() => setConfirmResetCredit(item)}>Reset Credit</Button>
+            ) : (
+              <Button variant="primary" size="sm" style={{ backgroundColor: '#A78BFA', opacity: 0.5 }} onPress={() => Alert.alert('No Credits', `${item.full_name} has no active credits to reset.`)}>Reset Credit</Button>
+            )}
+            <Button variant="danger" size="sm" onPress={() => handleDeleteStudent(item)}>Delete</Button>
+          </>
         )}
         {item.status === 'suspended' ? (
           <Button variant="primary" size="sm" style={{ backgroundColor: colors.success }} onPress={() => handleStatusChange(item, 'active')}>Unsuspend</Button>
@@ -763,14 +807,14 @@ export default function UserManagementScreen({ navigation }: any) {
 
       {/* Tab Navigation */}
       <View style={[styles.tabContainer, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
-        {(['admin', 'instructor', 'student'] as const).map(tab => (
+        {(['all', 'admin', 'instructor', 'student'] as const).map(tab => (
           <Pressable
             key={tab}
             style={[styles.tab, activeTab === tab && { borderBottomColor: colors.primary, backgroundColor: colors.primaryLight }]}
             onPress={() => handleTabChange(tab)}
           >
             <Text style={[styles.tabText, { color: colors.textSecondary, fontFamily: 'Inter_600SemiBold' }, activeTab === tab && { color: colors.primary, fontFamily: 'Inter_700Bold' }]}>
-              {tab === 'admin' ? 'Admins' : tab === 'instructor' ? 'Instructors' : 'Students'}
+              {tab === 'all' ? 'All Users' : tab === 'admin' ? 'Admins' : tab === 'instructor' ? 'Instructors' : 'Students'}
             </Text>
           </Pressable>
         ))}
@@ -780,7 +824,7 @@ export default function UserManagementScreen({ navigation }: any) {
       <View style={[styles.searchContainer, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
         <TextInput
           style={[styles.searchInput, { borderColor: colors.border, backgroundColor: colors.backgroundSecondary, color: colors.text, fontFamily: 'Inter_400Regular' }]}
-          placeholder={`Search ${activeTab}s by name, ID, phone, or email...`}
+          placeholder={`Search ${activeTab === 'all' ? 'user' : activeTab}s by name, ID, phone, or email...`}
           value={searchQuery}
           onChangeText={setSearchQuery}
           placeholderTextColor={colors.textMuted}
@@ -817,67 +861,12 @@ export default function UserManagementScreen({ navigation }: any) {
       >
         <View style={styles.gridContainer}>
           {filteredUsers.map(item => (
-            <View key={item.id.toString()} style={styles.cardWrapper}>
+            <View key={`${item.id}-${item.role}`} style={styles.cardWrapper}>
               {renderUser({ item })}
             </View>
           ))}
         </View>
       </ScrollView>
-
-      {/* Edit User Modal */}
-      <ThemedModal
-        visible={editModalVisible}
-        onClose={() => setEditModalVisible(false)}
-        title={`Edit User: ${selectedUser?.full_name || ''}`}
-        footer={
-          <View style={{ flexDirection: 'row', gap: 12 }}>
-            <Button variant="secondary" onPress={() => setEditModalVisible(false)}>Cancel</Button>
-            <Button variant="primary" onPress={handleSaveUserEdit}>Save Changes</Button>
-          </View>
-        }
-      >
-        <ScrollView>
-          <View style={styles.formGroup}>
-            <Text style={[styles.label, { color: colors.text }]}>First Name *</Text>
-            <TextInput
-              style={[styles.input, { borderColor: colors.border, backgroundColor: colors.backgroundSecondary, color: colors.text }]}
-              value={editFormData.first_name}
-              onChangeText={text => setEditFormData({ ...editFormData, first_name: text })}
-              placeholder="Enter first name"
-              placeholderTextColor={colors.textMuted}
-            />
-          </View>
-
-          <View style={styles.formGroup}>
-            <Text style={[styles.label, { color: colors.text }]}>Last Name *</Text>
-            <TextInput
-              style={[styles.input, { borderColor: colors.border, backgroundColor: colors.backgroundSecondary, color: colors.text }]}
-              value={editFormData.last_name}
-              onChangeText={text => setEditFormData({ ...editFormData, last_name: text })}
-              placeholder="Enter last name"
-              placeholderTextColor={colors.textMuted}
-            />
-          </View>
-
-          <View style={styles.formGroup}>
-            <Text style={[styles.label, { color: colors.text }]}>Phone Number *</Text>
-            <TextInput
-              style={[styles.input, { borderColor: colors.border, backgroundColor: colors.backgroundSecondary, color: colors.text }]}
-              value={editFormData.phone}
-              onChangeText={text => setEditFormData({ ...editFormData, phone: text })}
-              placeholder="+27..."
-              placeholderTextColor={colors.textMuted}
-              keyboardType="phone-pad"
-            />
-          </View>
-
-          <View style={styles.formGroup}>
-            <Text style={[styles.infoText, { color: colors.textSecondary }]}>Email: {selectedUser?.email}</Text>
-            <Text style={[styles.infoText, { color: colors.textSecondary }]}>Role: {selectedUser?.role.toUpperCase()}</Text>
-            <Text style={[styles.infoText, { color: colors.textSecondary }]}>Status: {selectedUser?.status.toUpperCase()}</Text>
-          </View>
-        </ScrollView>
-      </ThemedModal>
 
       {/* Reset Password Modal */}
       <ThemedModal
@@ -1057,6 +1046,29 @@ export default function UserManagementScreen({ navigation }: any) {
         <Text style={{ fontSize: 14, color: colors.danger, textAlign: 'center', marginTop: 15, fontStyle: 'italic', fontFamily: 'Inter_400Regular' }}>
           This removes the student profile and all related bookings. The user account
           remains intact and they can re-register as a student later.
+        </Text>
+      </ThemedModal>
+
+      {/* Reset Student Credit Confirmation Modal */}
+      <ThemedModal
+        visible={!!confirmResetCredit}
+        onClose={() => setConfirmResetCredit(null)}
+        title="Reset Student Credits"
+        footer={
+          <View style={{ flexDirection: 'row', gap: 12 }}>
+            <Button variant="secondary" onPress={() => setConfirmResetCredit(null)}>Cancel</Button>
+            <Button variant="primary" style={{ backgroundColor: '#7C3AED' }} onPress={handleResetCredit} disabled={resetCreditLoading}>
+              {resetCreditLoading ? 'Resetting...' : 'Reset Credits'}
+            </Button>
+          </View>
+        }
+      >
+        <Text style={{ fontSize: 16, color: colors.text, textAlign: 'center', lineHeight: 24, fontFamily: 'Inter_400Regular' }}>
+          Reset all pending and available credits for{'\n'}
+          <Text style={{ fontWeight: 'bold', color: colors.primary, fontFamily: 'Inter_700Bold' }}>{confirmResetCredit?.full_name}</Text>?
+        </Text>
+        <Text style={{ fontSize: 14, color: colors.warning, textAlign: 'center', marginTop: 15, fontStyle: 'italic', fontFamily: 'Inter_400Regular' }}>
+          ⚠️ This will expire all unused credits. The student will no longer be able to apply these credits to future bookings. This action cannot be undone.
         </Text>
       </ThemedModal>
 

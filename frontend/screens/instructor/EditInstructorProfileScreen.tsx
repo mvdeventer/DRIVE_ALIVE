@@ -35,6 +35,7 @@ export default function EditInstructorProfileScreen({ navigation: navProp }: any
     first_name: '',
     last_name: '',
     id_number: '',
+    address: '',
     license_number: '',
     license_types: [] as string[],
     vehicle_registration: '',
@@ -66,6 +67,8 @@ export default function EditInstructorProfileScreen({ navigation: navProp }: any
   const [pendingNavigation, setPendingNavigation] = useState<any>(null);
   const [successMessage, setSuccessMessage] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const [passwordFieldErrors, setPasswordFieldErrors] = useState<Record<string, string>>({});
 
   useEffect(() => {
     loadProfile();
@@ -98,7 +101,11 @@ export default function EditInstructorProfileScreen({ navigation: navProp }: any
   const handleSaveAndContinue = async () => {
     setShowDiscardModal(false);
     await handleSaveProfile();
-    // After save completes, navigation will happen automatically via the save handler
+    // After save, dispatch pending navigation
+    if (pendingNavigation) {
+      navigation.dispatch(pendingNavigation);
+      setPendingNavigation(null);
+    }
   };
 
   const loadProfile = async () => {
@@ -148,6 +155,7 @@ export default function EditInstructorProfileScreen({ navigation: navProp }: any
         first_name: user.first_name || '',
         last_name: user.last_name || '',
         id_number: instructor.id_number || '',
+        address: user.address || '',
         license_number: instructor.license_number || '',
         license_types: instructor.license_types ? instructor.license_types.split(',') : [],
         vehicle_registration: instructor.vehicle_registration || '',
@@ -170,6 +178,7 @@ export default function EditInstructorProfileScreen({ navigation: navProp }: any
         first_name: user.first_name || '',
         last_name: user.last_name || '',
         id_number: instructor.id_number || '',
+        address: user.address || '',
         license_number: instructor.license_number || '',
         license_types: instructor.license_types ? instructor.license_types.split(',') : [],
         vehicle_registration: instructor.vehicle_registration || '',
@@ -207,30 +216,34 @@ export default function EditInstructorProfileScreen({ navigation: navProp }: any
       console.log('  Has changes:', hasChanges);
       setHasUnsavedChanges(hasChanges);
       return updated;
-    });
-  };
+    });    if (fieldErrors[field]) {
+      setFieldErrors(prev => ({ ...prev, [field]: undefined as any }));
+    }  };
 
   const handleSaveProfile = async () => {
-    // Validation
-    const missingFields = [];
-    if (!formData.first_name) missingFields.push('First Name');
-    if (!formData.last_name) missingFields.push('Last Name');
-    if (!formData.phone) missingFields.push('Phone Number');
-    if (!formData.license_number) missingFields.push('License Number');
-    if (formData.license_types.length === 0) missingFields.push('License Types');
-    if (!formData.vehicle_registration) missingFields.push('Vehicle Registration');
-    if (!formData.vehicle_make) missingFields.push('Vehicle Make');
-    if (!formData.vehicle_model) missingFields.push('Vehicle Model');
-    if (!formData.vehicle_year) missingFields.push('Vehicle Year');
-    if (!formData.city) missingFields.push('City');
-    if (!formData.hourly_rate) missingFields.push('Hourly Rate');
+    // Per-field validation
+    const errors: Record<string, string> = {};
+    if (!formData.first_name) errors.first_name = 'First name is required';
+    if (!formData.last_name) errors.last_name = 'Last name is required';
+    if (!formData.email) errors.email = 'Email is required';
+    if (!formData.phone) errors.phone = 'Phone number is required';
+    if (!formData.license_number) errors.license_number = 'License number is required';
+    if (formData.license_types.length === 0) errors.license_types = 'Select at least one license type';
+    if (!formData.vehicle_registration) errors.vehicle_registration = 'Vehicle registration is required';
+    if (!formData.vehicle_make) errors.vehicle_make = 'Vehicle make is required';
+    if (!formData.vehicle_model) errors.vehicle_model = 'Vehicle model is required';
+    if (!formData.vehicle_year) errors.vehicle_year = 'Vehicle year is required';
+    if (!formData.city) errors.city = 'City is required';
+    if (!formData.hourly_rate) errors.hourly_rate = 'Hourly rate is required';
 
-    if (missingFields.length > 0) {
+    if (Object.keys(errors).length > 0) {
+      setFieldErrors(errors);
       scrollViewRef.current?.scrollTo({ y: 0, animated: true });
-      setErrorMessage(`Missing required fields: ${missingFields.join(', ')}`);
+      setErrorMessage('Please fix the highlighted errors');
       setTimeout(() => setErrorMessage(''), 5000);
       return;
     }
+    setFieldErrors({});
 
     setSaving(true);
     try {
@@ -241,12 +254,16 @@ export default function EditInstructorProfileScreen({ navigation: navProp }: any
         console.log('  instructorId:', instructorId);
 
         // Update user basic info via admin endpoint
+        const userParams = new URLSearchParams({
+          first_name: formData.first_name,
+          last_name: formData.last_name,
+          phone: formData.phone,
+          email: formData.email,
+          id_number: formData.id_number,
+          address: formData.address,
+        });
         await ApiService.put(
-          `/admin/users/${params.userId}?first_name=${encodeURIComponent(
-            formData.first_name
-          )}&last_name=${encodeURIComponent(formData.last_name)}&phone=${encodeURIComponent(
-            formData.phone
-          )}`
+          `/admin/users/${params.userId}?${userParams.toString()}`
         );
 
         // Update instructor profile via admin endpoint
@@ -279,6 +296,9 @@ export default function EditInstructorProfileScreen({ navigation: navProp }: any
           first_name: formData.first_name,
           last_name: formData.last_name,
           phone: formData.phone,
+          email: formData.email,
+          id_number: formData.id_number,
+          address: formData.address,
         });
 
         // Update instructor profile
@@ -309,6 +329,12 @@ export default function EditInstructorProfileScreen({ navigation: navProp }: any
     } catch (error: any) {
       console.error('Error saving profile:', error);
       const errorMsg = error.response?.data?.detail || 'Failed to update profile';
+      // Set field-level errors for uniqueness violations
+      if (errorMsg.toLowerCase().includes('email')) {
+        setFieldErrors(prev => ({ ...prev, email: errorMsg }));
+      } else if (errorMsg.toLowerCase().includes('id number')) {
+        setFieldErrors(prev => ({ ...prev, id_number: errorMsg }));
+      }
       setErrorMessage(errorMsg);
       setTimeout(() => setErrorMessage(''), 5000);
     } finally {
@@ -317,37 +343,57 @@ export default function EditInstructorProfileScreen({ navigation: navProp }: any
   };
 
   const handleChangePassword = async () => {
-    if (
-      !passwordData.currentPassword ||
-      !passwordData.newPassword ||
-      !passwordData.confirmPassword
-    ) {
-      setErrorMessage('Please fill in all password fields');
-      setTimeout(() => setErrorMessage(''), 5000);
-      return;
+    const pwErrors: Record<string, string> = {};
+
+    if (isAdminEditing) {
+      // Admin resetting another user's password — no current password needed
+      if (!passwordData.newPassword) {
+        pwErrors.newPassword = 'New password is required';
+      } else if (passwordData.newPassword.length < 6) {
+        pwErrors.newPassword = 'Password must be at least 6 characters';
+      }
+      if (!passwordData.confirmPassword) {
+        pwErrors.confirmPassword = 'Please confirm the password';
+      } else if (passwordData.newPassword !== passwordData.confirmPassword) {
+        pwErrors.confirmPassword = 'Passwords do not match';
+      }
+    } else {
+      // User changing their own password
+      if (!passwordData.currentPassword) pwErrors.currentPassword = 'Current password is required';
+      if (!passwordData.newPassword) {
+        pwErrors.newPassword = 'New password is required';
+      } else if (passwordData.newPassword.length < 6) {
+        pwErrors.newPassword = 'Password must be at least 6 characters';
+      }
+      if (!passwordData.confirmPassword) {
+        pwErrors.confirmPassword = 'Please confirm your password';
+      } else if (passwordData.newPassword !== passwordData.confirmPassword) {
+        pwErrors.confirmPassword = 'Passwords do not match';
+      }
     }
 
-    if (passwordData.newPassword !== passwordData.confirmPassword) {
-      setErrorMessage('New passwords do not match');
+    if (Object.keys(pwErrors).length > 0) {
+      setPasswordFieldErrors(pwErrors);
+      setErrorMessage(Object.values(pwErrors)[0]);
       setTimeout(() => setErrorMessage(''), 5000);
       return;
     }
-
-    if (passwordData.newPassword.length < 6) {
-      setErrorMessage('Password must be at least 6 characters long');
-      setTimeout(() => setErrorMessage(''), 5000);
-      return;
-    }
+    setPasswordFieldErrors({});
 
     try {
-      await ApiService.post('/auth/change-password', {
-        current_password: passwordData.currentPassword,
-        new_password: passwordData.newPassword,
-      });
+      if (isAdminEditing && params?.userId) {
+        await ApiService.resetUserPassword(params.userId, passwordData.newPassword);
+        setSuccessMessage('Password reset successfully!');
+      } else {
+        await ApiService.post('/auth/change-password', {
+          current_password: passwordData.currentPassword,
+          new_password: passwordData.newPassword,
+        });
+        setSuccessMessage('Password changed successfully!');
+      }
 
       setShowPasswordModal(false);
       setPasswordData({ currentPassword: '', newPassword: '', confirmPassword: '' });
-      setSuccessMessage('Password changed successfully!');
       setTimeout(() => setSuccessMessage(''), 4000);
     } catch (error: any) {
       const errorMsg = error.response?.data?.detail || 'Failed to change password';
@@ -404,6 +450,7 @@ export default function EditInstructorProfileScreen({ navigation: navProp }: any
           value={formData.first_name}
           onChangeText={value => updateField('first_name', value)}
           tooltip="Your legal first name as it appears on your ID"
+          error={fieldErrors.first_name}
         />
 
         <FormFieldWithTip
@@ -413,15 +460,19 @@ export default function EditInstructorProfileScreen({ navigation: navProp }: any
           value={formData.last_name}
           onChangeText={value => updateField('last_name', value)}
           tooltip="Your legal last name as it appears on your ID"
+          error={fieldErrors.last_name}
         />
 
         <FormFieldWithTip
           label="Email Address"
+          required
           placeholder="email@example.com"
           value={formData.email}
-          editable={false}
-          tooltip="Email cannot be changed. Contact support if you need to update it."
+          onChangeText={value => updateField('email', value)}
+          tooltip="Your account email address"
           keyboardType="email-address"
+          autoCapitalize="none"
+          error={fieldErrors.email}
         />
 
         <FormFieldWithTip
@@ -432,6 +483,28 @@ export default function EditInstructorProfileScreen({ navigation: navProp }: any
           onChangeText={value => updateField('phone', value)}
           tooltip="Contact number for students to reach you"
           keyboardType="phone-pad"
+          error={fieldErrors.phone}
+        />
+
+        <FormFieldWithTip
+          label="ID Number"
+          placeholder="e.g., 7901175104084"
+          value={formData.id_number}
+          onChangeText={value => updateField('id_number', value)}
+          tooltip="Your South African ID number (13 digits)"
+          keyboardType="numeric"
+          error={fieldErrors.id_number}
+        />
+
+        <FormFieldWithTip
+          label="Address"
+          placeholder="Enter full residential address"
+          value={formData.address}
+          onChangeText={value => updateField('address', value)}
+          tooltip="Your full residential or office address"
+          multiline
+          numberOfLines={3}
+          error={fieldErrors.address}
         />
 
         {/* License Information */}
@@ -444,6 +517,7 @@ export default function EditInstructorProfileScreen({ navigation: navProp }: any
           value={formData.license_number}
           onChangeText={value => updateField('license_number', value)}
           tooltip="Your professional driving instructor license number"
+          error={fieldErrors.license_number}
         />
 
         <LicenseTypeSelector
@@ -462,6 +536,7 @@ export default function EditInstructorProfileScreen({ navigation: navProp }: any
           value={formData.vehicle_registration}
           onChangeText={value => updateField('vehicle_registration', value.toUpperCase())}
           tooltip="License plate number of your training vehicle"
+          error={fieldErrors.vehicle_registration}
         />
 
         <FormFieldWithTip
@@ -471,6 +546,7 @@ export default function EditInstructorProfileScreen({ navigation: navProp }: any
           value={formData.vehicle_make}
           onChangeText={value => updateField('vehicle_make', value)}
           tooltip="Manufacturer of the vehicle"
+          error={fieldErrors.vehicle_make}
         />
 
         <FormFieldWithTip
@@ -480,6 +556,7 @@ export default function EditInstructorProfileScreen({ navigation: navProp }: any
           value={formData.vehicle_model}
           onChangeText={value => updateField('vehicle_model', value)}
           tooltip="Model name of the vehicle"
+          error={fieldErrors.vehicle_model}
         />
 
         <FormFieldWithTip
@@ -490,6 +567,7 @@ export default function EditInstructorProfileScreen({ navigation: navProp }: any
           onChangeText={value => updateField('vehicle_year', value)}
           keyboardType="numeric"
           tooltip="Year the vehicle was manufactured"
+          error={fieldErrors.vehicle_year}
         />
 
         {/* Location */}
@@ -521,6 +599,7 @@ export default function EditInstructorProfileScreen({ navigation: navProp }: any
           onChangeText={value => updateField('hourly_rate', value)}
           keyboardType="decimal-pad"
           tooltip="Your hourly rate in South African Rands"
+          error={fieldErrors.hourly_rate}
         />
 
         <FormFieldWithTip
@@ -566,7 +645,7 @@ export default function EditInstructorProfileScreen({ navigation: navProp }: any
           onPress={() => setShowPasswordModal(true)}
           style={{ marginTop: 24 }}
         >
-          🔒 Change Password
+          {isAdminEditing ? '🔒 Reset Password' : '🔒 Change Password'}
         </Button>
 
         <Button
@@ -580,11 +659,11 @@ export default function EditInstructorProfileScreen({ navigation: navProp }: any
         </Button>
       </ScrollView>
 
-      {/* Password Change Modal */}
+      {/* Password Change/Reset Modal */}
       <ThemedModal
         visible={showPasswordModal}
         onClose={() => setShowPasswordModal(false)}
-        title="Change Password"
+        title={isAdminEditing ? 'Reset Password' : 'Change Password'}
         size="md"
         footer={
           <View style={styles.modalFooter}>
@@ -603,29 +682,33 @@ export default function EditInstructorProfileScreen({ navigation: navProp }: any
               onPress={handleChangePassword}
               style={{ flex: 1 }}
             >
-              Change Password
+              {isAdminEditing ? 'Reset Password' : 'Change Password'}
             </Button>
           </View>
         }
       >
-        <FormFieldWithTip
-          label="Current Password"
-          required
-          placeholder="Enter current password"
-          value={passwordData.currentPassword}
-          onChangeText={value => setPasswordData(prev => ({ ...prev, currentPassword: value }))}
-          secureTextEntry={!showPassword}
-          tooltip="Your current password for verification"
-        />
+        {!isAdminEditing && (
+          <FormFieldWithTip
+            label="Current Password"
+            required
+            placeholder="Enter current password"
+            value={passwordData.currentPassword}
+            onChangeText={value => { setPasswordData(prev => ({ ...prev, currentPassword: value })); setPasswordFieldErrors(prev => ({ ...prev, currentPassword: undefined as any })); }}
+            secureTextEntry={!showPassword}
+            tooltip="Your current password for verification"
+            error={passwordFieldErrors.currentPassword}
+          />
+        )}
 
         <FormFieldWithTip
           label="New Password"
           required
           placeholder="Enter new password"
           value={passwordData.newPassword}
-          onChangeText={value => setPasswordData(prev => ({ ...prev, newPassword: value }))}
+          onChangeText={value => { setPasswordData(prev => ({ ...prev, newPassword: value })); setPasswordFieldErrors(prev => ({ ...prev, newPassword: undefined as any })); }}
           secureTextEntry={!showPassword}
           tooltip="New password (minimum 6 characters)"
+          error={passwordFieldErrors.newPassword}
         />
 
         <FormFieldWithTip
@@ -633,9 +716,10 @@ export default function EditInstructorProfileScreen({ navigation: navProp }: any
           required
           placeholder="Confirm new password"
           value={passwordData.confirmPassword}
-          onChangeText={value => setPasswordData(prev => ({ ...prev, confirmPassword: value }))}
+          onChangeText={value => { setPasswordData(prev => ({ ...prev, confirmPassword: value })); setPasswordFieldErrors(prev => ({ ...prev, confirmPassword: undefined as any })); }}
           secureTextEntry={!showPassword}
           tooltip="Re-enter your new password"
+          error={passwordFieldErrors.confirmPassword}
         />
 
         <Pressable

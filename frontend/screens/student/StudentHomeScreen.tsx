@@ -6,6 +6,7 @@ import * as SecureStore from 'expo-secure-store';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   Platform,
   Pressable,
   RefreshControl,
@@ -14,6 +15,7 @@ import {
   Text,
   View,
 } from 'react-native';
+import CreditBanner from '../../components/CreditBanner';
 import InlineMessage from '../../components/InlineMessage';
 import { Button, Card, StatCard, Badge, ThemedModal } from '../../components/ui';
 import { useTheme } from '../../theme/ThemeContext';
@@ -22,6 +24,7 @@ import ApiService from '../../services/api';
 interface Booking {
   id: number;
   booking_reference?: string;
+  instructor_id: number;
   instructor_name: string;
   instructor_phone?: string;
   vehicle_make?: string;
@@ -63,6 +66,8 @@ export default function StudentHomeScreen() {
     type: 'success' | 'error' | 'warning' | 'info';
     text: string;
   } | null>(null);
+  const [availableCredits, setAvailableCredits] = useState<{ total: number; credits: any[] }>({ total: 0, credits: [] });
+  const [rescheduleLoading, setRescheduleLoading] = useState(false);
 
   // Load hidden bookings from storage on mount
   useEffect(() => {
@@ -123,6 +128,16 @@ export default function StudentHomeScreen() {
         ApiService.get('/bookings/my-bookings'),
       ]);
 
+      // Load available credits (non-blocking)
+      try {
+        const creditsRes = await ApiService.getAvailableCredits();
+        const creditsList = creditsRes.credits || [];
+        const totalCredit = creditsRes.total_available_credit || creditsList.reduce((sum: number, c: any) => sum + c.credit_amount, 0);
+        setAvailableCredits({ total: totalCredit, credits: creditsList });
+      } catch {
+        setAvailableCredits({ total: 0, credits: [] });
+      }
+
       setProfile(profileRes.data);
 
       // Debug: Log the bookings data
@@ -131,12 +146,13 @@ export default function StudentHomeScreen() {
         console.log('🔍 First booking sample:', bookingsRes.data[0]);
       }
 
-      // Split bookings into upcoming and past (exclude cancelled bookings)
+      // Split bookings into upcoming and past (exclude cancelled and rescheduled bookings)
       const now = new Date();
+      const excludedStatuses = ['cancelled', 'rescheduled'];
       const upcoming = bookingsRes.data
         .filter(
           (b: Booking) =>
-            new Date(b.scheduled_time) >= now && b.status.toLowerCase() !== 'cancelled'
+            new Date(b.scheduled_time) >= now && !excludedStatuses.includes(b.status.toLowerCase())
         )
         .sort(
           (a: Booking, b: Booking) =>
@@ -144,7 +160,7 @@ export default function StudentHomeScreen() {
         );
       const past = bookingsRes.data
         .filter(
-          (b: Booking) => new Date(b.scheduled_time) < now && b.status.toLowerCase() !== 'cancelled'
+          (b: Booking) => new Date(b.scheduled_time) < now && !excludedStatuses.includes(b.status.toLowerCase())
         )
         .sort(
           (a: Booking, b: Booking) =>
@@ -236,18 +252,23 @@ export default function StudentHomeScreen() {
       return;
     }
 
-    // Calculate cancellation fee
-    const cancellationFee = hoursUntilLesson < 6 ? booking.total_price * 0.5 : 0;
-    const feeMessage =
-      cancellationFee > 0
-        ? `\n\n⚠️ Cancellation within 6 hours: 50% fee (R${cancellationFee.toFixed(2)}) will apply.`
-        : '';
+    // Calculate cancellation penalty and credit (only for paid bookings)
+    const isPaid = booking.payment_status?.toLowerCase() === 'paid';
+    let feeMessage = '';
+
+    if (isPaid) {
+      const cancellationFee = hoursUntilLesson < 24 ? booking.total_price * 0.5 : 0;
+      const creditAmount = hoursUntilLesson < 24 ? booking.total_price * 0.5 : booking.total_price * 0.9;
+      feeMessage = cancellationFee > 0
+        ? `\n\n⚠️ Cancellation within 24 hours: 50% penalty (R${cancellationFee.toFixed(2)}) will apply.\n\n💰 R${creditAmount.toFixed(2)} credit will be pending and applied when you pay for your next booking.`
+        : `\n\n💰 R${creditAmount.toFixed(2)} credit (90%) will be pending and applied when you pay for your next booking.`;
+    }
 
     const confirmMsg = `Delete this lesson?\n\nInstructor: ${
       booking.instructor_name
     }\nDate: ${formatDate(
       booking.scheduled_time
-    )}${feeMessage}\n\nThis will cancel the booking and remove it from your list.`;
+    )}${feeMessage}\n\nThis will cancel the booking${isPaid ? ' — credit will activate automatically when you book and pay for your next lesson' : ''}.`;
 
     const confirmed = Platform.OS === 'web' ? window.confirm(confirmMsg) : false;
 
@@ -282,15 +303,78 @@ export default function StudentHomeScreen() {
       // Remove from local state immediately (optimistic update)
       setUpcomingBookings(prev => prev.filter(b => b.id !== bookingId));
 
+      // Reload credits to show new credit balance
+      try {
+        const creditsRes = await ApiService.getAvailableCredits();
+        const creditsList = creditsRes.credits || [];
+        const totalCredit = creditsRes.total_available_credit || creditsList.reduce((sum: number, c: any) => sum + c.credit_amount, 0);
+        setAvailableCredits({ total: totalCredit, credits: creditsList });
+      } catch {
+        // Silently fail — credit will show on next reload
+      }
+
       scrollViewRef.current?.scrollTo({ y: 0, animated: true });
-      setMessage({ type: 'success', text: '✅ Booking deleted successfully' });
-      setTimeout(() => setMessage(null), 3000);
+      setMessage({ type: 'success', text: '✅ Booking cancelled. Credit is pending and will activate when you pay for your next booking.' });
+      setTimeout(() => setMessage(null), 5000);
     } catch (error: any) {
       console.error('Error deleting booking:', error);
       const errorMsg = error.response?.data?.detail || 'Failed to delete booking';
       scrollViewRef.current?.scrollTo({ y: 0, animated: true });
       setMessage({ type: 'error', text: errorMsg });
       setTimeout(() => setMessage(null), 3000);
+    }
+  };
+
+  const handleOpenReschedule = async (booking: Booking) => {
+    // Calculate 24h penalty warning
+    const lessonTime = new Date(booking.scheduled_time);
+    const now = new Date();
+    const hoursUntilLesson = (lessonTime.getTime() - now.getTime()) / (1000 * 60 * 60);
+
+    const isPaid = booking.payment_status?.toLowerCase() === 'paid';
+    let policyMessage = '';
+    if (isPaid && hoursUntilLesson < 24) {
+      const penalty = booking.total_price * 0.5;
+      policyMessage = `\n\n⚠️ Reschedule Policy: This lesson is within 24 hours. A 50% penalty (R${penalty.toFixed(2)}) will apply to the old booking. The remaining R${penalty.toFixed(2)} will be credited to your account.`;
+    } else if (isPaid) {
+      const credit = booking.total_price * 0.9;
+      policyMessage = `\n\n📋 Reschedule Policy: The old booking will be cancelled and R${credit.toFixed(2)} (90%) will be credited to your account. You will then book a new lesson at the current rate.`;
+    }
+
+    const confirmMsg = `Reschedule this lesson?\n\nInstructor: ${booking.instructor_name}\nDate: ${formatDate(booking.scheduled_time)}${policyMessage}\n\nYou will be taken to the booking screen to select a new date and time.`;
+
+    const proceedWithReschedule = async () => {
+      setRescheduleLoading(true);
+      try {
+        const response = await ApiService.get(`/instructors/${booking.instructor_id}`);
+        const instructor = response.data;
+        setRescheduleLoading(false);
+        (navigation as any).navigate('FindTab', {
+          screen: 'Booking',
+          params: {
+            instructor,
+            rescheduleBookingId: booking.id,
+            reschedulePickupAddress: booking.pickup_location || '',
+          },
+        });
+      } catch (error: any) {
+        setRescheduleLoading(false);
+        console.error('Error fetching instructor for reschedule:', error);
+        scrollViewRef.current?.scrollTo({ y: 0, animated: true });
+        setMessage({ type: 'error', text: 'Failed to load instructor details for reschedule' });
+        setTimeout(() => setMessage(null), 5000);
+      }
+    };
+
+    if (Platform.OS === 'web') {
+      if (window.confirm(confirmMsg)) {
+        await proceedWithReschedule();
+      }
+    } else {
+      Alert.alert('Reschedule Lesson', confirmMsg, [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Yes, Reschedule', onPress: () => proceedWithReschedule() },
+      ]);
     }
   };
 
@@ -477,6 +561,9 @@ export default function StudentHomeScreen() {
         />
       </View>
 
+      {/* Available Credit Balance */}
+      <CreditBanner refreshKey={availableCredits.total} />
+
       {/* Inline Message Display */}
       {message ? (
         <View style={{ marginHorizontal: 16 }}>
@@ -552,12 +639,21 @@ export default function StudentHomeScreen() {
                 <Text style={[styles.bookingDetail, { color: colors.textSecondary }]}>📞 {booking.instructor_phone || 'N/A'}</Text>
                 <View style={[styles.bookingFooter, { borderTopColor: colors.border }]}>
                   <Text style={[styles.bookingPrice, { color: colors.success }]}>R{booking.total_price.toFixed(2)}</Text>
-                  <Button
-                    label="🗑️ Delete"
-                    onPress={() => handleDeleteBooking(booking)}
-                    variant="danger"
-                    size="sm"
-                  />
+                  <View style={{ flexDirection: 'row', gap: 8 }}>
+                    <Button
+                      label={rescheduleLoading ? '⏳ Loading...' : '� Reschedule'}
+                      onPress={() => handleOpenReschedule(booking)}
+                      variant="accent"
+                      size="sm"
+                      disabled={rescheduleLoading}
+                    />
+                    <Button
+                      label="🗑️ Delete"
+                      onPress={() => handleDeleteBooking(booking)}
+                      variant="danger"
+                      size="sm"
+                    />
+                  </View>
                 </View>
               </Card>
             ))}
@@ -758,6 +854,7 @@ export default function StudentHomeScreen() {
             </Pressable>
           ))}
       </ThemedModal>
+
     </ScrollView>
   );
 }

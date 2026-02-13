@@ -66,8 +66,8 @@ export const useWindowsDetection = (): PlatformDetection => {
     else if (userAgent.includes('safari')) browserName = 'Safari';
     else if (userAgent.includes('opera')) browserName = 'Opera';
 
-    // Check screen size (desktop should be at least 1366x768)
-    const isDesktopResolution = window.innerWidth >= 1366 && window.innerHeight >= 600;
+    // Check screen size (desktop should be at least 1024x600 to support 13" laptops)
+    const isDesktopResolution = window.innerWidth >= 1024 && window.innerHeight >= 600;
 
     const isPlatformAllowed = isWindows && !isMobile && !isTablet && isDesktopResolution;
 
@@ -79,7 +79,7 @@ export const useWindowsDetection = (): PlatformDetection => {
     } else if (isTablet) {
       warning = '📱 Database Interface is not available on tablets.';
     } else if (!isDesktopResolution) {
-      warning = `⚠️ Your screen is too small (${window.innerWidth}x${window.innerHeight}). Minimum resolution: 1366x768`;
+      warning = `⚠️ Your screen is too small (${window.innerWidth}x${window.innerHeight}). Minimum resolution: 1024x600`;
     }
 
     setDetection({

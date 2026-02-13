@@ -213,7 +213,7 @@ export default function InstructorEarningsOverviewScreen({ navigation }: any) {
       console.error('Error exporting PDF:', error);
       showMessage(
         setErrorMessage,
-        `Failed to export PDF: ${error.message}`,
+        `Failed to export PDF: ${error.response?.data?.detail || error.message}`,
         SCREEN_NAME,
         'error',
         'error'
@@ -317,7 +317,7 @@ export default function InstructorEarningsOverviewScreen({ navigation }: any) {
       console.error('Error exporting Excel:', error);
       showMessage(
         setErrorMessage,
-        `Failed to export Excel: ${error.message}`,
+        `Failed to export Excel: ${error.response?.data?.detail || error.message}`,
         SCREEN_NAME,
         'error',
         'error'
@@ -383,7 +383,7 @@ export default function InstructorEarningsOverviewScreen({ navigation }: any) {
       console.error('Error exporting all reports:', error);
       showMessage(
         setErrorMessage,
-        `Failed to export reports: ${error.message}`,
+        `Failed to export reports: ${error.response?.data?.detail || error.message}`,
         SCREEN_NAME,
         'error',
         'error'

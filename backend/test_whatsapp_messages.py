@@ -134,14 +134,17 @@ def preview_daily_summary():
     bookings_summary = """1. 08:00 AM - John Smith (Ref: BK71C18E9F)
    📍 45 Oak Avenue, Rosebank, Johannesburg
    📞 +27 71 234 5678
+   🗺️ https://www.google.com/maps/search/?api=1&query=45+Oak+Avenue,+Rosebank,+Johannesburg
 
 2. 10:30 AM - Sarah Johnson (Ref: BK8D69B666)
    📍 123 Main Street, Sandton, Johannesburg
    📞 +27 82 345 6789
+   🗺️ https://www.google.com/maps/search/?api=1&query=123+Main+Street,+Sandton,+Johannesburg
 
 3. 01:00 PM - Michael Brown (Ref: BKB094862D)
    📍 78 Pine Road, Fourways, Johannesburg
-   📞 +27 83 456 7890"""
+   📞 +27 83 456 7890
+   🗺️ https://www.google.com/maps/search/?api=1&query=78+Pine+Road,+Fourways,+Johannesburg"""
 
     message = f"""📅 *Today's Schedule*
 

@@ -44,6 +44,17 @@ async def lifespan(app: FastAPI):
     Lifespan context manager for startup and shutdown events
     Handles background task lifecycle
     """
+    # ── First-Run Dependency Check (safety net) ──
+    # Primary setup path is bootstrap.py; this is the fallback
+    try:
+        from .utils.first_run_check import run_first_run_check
+        first_run_report = run_first_run_check()
+        if not first_run_report.get("packages_ok", True):
+            print("⚠️  Some packages are missing — the server may not work correctly.")
+            print("   Run 'python bootstrap.py' from the project root for full setup.")
+    except Exception as first_run_err:
+        print(f"⚠️  First-run check skipped: {first_run_err}")
+
     # Startup
     print("=" * 80)
     print("RoadReady Backend API - Starting Up")

@@ -288,6 +288,8 @@ Drive Safe! 🚗
                 f"\n\n📝 *Student Notes:*\n{student_notes}" if student_notes else ""
             )
 
+            maps_link = f"https://www.google.com/maps/search/?api=1&query={pickup_address.replace(' ', '+')}"
+
             message_body = f"""⏰ *Lesson Reminder*
 
 Hello {instructor_name},
@@ -302,6 +304,9 @@ Your next lesson is coming up.
 • Pickup: {pickup_address}{notes_section}
 
 📞 Student Contact: {student_phone}
+
+🗺️ Navigate to pickup:
+{maps_link}
 
 Drive Safe! 🚗
 - RoadReady Team"""
@@ -346,6 +351,8 @@ Drive Safe! 🚗
                 f"\n\n📝 *Student Notes:*\n{student_notes}" if student_notes else ""
             )
 
+            maps_link = f"https://www.google.com/maps/search/?api=1&query={pickup_address.replace(' ', '+')}"
+
             message_body = f"""🔔 *New Lesson Booked!*
 
 Hello {instructor_name},
@@ -361,6 +368,9 @@ You have a new confirmed booking.
 • Amount: R{amount:.2f}{notes_section}
 
 📞 Student Contact: {student_phone}
+
+🗺️ Navigate to pickup:
+{maps_link}
 
 Drive Safe! 🚗
 - RoadReady Team"""

@@ -132,16 +132,21 @@ export default function ManageAvailabilityScreen({ navigation: navProp }: any) {
 
   const handleDiscardChanges = () => {
     setShowDiscardModal(false);
+    setHasUnsavedChanges(false);
     if (pendingNavigation) {
-      navigation.dispatch(pendingNavigation);
+      navInstance.dispatch(pendingNavigation);
       setPendingNavigation(null);
     }
   };
 
   const handleSaveAndContinue = async () => {
     setShowDiscardModal(false);
-    await handleSaveSchedule();
-    // After save completes, navigation will happen via the save handler if successful
+    await saveSchedules();
+    // After save, navigate if there was a pending navigation
+    if (pendingNavigation) {
+      navInstance.dispatch(pendingNavigation);
+      setPendingNavigation(null);
+    }
   };
 
   const loadAvailability = async () => {
@@ -170,10 +175,11 @@ export default function ManageAvailabilityScreen({ navigation: navProp }: any) {
           setOriginalSchedules(prev => [...prev, JSON.parse(JSON.stringify(newSchedule))]);
         }
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error loading availability:', error);
-      setMessage({ type: 'error', text: 'Failed to load availability' });
-      setTimeout(() => setMessage(null), 3000);
+      scrollViewRef.current?.scrollTo({ y: 0, animated: true });
+      setMessage({ type: 'error', text: error.response?.data?.detail || 'Failed to load availability' });
+      setTimeout(() => setMessage(null), 5000);
     } finally {
       setLoading(false);
     }
@@ -405,10 +411,11 @@ export default function ManageAvailabilityScreen({ navigation: navProp }: any) {
 
       setMessage({ type: 'success', text: 'Time off deleted' });
       setTimeout(() => setMessage(null), 3000);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error deleting time off:', error);
-      setMessage({ type: 'error', text: 'Failed to delete time off' });
-      setTimeout(() => setMessage(null), 3000);
+      scrollViewRef.current?.scrollTo({ y: 0, animated: true });
+      setMessage({ type: 'error', text: error.response?.data?.detail || 'Failed to delete time off' });
+      setTimeout(() => setMessage(null), 5000);
     }
   };
 
@@ -586,7 +593,11 @@ export default function ManageAvailabilityScreen({ navigation: navProp }: any) {
             <Text style={[styles.label, { color: colors.text }]}>From Date *</Text>
             <Pressable
               style={[styles.datePickerButton, { backgroundColor: colors.backgroundSecondary, borderColor: colors.border }]}
-              onPress={() => setShowDatePicker({ field: 'start_date' })}
+              onPress={() => {
+                const initial = newTimeOff.start_date ? new Date(newTimeOff.start_date) : new Date();
+                setTempSelectedDate(initial);
+                setShowDatePicker({ field: 'start_date' });
+              }}
             >
               <Text style={[styles.datePickerText, { color: newTimeOff.start_date ? colors.text : colors.textMuted }]}>
                 {newTimeOff.start_date || 'Select Start Date'}
@@ -599,7 +610,15 @@ export default function ManageAvailabilityScreen({ navigation: navProp }: any) {
             <Text style={[styles.label, { color: colors.text }]}>To Date (optional - leave blank for single day)</Text>
             <Pressable
               style={[styles.datePickerButton, { backgroundColor: colors.backgroundSecondary, borderColor: colors.border }]}
-              onPress={() => setShowDatePicker({ field: 'end_date' })}
+              onPress={() => {
+                const initial = newTimeOff.end_date
+                  ? new Date(newTimeOff.end_date)
+                  : newTimeOff.start_date
+                    ? new Date(newTimeOff.start_date)
+                    : new Date();
+                setTempSelectedDate(initial);
+                setShowDatePicker({ field: 'end_date' });
+              }}
             >
               <Text style={[styles.datePickerText, { color: newTimeOff.end_date ? colors.text : colors.textMuted }]}>
                 {newTimeOff.end_date || 'Select End Date'}

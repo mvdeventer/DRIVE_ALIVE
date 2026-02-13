@@ -13,6 +13,7 @@ import { useTheme } from '../theme/ThemeContext';
 import { useAuthActions } from './AuthContext';
 
 // Screens
+import BookingScreen from '../screens/booking/BookingScreen';
 import EarningsReportScreen from '../screens/instructor/EarningsReportScreen';
 import EditInstructorProfileScreen from '../screens/instructor/EditInstructorProfileScreen';
 import InstructorHomeScreen from '../screens/instructor/InstructorHomeScreen';
@@ -92,6 +93,21 @@ function HomeStackScreen() {
         name="InstructorHome"
         component={InstructorHomeScreen}
         options={{ title: 'Dashboard' }}
+      />
+      <HomeStack.Screen
+        name="EditInstructorProfile"
+        component={EditInstructorProfileScreen}
+        options={{ title: 'Edit Profile' }}
+      />
+      <HomeStack.Screen
+        name="ManageAvailability"
+        component={ManageAvailabilityScreen}
+        options={{ title: 'Manage Schedule' }}
+      />
+      <HomeStack.Screen
+        name="Booking"
+        component={BookingScreen}
+        options={{ title: 'Reschedule Lesson' }}
       />
     </HomeStack.Navigator>
   );

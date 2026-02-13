@@ -51,6 +51,8 @@ export default function EditAdminProfileScreen({ navigation: navProp }: any) {
   const [successMessage, setSuccessMessage] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
   const [userId, setUserId] = useState<number | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const [passwordFieldErrors, setPasswordFieldErrors] = useState<Record<string, string>>({});
 
   useEffect(() => {
     loadProfile();
@@ -84,7 +86,11 @@ export default function EditAdminProfileScreen({ navigation: navProp }: any) {
   const handleSaveAndContinue = async () => {
     setShowDiscardModal(false);
     await handleSaveProfile();
-    // After save completes, navigation will happen automatically via the save handler
+    // After save, dispatch pending navigation
+    if (pendingNavigation) {
+      navigation.dispatch(pendingNavigation);
+      setPendingNavigation(null);
+    }
   };
 
   const loadProfile = async () => {
@@ -139,25 +145,42 @@ export default function EditAdminProfileScreen({ navigation: navProp }: any) {
   };
 
   const handleSaveProfile = async () => {
+    // Per-field validation
+    const errors: Record<string, string> = {};
+    if (!formData.first_name) errors.first_name = 'First name is required';
+    if (!formData.last_name) errors.last_name = 'Last name is required';
+    if (!formData.email) errors.email = 'Email is required';
+    if (!formData.phone) errors.phone = 'Phone number is required';
+
+    if (Object.keys(errors).length > 0) {
+      setFieldErrors(errors);
+      setErrorMessage('Please fix the highlighted errors');
+      return;
+    }
+    setFieldErrors({});
+
     try {
       setSaving(true);
       setErrorMessage('');
 
       if (isEditingOtherAdmin && params?.userId) {
-        // Admin editing another admin
-        await ApiService.put(`/admin/users/${params.userId}`, {
+        // Admin editing another admin - use query params
+        const userParams = new URLSearchParams({
           first_name: formData.first_name,
           last_name: formData.last_name,
           phone: formData.phone,
-          id_number: formData.id_number,
-          address: formData.address,
+          email: formData.email,
         });
+        if (formData.id_number) userParams.set('id_number', formData.id_number);
+        if (formData.address) userParams.set('address', formData.address);
+        await ApiService.put(`/admin/users/${params.userId}?${userParams.toString()}`);
       } else {
         // Admin editing own profile
         await ApiService.put('/auth/me', {
           first_name: formData.first_name,
           last_name: formData.last_name,
           phone: formData.phone,
+          email: formData.email,
           id_number: formData.id_number,
           address: formData.address,
         });
@@ -171,38 +194,71 @@ export default function EditAdminProfileScreen({ navigation: navProp }: any) {
       }, 2000);
     } catch (error: any) {
       console.error('Save error:', error);
-      setErrorMessage(error.response?.data?.detail || 'Failed to update profile');
+      const errorMsg = error.response?.data?.detail || 'Failed to update profile';
+      // Set field-level errors for uniqueness violations
+      if (errorMsg.toLowerCase().includes('email')) {
+        setFieldErrors(prev => ({ ...prev, email: errorMsg }));
+      } else if (errorMsg.toLowerCase().includes('id number')) {
+        setFieldErrors(prev => ({ ...prev, id_number: errorMsg }));
+      }
+      setErrorMessage(errorMsg);
     } finally {
       setSaving(false);
     }
   };
 
   const handlePasswordChange = async () => {
-    if (!passwordData.newPassword || !passwordData.confirmPassword) {
-      setErrorMessage('Please fill in all password fields');
-      return;
+    const pwErrors: Record<string, string> = {};
+
+    if (isEditingOtherAdmin) {
+      // Admin resetting another user's password — no current password needed
+      if (!passwordData.newPassword) {
+        pwErrors.newPassword = 'New password is required';
+      } else if (passwordData.newPassword.length < 6) {
+        pwErrors.newPassword = 'Password must be at least 6 characters';
+      }
+      if (!passwordData.confirmPassword) {
+        pwErrors.confirmPassword = 'Please confirm the password';
+      } else if (passwordData.newPassword !== passwordData.confirmPassword) {
+        pwErrors.confirmPassword = 'Passwords do not match';
+      }
+    } else {
+      // User changing their own password
+      if (!passwordData.currentPassword) pwErrors.currentPassword = 'Current password is required';
+      if (!passwordData.newPassword) {
+        pwErrors.newPassword = 'New password is required';
+      } else if (passwordData.newPassword.length < 6) {
+        pwErrors.newPassword = 'Password must be at least 6 characters';
+      }
+      if (!passwordData.confirmPassword) {
+        pwErrors.confirmPassword = 'Please confirm your password';
+      } else if (passwordData.newPassword !== passwordData.confirmPassword) {
+        pwErrors.confirmPassword = 'Passwords do not match';
+      }
     }
 
-    if (passwordData.newPassword !== passwordData.confirmPassword) {
-      setErrorMessage('New passwords do not match');
+    if (Object.keys(pwErrors).length > 0) {
+      setPasswordFieldErrors(pwErrors);
+      setErrorMessage(Object.values(pwErrors)[0]);
       return;
     }
-
-    if (passwordData.newPassword.length < 8) {
-      setErrorMessage('Password must be at least 8 characters');
-      return;
-    }
+    setPasswordFieldErrors({});
 
     try {
       setSaving(true);
       setErrorMessage('');
 
-      await ApiService.put('/auth/change-password', {
-        current_password: passwordData.currentPassword,
-        new_password: passwordData.newPassword,
-      });
+      if (isEditingOtherAdmin && params?.userId) {
+        await ApiService.resetUserPassword(params.userId, passwordData.newPassword);
+        setSuccessMessage('Password reset successfully!');
+      } else {
+        await ApiService.post('/auth/change-password', {
+          current_password: passwordData.currentPassword,
+          new_password: passwordData.newPassword,
+        });
+        setSuccessMessage('Password changed successfully!');
+      }
 
-      setSuccessMessage('Password changed successfully!');
       setShowPasswordModal(false);
       setPasswordData({ currentPassword: '', newPassword: '', confirmPassword: '' });
     } catch (error: any) {
@@ -247,58 +303,63 @@ export default function EditAdminProfileScreen({ navigation: navProp }: any) {
           <FormFieldWithTip
             label="First Name"
             value={formData.first_name}
-            onChangeText={text => setFormData({ ...formData, first_name: text })}
+            onChangeText={text => { setFormData({ ...formData, first_name: text }); setFieldErrors(prev => ({ ...prev, first_name: undefined as any })); }}
             placeholder="Enter first name"
             required
+            error={fieldErrors.first_name}
           />
 
           <FormFieldWithTip
             label="Last Name"
             value={formData.last_name}
-            onChangeText={text => setFormData({ ...formData, last_name: text })}
+            onChangeText={text => { setFormData({ ...formData, last_name: text }); setFieldErrors(prev => ({ ...prev, last_name: undefined as any })); }}
             placeholder="Enter last name"
             required
+            error={fieldErrors.last_name}
           />
 
           <FormFieldWithTip
             label="Email Address"
             value={formData.email}
-            onChangeText={text => setFormData({ ...formData, email: text })}
+            onChangeText={text => { setFormData({ ...formData, email: text }); setFieldErrors(prev => ({ ...prev, email: undefined as any })); }}
             placeholder="email@example.com"
             keyboardType="email-address"
             autoCapitalize="none"
-            editable={false}
-            tooltip="Email cannot be changed"
+            required
+            error={fieldErrors.email}
           />
 
           <FormFieldWithTip
             label="Phone Number"
             value={formData.phone}
-            onChangeText={text => setFormData({ ...formData, phone: text })}
+            onChangeText={text => { setFormData({ ...formData, phone: text }); setFieldErrors(prev => ({ ...prev, phone: undefined as any })); }}
             placeholder="+27 XX XXX XXXX"
             keyboardType="phone-pad"
             tooltip="Format: +27XXXXXXXXX or 0XXXXXXXXX"
             required
+            error={fieldErrors.phone}
           />
 
           <FormFieldWithTip
             label="ID Number"
             value={formData.id_number}
-            onChangeText={text => setFormData({ ...formData, id_number: text })}
+            onChangeText={text => { setFormData({ ...formData, id_number: text }); setFieldErrors(prev => ({ ...prev, id_number: undefined as any })); }}
             placeholder="13-digit SA ID number"
             keyboardType="numeric"
             maxLength={13}
             tooltip="South African ID number (13 digits)"
+            error={fieldErrors.id_number}
           />
 
           <FormFieldWithTip
             label="Address"
             value={formData.address}
-            onChangeText={text => setFormData({ ...formData, address: text })}
+            onChangeText={text => { setFormData({ ...formData, address: text }); setFieldErrors(prev => ({ ...prev, address: undefined as any })); }}
             placeholder="Enter full address"
             multiline
             numberOfLines={3}
             tooltip="Full residential or office address"
+            error={fieldErrors.address}
           />
         </Card>
 
@@ -314,16 +375,14 @@ export default function EditAdminProfileScreen({ navigation: navProp }: any) {
             Save Changes
           </Button>
 
-          {!isEditingOtherAdmin && (
-            <Button
-              variant="outline"
-              fullWidth
-              style={{ borderColor: colors.warning }}
-              onPress={() => setShowPasswordModal(true)}
-            >
-              Change Password
-            </Button>
-          )}
+          <Button
+            variant="outline"
+            fullWidth
+            style={{ borderColor: colors.warning }}
+            onPress={() => setShowPasswordModal(true)}
+          >
+            {isEditingOtherAdmin ? 'Reset Password' : 'Change Password'}
+          </Button>
 
           <Button variant="secondary" fullWidth onPress={() => navigation.goBack()}>
             Cancel
@@ -331,49 +390,54 @@ export default function EditAdminProfileScreen({ navigation: navProp }: any) {
         </View>
       </ScrollView>
 
-      {/* Password Change Modal */}
+      {/* Password Change/Reset Modal */}
       <ThemedModal
         visible={showPasswordModal}
         onClose={() => setShowPasswordModal(false)}
-        title="Change Password"
-        size="sm"
+        title={isEditingOtherAdmin ? 'Reset Password' : 'Change Password'}
+        size="md"
         footer={
           <View style={styles.modalButtons}>
             <Button variant="secondary" style={{ flex: 1 }} onPress={() => setShowPasswordModal(false)}>
               Cancel
             </Button>
             <Button variant="primary" style={{ flex: 1 }} onPress={handlePasswordChange} disabled={saving} loading={saving}>
-              Change Password
+              {isEditingOtherAdmin ? 'Reset Password' : 'Change Password'}
             </Button>
           </View>
         }
       >
-        <FormFieldWithTip
-          label="Current Password"
-          value={passwordData.currentPassword}
-          onChangeText={text => setPasswordData({ ...passwordData, currentPassword: text })}
-          placeholder="Enter current password"
-          secureTextEntry={!showPassword}
-          required
-        />
+        {!isEditingOtherAdmin && (
+          <FormFieldWithTip
+            label="Current Password"
+            value={passwordData.currentPassword}
+            onChangeText={text => { setPasswordData({ ...passwordData, currentPassword: text }); setPasswordFieldErrors(prev => ({ ...prev, currentPassword: undefined as any })); }}
+            placeholder="Enter current password"
+            secureTextEntry={!showPassword}
+            required
+            error={passwordFieldErrors.currentPassword}
+          />
+        )}
 
         <FormFieldWithTip
           label="New Password"
           value={passwordData.newPassword}
-          onChangeText={text => setPasswordData({ ...passwordData, newPassword: text })}
+          onChangeText={text => { setPasswordData({ ...passwordData, newPassword: text }); setPasswordFieldErrors(prev => ({ ...prev, newPassword: undefined as any })); }}
           placeholder="Enter new password"
           secureTextEntry={!showPassword}
-          tooltip="Minimum 8 characters"
+          tooltip="Minimum 6 characters"
           required
+          error={passwordFieldErrors.newPassword}
         />
 
         <FormFieldWithTip
           label="Confirm New Password"
           value={passwordData.confirmPassword}
-          onChangeText={text => setPasswordData({ ...passwordData, confirmPassword: text })}
+          onChangeText={text => { setPasswordData({ ...passwordData, confirmPassword: text }); setPasswordFieldErrors(prev => ({ ...prev, confirmPassword: undefined as any })); }}
           placeholder="Re-enter new password"
           secureTextEntry={!showPassword}
           required
+          error={passwordFieldErrors.confirmPassword}
         />
 
         <Pressable

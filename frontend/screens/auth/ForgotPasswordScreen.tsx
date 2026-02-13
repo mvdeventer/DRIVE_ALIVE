@@ -23,18 +23,22 @@ export default function ForgotPasswordScreen() {
   const [loading, setLoading] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
+  const [fieldError, setFieldError] = useState('');
 
   const handleSubmit = async () => {
     if (!email.trim()) {
+      setFieldError('Email address is required');
       setErrorMessage('Please enter your email address');
       setTimeout(() => setErrorMessage(''), 3000);
       return;
     }
     if (!email.includes('@')) {
+      setFieldError('Please enter a valid email address');
       setErrorMessage('Please enter a valid email address');
       setTimeout(() => setErrorMessage(''), 3000);
       return;
     }
+    setFieldError('');
 
     try {
       setLoading(true);
@@ -79,11 +83,12 @@ export default function ForgotPasswordScreen() {
           label="Email Address"
           placeholder="your.email@example.com"
           value={email}
-          onChangeText={setEmail}
+          onChangeText={(text) => { setEmail(text); setFieldError(''); }}
           keyboardType="email-address"
           autoCapitalize="none"
           autoCorrect={false}
           editable={!loading}
+          error={fieldError}
         />
 
         <Button

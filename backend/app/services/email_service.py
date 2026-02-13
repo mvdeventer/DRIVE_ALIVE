@@ -607,6 +607,172 @@ You can also verify from the admin dashboard.
             logger.error("Failed to send instructor verification email to %s: %s", admin_email, e)
             return False
 
+    def send_booking_notification_email(
+        self,
+        to_email: str,
+        user_name: str,
+        subject: str,
+        action_type: str,
+        lesson_date: str,
+        instructor_name: str,
+        student_name: str,
+        credit_info: str,
+        booking_reference: str,
+        is_instructor_initiated: bool = False,
+        is_recipient_instructor: bool = False,
+        new_lesson_date: str = None,
+        pickup_address: str = None,
+    ) -> bool:
+        """
+        Send booking cancellation or reschedule notification email.
+
+        Args:
+            to_email: Recipient email address
+            user_name: Recipient's first name
+            subject: Email subject line
+            action_type: 'cancelled' or 'rescheduled'
+            lesson_date: Original lesson date string
+            instructor_name: Instructor's first name
+            student_name: Student's first name
+            credit_info: Credit amount string e.g. 'R150.00 (100%)'
+            booking_reference: Booking reference code
+            is_instructor_initiated: Whether the instructor initiated the action
+            is_recipient_instructor: Whether the recipient is the instructor
+            new_lesson_date: New lesson date (for reschedule only)
+            pickup_address: Pickup address (for reschedule only)
+        """
+        if not self.smtp_username or not self.smtp_password:
+            logger.warning(
+                "SMTP not configured. Booking notification email not sent to %s",
+                to_email,
+            )
+            return False
+
+        try:
+            action_emoji = "❌" if action_type == "cancelled" else "📅"
+            action_verb = "Cancelled" if action_type == "cancelled" else "Rescheduled"
+
+            if is_recipient_instructor:
+                intro_text = (
+                    f"You have {action_type} the lesson with {student_name} "
+                    f"on {lesson_date}."
+                )
+                credit_text = (
+                    f"The student has been notified and received full credit "
+                    f"({credit_info}) for a future booking."
+                )
+            else:
+                intro_text = (
+                    f"Your instructor {instructor_name} has {action_type} "
+                    f"your lesson on {lesson_date}."
+                )
+                credit_text = (
+                    f"Full credit of {credit_info} has been issued to your account. "
+                    f"This credit will be applied when you book and pay for your "
+                    f"next lesson."
+                )
+
+            new_booking_section = ""
+            if action_type == "rescheduled" and new_lesson_date:
+                pickup_text = (
+                    f"<p><strong>Pickup:</strong> {pickup_address}</p>"
+                    if pickup_address else ""
+                )
+                new_booking_section = f"""
+            <div style="background-color: #d4edda; padding: 15px; border-radius: 5px;
+                        margin: 15px 0;">
+                <h3 style="margin-top: 0;">📅 New Lesson Details</h3>
+                <p><strong>Date:</strong> {new_lesson_date}</p>
+                {pickup_text}
+                <p><strong>Reference:</strong> {booking_reference}</p>
+                <p>No additional payment is required.</p>
+            </div>"""
+
+            html_body = f"""
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
+        .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
+        .header {{ background-color: #007bff; color: white; padding: 20px;
+                   text-align: center; }}
+        .content {{ background-color: #f9f9f9; padding: 20px; }}
+        .footer {{ text-align: center; padding: 20px; font-size: 12px;
+                   color: #666; }}
+        .credit-box {{ background-color: #fff3cd; padding: 15px;
+                       border-radius: 5px; margin: 15px 0; }}
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🚗 RoadReady</h1>
+        </div>
+        <div class="content">
+            <h2>{action_emoji} Lesson {action_verb}</h2>
+            <p>Hello {user_name},</p>
+            <p>{intro_text}</p>
+            <div class="credit-box">
+                <strong>💰 Credit Information:</strong>
+                <p>{credit_text}</p>
+            </div>
+            {new_booking_section}
+            <p><strong>Booking Reference:</strong> {booking_reference}</p>
+        </div>
+        <div class="footer">
+            <p>RoadReady - Your Trusted Driving School Platform</p>
+            <p>This is an automated email. Please do not reply.</p>
+        </div>
+    </div>
+</body>
+</html>
+            """
+
+            plain_body = (
+                f"RoadReady - Lesson {action_verb}\n\n"
+                f"Hello {user_name},\n\n"
+                f"{intro_text}\n\n"
+                f"Credit: {credit_text}\n\n"
+            )
+            if action_type == "rescheduled" and new_lesson_date:
+                plain_body += (
+                    f"New Lesson: {new_lesson_date}\n"
+                    f"Pickup: {pickup_address or 'N/A'}\n"
+                    f"No additional payment required.\n\n"
+                )
+            plain_body += (
+                f"Reference: {booking_reference}\n\n"
+                f"---\nRoadReady - Your Trusted Driving School Platform"
+            )
+
+            msg = MIMEMultipart("alternative")
+            msg["Subject"] = f"RoadReady - {subject}"
+            msg["From"] = self.from_email
+            msg["To"] = to_email
+
+            part1 = MIMEText(plain_body, "plain")
+            part2 = MIMEText(html_body, "html")
+            msg.attach(part1)
+            msg.attach(part2)
+
+            with smtplib.SMTP(self.smtp_server, self.smtp_port) as server:
+                server.starttls()
+                server.login(self.smtp_username, self.smtp_password)
+                server.send_message(msg)
+
+            logger.info(
+                "Booking %s email sent to %s", action_type, to_email
+            )
+            return True
+
+        except Exception as e:
+            logger.error(
+                "Failed to send booking %s email to %s: %s",
+                action_type, to_email, e,
+            )
+            return False
+
 
 # Global email service instance
 email_service = EmailService()

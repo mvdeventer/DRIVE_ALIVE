@@ -167,7 +167,10 @@ You can also verify from the admin dashboard.
             return False, "This verification link has already been used"
         
         # Check if expired
-        if datetime.now(timezone.utc) > verification_token.expires_at:
+        expires_at = verification_token.expires_at
+        if expires_at.tzinfo is None:
+            expires_at = expires_at.replace(tzinfo=timezone.utc)
+        if datetime.now(timezone.utc) > expires_at:
             return False, "This verification link has expired"
         
         # Mark as used

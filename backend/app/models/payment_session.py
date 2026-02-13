@@ -55,6 +55,11 @@ class PaymentSession(Base):
     # Status
     status = Column(SQLEnum(PaymentSessionStatus), default=PaymentSessionStatus.PENDING)
 
+    # Reschedule tracking
+    reschedule_booking_id = Column(
+        Integer, nullable=True
+    )  # Original booking ID being rescheduled
+
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     completed_at = Column(DateTime(timezone=True), nullable=True)

@@ -51,13 +51,7 @@ web-build/
 .env.local
 .env.development
 .env.production
-.env.*.local
 config/.env
-backend/.env
-backend/.env.local
-frontend/.env
-frontend/.env.local
-**/.env
 
 # IDE
 .vscode/
@@ -102,12 +96,6 @@ firebase-service-account.json
 tmp/
 temp/
 *.tmp
-
-# Application runtime files
-backend/.backend.pid
-frontend/.frontend.pid
-backend/backups/
-backend/backups/*.json
 
 # Coverage
 coverage/

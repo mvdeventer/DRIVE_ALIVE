@@ -5,7 +5,7 @@ Students pay R10 booking fee BEFORE lessons are created
 
 import json
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Annotated
 
 import stripe
@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session
 from ..config import settings
 from ..database import get_db
 from ..models.booking import Booking, BookingStatus, PaymentStatus
+from ..models.booking_credit import BookingCredit, CreditStatus
 from ..models.payment_session import PaymentSession, PaymentSessionStatus
 from ..models.user import Instructor, Student, User, UserRole
 from ..routes.auth import get_current_user, get_active_role
@@ -79,6 +80,33 @@ async def initiate_payment(
     booking_fee = instructor_booking_fee * bookings_count
     total_amount = total_lesson_amount + booking_fee
 
+    # Check for available credits from previous cancellations/reschedules
+    # Include PENDING credits (from cancellations) — they activate on payment
+    available_credits = (
+        db.query(BookingCredit)
+        .filter(
+            BookingCredit.student_id == student.id,
+            BookingCredit.status.in_([CreditStatus.AVAILABLE, CreditStatus.PENDING]),
+        )
+        .order_by(BookingCredit.created_at.asc())
+        .all()
+    )
+
+    credit_applied = 0.0
+    credits_to_apply = []
+    remaining_amount = total_amount
+
+    for credit in available_credits:
+        if remaining_amount <= 0:
+            break
+        apply_amount = min(credit.credit_amount, remaining_amount)
+        credit_applied += apply_amount
+        remaining_amount -= apply_amount
+        credits_to_apply.append((credit, apply_amount))
+
+    # Ensure we don't go below zero
+    final_amount = max(remaining_amount, 0.0)
+
     # Create payment session
     payment_session_id = f"PS{uuid.uuid4().hex[:12].upper()}"
     payment_session = PaymentSession(
@@ -88,9 +116,10 @@ async def initiate_payment(
         bookings_data=json.dumps(request.bookings),
         amount=total_lesson_amount,
         booking_fee=booking_fee,
-        total_amount=total_amount,
+        total_amount=final_amount,
         payment_gateway="stripe",
         status=PaymentSessionStatus.PENDING,
+        reschedule_booking_id=request.reschedule_booking_id,
     )
 
     db.add(payment_session)
@@ -106,6 +135,22 @@ async def initiate_payment(
     item_description = (
         f"Booking fee (R{booking_fee:.2f}) + Lessons (R{total_lesson_amount:.2f})"
     )
+    if credit_applied > 0:
+        item_description += f" - Credit (R{credit_applied:.2f})"
+
+    # Store credit IDs in payment session metadata for application after payment
+    credit_ids = [c.id for c, _ in credits_to_apply]
+    if credit_ids:
+        # Store in bookings_data as additional metadata
+        bookings_data_with_credits = {
+            "bookings": request.bookings,
+            "credit_ids": credit_ids,
+            "credit_amounts": {str(c.id): amt for c, amt in credits_to_apply},
+            "total_credit_applied": credit_applied,
+        }
+        payment_session.bookings_data = json.dumps(bookings_data_with_credits)
+        db.commit()
+        db.refresh(payment_session)
 
     # Print to console for debugging
     print("\n" + "=" * 80)
@@ -117,7 +162,10 @@ async def initiate_payment(
     print(f"Student: {current_user.first_name} {current_user.last_name}")
     print(f"Instructor ID: {instructor.id}")
     print(f"Bookings Count: {bookings_count}")
-    print(f"Total Amount: R{total_amount:.2f}")
+    print(f"Original Amount: R{total_amount:.2f}")
+    if credit_applied > 0:
+        print(f"Credit Applied: R{credit_applied:.2f}")
+    print(f"Final Amount: R{final_amount:.2f}")
     print("=" * 80)
 
     # MOCK PAYMENT MODE (for development without Stripe keys)
@@ -137,8 +185,10 @@ async def initiate_payment(
             payment_session_id=payment_session_id,
             amount=total_lesson_amount,
             booking_fee=booking_fee,
-            total_amount=total_amount,
+            total_amount=final_amount,
             bookings_count=bookings_count,
+            credit_applied=credit_applied,
+            original_total=total_amount,
         )
 
     # REAL STRIPE MODE
@@ -151,7 +201,7 @@ async def initiate_payment(
                 {
                     "price_data": {
                         "currency": "zar",
-                        "unit_amount": int(total_amount * 100),  # Convert to cents
+                        "unit_amount": int(final_amount * 100),  # Convert to cents
                         "product_data": {
                             "name": item_name,
                             "description": item_description,
@@ -183,8 +233,10 @@ async def initiate_payment(
             payment_session_id=payment_session_id,
             amount=total_lesson_amount,
             booking_fee=booking_fee,
-            total_amount=total_amount,
+            total_amount=final_amount,
             bookings_count=bookings_count,
+            credit_applied=credit_applied,
+            original_total=total_amount,
         )
 
     except stripe.error.StripeError as e:
@@ -269,10 +321,23 @@ async def stripe_webhook(request: Request, db: Session = Depends(get_db)):
             return {"status": "error", "message": "User or instructor not found"}
 
         # Create bookings from payment session
-        bookings_data = json.loads(payment_session.bookings_data)
+        bookings_data_raw = json.loads(payment_session.bookings_data)
+
+        # Handle new format with credits metadata
+        if isinstance(bookings_data_raw, dict) and "bookings" in bookings_data_raw:
+            bookings_list = bookings_data_raw["bookings"]
+            credit_ids = bookings_data_raw.get("credit_ids", [])
+            credit_amounts_map = bookings_data_raw.get("credit_amounts", {})
+            total_credit = bookings_data_raw.get("total_credit_applied", 0.0)
+        else:
+            bookings_list = bookings_data_raw
+            credit_ids = []
+            credit_amounts_map = {}
+            total_credit = 0.0
+
         created_bookings = []
 
-        for booking_data in bookings_data:
+        for booking_data in bookings_list:
             lesson_date_str = booking_data.get("lesson_date")
             duration_minutes = booking_data.get("duration_minutes", 60)
             pickup_address = booking_data.get("pickup_address", "")
@@ -312,6 +377,116 @@ async def stripe_webhook(request: Request, db: Session = Depends(get_db)):
             created_bookings.append(booking)
 
         db.commit()
+
+        # Apply credits after bookings are created (handles both AVAILABLE and PENDING credits)
+        if credit_ids and created_bookings:
+            for credit_id_str, apply_amt_str in credit_amounts_map.items():
+                credit_record = (
+                    db.query(BookingCredit)
+                    .filter(BookingCredit.id == int(credit_id_str))
+                    .first()
+                )
+                if credit_record and credit_record.status in [
+                    CreditStatus.AVAILABLE,
+                    CreditStatus.PENDING,
+                ]:
+                    apply_amount = float(apply_amt_str)
+                    remainder = credit_record.credit_amount - apply_amount
+
+                    if remainder > 0.01:
+                        # Partially used — reduce and keep remainder
+                        credit_record.credit_amount = apply_amount
+                        credit_record.status = CreditStatus.APPLIED
+                        credit_record.applied_booking_id = created_bookings[0].id
+                        credit_record.applied_at = datetime.now(timezone.utc)
+
+                        remainder_credit = BookingCredit(
+                            student_id=credit_record.student_id,
+                            original_booking_id=credit_record.original_booking_id,
+                            credit_amount=remainder,
+                            original_amount=credit_record.original_amount,
+                            status=CreditStatus.AVAILABLE,
+                            reason="remainder",
+                            notes=(
+                                f"Remaining R{remainder:.2f} from credit #{credit_record.id}. "
+                                f"R{apply_amount:.2f} was applied to booking."
+                            ),
+                        )
+                        db.add(remainder_credit)
+                    else:
+                        # Fully consumed
+                        credit_record.status = CreditStatus.APPLIED
+                        credit_record.applied_booking_id = created_bookings[0].id
+                        credit_record.applied_at = datetime.now(timezone.utc)
+
+            # Store credit amount on the first booking
+            if total_credit > 0:
+                created_bookings[0].credit_applied_amount = total_credit
+
+            db.commit()
+
+        # Handle reschedule: mark old booking as RESCHEDULED
+        if payment_session.reschedule_booking_id and created_bookings:
+            old_booking = (
+                db.query(Booking)
+                .filter(Booking.id == payment_session.reschedule_booking_id)
+                .first()
+            )
+            if old_booking and old_booking.status in [
+                BookingStatus.PENDING,
+                BookingStatus.CONFIRMED,
+            ]:
+                old_booking.status = BookingStatus.RESCHEDULED
+                old_booking.rescheduled_to_booking_id = created_bookings[0].id
+                if old_booking.rebooking_count == 0:
+                    old_booking.original_lesson_date = old_booking.lesson_date
+                old_booking.rebooking_count += 1
+
+                # Calculate credit and 24h penalty
+                if old_booking.payment_status == PaymentStatus.PAID:
+                    total_paid = old_booking.amount + (old_booking.booking_fee or 0.0)
+                    south_africa_offset = timedelta(hours=2)
+                    if old_booking.lesson_date.tzinfo is None:
+                        lesson_date_utc = (
+                            old_booking.lesson_date.replace(tzinfo=timezone.utc)
+                            - south_africa_offset
+                        )
+                    else:
+                        lesson_date_utc = old_booking.lesson_date
+                    hours_until = (
+                        lesson_date_utc - datetime.now(timezone.utc)
+                    ).total_seconds() / 3600
+
+                    if hours_until < 24:
+                        credit_percentage = 0.5
+                        credit_label = "50%"
+                        old_booking.cancellation_fee = total_paid * 0.5
+                    else:
+                        credit_percentage = 0.9
+                        credit_label = "90%"
+                        old_booking.cancellation_fee = 0.0
+
+                    credit_amount = total_paid * credit_percentage
+                    credit = BookingCredit(
+                        student_id=old_booking.student_id,
+                        original_booking_id=old_booking.id,
+                        credit_amount=credit_amount,
+                        original_amount=total_paid,
+                        status=CreditStatus.AVAILABLE,
+                        reason="reschedule",
+                        notes=(
+                            f"{credit_label} credit (R{credit_amount:.2f}) from rescheduled booking "
+                            f"{old_booking.booking_reference}. "
+                            f"{hours_until:.0f} hours before lesson."
+                        ),
+                    )
+                    db.add(credit)
+
+                db.commit()
+                logger.info(
+                    f"📅 Reschedule: Booking {old_booking.booking_reference} → "
+                    f"{created_bookings[0].booking_reference}"
+                )
 
         # Send WhatsApp confirmations
         from datetime import timedelta as td
@@ -472,7 +647,32 @@ async def complete_mock_payment(
         raise HTTPException(status_code=404, detail="Student profile not found")
 
     # Parse the bookings_data JSON
-    bookings_data = payment_session.bookings_list
+    bookings_data_raw = payment_session.bookings_list
+
+    # Handle new format with credits metadata
+    if isinstance(bookings_data_raw, dict) and "bookings" in bookings_data_raw:
+        bookings_data = bookings_data_raw["bookings"]
+        mock_credit_ids = bookings_data_raw.get("credit_ids", [])
+        mock_credit_amounts = bookings_data_raw.get("credit_amounts", {})
+        mock_total_credit = bookings_data_raw.get("total_credit_applied", 0.0)
+    elif isinstance(bookings_data_raw, list):
+        bookings_data = bookings_data_raw
+        mock_credit_ids = []
+        mock_credit_amounts = {}
+        mock_total_credit = 0.0
+    else:
+        # Try raw JSON parse as fallback
+        raw = json.loads(payment_session.bookings_data)
+        if isinstance(raw, dict) and "bookings" in raw:
+            bookings_data = raw["bookings"]
+            mock_credit_ids = raw.get("credit_ids", [])
+            mock_credit_amounts = raw.get("credit_amounts", {})
+            mock_total_credit = raw.get("total_credit_applied", 0.0)
+        else:
+            bookings_data = raw if isinstance(raw, list) else []
+            mock_credit_ids = []
+            mock_credit_amounts = {}
+            mock_total_credit = 0.0
 
     created_bookings = []
     for booking_data in bookings_data:
@@ -506,6 +706,136 @@ async def complete_mock_payment(
         created_bookings.append(booking_data)
 
     db.commit()
+
+    # Apply credits after mock bookings are created
+    if mock_credit_ids:
+        created_booking_objs_for_credit = (
+            db.query(Booking)
+            .filter(Booking.student_id == student.id)
+            .filter(Booking.payment_id == payment_session.gateway_transaction_id)
+            .all()
+        )
+        if created_booking_objs_for_credit:
+            for credit_id_str, apply_amt_str in mock_credit_amounts.items():
+                credit_record = (
+                    db.query(BookingCredit)
+                    .filter(BookingCredit.id == int(credit_id_str))
+                    .first()
+                )
+                if credit_record and credit_record.status in [
+                    CreditStatus.AVAILABLE,
+                    CreditStatus.PENDING,
+                ]:
+                    apply_amount = float(apply_amt_str)
+                    remainder = credit_record.credit_amount - apply_amount
+
+                    if remainder > 0.01:
+                        # Partially used — reduce this credit and keep remainder
+                        credit_record.credit_amount = apply_amount
+                        credit_record.status = CreditStatus.APPLIED
+                        credit_record.applied_booking_id = (
+                            created_booking_objs_for_credit[0].id
+                        )
+                        credit_record.applied_at = datetime.now(timezone.utc)
+
+                        # Create new credit for the unused remainder
+                        remainder_credit = BookingCredit(
+                            student_id=credit_record.student_id,
+                            original_booking_id=credit_record.original_booking_id,
+                            credit_amount=remainder,
+                            original_amount=credit_record.original_amount,
+                            status=CreditStatus.AVAILABLE,
+                            reason="remainder",
+                            notes=(
+                                f"Remaining R{remainder:.2f} from credit #{credit_record.id}. "
+                                f"R{apply_amount:.2f} was applied to booking."
+                            ),
+                        )
+                        db.add(remainder_credit)
+                    else:
+                        # Fully consumed — mark as applied
+                        credit_record.status = CreditStatus.APPLIED
+                        credit_record.applied_booking_id = (
+                            created_booking_objs_for_credit[0].id
+                        )
+                        credit_record.applied_at = datetime.now(timezone.utc)
+
+            if mock_total_credit > 0:
+                created_booking_objs_for_credit[0].credit_applied_amount = (
+                    mock_total_credit
+                )
+
+            db.commit()
+
+    # Handle reschedule: mark old booking as RESCHEDULED (mock flow)
+    if payment_session.reschedule_booking_id:
+        # Get the newly created booking objects to link
+        new_booking_objs = (
+            db.query(Booking)
+            .filter(Booking.student_id == student.id)
+            .filter(Booking.payment_id == payment_session.gateway_transaction_id)
+            .all()
+        )
+        old_booking = (
+            db.query(Booking)
+            .filter(Booking.id == payment_session.reschedule_booking_id)
+            .first()
+        )
+        if old_booking and old_booking.status in [
+            BookingStatus.PENDING,
+            BookingStatus.CONFIRMED,
+        ] and new_booking_objs:
+            old_booking.status = BookingStatus.RESCHEDULED
+            old_booking.rescheduled_to_booking_id = new_booking_objs[0].id
+            if old_booking.rebooking_count == 0:
+                old_booking.original_lesson_date = old_booking.lesson_date
+            old_booking.rebooking_count += 1
+
+            # Calculate credit and 24h penalty
+            if old_booking.payment_status == PaymentStatus.PAID:
+                total_paid = old_booking.amount + (old_booking.booking_fee or 0.0)
+                south_africa_offset = timedelta(hours=2)
+                if old_booking.lesson_date.tzinfo is None:
+                    lesson_date_utc = (
+                        old_booking.lesson_date.replace(tzinfo=timezone.utc)
+                        - south_africa_offset
+                    )
+                else:
+                    lesson_date_utc = old_booking.lesson_date
+                hours_until = (
+                    lesson_date_utc - datetime.now(timezone.utc)
+                ).total_seconds() / 3600
+
+                if hours_until < 24:
+                    credit_percentage = 0.5
+                    credit_label = "50%"
+                    old_booking.cancellation_fee = total_paid * 0.5
+                else:
+                    credit_percentage = 0.9
+                    credit_label = "90%"
+                    old_booking.cancellation_fee = 0.0
+
+                credit_amount = total_paid * credit_percentage
+                credit = BookingCredit(
+                    student_id=old_booking.student_id,
+                    original_booking_id=old_booking.id,
+                    credit_amount=credit_amount,
+                    original_amount=total_paid,
+                    status=CreditStatus.AVAILABLE,
+                    reason="reschedule",
+                    notes=(
+                        f"{credit_label} credit (R{credit_amount:.2f}) from rescheduled booking "
+                        f"{old_booking.booking_reference}. "
+                        f"{hours_until:.0f} hours before lesson."
+                    ),
+                )
+                db.add(credit)
+
+            db.commit()
+            logger.info(
+                f"📅 Reschedule (mock): Booking {old_booking.booking_reference} → "
+                f"{new_booking_objs[0].booking_reference}"
+            )
 
     # Send WhatsApp confirmations
     try:

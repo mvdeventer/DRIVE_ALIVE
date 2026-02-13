@@ -65,6 +65,11 @@ export default function CalendarPicker({
     const selectedDate = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), day);
     if (isDateDisabled(day)) return;
     setTempSelectedDate(selectedDate);
+    // When showActions is false, the parent manages confirm/cancel buttons,
+    // so notify the parent immediately on each day tap
+    if (!showActions) {
+      onChange(selectedDate);
+    }
   };
 
   const handleConfirm = () => {

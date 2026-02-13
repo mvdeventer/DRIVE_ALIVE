@@ -92,14 +92,17 @@ def send_test_daily_summary():
     bookings_summary = """1. 08:00 AM - John Smith (Ref: TEST-001)
    📍 45 Oak Avenue, Rosebank, Johannesburg
    📞 +27 71 234 5678
+   🗺️ https://www.google.com/maps/search/?api=1&query=45+Oak+Avenue,+Rosebank,+Johannesburg
 
 2. 10:30 AM - Sarah Johnson (Ref: TEST-002)
    📍 123 Main Street, Sandton, Johannesburg
    📞 +27 82 345 6789
+   🗺️ https://www.google.com/maps/search/?api=1&query=123+Main+Street,+Sandton,+Johannesburg
 
 3. 01:00 PM - Michael Brown (Ref: TEST-003)
    📍 78 Pine Road, Fourways, Johannesburg
-   📞 +27 83 456 7890"""
+   📞 +27 83 456 7890
+   🗺️ https://www.google.com/maps/search/?api=1&query=78+Pine+Road,+Fourways,+Johannesburg"""
 
     success = whatsapp_service.send_daily_summary(
         instructor_name="Test Instructor",

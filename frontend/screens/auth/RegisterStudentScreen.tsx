@@ -58,6 +58,7 @@ export default function RegisterStudentScreen({ navigation }: any) {
   } | null>(null);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const scrollViewRef = useRef<ScrollView>(null);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
   const handleRegister = async () => {
     // Validation
@@ -134,6 +135,9 @@ export default function RegisterStudentScreen({ navigation }: any) {
       value = formatPhoneNumber(value);
     }
     setFormData({ ...formData, [field]: value });
+    if (fieldErrors[field]) {
+      setFieldErrors(prev => ({ ...prev, [field]: undefined as any }));
+    }
   };
 
   const addressValue = [
@@ -197,6 +201,7 @@ export default function RegisterStudentScreen({ navigation }: any) {
           returnKeyType="next"
           onSubmitEditing={() => lastNameRef.current?.focus()}
           blurOnSubmit={false}
+          error={fieldErrors.first_name}
         />
         <FormFieldWithTip
           ref={lastNameRef}
@@ -208,6 +213,7 @@ export default function RegisterStudentScreen({ navigation }: any) {
           returnKeyType="next"
           onSubmitEditing={() => emailRef.current?.focus()}
           blurOnSubmit={false}
+          error={fieldErrors.last_name}
         />
         <FormFieldWithTip
           ref={emailRef}
@@ -221,6 +227,7 @@ export default function RegisterStudentScreen({ navigation }: any) {
           returnKeyType="next"
           onSubmitEditing={() => phoneRef.current?.focus()}
           blurOnSubmit={false}
+          error={fieldErrors.email}
         />
         <FormFieldWithTip
           ref={phoneRef}
@@ -320,6 +327,7 @@ export default function RegisterStudentScreen({ navigation }: any) {
           returnKeyType="next"
           onSubmitEditing={() => confirmPasswordRef.current?.focus()}
           blurOnSubmit={false}
+          error={fieldErrors.password}
         />
         <FormFieldWithTip
           key={`confirm-password-${showPassword}`}
@@ -332,6 +340,7 @@ export default function RegisterStudentScreen({ navigation }: any) {
           tip="Re-enter your password to confirm"
           returnKeyType="done"
           onSubmitEditing={handleRegister}
+          error={fieldErrors.confirmPassword}
         />
         <Pressable
           style={styles.showPasswordButton}

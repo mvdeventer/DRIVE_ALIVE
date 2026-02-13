@@ -251,14 +251,31 @@ class ApiService {
     return response.data;
   }
 
+  async rescheduleBooking(bookingId: number, newDatetime: string) {
+    const response = await this.api.patch(`/bookings/${bookingId}/reschedule`, {
+      new_datetime: newDatetime,
+    });
+    return response.data;
+  }
+
   async confirmBooking(bookingId: number) {
     const response = await this.api.post(API_CONFIG.ENDPOINTS.BOOKING_CONFIRM(bookingId));
     return response.data;
   }
 
   // Payment methods
-  async initiatePayment(data: { instructor_id: number; bookings: any[]; payment_gateway: string }) {
+  async initiatePayment(data: { instructor_id: number; bookings: any[]; payment_gateway: string; reschedule_booking_id?: number }) {
     const response = await this.api.post('/payments/initiate', data);
+    return response.data;
+  }
+
+  async getAvailableCredits() {
+    const response = await this.api.get('/bookings/credits/available');
+    return response.data;
+  }
+
+  async getCreditHistory() {
+    const response = await this.api.get('/bookings/credits/history');
     return response.data;
   }
 
@@ -366,7 +383,7 @@ class ApiService {
 
   async updateUserDetails(
     userId: number,
-    data: { first_name?: string; last_name?: string; phone?: string }
+    data: { first_name?: string; last_name?: string; phone?: string; email?: string; id_number?: string; address?: string }
   ) {
     const response = await this.api.put(`/admin/users/${userId}`, null, { params: data });
     return response.data;

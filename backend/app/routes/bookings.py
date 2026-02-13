@@ -26,6 +26,7 @@ from ..schemas.booking import (
     BookingReschedule,
     BookingResponse,
     BookingUpdate,
+    InstructorRescheduleRequest,
     ReviewCreate,
     ReviewResponse,
 )
@@ -50,9 +51,7 @@ def auto_update_past_bookings(db: Session):
     updated_count = 0
     for booking in past_pending:
         # Convert lesson_date to UTC for comparison
-        from datetime import timedelta as td
-
-        south_africa_offset = td(hours=2)
+        south_africa_offset = timedelta(hours=2)
 
         if booking.lesson_date.tzinfo is None:
             lesson_date_utc = (
@@ -62,7 +61,7 @@ def auto_update_past_bookings(db: Session):
             lesson_date_utc = booking.lesson_date
 
         # Add duration to get lesson end time
-        lesson_end_utc = lesson_date_utc + td(minutes=booking.duration_minutes)
+        lesson_end_utc = lesson_date_utc + timedelta(minutes=booking.duration_minutes)
 
         # If lesson has ended, mark as completed
         if lesson_end_utc < now:
@@ -325,10 +324,8 @@ async def create_booking(
         )
 
         # Check if lesson is today (same date in SAST timezone UTC+2)
-        from datetime import timedelta as td
-
-        sast_now = now + td(hours=2)  # Convert UTC to SAST
-        lesson_date_sast = lesson_date_utc + td(hours=2)  # Convert lesson time to SAST
+        sast_now = now + timedelta(hours=2)  # Convert UTC to SAST
+        lesson_date_sast = lesson_date_utc + timedelta(hours=2)  # Convert lesson time to SAST
 
         if sast_now.date() == lesson_date_sast.date():
             logger.info(
@@ -868,7 +865,7 @@ async def get_my_bookings(
                 "duration_minutes": booking.duration_minutes,
                 "status": booking.status.value,
                 "payment_status": booking.payment_status.value,
-                "total_price": float(booking.amount),
+                "total_price": float(booking.amount) + float(booking.booking_fee or 0.0),
                 "pickup_location": booking.pickup_address,
                 "student_notes": booking.student_notes,
             }
@@ -958,6 +955,264 @@ async def update_booking(
     return BookingResponse.from_orm(booking)
 
 
+@router.post("/{booking_id}/instructor-reschedule")
+async def instructor_reschedule_booking(
+    booking_id: int,
+    reschedule_data: InstructorRescheduleRequest,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Session = Depends(get_db),
+):
+    """
+    Instructor-initiated reschedule: cancels old booking with 24h policy,
+    creates a new booking for the same student at the new time,
+    and applies the credit from the old booking automatically.
+
+    The student does not need to pay again — the credit covers the new booking.
+    """
+    from ..models.booking_credit import BookingCredit, CreditStatus
+    from ..routes.availability import is_time_slot_available
+    import pytz
+
+    # Verify current user is an instructor
+    active_role = get_active_role(current_user)
+    instructor = (
+        db.query(Instructor).filter(Instructor.user_id == current_user.id).first()
+    )
+    if not instructor and active_role != UserRole.ADMIN.value:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only instructors or admins can use this endpoint",
+        )
+
+    # Get the old booking
+    old_booking = db.query(Booking).filter(Booking.id == booking_id).first()
+    if not old_booking:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Booking not found"
+        )
+
+    # Verify instructor owns this booking
+    if instructor and old_booking.instructor_id != instructor.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not authorized to reschedule this booking",
+        )
+
+    # Can only reschedule pending or confirmed bookings
+    if old_booking.status not in [BookingStatus.PENDING, BookingStatus.CONFIRMED]:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Can only reschedule pending or confirmed bookings",
+        )
+
+    # Parse new lesson date
+    try:
+        new_lesson_date = datetime.fromisoformat(reschedule_data.new_lesson_date)
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid date format. Use ISO format: YYYY-MM-DDTHH:MM:SS",
+        )
+
+    # Validate new slot is available
+    sast_tz = pytz.timezone("Africa/Johannesburg")
+    slot_start = new_lesson_date
+    if slot_start.tzinfo is None:
+        slot_start = sast_tz.localize(slot_start)
+    slot_end = slot_start + timedelta(minutes=reschedule_data.duration_minutes)
+
+    if not is_time_slot_available(
+        old_booking.instructor_id, slot_start, slot_end, db
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="The selected time slot is not available",
+        )
+
+    # Calculate 24h policy
+    south_africa_offset = timedelta(hours=2)
+    if old_booking.lesson_date.tzinfo is None:
+        lesson_date_utc = (
+            old_booking.lesson_date.replace(tzinfo=timezone.utc)
+            - south_africa_offset
+        )
+    else:
+        lesson_date_utc = old_booking.lesson_date
+
+    hours_until_lesson = (
+        lesson_date_utc - datetime.now(timezone.utc)
+    ).total_seconds() / 3600
+
+    # Mark old booking as RESCHEDULED
+    old_booking.status = BookingStatus.RESCHEDULED
+    if old_booking.rebooking_count == 0:
+        old_booking.original_lesson_date = old_booking.lesson_date
+    old_booking.rebooking_count += 1
+
+    # Calculate credit — instructor reschedule = 100% credit, no penalty
+    credit_amount = 0.0
+    total_paid = old_booking.amount + (old_booking.booking_fee or 0.0)
+
+    if old_booking.payment_status == PaymentStatus.PAID:
+        credit_percentage = 1.0
+        credit_label = "100%"
+        old_booking.cancellation_fee = 0.0
+
+        credit_amount = total_paid * credit_percentage
+
+        # Create credit record
+        credit = BookingCredit(
+            student_id=old_booking.student_id,
+            original_booking_id=old_booking.id,
+            credit_amount=credit_amount,
+            original_amount=total_paid,
+            status=CreditStatus.APPLIED,
+            reason="reschedule",
+            notes=(
+                f"{credit_label} credit (R{credit_amount:.2f}) from instructor-rescheduled "
+                f"booking {old_booking.booking_reference}. "
+                f"No penalty — instructor initiated. Auto-applied to new booking."
+            ),
+        )
+        db.add(credit)
+
+    # Create the new booking for the same student
+    new_booking = Booking(
+        booking_reference=f"BK{uuid.uuid4().hex[:8].upper()}",
+        student_id=old_booking.student_id,
+        instructor_id=old_booking.instructor_id,
+        lesson_date=new_lesson_date,
+        duration_minutes=reschedule_data.duration_minutes,
+        lesson_type="standard",
+        pickup_address=reschedule_data.pickup_address,
+        pickup_latitude=reschedule_data.pickup_latitude,
+        pickup_longitude=reschedule_data.pickup_longitude,
+        amount=old_booking.amount,
+        booking_fee=old_booking.booking_fee,
+        status=BookingStatus.PENDING,
+        payment_status=PaymentStatus.PAID,
+        payment_method=old_booking.payment_method or "credit",
+        payment_id=old_booking.payment_id,
+        credit_applied_amount=credit_amount,
+    )
+    db.add(new_booking)
+    db.flush()  # Get the new booking ID
+
+    # Link old booking to new booking
+    old_booking.rescheduled_to_booking_id = new_booking.id
+
+    # Mark the credit as applied to this booking
+    if credit_amount > 0:
+        credit.applied_booking_id = new_booking.id
+        credit.applied_at = datetime.now(timezone.utc)
+
+    db.commit()
+    db.refresh(new_booking)
+
+    # Send notifications to both student and instructor
+    try:
+        student = db.query(Student).filter(
+            Student.id == old_booking.student_id
+        ).first()
+        student_user = db.query(User).filter(
+            User.id == student.user_id
+        ).first() if student else None
+        instructor_user = db.query(User).filter(
+            User.id == current_user.id
+        ).first()
+        credit_info = (
+            f"R{credit_amount:.2f} (100%)" if credit_amount > 0 else "N/A"
+        )
+        old_date_str = old_booking.lesson_date.strftime("%a %d %b at %H:%M")
+        new_date_str = new_lesson_date.strftime("%a %d %b at %H:%M")
+
+        # WhatsApp to student
+        if student_user and student_user.phone:
+            whatsapp_service.send_message(
+                phone=student_user.phone,
+                message=(
+                    f"📅 *Lesson Rescheduled by Instructor*\n\n"
+                    f"Your instructor {instructor_user.first_name} has rescheduled "
+                    f"your lesson.\n\n"
+                    f"*Old:* {old_date_str}\n"
+                    f"*New:* {new_date_str}\n\n"
+                    f"Pickup: {reschedule_data.pickup_address}\n\n"
+                    f"💰 No penalty applied — full credit ({credit_info}) "
+                    f"has been transferred to your new booking. "
+                    f"No additional payment is required.\n\n"
+                    f"Ref: {new_booking.booking_reference}"
+                ),
+            )
+
+        # WhatsApp to instructor (confirmation)
+        if instructor_user and instructor_user.phone:
+            whatsapp_service.send_message(
+                phone=instructor_user.phone,
+                message=(
+                    f"✅ *Lesson Rescheduled*\n\n"
+                    f"You have rescheduled the lesson with "
+                    f"{student_user.first_name if student_user else 'student'}.\n\n"
+                    f"*Old:* {old_date_str}\n"
+                    f"*New:* {new_date_str}\n\n"
+                    f"The student has been notified. Full credit applied — "
+                    f"no additional payment required from the student.\n\n"
+                    f"Ref: {new_booking.booking_reference}"
+                ),
+            )
+
+        # Email to student
+        if student_user and student_user.email:
+            from ..services.email_service import email_service
+            email_service.send_booking_notification_email(
+                to_email=student_user.email,
+                user_name=student_user.first_name,
+                subject="Lesson Rescheduled by Instructor",
+                action_type="rescheduled",
+                lesson_date=old_date_str,
+                instructor_name=instructor_user.first_name if instructor_user else "Instructor",
+                student_name=student_user.first_name,
+                credit_info=credit_info,
+                booking_reference=new_booking.booking_reference,
+                is_instructor_initiated=True,
+                new_lesson_date=new_date_str,
+                pickup_address=reschedule_data.pickup_address,
+            )
+
+        # Email to instructor
+        if instructor_user and instructor_user.email:
+            from ..services.email_service import email_service
+            email_service.send_booking_notification_email(
+                to_email=instructor_user.email,
+                user_name=instructor_user.first_name,
+                subject="Lesson Reschedule Confirmation",
+                action_type="rescheduled",
+                lesson_date=old_date_str,
+                instructor_name=instructor_user.first_name,
+                student_name=student_user.first_name if student_user else "Student",
+                credit_info=credit_info,
+                booking_reference=new_booking.booking_reference,
+                is_instructor_initiated=True,
+                is_recipient_instructor=True,
+                new_lesson_date=new_date_str,
+                pickup_address=reschedule_data.pickup_address,
+            )
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).warning(
+            f"Failed to send reschedule notification: {e}"
+        )
+
+    return {
+        "message": "Booking rescheduled successfully",
+        "old_booking_id": old_booking.id,
+        "old_booking_reference": old_booking.booking_reference,
+        "new_booking": BookingResponse.from_orm(new_booking),
+        "credit_applied": credit_amount,
+        "penalty_applied": 0.0,
+        "hours_until_lesson": round(hours_until_lesson, 1),
+    }
+
+
 @router.post("/{booking_id}/cancel", response_model=BookingResponse)
 async def cancel_booking(
     booking_id: int,
@@ -966,8 +1221,20 @@ async def cancel_booking(
     db: Session = Depends(get_db),
 ):
     """
-    Cancel a booking
+    Cancel a booking.
+
+    Cancellation Policy:
+    - Students and instructors can cancel directly. If cancelled within 24 hours
+      of the lesson, a 50% cancellation fee applies and the student receives a
+      50% credit toward their next booking.
+    - If cancelled 24+ hours before the lesson, the student receives a 90% credit.
+    - Admins can cancel without restrictions — student receives 100% credit.
+    - Credits are automatically applied to the next booking payment.
+    - Credits are tracked in the booking_credits table.
+    - An optional replacement_booking_id can link the cancellation to a new booking.
     """
+    from ..models.booking_credit import BookingCredit, CreditStatus
+
     booking = db.query(Booking).filter(Booking.id == booking_id).first()
 
     if not booking:
@@ -976,6 +1243,7 @@ async def cancel_booking(
         )
 
     # Verify user has permission to cancel
+    active_role = get_active_role(current_user)
     student = db.query(Student).filter(Student.user_id == current_user.id).first()
     instructor = (
         db.query(Instructor).filter(Instructor.user_id == current_user.id).first()
@@ -1001,17 +1269,48 @@ async def cancel_booking(
             detail="Can only cancel pending or confirmed bookings",
         )
 
-    # Update booking
+    # If a replacement booking is provided, validate it
+    if cancel_data.replacement_booking_id:
+        replacement = (
+            db.query(Booking)
+            .filter(Booking.id == cancel_data.replacement_booking_id)
+            .first()
+        )
+
+        if not replacement:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Replacement booking not found",
+            )
+
+        if replacement.student_id != booking.student_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Replacement booking must belong to the same student",
+            )
+
+        if replacement.status in [BookingStatus.CANCELLED]:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Replacement booking cannot be a cancelled booking",
+            )
+
+        if replacement.id == booking.id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Replacement booking cannot be the same as the cancelled booking",
+            )
+
+        booking.replacement_booking_id = replacement.id
+
+    # Update booking status
     booking.status = BookingStatus.CANCELLED
     booking.cancelled_at = datetime.now(timezone.utc)
     booking.cancelled_by = cancelled_by
     booking.cancellation_reason = cancel_data.cancellation_reason
 
-    # Calculate refund based on cancellation policy (simplified)
-    # Note: lesson_date is stored as naive datetime in local time (SAST = UTC+2)
-    from datetime import timedelta as td
-
-    south_africa_offset = td(hours=2)
+    # Calculate credit based on cancellation timing
+    south_africa_offset = timedelta(hours=2)
 
     if booking.lesson_date.tzinfo is None:
         lesson_date_utc = (
@@ -1023,12 +1322,137 @@ async def cancel_booking(
     hours_until_lesson = (
         lesson_date_utc - datetime.now(timezone.utc)
     ).total_seconds() / 3600
-    if hours_until_lesson >= 24:
-        booking.refund_amount = booking.amount  # Full refund
-    elif hours_until_lesson >= 12:
-        booking.refund_amount = booking.amount * 0.5  # 50% refund
-    else:
-        booking.refund_amount = 0  # No refund
+
+    # Credit policy:
+    # Admin or instructor cancels = 100% credit (no penalty)
+    # Student cancels 24+ hours before lesson = 90% credit
+    # Student cancels <24 hours before lesson = 50% credit
+    credit_amount = 0.0
+    if booking.payment_status == PaymentStatus.PAID:
+        # Total paid = lesson fee + booking/admin fee
+        total_paid = booking.amount + (booking.booking_fee or 0.0)
+
+        if cancelled_by in ("admin", "instructor"):
+            credit_percentage = 1.0
+            credit_label = "100%"
+            booking.cancellation_fee = 0.0
+        elif hours_until_lesson >= 24:
+            credit_percentage = 0.9
+            credit_label = "90%"
+        else:
+            credit_percentage = 0.5
+            credit_label = "50%"
+
+        credit_amount = total_paid * credit_percentage
+        booking.refund_amount = 0  # No cash refund — credit only
+
+        # Create credit record as PENDING — credit only activates when
+        # the student makes and pays for a new booking
+        credit = BookingCredit(
+            student_id=booking.student_id,
+            original_booking_id=booking.id,
+            credit_amount=credit_amount,
+            original_amount=total_paid,
+            status=CreditStatus.PENDING,
+            reason="cancellation",
+            notes=(
+                f"{credit_label} credit (R{credit_amount:.2f}) from cancelled booking "
+                f"{booking.booking_reference}. "
+                f"Cancelled by {cancelled_by}, {hours_until_lesson:.0f} hours before lesson. "
+                f"Credit pending until next booking payment."
+            ),
+        )
+        db.add(credit)
+
+    # Send notifications for instructor-initiated cancellations
+    if cancelled_by == "instructor":
+        try:
+            student = db.query(Student).filter(
+                Student.id == booking.student_id
+            ).first()
+            student_user = (
+                db.query(User).filter(User.id == student.user_id).first()
+                if student else None
+            )
+            instructor_obj = db.query(Instructor).filter(
+                Instructor.id == booking.instructor_id
+            ).first()
+            instructor_user = (
+                db.query(User).filter(User.id == instructor_obj.user_id).first()
+                if instructor_obj else None
+            )
+            lesson_date_str = booking.lesson_date.strftime("%a %d %b at %H:%M")
+            credit_info = (
+                f"R{credit_amount:.2f} (100%)" if credit_amount > 0 else "N/A"
+            )
+
+            # WhatsApp to student
+            if student_user and student_user.phone:
+                whatsapp_service.send_message(
+                    phone=student_user.phone,
+                    message=(
+                        f"❌ *Lesson Cancelled by Instructor*\n\n"
+                        f"Your instructor {current_user.first_name} has cancelled "
+                        f"your lesson on {lesson_date_str}.\n\n"
+                        f"💰 Full credit of {credit_info} has been issued to your "
+                        f"account. This credit will be applied when you book and "
+                        f"pay for your next lesson.\n\n"
+                        f"Ref: {booking.booking_reference}"
+                    ),
+                )
+
+            # WhatsApp to instructor (confirmation)
+            if instructor_user and instructor_user.phone:
+                whatsapp_service.send_message(
+                    phone=instructor_user.phone,
+                    message=(
+                        f"✅ *Lesson Cancelled*\n\n"
+                        f"You have cancelled the lesson with "
+                        f"{student_user.first_name if student_user else 'student'} "
+                        f"on {lesson_date_str}.\n\n"
+                        f"The student has been notified and received full credit "
+                        f"({credit_info}) for a future booking.\n\n"
+                        f"Ref: {booking.booking_reference}"
+                    ),
+                )
+
+            # Email to student
+            if student_user and student_user.email:
+                from ..services.email_service import email_service
+                email_service.send_booking_notification_email(
+                    to_email=student_user.email,
+                    user_name=student_user.first_name,
+                    subject="Lesson Cancelled by Instructor",
+                    action_type="cancelled",
+                    lesson_date=lesson_date_str,
+                    instructor_name=current_user.first_name,
+                    student_name=student_user.first_name,
+                    credit_info=credit_info,
+                    booking_reference=booking.booking_reference,
+                    is_instructor_initiated=True,
+                )
+
+            # Email to instructor
+            if instructor_user and instructor_user.email:
+                from ..services.email_service import email_service
+                email_service.send_booking_notification_email(
+                    to_email=instructor_user.email,
+                    user_name=instructor_user.first_name,
+                    subject="Lesson Cancellation Confirmation",
+                    action_type="cancelled",
+                    lesson_date=lesson_date_str,
+                    instructor_name=instructor_user.first_name,
+                    student_name=student_user.first_name if student_user else "Student",
+                    credit_info=credit_info,
+                    booking_reference=booking.booking_reference,
+                    is_instructor_initiated=True,
+                    is_recipient_instructor=True,
+                )
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).warning(
+                f"Failed to send cancel notifications: {e}"
+            )
 
     db.commit()
     db.refresh(booking)
@@ -1125,9 +1549,7 @@ async def create_review(
     # Allow reviews if status is COMPLETED or if lesson time has passed
     # Note: lesson_date is stored as naive datetime in local time (SAST = UTC+2)
     # Convert to UTC+2 for proper comparison
-    from datetime import timedelta as td
-
-    south_africa_offset = td(hours=2)  # SAST is UTC+2
+    south_africa_offset = timedelta(hours=2)  # SAST is UTC+2
 
     if booking.lesson_date.tzinfo is None:
         # Naive datetime - treat as SAST (UTC+2)
@@ -1210,37 +1632,43 @@ async def reschedule_booking(
     db: Session = Depends(get_db),
 ):
     """
-    Reschedule a booking to a new date/time (instructor only)
-    """
-    # Verify user is an instructor
-    active_role = get_active_role(current_user)
-    if active_role != UserRole.INSTRUCTOR.value:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only instructors can reschedule bookings",
-        )
+    Reschedule a booking to a new date/time.
 
-    # Get instructor profile
+    Students and instructors can reschedule their own bookings.
+    Admins can reschedule any booking.
+
+    Penalty policy (same as cancellation):
+    - 24+ hours before lesson = no penalty
+    - <24 hours before lesson = 50% penalty fee
+    """
+    # Verify user role and find the booking
+    active_role = get_active_role(current_user)
+
     instructor = (
         db.query(Instructor).filter(Instructor.user_id == current_user.id).first()
     )
-    if not instructor:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Instructor profile not found"
-        )
+    student = (
+        db.query(Student).filter(Student.user_id == current_user.id).first()
+    )
 
-    # Get the booking
     booking = db.query(Booking).filter(Booking.id == booking_id).first()
     if not booking:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Booking not found"
         )
 
-    # Verify the booking belongs to this instructor
-    if booking.instructor_id != instructor.id:
+    # Determine who is rescheduling and verify permission
+    rescheduled_by = None
+    if instructor and booking.instructor_id == instructor.id:
+        rescheduled_by = "instructor"
+    elif student and booking.student_id == student.id:
+        rescheduled_by = "student"
+    elif active_role == UserRole.ADMIN.value:
+        rescheduled_by = "admin"
+    else:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="You can only reschedule your own bookings",
+            detail="Not authorized to reschedule this booking",
         )
 
     # Verify booking status allows rescheduling
@@ -1275,11 +1703,11 @@ async def reschedule_booking(
     lesson_date = new_lesson_datetime.date()
     lesson_time = new_lesson_datetime.time()
 
-    # Check for time off
+    # Check for instructor time off
     time_off = (
         db.query(TimeOffException)
         .filter(
-            TimeOffException.instructor_id == instructor.id,
+            TimeOffException.instructor_id == booking.instructor_id,
             TimeOffException.start_date <= lesson_date,
             TimeOffException.end_date >= lesson_date,
         )
@@ -1294,19 +1722,19 @@ async def reschedule_booking(
             ):
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=f"You have time off at this time. Reason: {time_off_entry.reason or 'Time off'}",
+                    detail=f"Instructor has time off at this time. Reason: {time_off_entry.reason or 'Time off'}",
                 )
         else:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"You have time off on {lesson_date}. Reason: {time_off_entry.reason or 'Time off'}",
+                detail=f"Instructor has time off on {lesson_date}. Reason: {time_off_entry.reason or 'Time off'}",
             )
 
     # Check for conflicts with existing bookings (exclude current booking)
     existing_bookings = (
         db.query(Booking)
         .filter(
-            Booking.instructor_id == instructor.id,
+            Booking.instructor_id == booking.instructor_id,
             Booking.id != booking_id,  # Exclude current booking
             Booking.status.in_([BookingStatus.PENDING, BookingStatus.CONFIRMED]),
         )
@@ -1373,7 +1801,7 @@ async def reschedule_booking(
     schedule = (
         db.query(InstructorSchedule)
         .filter(
-            InstructorSchedule.instructor_id == instructor.id,
+            InstructorSchedule.instructor_id == booking.instructor_id,
             InstructorSchedule.day_of_week == day_name,
             InstructorSchedule.is_active == True,
         )
@@ -1383,25 +1811,23 @@ async def reschedule_booking(
     if not schedule:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"You are not available on {day_name.lower()}s",
+            detail=f"Instructor is not available on {day_name.lower()}s",
         )
 
     # Validate time is within schedule
     if lesson_time < schedule.start_time or lesson_end.time() > schedule.end_time:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Time {lesson_time} is outside your working hours ({schedule.start_time} - {schedule.end_time})",
+            detail=f"Time {lesson_time} is outside instructor's working hours ({schedule.start_time} - {schedule.end_time})",
         )
 
     # Store original lesson date if this is the first reschedule
     if booking.rebooking_count == 0:
         booking.original_lesson_date = booking.lesson_date
 
-    # Check if rescheduling within 6 hours of lesson time
+    # Check if rescheduling within 24 hours of lesson time
     # Note: lesson_date is stored as naive datetime in local time (SAST = UTC+2)
-    from datetime import timedelta as td
-
-    south_africa_offset = td(hours=2)
+    south_africa_offset = timedelta(hours=2)
 
     if booking.lesson_date.tzinfo is None:
         lesson_date_utc = (
@@ -1413,9 +1839,15 @@ async def reschedule_booking(
     hours_until_lesson = (
         lesson_date_utc - datetime.now(timezone.utc)
     ).total_seconds() / 3600
-    if hours_until_lesson < 6:
-        # Apply 50% cancellation fee
-        booking.cancellation_fee = booking.amount * 0.5
+
+    # Reschedule penalty policy (same 24h rules as cancellation):
+    # 24+ hours before lesson = no penalty
+    # <24 hours before lesson = 50% penalty fee applied (on total paid incl. booking fee)
+    cancellation_fee = 0.0
+    if booking.payment_status == PaymentStatus.PAID and hours_until_lesson < 24:
+        total_paid = booking.amount + (booking.booking_fee or 0.0)
+        cancellation_fee = total_paid * 0.5
+        booking.cancellation_fee = cancellation_fee
 
     # Increment rebooking count
     booking.rebooking_count += 1
@@ -1426,10 +1858,183 @@ async def reschedule_booking(
     db.refresh(booking)
 
     return {
-        "message": "Booking rescheduled successfully",
+        "message": (
+            f"Booking rescheduled successfully"
+            + (f". A 50% penalty fee of R{cancellation_fee:.2f} was applied for rescheduling within 24 hours."
+               if cancellation_fee > 0 else "")
+        ),
         "booking_id": booking.id,
         "booking_reference": booking.booking_reference,
+        "rescheduled_by": rescheduled_by,
         "rebooking_count": booking.rebooking_count,
-        "cancellation_fee": booking.cancellation_fee,
+        "cancellation_fee": cancellation_fee,
         "new_datetime": new_lesson_datetime.isoformat(),
+    }
+
+
+@router.get("/credits/available")
+async def get_available_credits(
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Session = Depends(get_db),
+):
+    """
+    Get available credits for the current student.
+    Credits are earned when cancelling or rescheduling 24+ hours before a lesson.
+    """
+    from ..models.booking_credit import BookingCredit, CreditStatus
+
+    student = db.query(Student).filter(Student.user_id == current_user.id).first()
+    if not student:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Student profile not found"
+        )
+
+    credit_records = (
+        db.query(BookingCredit)
+        .filter(
+            BookingCredit.student_id == student.id,
+            BookingCredit.status.in_([CreditStatus.AVAILABLE, CreditStatus.PENDING]),
+        )
+        .all()
+    )
+
+    total_available = sum(
+        c.credit_amount for c in credit_records if c.status == CreditStatus.AVAILABLE
+    )
+    total_pending = sum(
+        c.credit_amount for c in credit_records if c.status == CreditStatus.PENDING
+    )
+
+    return {
+        "total_available_credit": total_available,
+        "total_pending_credit": total_pending,
+        "credits": [
+            {
+                "id": c.id,
+                "credit_amount": c.credit_amount,
+                "original_amount": c.original_amount,
+                "reason": c.reason,
+                "status": c.status.value if c.status else None,
+                "notes": c.notes,
+                "created_at": c.created_at.isoformat() if c.created_at else None,
+                "original_booking_id": c.original_booking_id,
+            }
+            for c in credit_records
+        ],
+    }
+
+
+@router.get("/credits/history")
+async def get_credit_history(
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Session = Depends(get_db),
+):
+    """
+    Get full credit history for the current student (available + applied + expired).
+    """
+    from ..models.booking_credit import BookingCredit
+
+    student = db.query(Student).filter(Student.user_id == current_user.id).first()
+    if not student:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Student profile not found"
+        )
+
+    credit_records = (
+        db.query(BookingCredit)
+        .filter(BookingCredit.student_id == student.id)
+        .order_by(BookingCredit.created_at.desc())
+        .all()
+    )
+
+    return {
+        "credits": [
+            {
+                "id": c.id,
+                "credit_amount": c.credit_amount,
+                "original_amount": c.original_amount,
+                "status": c.status.value if c.status else None,
+                "reason": c.reason,
+                "notes": c.notes,
+                "created_at": c.created_at.isoformat() if c.created_at else None,
+                "applied_at": c.applied_at.isoformat() if c.applied_at else None,
+                "original_booking_id": c.original_booking_id,
+                "applied_booking_id": c.applied_booking_id,
+            }
+            for c in credit_records
+        ],
+    }
+
+
+@router.post("/credits/reset/{user_id}")
+async def reset_student_credits(
+    user_id: int,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Session = Depends(get_db),
+):
+    """
+    Admin-only: Reset (expire) all pending and available credits for a student.
+    """
+    from ..models.booking_credit import BookingCredit, CreditStatus
+
+    active_role = get_active_role(current_user)
+    if active_role != UserRole.ADMIN.value:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only admins can reset credits",
+        )
+
+    # Find the student by user_id
+    target_user = db.query(User).filter(User.id == user_id).first()
+    if not target_user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
+        )
+
+    student = db.query(Student).filter(Student.user_id == user_id).first()
+    if not student:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="User does not have a student profile",
+        )
+
+    # Find all pending/available credits
+    credits_to_reset = (
+        db.query(BookingCredit)
+        .filter(
+            BookingCredit.student_id == student.id,
+            BookingCredit.status.in_([
+                CreditStatus.PENDING, CreditStatus.AVAILABLE
+            ]),
+        )
+        .all()
+    )
+
+    if not credits_to_reset:
+        return {
+            "message": "No active credits found for this student",
+            "credits_reset": 0,
+            "total_amount_reset": 0.0,
+        }
+
+    total_reset = 0.0
+    for credit in credits_to_reset:
+        total_reset += credit.credit_amount
+        credit.status = CreditStatus.EXPIRED
+        credit.notes = (
+            (credit.notes or "")
+            + f" | Reset by admin {current_user.first_name} on "
+            + datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+        )
+
+    db.commit()
+
+    return {
+        "message": (
+            f"Reset {len(credits_to_reset)} credit(s) totalling "
+            f"R{total_reset:.2f} for {target_user.first_name} "
+            f"{target_user.last_name}"
+        ),
+        "credits_reset": len(credits_to_reset),
+        "total_amount_reset": total_reset,
     }

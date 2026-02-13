@@ -134,6 +134,11 @@ export default function AdminManageInstructorScheduleScreen({ route, navigation:
   const handleSaveAndContinue = async () => {
     setShowDiscardModal(false);
     await handleSaveSchedule();
+    // After save, dispatch pending navigation
+    if (pendingNavigation) {
+      navInstance.dispatch(pendingNavigation);
+      setPendingNavigation(null);
+    }
   };
 
   const loadAvailability = async () => {

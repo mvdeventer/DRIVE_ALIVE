@@ -5,7 +5,7 @@ Authentication routes
 from datetime import datetime, timezone
 from typing import Annotated, Optional
 
-from fastapi import APIRouter, Cookie, Depends, Form, HTTPException, Request, Response, status
+from fastapi import APIRouter, Cookie, Depends, Form, HTTPException, Query, Request, Response, status
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 from sqlalchemy.sql import func
@@ -448,6 +448,40 @@ async def get_inactivity_timeout(db: Session = Depends(get_db)):
         return {"inactivity_timeout_minutes": 15}
 
 
+@router.get("/check-unique")
+async def check_unique_fields(
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Session = Depends(get_db),
+    email: Optional[str] = Query(None),
+    id_number: Optional[str] = Query(None),
+    exclude_user_id: Optional[int] = Query(None),
+):
+    """
+    Check if email or id_number are already in use by another user.
+    exclude_user_id: the user being edited (so their own values don't conflict).
+    """
+    exclude_id = exclude_user_id or current_user.id
+    conflicts = {}
+
+    if email:
+        existing = db.query(User).filter(
+            User.email == email,
+            User.id != exclude_id
+        ).first()
+        if existing:
+            conflicts["email"] = "This email is already in use by another user"
+
+    if id_number:
+        existing = db.query(User).filter(
+            User.id_number == id_number,
+            User.id != exclude_id
+        ).first()
+        if existing:
+            conflicts["id_number"] = "This ID number is already in use by another user"
+
+    return {"conflicts": conflicts, "is_unique": len(conflicts) == 0}
+
+
 @router.put("/me", response_model=UserResponse)
 async def update_user_profile(
     user_update: UserUpdate,
@@ -457,15 +491,39 @@ async def update_user_profile(
     """
     Update current user's basic profile information
     """
-    # Update only provided fields
+    # Check email uniqueness if email is being changed
+    if user_update.email is not None and user_update.email != current_user.email:
+        existing = db.query(User).filter(
+            User.email == user_update.email,
+            User.id != current_user.id
+        ).first()
+        if existing:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="This email is already in use by another user",
+            )
+        current_user.email = user_update.email
+
+    # Check id_number uniqueness if being changed
+    if user_update.id_number is not None and user_update.id_number != current_user.id_number:
+        existing = db.query(User).filter(
+            User.id_number == user_update.id_number,
+            User.id != current_user.id
+        ).first()
+        if existing:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="This ID number is already in use by another user",
+            )
+        current_user.id_number = user_update.id_number
+
+    # Update other provided fields
     if user_update.first_name is not None:
         current_user.first_name = user_update.first_name
     if user_update.last_name is not None:
         current_user.last_name = user_update.last_name
     if user_update.phone is not None:
         current_user.phone = user_update.phone
-    if user_update.id_number is not None:
-        current_user.id_number = user_update.id_number
     if user_update.address is not None:
         current_user.address = user_update.address
 

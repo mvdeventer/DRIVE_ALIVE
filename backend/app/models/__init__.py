@@ -9,6 +9,7 @@ from .availability import (
     TimeOffException,
 )
 from .booking import Booking, BookingStatus, PaymentStatus, Review
+from .booking_credit import BookingCredit, CreditStatus
 from .password_reset import PasswordResetToken
 from .payment import Transaction, TransactionStatus, TransactionType
 from .payment_session import PaymentSession, PaymentSessionStatus
@@ -38,4 +39,6 @@ __all__ = [
     "TimeOffException",
     "CustomAvailability",
     "DayOfWeek",
+    "BookingCredit",
+    "CreditStatus",
 ]

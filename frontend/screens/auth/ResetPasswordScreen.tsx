@@ -27,6 +27,7 @@ export default function ResetPasswordScreen() {
   const [successMessage, setSuccessMessage] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [fieldErrors, setFieldErrors] = useState<{ newPassword?: string; confirmPassword?: string }>({});
 
   useEffect(() => {
     // Get token from URL parameters (web) or navigation params (mobile)
@@ -45,6 +46,8 @@ export default function ResetPasswordScreen() {
 
   const handleSubmit = async () => {
     // Validate inputs
+    const errors: { newPassword?: string; confirmPassword?: string } = {};
+
     if (!token) {
       setErrorMessage('Invalid reset link. Please request a new password reset.');
       setTimeout(() => setErrorMessage(''), 5000);
@@ -52,22 +55,24 @@ export default function ResetPasswordScreen() {
     }
 
     if (!newPassword.trim()) {
-      setErrorMessage('Please enter a new password');
-      setTimeout(() => setErrorMessage(''), 3000);
-      return;
+      errors.newPassword = 'Password is required';
+    } else if (newPassword.length < 6) {
+      errors.newPassword = 'Password must be at least 6 characters';
     }
 
-    if (newPassword.length < 6) {
-      setErrorMessage('Password must be at least 6 characters long');
-      setTimeout(() => setErrorMessage(''), 3000);
-      return;
+    if (!confirmPassword.trim()) {
+      errors.confirmPassword = 'Please confirm your password';
+    } else if (newPassword !== confirmPassword) {
+      errors.confirmPassword = 'Passwords do not match';
     }
 
-    if (newPassword !== confirmPassword) {
-      setErrorMessage('Passwords do not match');
+    if (Object.keys(errors).length > 0) {
+      setFieldErrors(errors);
+      setErrorMessage(Object.values(errors)[0] || 'Please fix the errors below');
       setTimeout(() => setErrorMessage(''), 3000);
       return;
     }
+    setFieldErrors({});
 
     try {
       setLoading(true);
@@ -120,11 +125,12 @@ export default function ResetPasswordScreen() {
             label="New Password"
             placeholder="Enter new password (min. 6 characters)"
             value={newPassword}
-            onChangeText={setNewPassword}
+            onChangeText={(text) => { setNewPassword(text); setFieldErrors(prev => ({ ...prev, newPassword: undefined })); }}
             secureTextEntry={!showPassword}
             autoCapitalize="none"
             autoCorrect={false}
             editable={!loading}
+            error={fieldErrors.newPassword}
           />
           <Pressable
             onPress={() => setShowPassword(!showPassword)}
@@ -141,11 +147,12 @@ export default function ResetPasswordScreen() {
           label="Confirm Password"
           placeholder="Re-enter new password"
           value={confirmPassword}
-          onChangeText={setConfirmPassword}
+          onChangeText={(text) => { setConfirmPassword(text); setFieldErrors(prev => ({ ...prev, confirmPassword: undefined })); }}
           secureTextEntry={!showPassword}
           autoCapitalize="none"
           autoCorrect={false}
           editable={!loading}
+          error={fieldErrors.confirmPassword}
         />
 
         <Button

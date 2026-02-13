@@ -5,6 +5,7 @@ import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   Platform,
   Pressable,
   RefreshControl,
@@ -15,21 +16,12 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import CalendarPicker from '../../components/CalendarPicker';
 import InlineMessage from '../../components/InlineMessage';
 import WebNavigationHeader from '../../components/WebNavigationHeader';
 import { Badge, Button, Card, Input, ThemedModal } from '../../components/ui';
 import { useTheme } from '../../theme/ThemeContext';
 import ApiService from '../../services/api';
 import { showMessage } from '../../utils/messageConfig';
-
-// Lazy load DateTimePicker for native platforms
-const getDateTimePicker = () => {
-  if (Platform.OS !== 'web') {
-    return require('@react-native-community/datetimepicker').default;
-  }
-  return null;
-};
 
 interface Booking {
   id: number;
@@ -82,19 +74,6 @@ export default function InstructorHomeScreen() {
   const [selectedStudent, setSelectedStudent] = useState<Booking | null>(null);
   const [showEditProfileModal, setShowEditProfileModal] = useState(false);
   const [showAvailabilityModal, setShowAvailabilityModal] = useState(false);
-  const [showRescheduleModal, setShowRescheduleModal] = useState(false);
-  const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
-  const [rescheduleDate, setRescheduleDate] = useState('');
-  const [rescheduleTime, setRescheduleTime] = useState('');
-  const [availableSlots, setAvailableSlots] = useState<string[]>([]);
-  const [showDatePicker, setShowDatePicker] = useState(false);
-  const [showCalendarModal, setShowCalendarModal] = useState(false);
-  const [instructorTimeOff, setInstructorTimeOff] = useState<Date[]>([]);
-  const [tempDate, setTempDate] = useState(new Date());
-  const [rescheduleMessage, setRescheduleMessage] = useState<{
-    type: 'success' | 'error';
-    text: string;
-  } | null>(null);
   const [editFormData, setEditFormData] = useState({
     hourly_rate: '',
     is_available: true,
@@ -150,9 +129,10 @@ export default function InstructorHomeScreen() {
       const now = new Date();
       const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
-      // Sort all bookings by scheduled_time in ascending order (exclude cancelled bookings)
+      // Sort all bookings by scheduled_time in ascending order (exclude cancelled and rescheduled bookings)
+      const excludedStatuses = ['cancelled', 'rescheduled'];
       const sortedBookings = (bookingsRes.data || [])
-        .filter((b: Booking) => b.status.toLowerCase() !== 'cancelled')
+        .filter((b: Booking) => !excludedStatuses.includes(b.status.toLowerCase()))
         .sort(
           (a: Booking, b: Booking) =>
             new Date(a.scheduled_time).getTime() - new Date(b.scheduled_time).getTime()
@@ -203,11 +183,8 @@ export default function InstructorHomeScreen() {
       setUniqueStudents(students);
     } catch (error: any) {
       console.error('Error loading dashboard:', error);
-      if (Platform.OS === 'web') {
-        alert('Failed to load dashboard data');
-      } else {
-        Alert.alert('Error', 'Failed to load dashboard data');
-      }
+      scrollViewRef.current?.scrollTo({ y: 0, animated: true });
+      showMessage(setErrorMessage, error.response?.data?.detail || 'Failed to load dashboard data', SCREEN_NAME, 'loadDashboard', 'error');
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -272,13 +249,10 @@ export default function InstructorHomeScreen() {
       } else {
         Alert.alert('Success', 'Profile updated successfully!');
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error updating profile:', error);
-      if (Platform.OS === 'web') {
-        alert('Failed to update profile');
-      } else {
-        Alert.alert('Error', 'Failed to update profile');
-      }
+      scrollViewRef.current?.scrollTo({ y: 0, animated: true });
+      showMessage(setErrorMessage, error.response?.data?.detail || 'Failed to update profile', SCREEN_NAME, 'updateProfile', 'error');
     }
   };
 
@@ -348,11 +322,34 @@ export default function InstructorHomeScreen() {
       return;
     }
 
+    const lessonTime = new Date(lesson.scheduled_time);
+    const now = new Date();
+    const hoursUntilLesson = (lessonTime.getTime() - now.getTime()) / (1000 * 60 * 60);
+
+    // Check if lesson is in the past
+    if (hoursUntilLesson < 0) {
+      if (Platform.OS === 'web') {
+        alert('❌ Cannot delete a lesson that has already passed');
+      } else {
+        Alert.alert('Error', 'Cannot delete a lesson that has already passed');
+      }
+      return;
+    }
+
+    // Calculate cancellation credit (instructor = 100%, no penalty)
+    const isPaid = lesson.payment_status?.toLowerCase() === 'paid';
+    let feeMessage = '';
+
+    if (isPaid) {
+      const creditAmount = lesson.total_price;
+      feeMessage = `\n\n💰 Full credit of R${creditAmount.toFixed(2)} (100%) will be issued to the student. No penalty applies when the instructor cancels.\n\nThe credit will be applied when the student books and pays for their next lesson.`;
+    }
+
     const confirmMsg = `Delete this lesson?\n\nStudent: ${lesson.student_name}\nDate: ${formatDate(
       lesson.scheduled_time
     )} at ${formatTime(
       lesson.scheduled_time
-    )}\n\nThis will cancel the booking and remove it from your list.`;
+    )}${feeMessage}\n\nThis will cancel the booking${isPaid ? ' — the student will receive full credit for a future booking' : ''}.`;
 
     const confirmed = Platform.OS === 'web' ? window.confirm(confirmMsg) : false;
 
@@ -360,7 +357,7 @@ export default function InstructorHomeScreen() {
       Alert.alert('Delete Lesson', confirmMsg, [
         { text: 'Cancel', style: 'cancel' },
         {
-          text: 'Delete',
+          text: 'Yes, Delete',
           style: 'destructive',
           onPress: async () => {
             await performDeletion(lesson.id);
@@ -376,7 +373,7 @@ export default function InstructorHomeScreen() {
     try {
       // Cancel the booking via API
       await ApiService.post(`/bookings/${bookingId}/cancel`, {
-        cancellation_reason: 'Instructor deleted booking',
+        cancellation_reason: 'Instructor cancelled booking',
       });
 
       // Remove from local state immediately (optimistic update)
@@ -384,10 +381,13 @@ export default function InstructorHomeScreen() {
       setTodayLessons(prev => prev.filter(b => b.id !== bookingId));
 
       if (Platform.OS === 'web') {
-        alert('✅ Lesson deleted successfully');
+        alert('✅ Booking cancelled. The student has been notified and received full credit for a future booking.');
       } else {
-        Alert.alert('Success', 'Lesson deleted successfully');
+        Alert.alert('Success', 'Booking cancelled. The student has been notified and received full credit for a future booking.');
       }
+
+      // Reload dashboard data to reflect changes
+      loadDashboardData();
     } catch (error: any) {
       console.error('Error deleting lesson:', error);
       const errorMsg = error.response?.data?.detail || 'Failed to delete lesson';
@@ -413,157 +413,55 @@ export default function InstructorHomeScreen() {
     );
   };
 
-  const loadInstructorTimeOff = async () => {
-    if (!profile?.instructor_id) {
-      console.log('⚠️ No instructor_id available in profile:', profile);
-      return;
+  const handleOpenReschedule = async (booking: Booking) => {
+    const isPaid = booking.payment_status?.toLowerCase() === 'paid';
+    let policyMessage = '';
+    if (isPaid) {
+      policyMessage = `\n\n📋 Reschedule Policy: No penalty applies when the instructor reschedules. Full credit (R${booking.total_price.toFixed(2)}) will be applied to the new booking. The student will not need to pay again.`;
     }
-    try {
-      console.log('📅 Loading time-off for instructor:', profile.instructor_id);
-      const response = await ApiService.get(
-        `/availability/instructor/${profile.instructor_id}/time-off`
-      );
-      const timeOffDates: Date[] = [];
 
-      if (response.data && Array.isArray(response.data)) {
-        console.log('📅 Time-off periods received:', response.data);
-        response.data.forEach((period: any) => {
-          const start = new Date(period.start_date + 'T00:00:00');
-          const end = new Date(period.end_date + 'T00:00:00');
+    const confirmMsg = `Reschedule this lesson?\n\nStudent: ${booking.student_name}\nDate: ${formatDate(booking.scheduled_time)} at ${formatTime(booking.scheduled_time)}${policyMessage}\n\nYou will be taken to the booking screen to select a new date and time.`;
 
-          // Add all dates in the range
-          for (let date = new Date(start); date <= end; date.setDate(date.getDate() + 1)) {
-            timeOffDates.push(new Date(date));
+    const proceedWithReschedule = async () => {
+      try {
+        const instructorId = booking.instructor_id || profile?.instructor_id;
+        if (!instructorId) {
+          if (Platform.OS === 'web') {
+            alert('❌ Could not determine instructor details');
+          } else {
+            Alert.alert('Error', 'Could not determine instructor details');
           }
+          return;
+        }
+
+        const response = await ApiService.get(`/instructors/${instructorId}`);
+        const instructor = response.data;
+
+        (navigation as any).navigate('Booking', {
+          instructor,
+          rescheduleBookingId: booking.id,
+          reschedulePickupAddress: booking.pickup_location || '',
+          isInstructorReschedule: true,
         });
+      } catch (error: any) {
+        console.error('Error fetching instructor for reschedule:', error);
+        if (Platform.OS === 'web') {
+          alert('❌ Failed to load instructor details for reschedule');
+        } else {
+          Alert.alert('Error', 'Failed to load instructor details for reschedule');
+        }
       }
+    };
 
-      setInstructorTimeOff(timeOffDates);
-      console.log('📅 Instructor time-off dates loaded:', timeOffDates.length, 'dates');
-      console.log(
-        '📅 Time-off dates:',
-        timeOffDates.map(d => d.toISOString().split('T')[0])
-      );
-    } catch (error) {
-      console.error('Error loading instructor time-off:', error);
-    }
-  };
-
-  const openRescheduleModal = async (booking: Booking) => {
-    setSelectedBooking(booking);
-    setShowRescheduleModal(true);
-    loadInstructorTimeOff();
-    // Load available time slots for the current date
-    const currentDate = new Date(booking.scheduled_time);
-    // Use local date to avoid timezone shifts
-    const year = currentDate.getFullYear();
-    const month = String(currentDate.getMonth() + 1).padStart(2, '0');
-    const day = String(currentDate.getDate()).padStart(2, '0');
-    const dateStr = `${year}-${month}-${day}`;
-    setRescheduleDate(dateStr);
-    await loadAvailableSlots(dateStr);
-  };
-
-  const loadAvailableSlots = async (date: string) => {
-    if (!selectedBooking) return;
-    try {
-      // Get the instructor ID from the selected booking
-      const instructorId = selectedBooking.instructor_id || profile?.id;
-      if (!instructorId) {
-        console.error('No instructor ID available');
-        setAvailableSlots([]);
-        return;
+    if (Platform.OS === 'web') {
+      if (window.confirm(confirmMsg)) {
+        await proceedWithReschedule();
       }
-
-      const response = await ApiService.get(`/availability/instructor/${instructorId}/slots`, {
-        params: {
-          start_date: date,
-          end_date: date,
-          duration_minutes: selectedBooking.duration_minutes,
-        },
-      });
-
-      console.log('Available slots response:', response.data);
-
-      // Extract slots from the response
-      if (response.data.availability && response.data.availability.length > 0) {
-        const slots = response.data.availability[0].slots || [];
-        const now = new Date();
-        const selectedDate = new Date(date + 'T00:00:00');
-        const isToday = selectedDate.toDateString() === now.toDateString();
-
-        // Extract just the time portion (HH:MM) from start_time
-        const timeSlots = slots
-          .map((slot: any) => {
-            const startTime = new Date(slot.start_time);
-            return {
-              time: startTime.toLocaleTimeString('en-ZA', {
-                hour: '2-digit',
-                minute: '2-digit',
-                hour12: false,
-              }),
-              datetime: startTime,
-            };
-          })
-          .filter((slot: any) => {
-            // If it's today, only show slots that are in the future
-            if (isToday) {
-              return slot.datetime > now;
-            }
-            return true;
-          })
-          .map((slot: any) => slot.time);
-
-        setAvailableSlots(timeSlots);
-      } else {
-        setAvailableSlots([]);
-      }
-    } catch (error) {
-      console.error('Error loading time slots:', error);
-      setAvailableSlots([]);
-    }
-  };
-
-  const handleReschedule = async () => {
-    if (!selectedBooking || !rescheduleDate || !rescheduleTime) {
-      setRescheduleMessage({ type: 'error', text: 'Please select a date and time' });
-      setTimeout(() => setRescheduleMessage(null), 3000);
-      return;
-    }
-
-    // Validate that the new date/time is not in the past
-    const newDateTime = new Date(`${rescheduleDate}T${rescheduleTime}`);
-    const now = new Date();
-
-    if (newDateTime <= now) {
-      setRescheduleMessage({ type: 'error', text: 'Cannot reschedule to a past date/time' });
-      setTimeout(() => setRescheduleMessage(null), 3000);
-      return;
-    }
-
-    try {
-      const newDateTimeStr = `${rescheduleDate}T${rescheduleTime}:00`;
-      console.log('🔄 Attempting reschedule with datetime:', newDateTimeStr);
-      console.log('🔄 Booking ID:', selectedBooking.id);
-      await ApiService.patch(`/bookings/${selectedBooking.id}/reschedule`, {
-        new_datetime: newDateTimeStr,
-      });
-
-      setRescheduleMessage({ type: 'success', text: '✅ Booking rescheduled successfully!' });
-
-      setTimeout(() => {
-        setRescheduleMessage(null);
-        setShowRescheduleModal(false);
-        setSelectedBooking(null);
-        setRescheduleDate('');
-        setRescheduleTime('');
-        loadDashboardData();
-      }, 2000);
-    } catch (error: any) {
-      console.error('Error rescheduling booking:', error);
-      const message = error.response?.data?.detail || 'Failed to reschedule booking';
-      setRescheduleMessage({ type: 'error', text: message });
-      setTimeout(() => setRescheduleMessage(null), 3000);
+    } else {
+      Alert.alert('Reschedule Lesson', confirmMsg, [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Yes, Reschedule', onPress: () => proceedWithReschedule() },
+      ]);
     }
   };
 
@@ -872,9 +770,7 @@ export default function InstructorHomeScreen() {
                         <Text style={[styles.lessonPrice, { color: colors.success }]}>R{lesson.total_price.toFixed(2)}</Text>
                         <View style={styles.lessonActions}>
                           {lesson.status.toLowerCase() === 'pending' && (
-                            <Button variant="accent" size="sm" onPress={() => openRescheduleModal(lesson)}>
-                              🔄 Reschedule
-                            </Button>
+                            <Button variant="accent" size="sm" label="🔄 Reschedule" onPress={() => handleOpenReschedule(lesson)} />
                           )}
                           <Button variant="danger" size="sm" onPress={() => handleDeleteLesson(lesson)}>
                             🗑️ Delete
@@ -1064,142 +960,6 @@ export default function InstructorHomeScreen() {
           </View>
         </ThemedModal>
 
-        {/* Reschedule Modal */}
-        <ThemedModal
-          visible={showRescheduleModal}
-          onClose={() => setShowRescheduleModal(false)}
-          title="Reschedule Lesson"
-          size="md"
-          footer={
-            <View style={styles.modalButtons}>
-              <Button
-                variant="outline"
-                onPress={() => {
-                  setShowRescheduleModal(false);
-                  setSelectedBooking(null);
-                  setRescheduleDate('');
-                  setRescheduleTime('');
-                }}
-                style={{ flex: 1 }}
-              >
-                Cancel
-              </Button>
-              <Button variant="primary" onPress={handleReschedule} style={{ flex: 1 }}>
-                Confirm Reschedule
-              </Button>
-            </View>
-          }
-        >
-          {selectedBooking && (
-            <View style={[styles.bookingInfoCard, { backgroundColor: colors.backgroundSecondary }]}>
-              <Text style={[styles.bookingInfoText, { color: colors.text }]}>
-                👤 Student: {selectedBooking.student_name}
-              </Text>
-              <Text style={[styles.bookingInfoText, { color: colors.text }]}>
-                📅 Current Time: {formatDate(selectedBooking.scheduled_time)} at{' '}
-                {formatTime(selectedBooking.scheduled_time)}
-              </Text>
-              <Text style={[styles.bookingInfoText, { color: colors.text }]}>
-                ⏱️ Duration: {selectedBooking.duration_minutes} minutes
-              </Text>
-            </View>
-          )}
-
-          <Text style={[styles.modalLabel, { color: colors.text, marginBottom: 8 }]}>Select New Date</Text>
-          <Pressable
-            style={[styles.datePickerButton, { backgroundColor: colors.backgroundSecondary, borderColor: colors.border }]}
-            onPress={() => setShowCalendarModal(true)}
-          >
-            <Text style={styles.datePickerIcon}>📅</Text>
-            <Text style={[styles.datePickerText, { color: colors.text }]}>
-              {rescheduleDate
-                ? new Date(rescheduleDate + 'T00:00:00').toLocaleDateString('en-ZA', {
-                    weekday: 'short',
-                    year: 'numeric',
-                    month: 'short',
-                    day: 'numeric',
-                  })
-                : 'Click to Select Date'}
-            </Text>
-          </Pressable>
-
-          <Text style={[styles.modalLabel, { color: colors.text, marginTop: 16, marginBottom: 8 }]}>Available Time Slots</Text>
-          <ScrollView style={styles.timeSlotsContainer}>
-            {availableSlots.length === 0 ? (
-              <Text style={[styles.noSlotsText, { color: colors.textMuted }]}>
-                {rescheduleDate
-                  ? 'No available slots for this date'
-                  : 'Select a date to see available slots'}
-              </Text>
-            ) : (
-              availableSlots.map((slot, index) => (
-                <Pressable
-                  key={index}
-                  style={[
-                    styles.timeSlotButton,
-                    { backgroundColor: colors.backgroundSecondary },
-                    rescheduleTime === slot && { backgroundColor: colors.primary, borderColor: colors.primary },
-                  ]}
-                  onPress={() => setRescheduleTime(slot)}
-                >
-                  <Text
-                    style={[
-                      styles.timeSlotText,
-                      { color: colors.text },
-                      rescheduleTime === slot && { color: '#fff', fontWeight: 'bold' },
-                    ]}
-                  >
-                    {slot}
-                  </Text>
-                </Pressable>
-              ))
-            )}
-          </ScrollView>
-
-          {rescheduleMessage && (
-            <View
-              style={[
-                styles.messageBox,
-                { backgroundColor: rescheduleMessage.type === 'success' ? colors.successLight : colors.dangerLight },
-              ]}
-            >
-              <Text
-                style={[
-                  styles.messageText,
-                  { color: rescheduleMessage.type === 'success' ? colors.success : colors.danger },
-                ]}
-              >
-                {rescheduleMessage.text}
-              </Text>
-            </View>
-          )}
-        </ThemedModal>
-
-        {/* Calendar Modal for Reschedule */}
-        <ThemedModal
-          visible={showCalendarModal}
-          onClose={() => setShowCalendarModal(false)}
-          title="📅 Select Date"
-          size="sm"
-        >
-          <CalendarPicker
-            value={rescheduleDate ? new Date(rescheduleDate + 'T00:00:00') : new Date()}
-            onChange={date => {
-              const year = date.getFullYear();
-              const month = String(date.getMonth() + 1).padStart(2, '0');
-              const day = String(date.getDate()).padStart(2, '0');
-              const dateStr = `${year}-${month}-${day}`;
-              setRescheduleDate(dateStr);
-              loadAvailableSlots(dateStr);
-              setShowCalendarModal(false);
-            }}
-            onCancel={() => setShowCalendarModal(false)}
-            minDate={new Date()}
-            maxDate={new Date(Date.now() + 90 * 24 * 60 * 60 * 1000)}
-            disabledDates={instructorTimeOff}
-          />
-          <Text style={[styles.timeOffLegend, { color: colors.textSecondary }]}>🟧 Orange dates = Instructor unavailable</Text>
-        </ThemedModal>
       </ScrollView>
     </View>
   );
@@ -1533,70 +1293,6 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter_400Regular',
     textAlign: 'center',
     padding: 20,
-  },
-  timeOffLegend: {
-    fontSize: 12,
-    fontFamily: 'Inter_400Regular',
-    textAlign: 'center',
-    marginTop: 12,
-    fontStyle: 'italic',
-  },
-  bookingInfoCard: {
-    padding: 16,
-    borderRadius: 8,
-    marginBottom: 16,
-  },
-  bookingInfoText: {
-    fontSize: 14,
-    fontFamily: 'Inter_400Regular',
-    marginBottom: 8,
-  },
-  timeSlotsContainer: {
-    maxHeight: 200,
-  },
-  timeSlotButton: {
-    padding: 12,
-    borderRadius: 8,
-    marginBottom: 8,
-    borderWidth: 2,
-    borderColor: 'transparent',
-  },
-  timeSlotText: {
-    fontSize: 16,
-    fontFamily: 'Inter_400Regular',
-    textAlign: 'center',
-  },
-  noSlotsText: {
-    fontSize: 14,
-    fontFamily: 'Inter_400Regular',
-    textAlign: 'center',
-    padding: 20,
-  },
-  datePickerButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 14,
-    borderRadius: 8,
-    borderWidth: 1,
-  },
-  datePickerIcon: {
-    fontSize: 24,
-    marginRight: 12,
-  },
-  datePickerText: {
-    fontSize: 16,
-    fontFamily: 'Inter_400Regular',
-    flex: 1,
-  },
-  messageBox: {
-    padding: 12,
-    borderRadius: 8,
-    marginBottom: 16,
-  },
-  messageText: {
-    fontSize: 14,
-    fontFamily: 'Inter_500Medium',
-    textAlign: 'center',
   },
   bookingReference: {
     fontSize: 11,

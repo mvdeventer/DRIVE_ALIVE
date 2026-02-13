@@ -55,6 +55,7 @@ export default function RegisterInstructorScreen({ navigation }: any) {
   } | null>(null);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const scrollViewRef = useRef<ScrollView>(null);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
   const handleRegister = async () => {
     console.log('Register button clicked!');
@@ -208,6 +209,9 @@ export default function RegisterInstructorScreen({ navigation }: any) {
       value = formatPhoneNumber(value);
     }
     setFormData(prev => ({ ...prev, [field]: value }));
+    if (fieldErrors[field]) {
+      setFieldErrors(prev => ({ ...prev, [field]: undefined as any }));
+    }
   };
 
   // GPS address value for instructor (no longer used since no manual fields)
@@ -258,6 +262,7 @@ export default function RegisterInstructorScreen({ navigation }: any) {
             value={formData.first_name}
             onChangeText={text => updateFormData('first_name', text)}
             autoCapitalize="words"
+            error={fieldErrors.first_name}
           />
           <FormFieldWithTip
             label="Last Name"
@@ -267,6 +272,7 @@ export default function RegisterInstructorScreen({ navigation }: any) {
             value={formData.last_name}
             onChangeText={text => updateFormData('last_name', text)}
             autoCapitalize="words"
+            error={fieldErrors.last_name}
           />
           <FormFieldWithTip
             label="Email Address"
@@ -277,6 +283,7 @@ export default function RegisterInstructorScreen({ navigation }: any) {
             onChangeText={text => updateFormData('email', text)}
             keyboardType="email-address"
             autoCapitalize="none"
+            error={fieldErrors.email}
           />
           <FormFieldWithTip
             label="Phone Number"
@@ -287,6 +294,7 @@ export default function RegisterInstructorScreen({ navigation }: any) {
             onChangeText={text => updateFormData('phone', text)}
             keyboardType="phone-pad"
             maxLength={12}
+            error={fieldErrors.phone}
           />
           <FormFieldWithTip
             label="ID Number"
@@ -297,6 +305,7 @@ export default function RegisterInstructorScreen({ navigation }: any) {
             onChangeText={text => updateFormData('id_number', text)}
             keyboardType="numeric"
             maxLength={13}
+            error={fieldErrors.id_number}
           />
         </Card>
 
@@ -312,6 +321,7 @@ export default function RegisterInstructorScreen({ navigation }: any) {
             value={formData.license_number}
             onChangeText={text => updateFormData('license_number', text)}
             autoCapitalize="characters"
+            error={fieldErrors.license_number}
           />
           <LicenseTypeSelector
             label="License Types You Can Teach"
@@ -334,6 +344,7 @@ export default function RegisterInstructorScreen({ navigation }: any) {
             value={formData.vehicle_registration}
             onChangeText={text => updateFormData('vehicle_registration', text)}
             autoCapitalize="characters"
+            error={fieldErrors.vehicle_registration}
           />
           <FormFieldWithTip
             label="Vehicle Make"
@@ -342,6 +353,7 @@ export default function RegisterInstructorScreen({ navigation }: any) {
             value={formData.vehicle_make}
             onChangeText={text => updateFormData('vehicle_make', text)}
             autoCapitalize="words"
+            error={fieldErrors.vehicle_make}
           />
           <FormFieldWithTip
             label="Vehicle Model"
@@ -350,6 +362,7 @@ export default function RegisterInstructorScreen({ navigation }: any) {
             value={formData.vehicle_model}
             onChangeText={text => updateFormData('vehicle_model', text)}
             autoCapitalize="words"
+            error={fieldErrors.vehicle_model}
           />
           <FormFieldWithTip
             label="Vehicle Year"
@@ -357,6 +370,7 @@ export default function RegisterInstructorScreen({ navigation }: any) {
             value={formData.vehicle_year}
             onChangeText={text => updateFormData('vehicle_year', text)}
             keyboardType="numeric"
+            error={fieldErrors.vehicle_year}
           />
 
           <View style={[styles.addressGpsContainer, { backgroundColor: colors.backgroundSecondary }]}>
@@ -383,6 +397,7 @@ export default function RegisterInstructorScreen({ navigation }: any) {
             value={formData.hourly_rate}
             onChangeText={text => updateFormData('hourly_rate', text)}
             keyboardType="decimal-pad"
+            error={fieldErrors.hourly_rate}
           />
           <FormFieldWithTip
             label="Service Radius (km)"
@@ -433,6 +448,7 @@ export default function RegisterInstructorScreen({ navigation }: any) {
             value={formData.password}
             onChangeText={text => updateFormData('password', text)}
             secureTextEntry={!showPassword}
+            error={fieldErrors.password}
           />
           <FormFieldWithTip
             key={`confirm-password-${showPassword}`}
@@ -443,6 +459,7 @@ export default function RegisterInstructorScreen({ navigation }: any) {
             value={formData.confirmPassword}
             onChangeText={text => updateFormData('confirmPassword', text)}
             secureTextEntry={!showPassword}
+            error={fieldErrors.confirmPassword}
           />
           <Pressable
             style={styles.showPasswordButton}
