@@ -22,8 +22,6 @@ import { Button } from '../../components/ui';
 import { useQuery, useQueryClient, QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { useNavigation } from '@react-navigation/native';
-import ExcelJS from 'exceljs';
-import jsPDF from 'jspdf';
 import WebNavigationHeader from '../../components/WebNavigationHeader';
 import DatabaseEditForm from '../../components/DatabaseEditForm';
 import DatabaseDeleteConfirm from '../../components/DatabaseDeleteConfirm';
@@ -750,6 +748,7 @@ const DatabaseInterfaceScreen = ({ navigation }: any) => {
     }
 
     try {
+      const ExcelJS = (await import('exceljs')).default;
       const workbook = new ExcelJS.Workbook();
       const worksheet = workbook.addWorksheet(activeTab.toUpperCase());
 
@@ -807,7 +806,7 @@ const DatabaseInterfaceScreen = ({ navigation }: any) => {
   };
 
   // Export to PDF
-  const exportToPDF = () => {
+  const exportToPDF = async () => {
     const currentData = activeTab === 'users' ? usersTable.data :
                        activeTab === 'instructors' ? instructorsTable.data :
                        activeTab === 'students' ? studentsTable.data : bookingsTable.data;
@@ -818,6 +817,7 @@ const DatabaseInterfaceScreen = ({ navigation }: any) => {
     }
 
     try {
+      const { default: jsPDF } = await import('jspdf');
       const doc = new jsPDF();
       
       // Add metadata

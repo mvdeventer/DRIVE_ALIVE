@@ -173,6 +173,7 @@ app.add_exception_handler(RateLimitExceeded, rate_limit_exceeded_handler)
 
 # Configure CORS - Allow specific origins with credentials
 origins = [
+    # HTTP local dev
     "http://localhost:8081",  # Web version on localhost
     "http://localhost:8082",
     "http://localhost:8080",
@@ -188,7 +189,22 @@ origins = [
     "http://10.0.0.121:19000",
     "http://10.0.0.121:19001",
     "http://10.0.0.121:19006",
-    "https://roadready.onrender.com",  # Production frontend
+    # HTTPS local dev (SSL proxy on 8443)
+    "https://localhost:8443",
+    "https://localhost:8081",
+    "https://localhost:8082",
+    "https://localhost:8080",
+    "https://localhost:3000",
+    "https://127.0.0.1:8081",
+    "https://127.0.0.1:8082",
+    "https://127.0.0.1:8080",
+    "https://127.0.0.1:3000",
+    "https://10.0.0.121:8081",
+    "https://10.0.0.121:8082",
+    "https://10.0.0.121:8080",
+    # Production
+    "https://roadready.onrender.com",
+    "https://drive-alive-web.onrender.com",
 ]
 
 app.add_middleware(

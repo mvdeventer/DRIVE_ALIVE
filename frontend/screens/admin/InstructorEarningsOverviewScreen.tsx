@@ -2,8 +2,6 @@
  * Instructor Earnings Overview Screen (Admin)
  * Comprehensive view of all instructor earnings with detailed reports
  */
-import ExcelJS from 'exceljs';
-import jsPDF from 'jspdf';
 import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
@@ -125,8 +123,9 @@ export default function InstructorEarningsOverviewScreen({ navigation }: any) {
     loadInstructors();
   };
 
-  const exportToPDF = (instructor: DetailedEarnings) => {
+  const exportToPDF = async (instructor: DetailedEarnings) => {
     try {
+      const { default: jsPDF } = await import('jspdf');
       const doc = new jsPDF();
       const pageWidth = doc.internal.pageSize.getWidth();
       let yPos = 20;
@@ -223,6 +222,7 @@ export default function InstructorEarningsOverviewScreen({ navigation }: any) {
 
   const exportToExcel = async (instructor: DetailedEarnings) => {
     try {
+      const ExcelJS = (await import('exceljs')).default;
       const workbook = new ExcelJS.Workbook();
 
       // Summary Sheet
@@ -395,6 +395,7 @@ export default function InstructorEarningsOverviewScreen({ navigation }: any) {
 
   const exportAllToPDF = async (allInstructors: DetailedEarnings[]) => {
     try {
+      const { default: jsPDF } = await import('jspdf');
       const doc = new jsPDF();
       const pageWidth = doc.internal.pageSize.getWidth();
 
@@ -482,6 +483,7 @@ export default function InstructorEarningsOverviewScreen({ navigation }: any) {
 
   const exportAllToExcel = async (allInstructors: DetailedEarnings[]) => {
     try {
+      const ExcelJS = (await import('exceljs')).default;
       const workbook = new ExcelJS.Workbook();
 
       // Summary Sheet for All Instructors

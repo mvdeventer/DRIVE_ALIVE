@@ -85,8 +85,8 @@ $EnvContent = Get-Content $EnvFile -Raw
 switch ($NormalizedEnv) {
     'local' {
         Write-Info "Configuring for LOCAL mode"
-        $FrontendUrl = "http://localhost:8081"
-        $AllowedOrigins = "http://localhost:3000,http://localhost:8081,http://localhost:19000"
+        $FrontendUrl = "https://localhost:8443"
+        $AllowedOrigins = "http://localhost:3000,http://localhost:8081,http://localhost:19000,https://localhost:3000,https://localhost:8081,https://localhost:8443"
         
         Write-Success "Frontend URL: $FrontendUrl"
         Write-Success "Allowed Origins: $AllowedOrigins"
@@ -102,7 +102,7 @@ switch ($NormalizedEnv) {
         
         if ($IP) {
             $FrontendUrl = "http://" + $IP + ":8081"
-            $AllowedOrigins = "http://" + $IP + ":8081,http://" + $IP + ":19000,http://localhost:8081,http://localhost:19000"
+            $AllowedOrigins = "http://" + $IP + ":8081,http://" + $IP + ":19000,http://localhost:8081,http://localhost:19000,https://localhost:8081"
             
             Write-Success "Detected IP: $IP"
             Write-Success "Frontend URL: $FrontendUrl"

@@ -882,7 +882,7 @@ export default function BookingScreen({ navigation: navProp }: any) {
         </Card>
 
         {/* Pickup Address - MOVED TO TOP */}
-        <Card variant="elevated" style={[styles.formCard, styles.pickupFormCard]}>
+        <Card variant="elevated" style={[styles.formCard, styles.pickupFormCard, { overflow: 'visible' }]}>
           <Text style={[styles.sectionTitle, { color: colors.text }]}>Step 1: Pickup Details</Text>
           <View style={styles.formGroup}>
             <Text style={[styles.label, { color: colors.text }]}>
@@ -896,7 +896,6 @@ export default function BookingScreen({ navigation: navProp }: any) {
                 console.log('📍 Pickup location captured:', coords);
               }}
               placeholder="Start typing your street address... (e.g., 123 Main Road, Sandton)"
-              style={[styles.textArea, { backgroundColor: colors.backgroundSecondary, borderColor: colors.border, color: colors.text }]}
             />
           </View>
         </Card>

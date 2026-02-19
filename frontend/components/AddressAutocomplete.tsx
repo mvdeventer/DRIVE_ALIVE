@@ -129,8 +129,124 @@ export default function AddressAutocomplete({
     }
   };
 
+  // Helper: apply parsed address to fields and parent
+  const applyAddress = (
+    fullStreet: string,
+    suburbVal: string,
+    cityVal: string,
+    postalVal: string
+  ) => {
+    console.log('📍 applyAddress called:', { fullStreet, suburbVal, cityVal, postalVal });
+    setStreetAddress(fullStreet);
+    setSuburb(suburbVal);
+    setCity(cityVal);
+    setPostalCode(postalVal);
+    updateAddress(fullStreet, suburbVal, cityVal, postalVal);
+  };
+
+  // Native reverse geocode via expo-location (uses device geocoder, no API key)
+  const reverseGeocodeNative = async (
+    coords: { latitude: number; longitude: number }
+  ): Promise<boolean> => {
+    try {
+      console.log('📍 Trying native reverseGeocode...');
+      const results = await Location.reverseGeocodeAsync(coords);
+      console.log('📍 Native geocode results:', JSON.stringify(results));
+      if (results && results.length > 0) {
+        const place = results[0];
+        const house = place.streetNumber || '';
+        const street = place.street || '';
+        const fullStreet = house ? `${house} ${street}`.trim() : street;
+        const suburbVal = place.district || place.subregion || '';
+        const cityVal = place.city || '';
+        const postalVal = place.postalCode || '';
+
+        applyAddress(fullStreet, suburbVal, cityVal, postalVal);
+        return true;
+      }
+    } catch (err) {
+      console.log('📍 Native reverseGeocode failed:', err);
+    }
+    return false;
+  };
+
+  // HTTP-based reverse geocode via Google Maps Geocoding API
+  const reverseGeocodeGoogle = async (
+    coords: { latitude: number; longitude: number }
+  ): Promise<boolean> => {
+    try {
+      console.log('📍 Trying Google Geocoding API...');
+      const resp = await fetch(
+        `https://maps.googleapis.com/maps/api/geocode/json?latlng=${coords.latitude},${coords.longitude}&key=AIzaSyBFw0Qbyq9zTFTd-tUY6dZWTgaQzuU17R8`
+      );
+      console.log('📍 Google response status:', resp.status);
+      if (resp.ok) {
+        const data = await resp.json();
+        console.log('📍 Google data.status:', data.status, 'results:', data.results?.length);
+        if (data.status === 'OK' && data.results?.[0]) {
+          const components = data.results[0].address_components;
+          let street = '';
+          let house = '';
+          let suburbVal = '';
+          let cityVal = '';
+          let postalVal = '';
+
+          components.forEach((c: any) => {
+            if (c.types.includes('street_number')) house = c.long_name;
+            else if (c.types.includes('route')) street = c.long_name;
+            else if (c.types.includes('sublocality') || c.types.includes('sublocality_level_1'))
+              suburbVal = c.long_name;
+            else if (c.types.includes('locality')) cityVal = c.long_name;
+            else if (c.types.includes('postal_code')) postalVal = c.long_name;
+          });
+
+          const fullStreet = house ? `${house} ${street}`.trim() : street;
+          applyAddress(fullStreet, suburbVal, cityVal, postalVal);
+          return true;
+        }
+      }
+    } catch (err) {
+      console.log('📍 Google geocode failed:', err);
+    }
+    return false;
+  };
+
+  // HTTP-based reverse geocode via OpenStreetMap Nominatim
+  const reverseGeocodeOSM = async (
+    coords: { latitude: number; longitude: number }
+  ): Promise<boolean> => {
+    try {
+      console.log('📍 Trying OSM Nominatim...');
+      const resp = await fetch(
+        `https://nominatim.openstreetmap.org/reverse?lat=${coords.latitude}&lon=${coords.longitude}&format=json&addressdetails=1`,
+        { headers: { 'User-Agent': 'RoadReady-BookingApp/3.0' } }
+      );
+      console.log('📍 OSM response status:', resp.status);
+      if (resp.ok) {
+        const data = await resp.json();
+        const addr = data.address;
+        console.log('📍 OSM address:', JSON.stringify(addr));
+        if (addr) {
+          const street = addr.road || addr.street || '';
+          const house = addr.house_number || '';
+          const fullStreet = house ? `${house} ${street}`.trim() : street;
+          const suburbVal = addr.suburb || addr.neighbourhood || addr.village || '';
+          const cityVal = addr.city || addr.town || addr.municipality || '';
+          const postalVal = addr.postcode || '';
+
+          applyAddress(fullStreet, suburbVal, cityVal, postalVal);
+          return true;
+        }
+      }
+    } catch (err) {
+      console.log('📍 OSM geocode failed:', err);
+    }
+    return false;
+  };
+
   // Process captured location coordinates
   const processLocation = async (coords: { latitude: number; longitude: number }) => {
+    console.log('📍 processLocation called with:', coords);
     setCoordinates(coords);
     setLoadingGPS(false);
 
@@ -138,82 +254,32 @@ export default function AddressAutocomplete({
       onLocationCapture(coords);
     }
 
-    try {
-      const googleResponse = await fetch(
-        `https://maps.googleapis.com/maps/api/geocode/json?latlng=${coords.latitude},${coords.longitude}&key=AIzaSyBFw0Qbyq9zTFTd-tUY6dZWTgaQzuU17R8`
+    let resolved = false;
+
+    if (Platform.OS !== 'web') {
+      // Native: use device geocoder first (most reliable, no API key needed)
+      resolved = await reverseGeocodeNative(coords);
+      console.log('📍 Native result:', resolved);
+    }
+
+    if (!resolved) {
+      // Fallback 1: Google Maps Geocoding API
+      resolved = await reverseGeocodeGoogle(coords);
+      console.log('📍 Google result:', resolved);
+    }
+
+    if (!resolved) {
+      // Fallback 2: OpenStreetMap Nominatim
+      resolved = await reverseGeocodeOSM(coords);
+      console.log('📍 OSM result:', resolved);
+    }
+
+    if (!resolved) {
+      console.log('📍 All geocoding methods failed');
+      setGpsError(
+        'GPS coordinates captured but address could not be determined automatically.\n' +
+          'Please fill in the address fields below manually.'
       );
-
-      if (googleResponse.ok) {
-        const googleData = await googleResponse.json();
-        if (googleData.status === 'OK' && googleData.results?.[0]) {
-          const components = googleData.results[0].address_components;
-
-          let street = '';
-          let house = '';
-          let suburbValue = '';
-          let cityValue = '';
-          let postalValue = '';
-
-          components.forEach((component: any) => {
-            if (component.types.includes('street_number')) {
-              house = component.long_name;
-            } else if (component.types.includes('route')) {
-              street = component.long_name;
-            } else if (
-              component.types.includes('sublocality') ||
-              component.types.includes('sublocality_level_1')
-            ) {
-              suburbValue = component.long_name;
-            } else if (component.types.includes('locality')) {
-              cityValue = component.long_name;
-            } else if (component.types.includes('postal_code')) {
-              postalValue = component.long_name;
-            }
-          });
-
-          const fullStreet = house ? `${house} ${street}`.trim() : street;
-
-          setStreetAddress(fullStreet);
-          setSuburb(suburbValue);
-          setCity(cityValue);
-          setPostalCode(postalValue);
-          updateAddress(fullStreet, suburbValue, cityValue, postalValue);
-          return;
-        }
-      }
-
-      const osmResponse = await fetch(
-        `https://nominatim.openstreetmap.org/reverse?` +
-          `lat=${coords.latitude}&lon=${coords.longitude}&format=json&addressdetails=1`,
-        {
-          headers: {
-            'User-Agent': 'RoadReady-BookingApp/3.0',
-          },
-        }
-      );
-
-      if (osmResponse.ok) {
-        const data = await osmResponse.json();
-        const address = data.address;
-
-        if (address) {
-          const street = address.road || address.street || '';
-          const house = address.house_number || '';
-          const suburbValue = address.suburb || address.neighbourhood || address.village || '';
-          const cityValue = address.city || address.town || address.municipality || '';
-          const postalValue = address.postcode || '';
-
-          const fullStreet = house ? `${house} ${street}`.trim() : street;
-
-          setStreetAddress(fullStreet);
-          setSuburb(suburbValue);
-          setCity(cityValue);
-          setPostalCode(postalValue);
-          updateAddress(fullStreet, suburbValue, cityValue, postalValue);
-        }
-      }
-    } catch (error) {
-      console.log('Reverse geocoding failed, coordinates captured:', coords);
     }
   };
 
@@ -272,21 +338,17 @@ export default function AddressAutocomplete({
       <Pressable
         onPress={handleGetCurrentLocation}
         disabled={loadingGPS}
-        style={({ pressed }) => ({
-          backgroundColor: loadingGPS
-            ? colors.textTertiary
-            : pressed
-              ? colors.primaryDark
-              : colors.buttonPrimary,
+        style={{
+          backgroundColor: loadingGPS ? colors.textTertiary : colors.buttonPrimary,
           padding: 14,
           borderRadius: 8,
-          alignItems: 'center' as const,
-          justifyContent: 'center' as const,
-          flexDirection: 'row' as const,
+          alignItems: 'center',
+          justifyContent: 'center',
+          flexDirection: 'row',
           gap: 8,
           minHeight: 48,
           opacity: loadingGPS ? 0.7 : 1,
-        })}
+        }}
       >
         {loadingGPS ? (
           <ActivityIndicator size="small" color={colors.buttonPrimaryText} />

@@ -12,3 +12,6 @@ web-build/
 .env
 .env.local
 .env.production
+
+# SSL certificates (mkcert)
+*.pem

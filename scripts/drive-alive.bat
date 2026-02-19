@@ -268,6 +268,12 @@ exit /b 1
 :: ==============================================================================
 :: HELPER: Find Available Port
 :: ==============================================================================
+:start_ssl_proxy
+echo %COLOR_GREEN%  Starting HTTPS proxy on port %SSL_PROXY_PORT% -^> %FRONTEND_PORT% (mkcert certs)%COLOR_RESET%
+powershell -Command "Start-Process cmd -ArgumentList '/k', 'cd /d \"%FRONTEND_DIR%\" && npx local-ssl-proxy --source %SSL_PROXY_PORT% --target %FRONTEND_PORT% --cert cert.pem --key key.pem' -WindowStyle Minimized"
+echo %COLOR_GREEN%  SSL Proxy started.%COLOR_RESET%
+goto :eof
+
 :find_available_port
 :: Usage: call :find_available_port <start_port> <return_var_name>
 :: Returns the first available port starting from <start_port>
@@ -304,6 +310,7 @@ echo %COLOR_GREEN%Frontend will use port: %FRONTEND_PORT%%COLOR_RESET%
 set "BACKEND_URL=http://localhost:%BACKEND_PORT%"
 set "API_DOCS_URL=http://localhost:%BACKEND_PORT%/docs"
 set "FRONTEND_URL_DISPLAY=http://localhost:%FRONTEND_PORT%"
+set "SSL_PROXY_PORT=8443"
 echo.
 
 :: Always stop any existing servers first with graceful shutdown
@@ -381,6 +388,12 @@ for /f "tokens=5" %%a in ('netstat -ano 2^>nul ^| findstr ":8000" ^| findstr "LI
 )
 
 for /f "tokens=5" %%a in ('netstat -ano 2^>nul ^| findstr ":8081" ^| findstr "LISTENING"') do (
+    taskkill /PID %%a >nul 2>&1
+    timeout /t 1 /nobreak >nul
+    taskkill /F /PID %%a >nul 2>&1
+)
+
+for /f "tokens=5" %%a in ('netstat -ano 2^>nul ^| findstr ":8443" ^| findstr "LISTENING"') do (
     taskkill /PID %%a >nul 2>&1
     timeout /t 1 /nobreak >nul
     taskkill /F /PID %%a >nul 2>&1
@@ -533,6 +546,9 @@ if "%DEBUG%"=="1" (
 )
 
 findstr /I /C:"FRONTEND_URL=http://localhost" "%BACKEND_DIR%\.env" >nul
+if errorlevel 1 (
+    findstr /I /C:"FRONTEND_URL=https://localhost" "%BACKEND_DIR%\.env" >nul
+)
 if "%DEBUG%"=="1" (
     echo [DEBUG] localhost findstr errorlevel=!errorlevel!
 )
@@ -557,10 +573,27 @@ if errorlevel 1 (
     echo %COLOR_GREEN%  Mode: Localhost%COLOR_RESET%
 )
 
-if defined FRONTEND_URL_VALUE set "FRONTEND_URL_DISPLAY=%FRONTEND_URL_VALUE%"
+:: Override display URL with .env value
+if defined FRONTEND_URL_VALUE (
+    set "FRONTEND_URL_DISPLAY=%FRONTEND_URL_VALUE%"
+)
+
+:: In localhost mode, use SSL proxy for HTTPS
+set "USE_SSL_PROXY=0"
+if "!ENV_MODE!"=="local" (
+    if exist "%FRONTEND_DIR%\cert.pem" (
+        if exist "%FRONTEND_DIR%\key.pem" (
+            set "USE_SSL_PROXY=1"
+            set "FRONTEND_URL_DISPLAY=https://localhost:!SSL_PROXY_PORT!"
+        )
+    )
+)
 
 echo %COLOR_YELLOW%Starting Frontend Server ^(!ENV_MODE! mode^)...%COLOR_RESET%
-powershell -Command "$process = Start-Process cmd -ArgumentList '/k', 'cd /d \"%FRONTEND_DIR%\" && set \"EXPO_OFFLINE=true\" && npx expo start %EXPO_HOST_FLAG%' -WindowStyle Normal -PassThru; $process.Id | Out-File -FilePath '%FRONTEND_PID_FILE%' -Encoding ASCII -NoNewline; Write-Host \"Frontend started with PID: $($process.Id)\" -ForegroundColor Green"
+powershell -Command "$process = Start-Process cmd -ArgumentList '/k', 'cd /d \"%FRONTEND_DIR%\" && set \"EXPO_OFFLINE=true\" && npx expo start --web %EXPO_HOST_FLAG%' -WindowStyle Normal -PassThru; $process.Id | Out-File -FilePath '%FRONTEND_PID_FILE%' -Encoding ASCII -NoNewline; Write-Host \"Frontend started with PID: $($process.Id)\" -ForegroundColor Green"
+
+:: Start SSL proxy if in localhost mode with certs
+if "!USE_SSL_PROXY!"=="1" call :start_ssl_proxy
 
 echo.
 echo %COLOR_GREEN%Servers are starting...%COLOR_RESET%
@@ -647,6 +680,12 @@ for /f "tokens=5" %%a in ('netstat -ano ^| findstr ":8081" ^| findstr "LISTENING
     timeout /t 2 /nobreak >nul
     taskkill /F /PID %%a >nul 2>&1
 )
+for /f "tokens=5" %%a in ('netstat -ano ^| findstr ":8443" ^| findstr "LISTENING" 2^>nul') do (
+    echo %COLOR_CYAN%Gracefully stopping SSL proxy on port 8443...%COLOR_RESET%
+    taskkill /PID %%a >nul 2>&1
+    timeout /t 2 /nobreak >nul
+    taskkill /F /PID %%a >nul 2>&1
+)
 for /f "tokens=5" %%a in ('netstat -ano ^| findstr ":19000" ^| findstr "LISTENING" 2^>nul') do (
     echo %COLOR_CYAN%Gracefully stopping Expo on port 19000...%COLOR_RESET%
     taskkill /PID %%a >nul 2>&1
@@ -670,6 +709,9 @@ if "%DEBUG%"=="1" (
 )
 
 findstr /I /C:"FRONTEND_URL=http://localhost" "%BACKEND_DIR%\.env" >nul
+if errorlevel 1 (
+    findstr /I /C:"FRONTEND_URL=https://localhost" "%BACKEND_DIR%\.env" >nul
+)
 if "%DEBUG%"=="1" (
     echo [DEBUG] localhost findstr errorlevel=!errorlevel!
 )
@@ -694,10 +736,24 @@ if errorlevel 1 (
     echo %COLOR_GREEN%  Mode: Localhost%COLOR_RESET%
 )
 
-if defined FRONTEND_URL_VALUE set "FRONTEND_URL_DISPLAY=%FRONTEND_URL_VALUE%"
+:: Override display URL with .env value
+set "USE_SSL_PROXY=0"
+if "!ENV_MODE!"=="local" (
+    if exist "%FRONTEND_DIR%\cert.pem" (
+        if exist "%FRONTEND_DIR%\key.pem" (
+            set "USE_SSL_PROXY=1"
+            set "FRONTEND_URL_DISPLAY=https://localhost:!SSL_PROXY_PORT!"
+        )
+    )
+) else (
+    if defined FRONTEND_URL_VALUE set "FRONTEND_URL_DISPLAY=%FRONTEND_URL_VALUE%"
+)
 
 echo %COLOR_YELLOW%Starting Frontend Server only ^(!ENV_MODE! mode^)...%COLOR_RESET%
-powershell -Command "$process = Start-Process cmd -ArgumentList '/k', 'cd /d \"%FRONTEND_DIR%\" && set \"EXPO_OFFLINE=true\" && npx expo start %EXPO_HOST_FLAG%' -WindowStyle Normal -PassThru; $process.Id | Out-File -FilePath '%FRONTEND_PID_FILE%' -Encoding ASCII -NoNewline; Write-Host \"Frontend started with PID: $($process.Id)\" -ForegroundColor Green"
+powershell -Command "$process = Start-Process cmd -ArgumentList '/k', 'cd /d \"%FRONTEND_DIR%\" && set \"EXPO_OFFLINE=true\" && npx expo start --web %EXPO_HOST_FLAG%' -WindowStyle Normal -PassThru; $process.Id | Out-File -FilePath '%FRONTEND_PID_FILE%' -Encoding ASCII -NoNewline; Write-Host \"Frontend started with PID: $($process.Id)\" -ForegroundColor Green"
+
+:: Start SSL proxy if in localhost mode with certs
+if "!USE_SSL_PROXY!"=="1" call :start_ssl_proxy
 echo.
 echo %COLOR_GREEN%Frontend server started: %FRONTEND_URL_DISPLAY%%COLOR_RESET%
 

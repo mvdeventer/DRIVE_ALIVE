@@ -3,8 +3,6 @@
  * Comprehensive earnings breakdown with filters and export functionality
  */
 import { useFocusEffect } from '@react-navigation/native';
-import ExcelJS from 'exceljs';
-import jsPDF from 'jspdf';
 import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
@@ -162,10 +160,11 @@ export default function EarningsReportScreen({ navigation }: any) {
     }
   };
 
-  const exportToPDF = () => {
+  const exportToPDF = async () => {
     if (!profile || !earningsData) return;
 
     try {
+      const { default: jsPDF } = await import('jspdf');
       const doc = new jsPDF();
       let yPosition = 10;
 
@@ -394,6 +393,7 @@ export default function EarningsReportScreen({ navigation }: any) {
     if (!profile || !earningsData) return;
 
     try {
+      const ExcelJS = (await import('exceljs')).default;
       const workbook = new ExcelJS.Workbook();
       workbook.creator = 'RoadReady';
       workbook.created = new Date();
