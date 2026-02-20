@@ -98,6 +98,7 @@ export default function BookingScreen({ navigation: navProp }: any) {
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showCalendarModal, setShowCalendarModal] = useState(false);
+  const [tempCalendarDate, setTempCalendarDate] = useState<Date | null>(null);
   const [instructorTimeOff, setInstructorTimeOff] = useState<Date[]>([]);
   const [fullyBookedDates, setFullyBookedDates] = useState<Date[]>([]);
   const [instructorSchedule, setInstructorSchedule] = useState<string[]>([]);
@@ -1281,23 +1282,46 @@ export default function BookingScreen({ navigation: navProp }: any) {
                 <Text style={[styles.calendarModalCloseText, { color: colors.textSecondary }]}>✕</Text>
               </Pressable>
             </View>
-            <CalendarPicker
-              value={selectedDate || new Date()}
-              onChange={date => {
-                handleDateSelect(date);
-                setShowCalendarModal(false);
-              }}
-              onCancel={() => setShowCalendarModal(false)}
-              minDate={new Date(new Date().setHours(0, 0, 0, 0))}
-              maxDate={new Date(Date.now() + 90 * 24 * 60 * 60 * 1000)}
-              timeOffDates={instructorTimeOff}
-              noScheduleDates={unavailableDays}
-              fullyBookedDates={fullyBookedDates}
-            />
-            <View style={[styles.calendarLegendContainer, { borderTopColor: colors.border }]}>
-              <Text style={[styles.legendText, { color: colors.textSecondary }]}>⚫ Grey = No schedule</Text>
-              <Text style={[styles.legendText, { color: colors.textSecondary }]}>🟧 Orange = Time-off</Text>
-              <Text style={[styles.legendText, { color: colors.textSecondary }]}>🟥 Red = Fully booked</Text>
+            <ScrollView bounces={false} showsVerticalScrollIndicator={false} style={{ flexShrink: 1 }}>
+              <CalendarPicker
+                value={tempCalendarDate || selectedDate || new Date()}
+                onChange={date => setTempCalendarDate(date)}
+                showActions={false}
+                minDate={new Date(new Date().setHours(0, 0, 0, 0))}
+                maxDate={new Date(Date.now() + 90 * 24 * 60 * 60 * 1000)}
+                timeOffDates={instructorTimeOff}
+                noScheduleDates={unavailableDays}
+                fullyBookedDates={fullyBookedDates}
+              />
+              <View style={[styles.calendarLegendContainer, { borderTopColor: colors.border }]}>
+                <Text style={[styles.legendText, { color: colors.textSecondary }]}>⚫ Grey = No schedule</Text>
+                <Text style={[styles.legendText, { color: colors.textSecondary }]}>🟧 Orange = Time-off</Text>
+                <Text style={[styles.legendText, { color: colors.textSecondary }]}>🟥 Red = Fully booked</Text>
+              </View>
+            </ScrollView>
+            <View style={styles.calendarModalButtons}>
+              <Button
+                variant="secondary"
+                onPress={() => {
+                  setTempCalendarDate(null);
+                  setShowCalendarModal(false);
+                }}
+                style={{ flex: 1 }}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="primary"
+                onPress={() => {
+                  const dateToSelect = tempCalendarDate || selectedDate || new Date();
+                  handleDateSelect(dateToSelect);
+                  setTempCalendarDate(null);
+                  setShowCalendarModal(false);
+                }}
+                style={{ flex: 1 }}
+              >
+                OK
+              </Button>
             </View>
           </View>
         </View>
@@ -1732,6 +1756,7 @@ const styles = StyleSheet.create({
     padding: 20,
     maxWidth: 400,
     width: '90%',
+    maxHeight: '90%',
   },
   calendarModalHeader: {
     flexDirection: 'row',
@@ -1765,6 +1790,14 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter_400Regular',
     textAlign: 'center',
     fontStyle: 'italic',
+  },
+  calendarModalButtons: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 16,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#e0e0e0',
   },
   // Unsaved changes modal (ThemedModal) — text style only
   confirmModalText: {

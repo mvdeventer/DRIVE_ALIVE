@@ -182,18 +182,12 @@ export default function PaymentScreen() {
           <Text style={[styles.sectionTitle, { color: colors.text }]}>Payment Summary</Text>
 
           <View style={styles.summaryRow}>
-            <Text style={[styles.summaryLabel, { color: colors.textSecondary }]}>Lesson Fee</Text>
-            <Text style={[styles.summaryValue, { color: colors.text }]}>R{lesson_amount.toFixed(2)}</Text>
-          </View>
-          <View style={styles.summaryRow}>
-            <Text style={[styles.summaryLabel, { color: colors.textSecondary }]}>Booking Fee</Text>
-            <Text style={[styles.summaryValue, { color: colors.text }]}>R{booking_fee.toFixed(2)}</Text>
+            <Text style={[styles.summaryLabel, { color: colors.textSecondary }]}>
+              Lesson Fee ({bookings.length} {bookings.length === 1 ? 'lesson' : 'lessons'})
+            </Text>
+            <Text style={[styles.summaryValue, { color: colors.text }]}>R{total_amount.toFixed(2)}</Text>
           </View>
           <View style={[styles.divider, { backgroundColor: colors.border }]} />
-          <View style={styles.summaryRow}>
-            <Text style={[styles.summaryLabel, { color: colors.text, fontFamily: 'Inter_600SemiBold' }]}>Subtotal</Text>
-            <Text style={[styles.summaryValue, { color: colors.text, fontFamily: 'Inter_600SemiBold' }]}>R{total_amount.toFixed(2)}</Text>
-          </View>
 
           {!loadingCredits && creditApplied > 0 && (
             <>
