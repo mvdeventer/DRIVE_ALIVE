@@ -167,8 +167,15 @@ if "!NODE_OK!"=="0" (
             call :manual_install_prompt "Node.js 20 LTS" "https://nodejs.org/en/download"
         ) else (
             echo   [OK] Node.js installed.
-            :: Refresh PATH
-            for /f "skip=2 tokens=3*" %%a in ('reg query "HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Environment" /v Path 2^>nul') do set "PATH=%%a %%b;%PATH%"
+            :: Hard-add known Node.js install locations to current session PATH
+            if exist "C:\Program Files\nodejs\npm.cmd" (
+                set "PATH=C:\Program Files\nodejs;!PATH!"
+            )
+            if exist "C:\Program Files\nodejs\npx.cmd" (
+                set "PATH=C:\Program Files\nodejs;!PATH!"
+            )
+            :: Also try refreshing from registry
+            for /f "skip=2 tokens=3*" %%a in ('reg query "HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Environment" /v Path 2^>nul') do set "PATH=%%a %%b;!PATH!"
             set "NODE_OK=1"
         )
     ) else (
@@ -179,23 +186,28 @@ if "!NODE_OK!"=="0" (
 
 :: ── STEP 4: Install Expo CLI globally (needed for frontend) ──────────────────
 call :step_header "4" "5" "Installing Expo CLI"
-npm list -g expo-cli >nul 2>&1
+npm list -g eas-cli >nul 2>&1
 if !errorlevel! equ 0 (
-    echo   [OK] expo-cli already installed globally.
+    echo   [OK] eas-cli already installed globally.
 ) else (
-    where npx >nul 2>&1
+    where npm >nul 2>&1
     if !errorlevel! equ 0 (
-        echo   Installing expo-cli globally via npm...
-        call npm install -g expo-cli --silent 2>nul
-        call npm install -g eas-cli --silent 2>nul
-        echo   [OK] expo-cli and eas-cli installed.
+        echo   Installing eas-cli globally via npm (may take a minute)...
+        call npm install -g eas-cli
+        if !errorlevel! equ 0 (
+            echo   [OK] eas-cli installed.
+        ) else (
+            echo   [WARN] eas-cli install failed - this is optional, continuing...
+        )
     ) else (
-        echo   [WARN] npm not available - Expo CLI not installed.
-        echo         Install Node.js first, then run: npm install -g expo-cli
+        echo   [WARN] npm not in PATH yet.
+        echo         If Node.js was just installed, please restart this script.
+        echo         Or install manually:  npm install -g eas-cli
     )
 )
+echo   Note: expo-cli is used via npx - no global install needed.
 
-:: ── STEP 5: Run bootstrap.py (handles everything else) ───────────────────────
+:: ── STEP 5: Run bootstrap.py (handles everything else) ─────────────────────
 call :step_header "5" "5" "Running Drive Alive bootstrap"
 echo.
 echo   This handles:
@@ -207,6 +219,14 @@ echo     - .env file generation with secure keys
 echo     - Database creation ^& table init
 echo.
 
+if "!PYTHON_CMD!"=="" (
+    echo   [WARN] Python command not detected in earlier steps.
+    echo         Trying 'python' as fallback...
+    set "PYTHON_CMD=python"
+)
+
+echo   Running: !PYTHON_CMD! bootstrap.py!BOOTSTRAP_ARGS!
+echo.
 !PYTHON_CMD! "%PROJECT_ROOT%\bootstrap.py"!BOOTSTRAP_ARGS!
 set "BOOTSTRAP_EXIT=!errorlevel!"
 
@@ -277,9 +297,9 @@ goto :eof
 
 :step_header
 echo.
-echo ─────────────────────────────────────────────────────────────
+echo -------------------------------------------------------------
 echo  STEP %~1 of %~2:  %~3
-echo ─────────────────────────────────────────────────────────────
+echo -------------------------------------------------------------
 goto :eof
 
 :manual_install_prompt
