@@ -1282,7 +1282,7 @@ export default function BookingScreen({ navigation: navProp }: any) {
                 <Text style={[styles.calendarModalCloseText, { color: colors.textSecondary }]}>✕</Text>
               </Pressable>
             </View>
-            <ScrollView bounces={false} showsVerticalScrollIndicator={false} style={{ flexShrink: 1 }}>
+            <ScrollView bounces={false} showsVerticalScrollIndicator={false} style={{ flex: 1, flexShrink: 1 }}>
               <CalendarPicker
                 value={tempCalendarDate || selectedDate || new Date()}
                 onChange={date => setTempCalendarDate(date)}
@@ -1756,7 +1756,8 @@ const styles = StyleSheet.create({
     padding: 20,
     maxWidth: 400,
     width: '90%',
-    maxHeight: '90%',
+    maxHeight: '85%',
+    flexDirection: 'column',
   },
   calendarModalHeader: {
     flexDirection: 'row',
