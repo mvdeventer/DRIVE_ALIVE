@@ -1449,25 +1449,35 @@ echo %COLOR_YELLOW%[2/6] Staging version changes...%COLOR_RESET%
 git add frontend/package.json frontend/app.json backend/app/__init__.py
 echo %COLOR_GREEN%Changes staged%COLOR_RESET%
 
-:: Commit version changes
+:: Commit version changes (only if there is anything new to commit)
 echo.
 echo %COLOR_YELLOW%[3/6] Committing version changes...%COLOR_RESET%
-git commit -m "chore: bump version to %VERSION_NUMBER%"
+git diff --cached --quiet
 if errorlevel 1 (
-    echo %COLOR_RED%Failed to commit version changes%COLOR_RESET%
-    exit /b 1
+    git commit -m "chore: bump version to %VERSION_NUMBER%"
+    if errorlevel 1 (
+        echo %COLOR_RED%Failed to commit version changes%COLOR_RESET%
+        exit /b 1
+    )
+    echo %COLOR_GREEN%Version changes committed%COLOR_RESET%
+) else (
+    echo %COLOR_YELLOW%Nothing new to commit - version files already up to date%COLOR_RESET%
 )
-echo %COLOR_GREEN%Version changes committed%COLOR_RESET%
 
-:: Create Git tag
+:: Create Git tag (skip gracefully if it already exists locally)
 echo.
 echo %COLOR_YELLOW%[4/6] Creating Git tag %RELEASE_VERSION%...%COLOR_RESET%
-git tag -a %RELEASE_VERSION% -m "Release %RELEASE_VERSION%"
+git rev-parse %RELEASE_VERSION% >nul 2>&1
 if errorlevel 1 (
-    echo %COLOR_RED%Failed to create Git tag%COLOR_RESET%
-    exit /b 1
+    git tag -a %RELEASE_VERSION% -m "Release %RELEASE_VERSION%"
+    if errorlevel 1 (
+        echo %COLOR_RED%Failed to create Git tag%COLOR_RESET%
+        exit /b 1
+    )
+    echo %COLOR_GREEN%Git tag created%COLOR_RESET%
+) else (
+    echo %COLOR_YELLOW%Tag %RELEASE_VERSION% already exists - skipping tag creation%COLOR_RESET%
 )
-echo %COLOR_GREEN%Git tag created%COLOR_RESET%
 
 :: Push changes and tags
 echo.
@@ -1479,10 +1489,15 @@ if errorlevel 1 (
     git tag -d %RELEASE_VERSION%
     exit /b 1
 )
-git push origin %RELEASE_VERSION%
+git push origin %RELEASE_VERSION% 2>nul
 if errorlevel 1 (
-    echo %COLOR_RED%Failed to push tag%COLOR_RESET%
-    exit /b 1
+    :: Tag may already be on remote - check before calling it a failure
+    for /f %%T in ('git ls-remote --tags origin %RELEASE_VERSION% 2^>nul') do set "TAG_REMOTE=%%T"
+    if not defined TAG_REMOTE (
+        echo %COLOR_RED%Failed to push tag%COLOR_RESET%
+        exit /b 1
+    )
+    echo %COLOR_YELLOW%Tag %RELEASE_VERSION% already exists on remote - skipping push%COLOR_RESET%
 )
 echo %COLOR_GREEN%Changes and tags pushed to GitHub%COLOR_RESET%
 
