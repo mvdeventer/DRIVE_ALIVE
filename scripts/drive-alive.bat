@@ -482,14 +482,14 @@ if "%CLEAR_DB%"=="1" (
 )
 
 REM Run bootstrap if first-time setup needed
-if not exist "%ROOT_DIR%\.installed" (
+if not exist "%PROJECT_ROOT%\.installed" (
     echo %COLOR_YELLOW%First-run detected - running bootstrap setup...%COLOR_RESET%
-    cd /d "%ROOT_DIR%"
+    cd /d "%PROJECT_ROOT%"
     python bootstrap.py
     if errorlevel 1 (
         echo %COLOR_RED%Bootstrap failed. Falling back to manual dependency check...%COLOR_RESET%
     )
-    cd /d "%SCRIPT_DIR%"
+    cd /d "%SCRIPTS_DIR%"
 )
 
 call :check_and_setup_dependencies
@@ -956,7 +956,7 @@ echo.
 
 echo %COLOR_YELLOW%[3/3] Installing frontend dependencies...%COLOR_RESET%
 cd /d "%FRONTEND_DIR%"
-call npm install
+call npm install --legacy-peer-deps
 if errorlevel 1 (
     echo %COLOR_RED%Failed to install frontend dependencies%COLOR_RESET%
     exit /b 1
@@ -980,7 +980,7 @@ goto :eof
 :install_frontend_only
 echo %COLOR_YELLOW%Installing frontend dependencies only...%COLOR_RESET%
 cd /d "%FRONTEND_DIR%"
-call npm install
+call npm install --legacy-peer-deps
 echo %COLOR_GREEN%Frontend dependencies installed%COLOR_RESET%
 goto :eof
 
@@ -1841,9 +1841,9 @@ echo [DEBUG] Step 2: Python OK
 :: Check .env file exists
 if not exist "%BACKEND_DIR%\.env" (
     echo %COLOR_YELLOW%.env file not found. Running bootstrap to generate...%COLOR_RESET%
-    cd /d "%ROOT_DIR%"
+    cd /d "%PROJECT_ROOT%"
     python bootstrap.py --force
-    cd /d "%SCRIPT_DIR%"
+    cd /d "%SCRIPTS_DIR%"
 )
 
 :: Check Node.js
@@ -1896,7 +1896,7 @@ echo [DEBUG] Step 9: After backend dependencies check
 if not exist "%FRONTEND_DIR%\node_modules" (
     echo %COLOR_YELLOW%Frontend dependencies not installed. Installing...%COLOR_RESET%
     cd /d "%FRONTEND_DIR%"
-    call npm install
+    call npm install --legacy-peer-deps
     if errorlevel 1 (
         echo %COLOR_RED%Failed to install frontend dependencies%COLOR_RESET%
         exit /b 1

@@ -567,10 +567,12 @@ def install_npm_packages(offline=False):
         log_ok("Frontend node_modules already exists")
         return True
 
+    npm_exe = shutil.which("npm") or "npm"
+
     if not offline:
         log("  Installing npm packages...", Colors.CYAN)
         result = run_cmd(
-            ["npm", "install"],
+            [npm_exe, "install", "--legacy-peer-deps"],
             cwd=str(FRONTEND_DIR),
             check=False,
             capture=False,
@@ -599,7 +601,7 @@ def install_npm_packages(offline=False):
     # Try npm ci with cache
     log("  Trying npm ci --prefer-offline...", Colors.CYAN)
     result = run_cmd(
-        ["npm", "ci", "--prefer-offline"],
+        [npm_exe, "ci", "--prefer-offline", "--legacy-peer-deps"],
         cwd=str(FRONTEND_DIR),
         check=False,
         capture=False,

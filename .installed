@@ -1,6 +1,6 @@
 {
-  "installed_at": "2026-02-13T08:18:25",
-  "python_version": "3.14.2",
+  "installed_at": "2026-02-26T13:02:24",
+  "python_version": "3.11.9",
   "platform": "Windows",
   "machine": "AMD64",
   "results": {
@@ -9,10 +9,10 @@
     "venv": "ok",
     "python_packages": "ok",
     "nodejs": "ok",
-    "npm_packages": "ok",
+    "npm_packages": "failed",
     "env_file": "ok",
     "database": "skipped_no_postgresql",
     "tables": "skipped"
   },
-  "node_version": "v24.12.0"
+  "node_version": "v24.14.0"
 }
