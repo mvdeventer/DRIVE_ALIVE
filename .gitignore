@@ -113,6 +113,11 @@ docker-compose.override.yml
 .cache/
 .parcel-cache/
 
+# Vendor / offline bundle directory (large binaries, not for git)
+vendor/installers/
+vendor/python/
+vendor/node/
+
 
 #Ignore vscode AI rules
 .github\instructions\codacy.instructions.md
