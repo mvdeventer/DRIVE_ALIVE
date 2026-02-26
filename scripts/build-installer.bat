@@ -84,7 +84,7 @@ if not exist "node_modules" (
 
 REM Build web version
 echo Building frontend web bundle...
-call npx expo export:web
+call npx expo export --platform web
 
 if !errorlevel! neq 0 (
     echo Error: Frontend build failed

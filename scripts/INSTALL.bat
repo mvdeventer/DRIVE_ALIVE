@@ -95,7 +95,7 @@ for %%P in (python python3 py) do (
         %%P --version >nul 2>&1
         if !errorlevel! equ 0 (
             :: Verify version is 3.9+
-            for /f "tokens=2" %%V in ('%%P --version 2^>&1') do (
+            for /f "tokens=2" %%V in ('%%P --version 2^>^&1') do (
                 for /f "tokens=1,2 delims=." %%M in ("%%V") do (
                     if %%M geq 3 (
                         if %%N geq 9 (
@@ -145,7 +145,7 @@ call :step_header "3" "5" "Checking Node.js"
 set "NODE_OK=0"
 node --version >nul 2>&1
 if !errorlevel! equ 0 (
-    for /f "tokens=1" %%V in ('node --version 2^>&1') do (
+    for /f "tokens=1" %%V in ('node --version 2^>^&1') do (
         set "NODE_VER=%%V"
         set "NODE_VER=!NODE_VER:v=!"
     )
