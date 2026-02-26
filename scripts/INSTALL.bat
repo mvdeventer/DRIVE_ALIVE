@@ -45,74 +45,74 @@ for %%A in (%*) do (
 call :header
 
 :: ── Uninstall mode ───────────────────────────────────────────────────────────
-if "!UNINSTALL!"=="1" (
-    echo -------------------------------------------------------------
-    echo  DRIVE ALIVE - UNINSTALLER
-    echo -------------------------------------------------------------
-    echo.
-    echo   This will REMOVE all generated files, environments, and config:
-    echo     - backend\venv
-    echo     - frontend\node_modules
-    echo     - build\, dist\, backend\dist\
-    echo     - .installed marker
-    echo     - Optionally: backend\.env
-    echo     - Optionally: DROP the PostgreSQL database
-    echo.
-    set /p "CONFIRM=Are you sure you want to uninstall everything? (y/N): "
-    if /i not "!CONFIRM!"=="y" (
-        echo   Aborted.
-        exit /b 1
-    )
-
-    echo   Removing backend\venv ...
-    rmdir /s /q "%PROJECT_ROOT%\backend\venv" 2>nul
-    echo   Removing frontend\node_modules ...
-    rmdir /s /q "%PROJECT_ROOT%\frontend\node_modules" 2>nul
-    echo   Removing build\ ...
-    rmdir /s /q "%PROJECT_ROOT%\build" 2>nul
-    echo   Removing dist\ ...
-    rmdir /s /q "%PROJECT_ROOT%\dist" 2>nul
-    echo   Removing backend\dist\ ...
-    rmdir /s /q "%PROJECT_ROOT%\backend\dist" 2>nul
-    echo   Removing .installed marker ...
-    del /f /q "%PROJECT_ROOT%\.installed" 2>nul
-
-    if exist "%PROJECT_ROOT%\backend\.env" (
-        set /p "DELENV=Delete backend\.env file? (y/N): "
-        if /i "!DELENV!"=="y" del /f /q "%PROJECT_ROOT%\backend\.env"
-    )
-
-    set /p "DROPDB=Drop the PostgreSQL database (driving_school_db)? (y/N): "
-    if /i "!DROPDB!"=="y" (
-        echo   Attempting to drop database 'driving_school_db' (requires psql)...
-        set "PGUSER=postgres"
-        set "PGDB=driving_school_db"
-        set /p "PGUSER=Enter PostgreSQL superuser (default: postgres): "
-        if "!PGUSER!"=="" set "PGUSER=postgres"
-        set /p "PGPORT=Enter PostgreSQL port (default: 5432): "
-        if "!PGPORT!"=="" set "PGPORT=5432"
-        set /p "PGHOST=Enter PostgreSQL host (default: localhost): "
-        if "!PGHOST!"=="" set "PGHOST=localhost"
-        set /p "PGPASS=Enter PostgreSQL password (leave blank to prompt): "
-        set "PGPASSFILE=%TEMP%\pgpass.txt"
-        if not "!PGPASS!"=="" echo !PGHOST!:!PGPORT!:*:%PGUSER%:!PGPASS! > !PGPASSFILE!
-        set "PGPASSFILE_ARG="
-        if exist "!PGPASSFILE!" set "PGPASSFILE_ARG=--no-password --username=%PGUSER% --host=%PGHOST% --port=%PGPORT% --file=!PGPASSFILE!"
-        echo   Terminating connections and dropping database...
-        setlocal
-        set PGPASSWORD=!PGPASS!
-        psql -U !PGUSER! -h !PGHOST! -p !PGPORT! -c "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname='driving_school_db';" postgres
-        psql -U !PGUSER! -h !PGHOST! -p !PGPORT! -c "DROP DATABASE IF EXISTS driving_school_db;" postgres
-        endlocal
-        if exist "!PGPASSFILE!" del /f /q "!PGPASSFILE!"
-    )
-
-    echo.
-    echo   Uninstall complete.
-    echo.
-    pause
-    exit /b 0
+if "!UNINSTALL!"=="1" goto :uninstall
+:uninstall
+echo -------------------------------------------------------------
+echo  DRIVE ALIVE - UNINSTALLER
+echo -------------------------------------------------------------
+echo.
+echo   This will REMOVE all generated files, environments, and config:
+echo     - backend\venv
+echo     - frontend\node_modules
+echo     - build\, dist\, backend\dist\
+echo     - .installed marker
+echo     - Optionally: backend\.env
+echo     - Optionally: DROP the PostgreSQL database
+echo.
+set /p "CONFIRM=Are you sure you want to uninstall everything? (y/N): "
+if /i not "!CONFIRM!"=="y" (
+    echo   Aborted.
+    exit /b 1
 )
+
+echo   Removing backend\venv ...
+rmdir /s /q "%PROJECT_ROOT%\backend\venv" 2>nul
+echo   Removing frontend\node_modules ...
+rmdir /s /q "%PROJECT_ROOT%\frontend\node_modules" 2>nul
+echo   Removing build\ ...
+rmdir /s /q "%PROJECT_ROOT%\build" 2>nul
+echo   Removing dist\ ...
+rmdir /s /q "%PROJECT_ROOT%\dist" 2>nul
+echo   Removing backend\dist\ ...
+rmdir /s /q "%PROJECT_ROOT%\backend\dist" 2>nul
+echo   Removing .installed marker ...
+del /f /q "%PROJECT_ROOT%\.installed" 2>nul
+
+if exist "%PROJECT_ROOT%\backend\.env" (
+    set /p "DELENV=Delete backend\.env file? (y/N): "
+    if /i "!DELENV!"=="y" del /f /q "%PROJECT_ROOT%\backend\.env"
+)
+
+set /p "DROPDB=Drop the PostgreSQL database (driving_school_db)? (y/N): "
+if /i "!DROPDB!"=="y" (
+    echo   Attempting to drop database 'driving_school_db' (requires psql)...
+    set "PGUSER=postgres"
+    set "PGDB=driving_school_db"
+    set /p "PGUSER=Enter PostgreSQL superuser (default: postgres): "
+    if "!PGUSER!"=="" set "PGUSER=postgres"
+    set /p "PGPORT=Enter PostgreSQL port (default: 5432): "
+    if "!PGPORT!"=="" set "PGPORT=5432"
+    set /p "PGHOST=Enter PostgreSQL host (default: localhost): "
+    if "!PGHOST!"=="" set "PGHOST=localhost"
+    set /p "PGPASS=Enter PostgreSQL password (leave blank to prompt): "
+    set "PGPASSFILE=%TEMP%\pgpass.txt"
+    if not "!PGPASS!"=="" echo !PGHOST!:!PGPORT!:*:%PGUSER%:!PGPASS! > !PGPASSFILE!
+    set "PGPASSFILE_ARG="
+    if exist "!PGPASSFILE!" set "PGPASSFILE_ARG=--no-password --username=%PGUSER% --host=%PGHOST% --port=%PGPORT% --file=!PGPASSFILE!"
+    echo   Terminating connections and dropping database...
+    setlocal
+    set PGPASSWORD=!PGPASS!
+    psql -U !PGUSER! -h !PGHOST! -p !PGPORT! -c "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname='driving_school_db';" postgres
+    psql -U !PGUSER! -h !PGHOST! -p !PGPORT! -c "DROP DATABASE IF EXISTS driving_school_db;" postgres
+    endlocal
+    if exist "!PGPASSFILE!" del /f /q "!PGPASSFILE!"
+)
+
+echo.
+echo   Uninstall complete.
+echo.
+pause
+exit /b 0
 
 :: ── Check if already installed (skip unless --force) ─────────────────────────
 if "!FORCE!"=="0" (
