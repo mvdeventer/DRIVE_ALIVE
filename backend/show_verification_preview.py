@@ -199,7 +199,7 @@ next_steps = """
    - SetupScreen will appear automatically
    
 2. Enter credentials:
-   Email: <your SMTP email>`n   App Password: <your Gmail App Password — Google Account > Security > App Passwords>
+   Email: <your SMTP email>`n   App Password: <your Gmail App Password ï¿½ Google Account > Security > App Passwords>
    Link Validity: 30 minutes
    
 3. Click "Test Email" to verify configuration
