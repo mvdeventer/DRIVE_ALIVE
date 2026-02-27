@@ -26,11 +26,15 @@ def print_header(title):
 def send_test_email():
     """Send test verification email"""
     print_header("📧 SENDING TEST VERIFICATION EMAIL")
-    
-    # Credentials
-    smtp_email = "mvdeventer123@gmail.com"
-    smtp_password = "ManniePokkie1@"
-    test_recipient = "mvdeventer123@gmail.com"
+
+    # Load credentials from environment variables — never hardcode these!
+    smtp_email = os.environ.get('TEST_SMTP_EMAIL', '')
+    smtp_password = os.environ.get('TEST_SMTP_PASSWORD', '')
+    test_recipient = os.environ.get('TEST_SMTP_RECIPIENT', smtp_email)
+
+    if not smtp_email or not smtp_password:
+        print('❌  Set TEST_SMTP_EMAIL and TEST_SMTP_PASSWORD environment variables before running this script.')
+        return
     
     print(f"📧 Email Configuration:")
     print(f"   From (SMTP): {smtp_email}")
@@ -119,24 +123,31 @@ If you didn't create this account, ignore this message.
 def setup_admin_with_credentials():
     """Setup or update admin with provided SMTP credentials"""
     print_header("⚙️  SETTING UP ADMIN WITH EMAIL CREDENTIALS")
-    
-    smtp_email = "mvdeventer123@gmail.com"
-    smtp_password = "ManniePokkie1@"
-    cell_number = "0611154598"
-    
+
+    # Load credentials from environment variables — never hardcode these!
+    smtp_email = os.environ.get('TEST_SMTP_EMAIL', '')
+    smtp_password = os.environ.get('TEST_SMTP_PASSWORD', '')
+    cell_number = os.environ.get('TEST_PHONE', '')
+
+    if not smtp_email or not smtp_password:
+        print('❌  Set TEST_SMTP_EMAIL and TEST_SMTP_PASSWORD environment variables before running this script.')
+        return False
+
+    from app.utils.encryption import EncryptionService
+
     db = SessionLocal()
-    
+
     try:
         # Check if admin exists
         admin = db.query(User).filter(User.role == UserRole.ADMIN).first()
-        
+
         if admin:
             print(f"✅ Admin found: {admin.email}")
             print(f"\n📝 Updating SMTP credentials...")
-            
-            # Update SMTP settings
+
+            # Update SMTP settings — password is ALWAYS stored encrypted
             admin.smtp_email = smtp_email
-            admin.smtp_password = smtp_password
+            admin.smtp_password = EncryptionService.encrypt(smtp_password)
             admin.verification_link_validity_minutes = 30
             
             db.commit()

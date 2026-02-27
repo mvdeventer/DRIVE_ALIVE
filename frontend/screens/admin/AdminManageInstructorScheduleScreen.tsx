@@ -52,9 +52,17 @@ const DAY_LABELS: { [key: string]: string } = {
 };
 
 export default function AdminManageInstructorScheduleScreen({ route, navigation: navProp }: any) {
-  const { instructorId, instructorName } = route.params;
+  const { instructorId, instructorName, setupToken } = route.params;
   const navInstance = navProp || useNavigation();
   const { colors } = useTheme();
+
+  // URL builder: uses unauthenticated setup endpoints when a one-time setup_token
+  // is present (instructor initial schedule setup before account verification).
+  const scheduleBase = setupToken
+    ? `/instructors/setup/${instructorId}`
+    : `/admin/instructors/${instructorId}`;
+  const setupSuffix = setupToken ? `?setup_token=${encodeURIComponent(setupToken)}` : '';
+  const scheduleUrl = (path: string) => `${scheduleBase}${path}${setupSuffix}`;
   const scrollViewRef = useRef<ScrollView>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -145,8 +153,8 @@ export default function AdminManageInstructorScheduleScreen({ route, navigation:
     try {
       setLoading(true);
       const [scheduleRes, timeOffRes] = await Promise.all([
-        ApiService.get(`/admin/instructors/${instructorId}/schedule`),
-        ApiService.get(`/admin/instructors/${instructorId}/time-off`),
+        ApiService.get(scheduleUrl('/schedule')),
+        ApiService.get(scheduleUrl('/time-off')),
       ]);
 
       const loadedSchedules: Schedule[] = scheduleRes.data || [];
@@ -189,7 +197,7 @@ export default function AdminManageInstructorScheduleScreen({ route, navigation:
             schedule.is_active !== original.is_active;
           
           if (hasChanged) {
-            await ApiService.put(`/admin/instructors/${instructorId}/schedule/${schedule.id}`, {
+            await ApiService.put(scheduleUrl(`/schedule/${schedule.id}`), {
               start_time: schedule.start_time,
               end_time: schedule.end_time,
               is_active: schedule.is_active,
@@ -197,7 +205,7 @@ export default function AdminManageInstructorScheduleScreen({ route, navigation:
           }
         } else if (!schedule.id && schedule.is_active) {
           // Create new schedule if it doesn't exist and is active
-          const created = await ApiService.post(`/admin/instructors/${instructorId}/schedule`, {
+          const created = await ApiService.post(scheduleUrl('/schedule'), {
             day_of_week: schedule.day_of_week,
             start_time: schedule.start_time,
             end_time: schedule.end_time,
@@ -223,7 +231,7 @@ export default function AdminManageInstructorScheduleScreen({ route, navigation:
 
   const handleDeleteSchedule = async (scheduleId: number) => {
     try {
-      await ApiService.delete(`/admin/instructors/${instructorId}/schedule/${scheduleId}`);
+      await ApiService.delete(scheduleUrl(`/schedule/${scheduleId}`));
       
       // Update local state
       const updatedSchedules = schedules.map((s) =>
@@ -256,7 +264,7 @@ export default function AdminManageInstructorScheduleScreen({ route, navigation:
       };
 
       const created = await ApiService.post(
-        `/admin/instructors/${instructorId}/time-off`,
+        scheduleUrl('/time-off'),
         timeOffPayload
       );
       setTimeOff([...timeOff, created.data]);
@@ -274,7 +282,7 @@ export default function AdminManageInstructorScheduleScreen({ route, navigation:
 
   const handleDeleteTimeOff = async (timeOffId: number) => {
     try {
-      await ApiService.delete(`/admin/instructors/${instructorId}/time-off/${timeOffId}`);
+      await ApiService.delete(scheduleUrl(`/time-off/${timeOffId}`));
       setTimeOff(timeOff.filter((t) => t.id !== timeOffId));
       setConfirmDeleteTimeOff(null);
       scrollViewRef.current?.scrollTo({ y: 0, animated: true });

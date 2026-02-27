@@ -29,20 +29,29 @@ def create_test_admin():
             print(f"✅ Admin already exists: {admin.email}")
             return admin
 
-        # Create admin user
+        # Load credentials from environment variables — never hardcode these!
+        from app.utils.encryption import EncryptionService
+        smtp_email = os.environ.get('TEST_SMTP_EMAIL', '')
+        smtp_password_plain = os.environ.get('TEST_SMTP_PASSWORD', '')
+
+        if not smtp_email or not smtp_password_plain:
+            print('❌  Set TEST_SMTP_EMAIL and TEST_SMTP_PASSWORD environment variables before running this script.')
+            return None
+
+        # Create admin user  — SMTP password is ALWAYS stored encrypted
         admin = User(
             first_name="Admin",
             last_name="User",
             email="admin@test.com",
-            phone="+27611154598",
+            phone=os.environ.get('TEST_PHONE', '+27000000000'),
             id_number="9999999999999",
-            password_hash=get_password_hash("AdminPassword123!"),
+            password_hash=get_password_hash(os.environ.get('TEST_ADMIN_PASSWORD', 'AdminPassword123!')),
             role=UserRole.ADMIN,
             status="active",
             created_at=datetime.now(timezone.utc),
-            # SMTP Configuration
-            smtp_email="mvdeventer123@gmail.com",
-            smtp_password="zebg rkkp tllh frbs",
+            # SMTP Configuration — password stored encrypted
+            smtp_email=smtp_email,
+            smtp_password=EncryptionService.encrypt(smtp_password_plain),
             verification_link_validity_minutes=30,
         )
 

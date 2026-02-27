@@ -61,6 +61,9 @@ export default function FormFieldWithTip({
 
       <TextInput
         {...textInputProps}
+        autoComplete={textInputProps.autoComplete ?? (textInputProps.secureTextEntry ? 'new-password' : 'off')}
+        autoCorrect={textInputProps.autoCorrect ?? false}
+        spellCheck={false}
         placeholderTextColor={colors.inputPlaceholder}
         style={[
           {

@@ -2,6 +2,7 @@
 Authentication service
 """
 
+import uuid
 from datetime import datetime, timezone
 from typing import Optional
 
@@ -141,6 +142,9 @@ class AuthService:
                 print(f"[DEBUG] Auto-verified instructor {instructor.id} (debug mode enabled)")
             else:
                 print(f"[INFO] Instructor {instructor.id} created - requires manual verification")
+
+            # Generate a one-time setup token for pre-auth schedule setup
+            instructor.setup_token = str(uuid.uuid4())
 
             db.add(instructor)
 
@@ -330,13 +334,23 @@ class AuthService:
         return user
 
     @staticmethod
-    def create_user_token(user: User, role: Optional[str] = None) -> str:
+    def create_user_token(user: User, role: Optional[str] = None, db: Optional[Session] = None) -> str:
         """
-        Create access token for user
+        Create access token for user and record the active session token (single-session enforcement).
+        The JWT embeds a `jti` claim that must match `user.active_session_token` on every request.
         """
         selected_role = role or user.role.value
         print(f"🔑 [CREATE_TOKEN] User: {user.email}, role param: {role}, user.role: {user.role.value}, selected_role: {selected_role}")
+
+        # Generate a unique session token (JWT ID)
+        session_token = str(uuid.uuid4())
+
+        # Persist the session token so we can validate it on every authenticated request
+        if db is not None:
+            user.active_session_token = session_token
+            db.commit()
+
         token_data = {"sub": str(user.id), "email": user.email, "role": selected_role}
         print(f"🔑 [CREATE_TOKEN] Token data: {token_data}")
 
-        return create_access_token(token_data)
+        return create_access_token(token_data, jti=session_token)

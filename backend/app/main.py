@@ -24,6 +24,7 @@ from .routes import (
     bookings,
     database,
     database_interface,
+    instructor_setup,
     instructors,
     payments,
     setup,
@@ -36,6 +37,44 @@ from .services.verification_cleanup_scheduler import verification_cleanup_schedu
 
 # Create database tables
 Base.metadata.create_all(bind=engine)
+
+
+def _apply_incremental_migrations():
+    """
+    Apply incremental schema changes that SQLAlchemy's create_all() cannot handle
+    (adding columns to existing tables).  Each operation is idempotent.
+    """
+    from sqlalchemy import inspect, text
+
+    inspector = inspect(engine)
+    try:
+        existing_columns = [col["name"] for col in inspector.get_columns("users")]
+    except Exception:
+        return  # Table doesn't exist yet; create_all will handle it
+
+    # ── Single-session enforcement (Feb 2026) ────────────────────────────────
+    if "active_session_token" not in existing_columns:
+        try:
+            with engine.connect() as conn:
+                conn.execute(text("ALTER TABLE users ADD COLUMN active_session_token VARCHAR"))
+                conn.commit()
+            print("✅ [MIGRATION] Added active_session_token column to users table")
+        except Exception as exc:
+            print(f"⚠️  [MIGRATION] Could not add active_session_token: {exc}")
+
+    # ── Instructor initial-setup token (Feb 2026) ─────────────────────────────
+    try:
+        existing_instructor_cols = [col["name"] for col in inspector.get_columns("instructors")]
+        if "setup_token" not in existing_instructor_cols:
+            with engine.connect() as conn:
+                conn.execute(text("ALTER TABLE instructors ADD COLUMN setup_token VARCHAR"))
+                conn.commit()
+            print("✅ [MIGRATION] Added setup_token column to instructors table")
+    except Exception as exc:
+        print(f"⚠️  [MIGRATION] Could not add setup_token to instructors: {exc}")
+
+
+_apply_incremental_migrations()
 
 
 @asynccontextmanager
@@ -304,6 +343,7 @@ app.include_router(verification.router)
 app.include_router(availability.router)
 app.include_router(bookings.router)
 app.include_router(instructors.router)
+app.include_router(instructor_setup.router)
 app.include_router(payments.router)
 app.include_router(students.router)
 

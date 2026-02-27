@@ -37,6 +37,96 @@ if defined MODE_SWITCH (
 REM --- Ensure PostgreSQL is running ---
 
 call :start_postgres_service
+goto :continue_startup_after_pg
+
+:ensure_docker_postgres
+setlocal enabledelayedexpansion
+REM Check if a Windows PostgreSQL service exists first - if so, skip Docker
+set "PGSERVICE="
+powershell -NoProfile -Command "$svc = Get-Service | Where-Object {$_.Name -like '*postgres*'} | Select-Object -First 1; if ($svc) { Set-Content -Path '%TEMP%\_pgservice2.tmp' -Value $svc.Name }" 2>nul
+if exist "%TEMP%\_pgservice2.tmp" (
+    set /p PGSERVICE=<"%TEMP%\_pgservice2.tmp"
+    del "%TEMP%\_pgservice2.tmp" >nul 2>&1
+)
+if defined PGSERVICE goto :docker_pg_skip
+
+echo.
+echo ============================================
+echo  Checking PostgreSQL Docker container...
+echo ============================================
+docker info >nul 2>&1
+if not errorlevel 1 goto :docker_ready
+echo   [INFO] Docker not running - starting Docker Desktop...
+start "" "C:\Program Files\Docker\Docker\Docker Desktop.exe"
+echo   Waiting for Docker to start (up to 60 seconds)...
+call :wait_for_docker
+if errorlevel 1 goto :docker_pg_skip
+
+:docker_ready
+docker inspect drivealive_postgres_local >nul 2>&1
+if not errorlevel 1 goto :docker_check_running
+echo   [INFO] Starting PostgreSQL Docker container...
+docker run -d --name drivealive_postgres_local -e POSTGRES_USER=postgres -e POSTGRES_PASSWORD=postgres -e POSTGRES_DB=driving_school_db -p 5432:5432 --restart unless-stopped postgres:14-alpine >nul 2>&1
+if errorlevel 1 (
+    echo   [WARN] Could not start PostgreSQL container.
+    goto :docker_pg_skip
+)
+echo   [OK] PostgreSQL container started - waiting for it to be ready...
+call :wait_for_postgres
+goto :docker_pg_skip
+
+:docker_check_running
+set "_pgrunning="
+for /f "tokens=*" %%i in ('docker ps -q --filter "name=drivealive_postgres_local" --filter "status=running" 2^>nul') do set "_pgrunning=%%i"
+if defined _pgrunning (
+    echo   [OK] PostgreSQL Docker container already running.
+    goto :docker_pg_skip
+)
+echo   [INFO] Starting existing PostgreSQL container...
+docker start drivealive_postgres_local >nul 2>&1
+echo   [OK] PostgreSQL container started - waiting for it to be ready...
+call :wait_for_postgres
+
+:docker_pg_skip
+endlocal
+goto :EOF
+
+:wait_for_docker
+setlocal enabledelayedexpansion
+set /a _dw=0
+:docker_daemon_loop
+if !_dw! geq 60 (
+    echo   [WARN] Docker did not start in time - database may not be available.
+    endlocal & exit /b 1
+)
+timeout /t 5 /nobreak >nul 2>&1
+set /a _dw+=5
+docker info >nul 2>&1
+if errorlevel 1 goto :docker_daemon_loop
+echo   [OK] Docker is ready.
+endlocal & exit /b 0
+
+:wait_for_postgres
+setlocal enabledelayedexpansion
+set /a _pw=0
+:pg_ready_loop
+if !_pw! geq 30 (
+    echo   [WARN] PostgreSQL did not become ready in time.
+    endlocal
+    goto :EOF
+)
+docker exec drivealive_postgres_local pg_isready -U postgres >nul 2>&1
+if not errorlevel 1 (
+    echo   [OK] PostgreSQL is ready.
+    endlocal
+    goto :EOF
+)
+timeout /t 2 /nobreak >nul 2>&1
+set /a _pw+=2
+goto :pg_ready_loop
+
+:continue_startup_after_pg
+call :ensure_docker_postgres
 goto :continue_startup
 
 :start_postgres_service
@@ -92,6 +182,21 @@ if not exist "%~dp0.installed" (
     if errorlevel 1 (
         echo.
         echo [WARN] Bootstrap had issues - attempting to continue...
+        echo.
+    )
+)
+
+REM Venv health check: re-run bootstrap if venv is missing/corrupted (even after first-run)
+if not exist "%~dp0backend\venv\Scripts\python.exe" (
+    echo.
+    echo ============================================
+    echo  Virtual environment missing - repairing...
+    echo ============================================
+    echo.
+    python "%~dp0bootstrap.py"
+    if errorlevel 1 (
+        echo.
+        echo [WARN] Bootstrap repair had issues - attempting to continue...
         echo.
     )
 )

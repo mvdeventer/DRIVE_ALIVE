@@ -125,9 +125,17 @@ function AppContent() {
   const [requiresSetup, setRequiresSetup] = useState<boolean>(false);
   const [inactivityTimeout, setInactivityTimeout] = useState<number>(15); // Default 15 minutes
   const navigationRef = useRef<any>(null);
+  // Stable ref so the session-invalidation handler registered with ApiService
+  // always calls the latest handleLogout without breaking Rules of Hooks.
+  const handleLogoutRef = useRef<() => void>(() => {});
 
   useEffect(() => {
     checkInitialization();
+  }, []);
+
+  // Register once; the ref keeps it pointing at the current handleLogout.
+  useEffect(() => {
+    ApiService.registerSessionInvalidationHandler(() => handleLogoutRef.current());
   }, []);
 
   // Inactivity tracking - start when authenticated, stop when logged out
@@ -281,6 +289,8 @@ function AppContent() {
       console.error('Error logging out:', error);
     }
   };
+  // Keep the ref current every render so the useEffect above always calls the latest version.
+  handleLogoutRef.current = handleLogout;
 
   return (
     <AuthActionsContext.Provider value={{ onLogout: handleLogout, userName, userRole }}>

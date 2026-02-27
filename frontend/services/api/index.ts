@@ -61,6 +61,12 @@ const storage = {
 
 class ApiService {
   private api: AxiosInstance;
+  private _onSessionInvalidated: (() => void) | null = null;
+
+  /** Register a callback to be called when this device's session is ended from another device. */
+  registerSessionInvalidationHandler(handler: () => void) {
+    this._onSessionInvalidated = handler;
+  }
 
   constructor() {
     // Debug: Log the API URL being used
@@ -103,9 +109,15 @@ class ApiService {
       response => response,
       async error => {
         if (error.response?.status === 401) {
-          // Token expired, logout user
+          // Clear local token
           await storage.removeItem('access_token');
-          // You might want to navigate to login screen here
+          await storage.removeItem('user_role');
+          // If the server signals this session was specifically invalidated by another login,
+          // trigger the registered callback so the UI can navigate to login with a message.
+          const errorCode = error.response?.headers?.['x-error-code'];
+          if (errorCode === 'SESSION_INVALIDATED' && this._onSessionInvalidated) {
+            this._onSessionInvalidated();
+          }
         }
         return Promise.reject(error);
       }

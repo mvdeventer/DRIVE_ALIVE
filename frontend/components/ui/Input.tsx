@@ -48,6 +48,9 @@ export default function Input({
       )}
       <TextInput
         {...props}
+        autoComplete={props.autoComplete ?? (props.secureTextEntry ? 'new-password' : 'off')}
+        autoCorrect={props.autoCorrect ?? false}
+        spellCheck={false}
         onFocus={(e) => {
           setIsFocused(true);
           props.onFocus?.(e);

@@ -70,6 +70,10 @@ class User(Base):
     twilio_sender_phone_number = Column(String, nullable=True)  # Twilio sender number (e.g., +14155238886) - used as FROM in all messages
     twilio_phone_number = Column(String, nullable=True)  # Admin's Twilio phone number for receiving test messages
 
+    # Single-session enforcement: stores the active JWT session token ID (jti)
+    # If set, only the JWT with this jti is valid. Cleared on logout.
+    active_session_token = Column(String, nullable=True)
+
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
@@ -142,6 +146,9 @@ class Instructor(Base):
     # Verification
     is_verified = Column(Boolean, default=False)
     verified_at = Column(DateTime(timezone=True), nullable=True)
+
+    # Initial setup token (one-time UUID issued at registration for pre-auth schedule setup)
+    setup_token = Column(String, nullable=True)
 
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())

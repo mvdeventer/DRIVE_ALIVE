@@ -95,6 +95,18 @@ async def get_current_user(
     if user is None:
         raise credentials_exception
 
+    # ── Single-session validation ─────────────────────────────────────────────
+    # Each JWT carries a `jti` (session token ID). If the DB no longer holds this
+    # token (because the user logged in elsewhere), reject the request.
+    jti = payload.get("jti")
+    if jti is not None and user.active_session_token != jti:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Your session has been ended from another device. Please log in again.",
+            headers={"WWW-Authenticate": "Bearer", "X-Error-Code": "SESSION_INVALIDATED"},
+        )
+    # ─────────────────────────────────────────────────────────────────────────
+
     token_role = payload.get("role")
     if token_role:
         print(f"🔐 [AUTH] JWT token role: {token_role}, Database role: {user.role.value}")
@@ -263,6 +275,7 @@ async def register_instructor(
             "message": "Registration successful! Please verify your account via email/WhatsApp. Admins have also been notified to verify your instructor credentials.",
             "user_id": user.id,
             "instructor_id": instructor.id,
+            "setup_token": instructor.setup_token,
             "verification_sent": {
                 "email_sent": user_verification_result.get("email_sent", False),
                 "whatsapp_sent": user_verification_result.get("whatsapp_sent", False),
@@ -288,15 +301,29 @@ async def login(
     request: Request,  # Required for rate limiter
     form_data: Annotated[OAuth2PasswordRequestForm, Depends()],
     role: str | None = Form(None),
+    force_login: bool = Form(False),
     db: Session = Depends(get_db),
 ):
     """
-    Login with email/phone and password
+    Login with email/phone and password.
+    Single-session enforcement: each user may only be logged in from one device at a time.
+    Pass force_login=true to invalidate any existing session and log in anyway.
     """
     # authenticate_user now raises HTTPException with specific error messages
     user = AuthService.authenticate_user(db, form_data.username, form_data.password)
     
-    print(f"🔐 [LOGIN] User: {user.email}, Received role param: {role}")
+    print(f"🔐 [LOGIN] User: {user.email}, Received role param: {role}, force_login: {force_login}")
+
+    # ── Single-session check ──────────────────────────────────────────────────
+    if user.active_session_token is not None and not force_login:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={
+                "message": "You are already logged in from another device or browser. Log out there first, or choose 'Force Login' to end that session.",
+                "error_code": "ALREADY_LOGGED_IN",
+            },
+        )
+    # ─────────────────────────────────────────────────────────────────────────
 
     available_roles: set[str] = set()
 
@@ -329,7 +356,7 @@ async def login(
         )
 
     print(f"🔐 [LOGIN] Creating token with selected_role: {selected_role}")
-    access_token = AuthService.create_user_token(user, selected_role)
+    access_token = AuthService.create_user_token(user, selected_role, db=db)
     
     # Set HTTP-only cookie for web security (prevents XSS token theft)
     is_secure_cookie = settings.ENVIRONMENT.lower() == "production"
@@ -351,10 +378,35 @@ async def login(
 
 
 @router.post("/logout")
-async def logout(response: Response):
+async def logout(
+    request: Request,
+    response: Response,
+    db: Session = Depends(get_db),
+    access_token: Optional[str] = Cookie(None),
+):
     """
-    Logout user by clearing HTTP-only cookie
+    Logout user: clear HTTP-only cookie and invalidate the active session token in the DB
+    so that the same user cannot remain logged in from another device after this logout.
     """
+    # Attempt to decode the token to locate the user and clear their session token.
+    # We do this softly (no exception on mismatch) so the logout always succeeds.
+    token = access_token
+    if not token:
+        authorization = request.headers.get("Authorization")
+        if authorization and authorization.startswith("Bearer "):
+            token = authorization.replace("Bearer ", "")
+
+    if token:
+        payload = decode_access_token(token)
+        if payload:
+            user_id = payload.get("sub")
+            if user_id:
+                user = db.query(User).filter(User.id == int(user_id)).first()
+                if user:
+                    user.active_session_token = None
+                    db.commit()
+                    print(f"🔓 [LOGOUT] Cleared active_session_token for user {user.email}")
+
     response.delete_cookie(key="access_token")
     return {"message": "Successfully logged out"}
 

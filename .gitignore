@@ -124,5 +124,9 @@ vendor/node/
 
 # Local secrets
 keys.txt
+KEYS.txt
+*.keys.txt
+secrets.txt
+SECRETS.txt
 # mkcert binary
 mkcert.exe

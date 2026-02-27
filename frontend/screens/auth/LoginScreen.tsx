@@ -49,6 +49,9 @@ export default function LoginScreen({ navigation, onAuthChange }: any) {
   const [showPassword, setShowPassword] = useState(false);
   const [showRoleModal, setShowRoleModal] = useState(false);
   const [roleOptions, setRoleOptions] = useState<string[]>([]);
+  const [roleSelectionIsForceLogin, setRoleSelectionIsForceLogin] = useState(false);
+  const [showForceLoginModal, setShowForceLoginModal] = useState(false);
+  const [pendingForceLoginRole, setPendingForceLoginRole] = useState<string | undefined>(undefined);
   const [message, setMessage] = useState<{
     type: 'success' | 'error' | 'warning' | 'info';
     text: string;
@@ -69,12 +72,15 @@ export default function LoginScreen({ navigation, onAuthChange }: any) {
     return normalizedEmailOrPhone;
   };
 
-  const buildLoginBody = (selectedRole?: string) => {
+  const buildLoginBody = (selectedRole?: string, forceLogin?: boolean) => {
     const params = new URLSearchParams();
     params.append('username', normalizeLoginIdentifier());
     params.append('password', password);
     if (selectedRole) {
       params.append('role', selectedRole);
+    }
+    if (forceLogin) {
+      params.append('force_login', 'true');
     }
     return params.toString();
   };
@@ -91,14 +97,26 @@ export default function LoginScreen({ navigation, onAuthChange }: any) {
 
     const data = await fetchResponse.json();
     if (!fetchResponse.ok) {
-      throw new Error(data.detail || 'Login failed');
+      // `detail` may be a string or a structured object { message, error_code }
+      const detailMsg =
+        typeof data.detail === 'object' && data.detail !== null
+          ? data.detail.message
+          : data.detail;
+      const errorCode =
+        typeof data.detail === 'object' && data.detail !== null
+          ? data.detail.error_code
+          : undefined;
+      const err: any = new Error(detailMsg || 'Login failed');
+      err.httpStatus = fetchResponse.status;
+      err.errorCode = errorCode;
+      throw err;
     }
 
     return data;
   };
 
-  const requestLogin = async (selectedRole?: string) => {
-    return fetchLoginResponse(buildLoginBody(selectedRole));
+  const requestLogin = async (selectedRole?: string, forceLogin?: boolean) => {
+    return fetchLoginResponse(buildLoginBody(selectedRole, forceLogin));
   };
 
   const finalizeLogin = async (accessToken: string, role?: string) => {
@@ -148,6 +166,7 @@ export default function LoginScreen({ navigation, onAuthChange }: any) {
       if (data.requires_role_selection && Array.isArray(data.available_roles)) {
         console.log('[LoginScreen] Role selection required:', data.available_roles);
         setRoleOptions(data.available_roles);
+        setRoleSelectionIsForceLogin(false);
         setShowRoleModal(true);
         return;
       }
@@ -157,27 +176,26 @@ export default function LoginScreen({ navigation, onAuthChange }: any) {
       await finalizeLogin(data.access_token, data.role);
     } catch (error: any) {
       console.error('Login error:', error);
-      console.error('Error response:', error.response);
-      console.error('Error data:', error.response?.data);
-      console.error('Error detail:', error.response?.data?.detail);
-      console.error('Error status:', error.response?.status);
-      console.error('Error code:', error.code);
-      console.error('Error request:', error.request);
+
+      // ── Single-session conflict ────────────────────────────────────────────
+      if (error.httpStatus === 409 || error.errorCode === 'ALREADY_LOGGED_IN') {
+        setPendingForceLoginRole(selectedRole);
+        setShowForceLoginModal(true);
+        return;
+      }
+      // ───────────────────────────────────────────────────────────────────────
 
       // More detailed error message for debugging
       let errorMessage = 'An error occurred during login';
-      let statusCode = 'unknown';
+      let statusCode = error.httpStatus ?? 'unknown';
 
       if (error.response) {
-        // Server responded with error
         errorMessage = error.response.data?.detail || error.response.statusText || 'Server error';
         statusCode = error.response.status;
       } else if (error.request) {
-        // Request made but no response (network error)
         errorMessage = `Network error: ${error.message}. Check if backend is running and firewall allows port 8000.`;
         statusCode = 'network';
       } else {
-        // Something else happened
         errorMessage = error.message;
       }
 
@@ -199,7 +217,53 @@ export default function LoginScreen({ navigation, onAuthChange }: any) {
 
   const handleRoleSelect = async (role: string) => {
     setShowRoleModal(false);
-    await performLogin(role);
+    if (roleSelectionIsForceLogin) {
+      // This role selection is part of a force-login flow — pass force_login=true
+      setRoleSelectionIsForceLogin(false);
+      const errors: { emailOrPhone?: string; password?: string } = {};
+      if (!emailOrPhone) errors.emailOrPhone = 'Email or phone is required';
+      if (!password) errors.password = 'Password is required';
+      if (Object.keys(errors).length > 0) return;
+      try {
+        setLoading(true);
+        const data = await requestLogin(role, true /* forceLogin */);
+        await finalizeLogin(data.access_token, data.role);
+      } catch (error: any) {
+        setMessage({ type: 'error', text: error.message || 'Force login failed' });
+        setTimeout(() => setMessage(null), 8000);
+      } finally {
+        setLoading(false);
+      }
+    } else {
+      await performLogin(role);
+    }
+  };
+
+  const handleForceLogin = async () => {
+    setShowForceLoginModal(false);
+    const role = pendingForceLoginRole;
+    setPendingForceLoginRole(undefined);
+    // Re-run login with force_login=true to override the other session
+    const errors: { emailOrPhone?: string; password?: string } = {};
+    if (!emailOrPhone) errors.emailOrPhone = 'Email or phone is required';
+    if (!password) errors.password = 'Password is required';
+    if (Object.keys(errors).length > 0) return;
+    try {
+      setLoading(true);
+      const data = await requestLogin(role, true /* forceLogin */);
+      if (data.requires_role_selection && Array.isArray(data.available_roles)) {
+        setRoleOptions(data.available_roles);
+        setRoleSelectionIsForceLogin(true); // keep force context for role selection
+        setShowRoleModal(true);
+        return;
+      }
+      await finalizeLogin(data.access_token, data.role);
+    } catch (error: any) {
+      setMessage({ type: 'error', text: error.message || 'Force login failed' });
+      setTimeout(() => setMessage(null), 8000);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -344,6 +408,28 @@ export default function LoginScreen({ navigation, onAuthChange }: any) {
           onPress={() => setShowRoleModal(false)}
           fullWidth
           style={{ marginTop: 4 }}
+        />
+      </ThemedModal>
+
+      {/* Force Login Modal — shown when the account is already active elsewhere */}
+      <ThemedModal
+        visible={showForceLoginModal}
+        onClose={() => setShowForceLoginModal(false)}
+        title="Already Logged In"
+        subtitle="This account is already logged in from another device or browser. You can force-end that session and log in here instead."
+        size="sm"
+      >
+        <Button
+          label="Force Login (End Other Session)"
+          onPress={handleForceLogin}
+          fullWidth
+          style={{ marginBottom: 10 }}
+        />
+        <Button
+          label="Cancel"
+          variant="ghost"
+          onPress={() => { setShowForceLoginModal(false); setPendingForceLoginRole(undefined); }}
+          fullWidth
         />
       </ThemedModal>
     </KeyboardAvoidingView>

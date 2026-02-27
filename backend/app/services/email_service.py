@@ -399,7 +399,13 @@ If you didn't create an account with us, please ignore this email.
             </div>
             
             <p><strong>Note:</strong> The student has been sent a verification link. Once verified, they will be able to access the platform and book lessons.</p>
-            
+
+            <p><strong>Student's Verification Link (for your reference):</strong></p>
+            <div style="text-align: center; margin: 15px 0;">
+                <a href="{verification_link}" style="display: inline-block; padding: 12px 25px; background-color: #007bff; color: white; text-decoration: none; border-radius: 5px; font-weight: bold;">🔗 Student Verification Link</a>
+            </div>
+            <p style="word-break: break-all; background-color: #fff; padding: 10px; border: 1px solid #ddd; font-size: 13px;">{verification_link}</p>
+
             <p style="font-size: 12px; color: #666;">This is an automated notification. You do not need to take any action unless the student contacts you directly.</p>
         </div>
         <div class="footer">
@@ -421,7 +427,9 @@ A new student has registered:
 - Phone: {student_phone}
 - Status: Awaiting Verification
 
-The student has been sent a verification link. Once verified, they will be able to book lessons.
+Student Verification Link: {verification_link}
+
+The student has been sent this link to verify their account. Once verified, they will be able to book lessons.
 """
 
         try:

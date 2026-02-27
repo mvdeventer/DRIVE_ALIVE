@@ -22,6 +22,7 @@ export default function InstructorScheduleSetupScreen({ route, navigation }: any
     instructorId: passedInstructorId,
     instructorName,
     isInitialSetup = false,
+    setupToken = undefined as string | undefined,
     verificationData = null,
   } = route.params || {};
 
@@ -107,7 +108,7 @@ export default function InstructorScheduleSetupScreen({ route, navigation }: any
         </View>
       ) : null}
       <AdminManageInstructorScheduleScreen
-        route={{ params: { instructorId, instructorName } }}
+        route={{ params: { instructorId, instructorName, setupToken } }}
         navigation={navigation}
       />
     </View>

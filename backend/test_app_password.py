@@ -7,10 +7,14 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from app.services.email_service import EmailService
 
-# Gmail credentials
-email = 'mvdeventer123@gmail.com'
-app_password = 'zebg rkkp tllh frbs'
-recipient = 'mvdeventer123@gmail.com'
+# Load credentials from environment variables — never hardcode these!
+email = os.environ.get('TEST_SMTP_EMAIL', '')
+app_password = os.environ.get('TEST_SMTP_PASSWORD', '')
+recipient = os.environ.get('TEST_SMTP_RECIPIENT', email)
+
+if not email or not app_password:
+    print('❌  Set TEST_SMTP_EMAIL and TEST_SMTP_PASSWORD environment variables before running this script.')
+    sys.exit(1)
 
 print('\n' + '=' * 80)
 print('📧 TESTING EMAIL WITH PROVIDED APP PASSWORD')
@@ -41,8 +45,8 @@ try:
         print()
         print('Next steps:')
         print('1. Go to SetupScreen in the app')
-        print('2. Enter email: mvdeventer123@gmail.com')
-        print('3. Enter app password: zebg rkkp tllh frbs')
+        print('2. Enter your SMTP email address')
+        print('3. Enter your Gmail app password (see Google Account > Security > App Passwords)')
         print('4. Set link validity: 30 minutes')
         print('5. Click "Test Email" to verify')
         print()

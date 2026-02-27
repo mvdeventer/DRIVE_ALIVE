@@ -231,7 +231,8 @@ class VerificationService:
                         admin_name=admin_user.first_name,
                         student_name=f"{user.first_name} {user.last_name}",
                         student_email=user.email,
-                        student_phone=user.phone
+                        student_phone=user.phone,
+                        verification_link=verification_link
                     )
                     if admin_wa_sent:
                         admin_whatsapp_sent += 1

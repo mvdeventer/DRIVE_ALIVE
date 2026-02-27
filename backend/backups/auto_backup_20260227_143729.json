@@ -1,0 +1,29 @@
+{
+  "users": [
+    {
+      "id": 1,
+      "email": "mvdeventer123@gmail.com",
+      "phone": "+27611154598",
+      "password_hash": "$2b$12$0F2DvH3mzzgVBtyh0ddUiuewflYILG8IxOFdb8B/NdEs6ktSRllga",
+      "first_name": "Martin",
+      "last_name": "van Deventer",
+      "role": "admin",
+      "status": "active",
+      "firebase_uid": null,
+      "address": "Potgieter Crescent\nMorgenster Hoogte\nKraaifontein\n7560",
+      "address_latitude": -33.865587313748186,
+      "address_longitude": 18.700376401308958,
+      "created_at": "2026-02-27T12:35:51.350019+00:00",
+      "updated_at": "2026-02-27T12:36:25.128592+00:00",
+      "last_login": "2026-02-27T12:36:25.351687+00:00"
+    }
+  ],
+  "instructors": [],
+  "students": [],
+  "bookings": [],
+  "reviews": [],
+  "instructor_schedules": [],
+  "time_off_exceptions": [],
+  "custom_availability": [],
+  "transactions": []
+}

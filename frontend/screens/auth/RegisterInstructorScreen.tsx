@@ -141,6 +141,9 @@ export default function RegisterInstructorScreen({ navigation }: any) {
 
       const response = await ApiService.post('/auth/register/instructor', registrationData);
 
+      const instructorId = response.instructor_id as number;
+      const setupToken = response.setup_token as string | undefined;
+
       // Capture verification info from response
       const verificationData = response.verification_sent || {
         email_sent: false,
@@ -151,33 +154,23 @@ export default function RegisterInstructorScreen({ navigation }: any) {
         total_admins: 0,
       };
 
-      // Show success message about both user and admin verification
-      const adminCount = verificationData.total_admins || 0;
-      
-      let successText = '✅ Registration Successful!\n\n';
-      successText += 'Please check your email and WhatsApp to verify your account.\n\n';
-      if (adminCount > 0) {
-        successText += `Admins (${adminCount}) have also been notified to verify your instructor credentials.\n\n`;
-      }
-      successText += 'You must verify your account before you can log in.';
-
-      setMessage({
-        type: 'success',
-        text: successText,
-      });
-      scrollViewRef.current?.scrollTo({ y: 0, animated: true });
-
-      // Navigate to verification pending screen
-      setTimeout(() => {
-        navigation.replace('VerificationPending', {
+      // Navigate directly to schedule setup so instructor can configure availability now
+      navigation.replace('InstructorScheduleSetup', {
+        instructorId,
+        instructorName: `${formData.first_name} ${formData.last_name}`,
+        isInitialSetup: true,
+        setupToken,
+        verificationData: {
           email: formData.email,
           phone: formData.phone,
           firstName: formData.first_name,
           emailSent: verificationData.email_sent || false,
           whatsappSent: verificationData.whatsapp_sent || false,
           expiryMinutes: verificationData.expires_in_minutes || 30,
-        });
-      }, 3000);
+          adminVerificationPending: (verificationData.total_admins || 0) > 0,
+          adminCount: verificationData.total_admins || 0,
+        },
+      });
     } catch (error: any) {
       console.error('Registration error:', error);
       console.error('Error response:', error.response);

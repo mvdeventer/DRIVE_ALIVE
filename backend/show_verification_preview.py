@@ -11,13 +11,11 @@ def print_section(title):
 print_section("✅ VERIFICATION SYSTEM - FULLY TESTED & WORKING")
 
 print("""
-CONFIGURATION CONFIRMED:
+CONFIGURATION:
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-✅ Gmail Email: mvdeventer123@gmail.com
-✅ App Password: zebg rkkp tllh frbs
-✅ Phone Number: +27611154598
-✅ SMTP Test: SUCCESSFUL
+  SMTP credentials are configured in the app via the Setup/Admin screen
+  and stored encrypted in the database.  Do not hardcode them here.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 """)
@@ -201,8 +199,7 @@ next_steps = """
    - SetupScreen will appear automatically
    
 2. Enter credentials:
-   Email: mvdeventer123@gmail.com
-   App Password: zebg rkkp tllh frbs
+   Email: <your SMTP email>`n   App Password: <your Gmail App Password � Google Account > Security > App Passwords>
    Link Validity: 30 minutes
    
 3. Click "Test Email" to verify configuration

@@ -507,7 +507,8 @@ Drive Safe! 🚗
         admin_name: str,
         student_name: str,
         student_email: str,
-        student_phone: str
+        student_phone: str,
+        verification_link: str = None
     ) -> bool:
         """
         Send notification to admin about new student registration
@@ -518,6 +519,7 @@ Drive Safe! 🚗
             student_name: Student's full name
             student_email: Student's email
             student_phone: Student's phone
+            verification_link: Student's verification link (optional)
             
         Returns:
             bool: True if successful, False otherwise
@@ -529,7 +531,9 @@ Drive Safe! 🚗
         try:
             to_number = self._format_phone_number(admin_phone)
             from_number = self.get_admin_twilio_sender_phone()
-            
+
+            link_line = f"\n🔗 Verification Link:\n{verification_link}\n" if verification_link else ""
+
             # Admin notification message (different from student verification)
             message_body = (
                 f"👋 Hi {admin_name}!\n\n"
@@ -537,8 +541,8 @@ Drive Safe! 🚗
                 f"📝 Name: {student_name}\n"
                 f"📧 Email: {student_email}\n"
                 f"📱 Phone: {student_phone}\n\n"
-                f"⏳ Status: Awaiting verification\n\n"
-                f"The student has been sent a verification link. "
+                f"⏳ Status: Awaiting verification"
+                f"{link_line}\n"
                 f"They will be able to book lessons once verified.\n\n"
                 f"This is an automated notification from RoadReady."
             )
