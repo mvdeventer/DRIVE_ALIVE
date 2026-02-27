@@ -17,9 +17,33 @@ class WhatsAppService:
     """Service for sending WhatsApp messages via Twilio"""
 
     def __init__(self):
-        """Initialize Twilio client"""
-        self.account_sid = settings.TWILIO_ACCOUNT_SID
-        self.auth_token = settings.TWILIO_AUTH_TOKEN
+        """Initialize Twilio client — tries encrypted DB credentials first, falls back to .env"""
+        # Try DB first
+        account_sid = ""
+        auth_token = ""
+        try:
+            from ..database import SessionLocal
+            from ..models.user import User, UserRole
+            from ..utils.encryption import EncryptionService
+            _db = SessionLocal()
+            try:
+                admin = _db.query(User).filter(User.role == UserRole.ADMIN).first()
+                if admin and admin.twilio_account_sid and admin.twilio_auth_token:
+                    account_sid = EncryptionService.decrypt(admin.twilio_account_sid)
+                    auth_token = EncryptionService.decrypt(admin.twilio_auth_token)
+            finally:
+                _db.close()
+        except Exception:
+            pass
+
+        # Fall back to .env / settings
+        if not account_sid:
+            account_sid = settings.TWILIO_ACCOUNT_SID
+        if not auth_token:
+            auth_token = settings.TWILIO_AUTH_TOKEN
+
+        self.account_sid = account_sid
+        self.auth_token = auth_token
 
         if not self.account_sid or not self.auth_token:
             logger.warning(

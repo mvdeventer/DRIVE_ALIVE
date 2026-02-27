@@ -590,7 +590,7 @@ if "!ENV_MODE!"=="local" (
 )
 
 echo %COLOR_YELLOW%Starting Frontend Server ^(!ENV_MODE! mode^)...%COLOR_RESET%
-powershell -Command "$process = Start-Process cmd -ArgumentList '/k', 'cd /d \"%FRONTEND_DIR%\" && set \"EXPO_OFFLINE=true\" && npx expo start --web %EXPO_HOST_FLAG%' -WindowStyle Normal -PassThru; $process.Id | Out-File -FilePath '%FRONTEND_PID_FILE%' -Encoding ASCII -NoNewline; Write-Host \"Frontend started with PID: $($process.Id)\" -ForegroundColor Green"
+powershell -Command "$process = Start-Process cmd -ArgumentList '/k', 'cd /d \"%FRONTEND_DIR%\" && set \"EXPO_OFFLINE=true\" && set \"BROWSER=none\" && npx expo start --web %EXPO_HOST_FLAG%' -WindowStyle Normal -PassThru; $process.Id | Out-File -FilePath '%FRONTEND_PID_FILE%' -Encoding ASCII -NoNewline; Write-Host \"Frontend started with PID: $($process.Id)\" -ForegroundColor Green"
 
 :: Start SSL proxy if in localhost mode with certs
 if "!USE_SSL_PROXY!"=="1" call :start_ssl_proxy
@@ -612,7 +612,7 @@ echo %COLOR_YELLOW%Opening browser windows...%COLOR_RESET%
 start "" "%API_DOCS_URL%"
 timeout /t 2 /nobreak >nul
 
-REM Open browser - Edge with dev tools if -d flag, otherwise default browser
+REM Open frontend - Edge with dev tools if -d flag, otherwise default browser
 if "%DEV_MODE%"=="1" (
     echo %COLOR_CYAN%Opening Edge with developer tools...%COLOR_RESET%
     powershell -Command "Start-Process msedge -ArgumentList '%FRONTEND_URL_DISPLAY%' -WindowStyle Maximized; Start-Sleep -Seconds 2; (New-Object -ComObject WScript.Shell).SendKeys('{F12}')"
@@ -658,8 +658,10 @@ powershell -Command "$process = Start-Process cmd -ArgumentList '/k', 'cd /d \"%
 echo.
 echo %COLOR_GREEN%Backend server started: %BACKEND_URL%%COLOR_RESET%
 if "%NO_BROWSER%"=="0" (
-    timeout /t 5 /nobreak >nul
-    start "" "%API_DOCS_URL%"
+    if "%DEV_MODE%"=="1" (
+        timeout /t 5 /nobreak >nul
+        start "" "%API_DOCS_URL%"
+    )
 )
 goto :eof
 
@@ -750,7 +752,7 @@ if "!ENV_MODE!"=="local" (
 )
 
 echo %COLOR_YELLOW%Starting Frontend Server only ^(!ENV_MODE! mode^)...%COLOR_RESET%
-powershell -Command "$process = Start-Process cmd -ArgumentList '/k', 'cd /d \"%FRONTEND_DIR%\" && set \"EXPO_OFFLINE=true\" && npx expo start --web %EXPO_HOST_FLAG%' -WindowStyle Normal -PassThru; $process.Id | Out-File -FilePath '%FRONTEND_PID_FILE%' -Encoding ASCII -NoNewline; Write-Host \"Frontend started with PID: $($process.Id)\" -ForegroundColor Green"
+powershell -Command "$process = Start-Process cmd -ArgumentList '/k', 'cd /d \"%FRONTEND_DIR%\" && set \"EXPO_OFFLINE=true\" && set \"BROWSER=none\" && npx expo start --web %EXPO_HOST_FLAG%' -WindowStyle Normal -PassThru; $process.Id | Out-File -FilePath '%FRONTEND_PID_FILE%' -Encoding ASCII -NoNewline; Write-Host \"Frontend started with PID: $($process.Id)\" -ForegroundColor Green"
 
 :: Start SSL proxy if in localhost mode with certs
 if "!USE_SSL_PROXY!"=="1" call :start_ssl_proxy
@@ -828,8 +830,18 @@ echo.
 
 set "CHECK_FAILED=0"
 
+:: Check PostgreSQL
+echo %COLOR_CYAN%[1/9] Checking PostgreSQL...%COLOR_RESET%
+psql --version >nul 2>&1
+if errorlevel 1 (
+    echo %COLOR_RED%  X PostgreSQL not found. Run 'drive-alive.bat install' to install it.%COLOR_RESET%
+    set "CHECK_FAILED=1"
+) else (
+    for /f "tokens=3" %%i in ('psql --version 2^>^&1') do echo %COLOR_GREEN%  ✓ PostgreSQL %%i%COLOR_RESET%
+)
+
 :: Check Python
-echo %COLOR_CYAN%[1/8] Checking Python...%COLOR_RESET%
+echo %COLOR_CYAN%[2/9] Checking Python...%COLOR_RESET%
 python --version >nul 2>&1
 if errorlevel 1 (
     echo %COLOR_RED%  X Python not found. Please install Python 3.9+%COLOR_RESET%
@@ -839,7 +851,7 @@ if errorlevel 1 (
 )
 
 :: Check Node.js
-echo %COLOR_CYAN%[2/8] Checking Node.js...%COLOR_RESET%
+echo %COLOR_CYAN%[3/9] Checking Node.js...%COLOR_RESET%
 node --version >nul 2>&1
 if errorlevel 1 (
     echo %COLOR_RED%  X Node.js not found. Please install Node.js 18+%COLOR_RESET%
@@ -849,7 +861,7 @@ if errorlevel 1 (
 )
 
 :: Check npm
-echo %COLOR_CYAN%[3/8] Checking npm...%COLOR_RESET%
+echo %COLOR_CYAN%[4/9] Checking npm...%COLOR_RESET%
 npm --version >nul 2>&1
 if errorlevel 1 (
     echo %COLOR_RED%  X npm not found%COLOR_RESET%
@@ -859,7 +871,7 @@ if errorlevel 1 (
 )
 
 :: Check Git
-echo %COLOR_CYAN%[4/8] Checking Git...%COLOR_RESET%
+echo %COLOR_CYAN%[5/9] Checking Git...%COLOR_RESET%
 git --version >nul 2>&1
 if errorlevel 1 (
     echo %COLOR_YELLOW%  ! Git not found (optional)%COLOR_RESET%
@@ -868,7 +880,7 @@ if errorlevel 1 (
 )
 
 :: Check GitHub CLI
-echo %COLOR_CYAN%[5/8] Checking GitHub CLI...%COLOR_RESET%
+echo %COLOR_CYAN%[6/9] Checking GitHub CLI...%COLOR_RESET%
 gh --version >nul 2>&1
 if errorlevel 1 (
     echo %COLOR_YELLOW%  ! GitHub CLI not found (optional, needed for commit/release commands)%COLOR_RESET%
@@ -877,7 +889,7 @@ if errorlevel 1 (
 )
 
 :: Check Python Virtual Environment
-echo %COLOR_CYAN%[6/8] Checking Python Virtual Environment...%COLOR_RESET%
+echo %COLOR_CYAN%[7/9] Checking Python Virtual Environment...%COLOR_RESET%
 if exist "%VENV_DIR%\Scripts\python.exe" (
     echo %COLOR_GREEN%  ✓ Virtual environment found at %VENV_DIR%%COLOR_RESET%
 
@@ -895,7 +907,7 @@ if exist "%VENV_DIR%\Scripts\python.exe" (
 )
 
 :: Check Frontend Dependencies
-echo %COLOR_CYAN%[7/8] Checking Frontend Dependencies...%COLOR_RESET%
+echo %COLOR_CYAN%[8/9] Checking Frontend Dependencies...%COLOR_RESET%
 if exist "%FRONTEND_DIR%\node_modules" (
     echo %COLOR_GREEN%  ✓ Frontend dependencies installed%COLOR_RESET%
 ) else (
@@ -904,7 +916,7 @@ if exist "%FRONTEND_DIR%\node_modules" (
 )
 
 :: Check Environment Variables
-echo %COLOR_CYAN%[8/8] Checking Environment Files...%COLOR_RESET%
+echo %COLOR_CYAN%[9/9] Checking Environment Files...%COLOR_RESET%
 if exist "%BACKEND_DIR%\.env" (
     echo %COLOR_GREEN%  ✓ Backend .env file found%COLOR_RESET%
 ) else (
@@ -930,8 +942,26 @@ echo.
 if "%FRONTEND_ONLY%"=="1" goto :install_frontend_only
 if "%BACKEND_ONLY%"=="1" goto :install_backend_only
 
+:: Check / Install PostgreSQL
+echo %COLOR_YELLOW%[1/4] Checking PostgreSQL...%COLOR_RESET%
+psql --version >nul 2>&1
+if errorlevel 1 (
+    echo %COLOR_CYAN%  PostgreSQL not found - installing via winget...%COLOR_RESET%
+    winget install --id PostgreSQL.PostgreSQL.17 --silent --accept-package-agreements --accept-source-agreements
+    if errorlevel 1 (
+        echo %COLOR_RED%  Failed to install PostgreSQL via winget.%COLOR_RESET%
+        echo %COLOR_YELLOW%  Download manually: https://www.postgresql.org/download/windows/%COLOR_RESET%
+    ) else (
+        echo %COLOR_GREEN%  PostgreSQL 17 installed successfully%COLOR_RESET%
+        echo %COLOR_YELLOW%  NOTE: Open a new terminal for PATH to refresh, then run s.bat%COLOR_RESET%
+    )
+) else (
+    for /f "tokens=3" %%i in ('psql --version 2^>^&1') do echo %COLOR_GREEN%  ✓ PostgreSQL %%i already installed%COLOR_RESET%
+)
+echo.
+
 :: Install both
-echo %COLOR_YELLOW%[1/3] Creating Python virtual environment...%COLOR_RESET%
+echo %COLOR_YELLOW%[2/4] Creating Python virtual environment...%COLOR_RESET%
 cd /d "%BACKEND_DIR%"
 if not exist "%VENV_DIR%" (
     python -m venv venv
@@ -943,7 +973,7 @@ if not exist "%VENV_DIR%" (
 echo %COLOR_GREEN%Virtual environment ready%COLOR_RESET%
 echo.
 
-echo %COLOR_YELLOW%[2/3] Installing backend dependencies...%COLOR_RESET%
+echo %COLOR_YELLOW%[3/4] Installing backend dependencies...%COLOR_RESET%
 call "%VENV_DIR%\Scripts\activate.bat"
 python -m pip install --upgrade pip
 pip install -r requirements.txt
@@ -954,7 +984,7 @@ if errorlevel 1 (
 echo %COLOR_GREEN%Backend dependencies installed%COLOR_RESET%
 echo.
 
-echo %COLOR_YELLOW%[3/3] Installing frontend dependencies...%COLOR_RESET%
+echo %COLOR_YELLOW%[4/4] Installing frontend dependencies...%COLOR_RESET%
 cd /d "%FRONTEND_DIR%"
 call npm install --legacy-peer-deps
 if errorlevel 1 (
@@ -964,6 +994,7 @@ if errorlevel 1 (
 echo %COLOR_GREEN%Frontend dependencies installed%COLOR_RESET%
 echo.
 
+echo.
 echo %COLOR_GREEN%All dependencies installed successfully!%COLOR_RESET%
 goto :eof
 
@@ -1761,8 +1792,8 @@ echo   --minor                 Increment minor version (0.x.0)
 echo   --patch                 Increment patch version (0.0.x)
 echo.
 echo EXAMPLES:
-echo   drive-alive.bat                           # Start servers - open default browser
-echo   drive-alive.bat -d                        # Start servers - open Edge with dev tools
+echo   drive-alive.bat                           # Start servers - open frontend in default browser
+echo   drive-alive.bat -d                        # Start servers - open Edge with dev tools + API docs
 echo   drive-alive.bat start -f -d               # Start frontend only - open Edge with dev tools
 echo   drive-alive.bat start -b                  # Start backend only (no dev mode)
 echo   drive-alive.bat start --backend-only --port 8080

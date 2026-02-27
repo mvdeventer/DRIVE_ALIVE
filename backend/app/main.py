@@ -86,6 +86,23 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         print(f"⚠️  Warning initializing tables: {e}")
 
+    # Inline column migration: add encrypted Twilio credential columns if missing
+    try:
+        from sqlalchemy import inspect, text
+        from .database import engine as _engine
+        _insp = inspect(_engine)
+        existing_cols = {c["name"] for c in _insp.get_columns("users")}
+        with _engine.connect() as _conn:
+            if "twilio_account_sid" not in existing_cols:
+                _conn.execute(text("ALTER TABLE users ADD COLUMN twilio_account_sid VARCHAR"))
+                print("✅ Added users.twilio_account_sid column")
+            if "twilio_auth_token" not in existing_cols:
+                _conn.execute(text("ALTER TABLE users ADD COLUMN twilio_auth_token VARCHAR"))
+                print("✅ Added users.twilio_auth_token column")
+            _conn.commit()
+    except Exception as _mig_err:
+        print(f"⚠️  Column migration warning: {_mig_err}")
+
     # Check admin status (no longer auto-creating admin - use setup screen)
     print("\n🔐 Checking for admin user...")
     db = SessionLocal()

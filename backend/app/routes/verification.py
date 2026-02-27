@@ -1,10 +1,12 @@
 """
 Verification routes for email/phone confirmation
 """
+from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from app.database import get_db
+from app.config import settings
 from app.services.verification_service import VerificationService
 from app.services.email_service import EmailService
 from app.models.user import User, UserRole
@@ -112,6 +114,8 @@ def _resolve_twilio_config(
     db: Session,
     sender_phone: str,
     recipient_phone: str,
+    account_sid: str | None = None,
+    auth_token: str | None = None,
 ) -> tuple[str, str, bool]:
     """
     Store Twilio config in database (if admin exists) and return sender/recipient
@@ -124,6 +128,11 @@ def _resolve_twilio_config(
         # Save Twilio config to first admin (global settings holder)
         admin.twilio_sender_phone_number = sender_phone
         admin.twilio_phone_number = recipient_phone
+        # Persist encrypted SID/token if supplied
+        if account_sid:
+            admin.twilio_account_sid = EncryptionService.encrypt(account_sid)
+        if auth_token:
+            admin.twilio_auth_token = EncryptionService.encrypt(auth_token)
         db.commit()
         db.refresh(admin)
 
@@ -308,6 +317,8 @@ class TestWhatsAppRequest(BaseModel):
     """Request schema for testing WhatsApp configuration"""
     phone: str  # Admin's personal phone to receive test
     twilio_sender_phone_number: str  # Twilio sender number (FROM)
+    twilio_account_sid: Optional[str] = None  # Twilio Account SID (required if not in .env)
+    twilio_auth_token: Optional[str] = None   # Twilio Auth Token (required if not in .env)
 
 
 @router.post("/test-whatsapp")
@@ -322,8 +333,6 @@ def test_whatsapp_configuration(request: TestWhatsAppRequest, db: Session = Depe
     This validates the complete store → retrieve → use cycle.
     """
     try:
-        from app.services.whatsapp_service import WhatsAppService
-
         logger.info(
             f"Test WhatsApp request: phone={request.phone}, sender={request.twilio_sender_phone_number}"
         )
@@ -371,12 +380,52 @@ def test_whatsapp_configuration(request: TestWhatsAppRequest, db: Session = Depe
             db,
             sender_phone,
             phone,
+            account_sid=(request.twilio_account_sid or "").strip() or None,
+            auth_token=(request.twilio_auth_token or "").strip() or None,
         )
 
-        whatsapp_service = WhatsAppService()
-        success = whatsapp_service.send_message(
-            phone=retrieved_recipient,
-            message="""🎉 RoadReady WhatsApp Test
+        # Credential priority: request → DB (decrypted) → .env settings
+        req_sid = (request.twilio_account_sid or "").strip()
+        req_token = (request.twilio_auth_token or "").strip()
+
+        account_sid = req_sid
+        auth_token = req_token
+        if not account_sid or not auth_token:
+            # Try DB
+            admin = _get_admin(db)
+            if admin:
+                if not account_sid and admin.twilio_account_sid:
+                    account_sid = EncryptionService.decrypt(admin.twilio_account_sid)
+                if not auth_token and admin.twilio_auth_token:
+                    auth_token = EncryptionService.decrypt(admin.twilio_auth_token)
+        if not account_sid:
+            account_sid = settings.TWILIO_ACCOUNT_SID
+        if not auth_token:
+            auth_token = settings.TWILIO_AUTH_TOKEN
+
+        if not account_sid or not auth_token:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "Twilio Account SID and Auth Token are required. "
+                    "Enter them on the setup screen or add them to backend/.env "
+                    "as TWILIO_ACCOUNT_SID and TWILIO_AUTH_TOKEN."
+                )
+            )
+
+        try:
+            from twilio.rest import Client as TwilioClient
+            client = TwilioClient(account_sid, auth_token)
+            from_number = (
+                retrieved_sender if retrieved_sender.startswith("whatsapp:")
+                else f"whatsapp:{retrieved_sender}"
+            )
+            to_number = (
+                retrieved_recipient if retrieved_recipient.startswith("whatsapp:")
+                else f"whatsapp:{retrieved_recipient}"
+            )
+            msg = client.messages.create(
+                body="""🎉 RoadReady WhatsApp Test
 
 Your Twilio WhatsApp configuration is working correctly!
 
@@ -385,15 +434,18 @@ Your Twilio WhatsApp configuration is working correctly!
 ✅ Test message sent successfully
 
 You're all set to receive booking confirmations and reminders.""",
-        )
-
-        if not success:
+                from_=from_number,
+                to=to_number,
+            )
+            logger.info(f"Test WhatsApp sent: {msg.sid}")
+        except Exception as twilio_err:
+            logger.error(f"Twilio send failed: {twilio_err}")
             raise HTTPException(
                 status_code=400,
                 detail=(
-                    "Failed to send test WhatsApp message. Please verify your Twilio "
-                    "credentials and phone number format (e.g., +27123456789). Make "
-                    "sure you're not sending to the Twilio number itself."
+                    f"Twilio error: {twilio_err}. "
+                    "Check your Account SID, Auth Token, and ensure the sandbox is joined "
+                    "(whatsapp:+14155238886 → 'join <keyword>')."
                 )
             )
 

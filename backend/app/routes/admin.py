@@ -1968,6 +1968,12 @@ async def get_admin_settings(
             else None
         )
 
+        # Mask Twilio credentials for API response
+        raw_sid = EncryptionService.decrypt(first_admin.twilio_account_sid) if first_admin.twilio_account_sid else None
+        raw_token = EncryptionService.decrypt(first_admin.twilio_auth_token) if first_admin.twilio_auth_token else None
+        masked_sid = (raw_sid[:8] + "..." + raw_sid[-4:]) if raw_sid and len(raw_sid) > 12 else raw_sid
+        masked_token = ("*" * 8) if raw_token else None
+
         return {
             "user_id": first_admin.id,
             "email": first_admin.email,
@@ -1977,9 +1983,11 @@ async def get_admin_settings(
             "backup_interval_minutes": first_admin.backup_interval_minutes or 10,
             "retention_days": first_admin.retention_days or 30,
             "auto_archive_after_days": first_admin.auto_archive_after_days or 14,
-            "twilio_sender_phone_number": first_admin.twilio_sender_phone_number,  # Twilio sender number
-            "twilio_phone_number": first_admin.twilio_phone_number,  # Admin's test recipient phone
-            "inactivity_timeout_minutes": first_admin.inactivity_timeout_minutes or 15,  # Auto-logout timeout
+            "twilio_sender_phone_number": first_admin.twilio_sender_phone_number,
+            "twilio_phone_number": first_admin.twilio_phone_number,
+            "twilio_account_sid": masked_sid,
+            "twilio_auth_token": masked_token,
+            "inactivity_timeout_minutes": first_admin.inactivity_timeout_minutes or 15,
         }
     except HTTPException:
         raise
@@ -2035,6 +2043,16 @@ async def update_admin_settings(
             first_admin.twilio_sender_phone_number = settings_update.twilio_sender_phone_number if settings_update.twilio_sender_phone_number else None
         if settings_update.twilio_phone_number is not None:
             first_admin.twilio_phone_number = settings_update.twilio_phone_number if settings_update.twilio_phone_number else None
+        if settings_update.twilio_account_sid is not None:
+            first_admin.twilio_account_sid = (
+                EncryptionService.encrypt(settings_update.twilio_account_sid.strip())
+                if settings_update.twilio_account_sid.strip() else None
+            )
+        if settings_update.twilio_auth_token is not None:
+            first_admin.twilio_auth_token = (
+                EncryptionService.encrypt(settings_update.twilio_auth_token.strip())
+                if settings_update.twilio_auth_token.strip() else None
+            )
         if settings_update.inactivity_timeout_minutes is not None:
             first_admin.inactivity_timeout_minutes = settings_update.inactivity_timeout_minutes
 

@@ -29,6 +29,8 @@ interface FormData {
   testRecipient: string;
   twilioSenderPhoneNumber: string;  // Twilio sender number (FROM)
   twilioPhoneNumber: string;  // Admin's phone for receiving tests (TO)
+  twilioAccountSid: string;   // Twilio Account SID
+  twilioAuthToken: string;    // Twilio Auth Token
 }
 
 interface SetupScreenProps {
@@ -52,6 +54,8 @@ export default function SetupScreen({ navigation }: SetupScreenProps) {
     testRecipient: '',
     twilioSenderPhoneNumber: '',  // Twilio sender number
     twilioPhoneNumber: '',  // Admin's test recipient phone
+    twilioAccountSid: '',
+    twilioAuthToken: '',
   });
 
   const [pickupCoordinates, setPickupCoordinates] = useState<{
@@ -63,6 +67,7 @@ export default function SetupScreen({ navigation }: SetupScreenProps) {
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showSmtpPassword, setShowSmtpPassword] = useState(false);
+  const [showTwilioAuthToken, setShowTwilioAuthToken] = useState(false);
   const [testingEmail, setTestingEmail] = useState(false);
   const [testingWhatsApp, setTestingWhatsApp] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
@@ -145,6 +150,8 @@ export default function SetupScreen({ navigation }: SetupScreenProps) {
           verification_link_validity_minutes: formData.linkValidity ? parseInt(formData.linkValidity) : 30,
           twilio_sender_phone_number: formData.twilioSenderPhoneNumber || null,  // Twilio sender number
           twilio_phone_number: formData.twilioPhoneNumber || null,  // Admin's test recipient phone
+          twilio_account_sid: formData.twilioAccountSid || null,
+          twilio_auth_token: formData.twilioAuthToken || null,
         }),
       });
 
@@ -215,13 +222,20 @@ export default function SetupScreen({ navigation }: SetupScreenProps) {
   };
 
   const handleTestWhatsApp = async () => {
-    if (!formData.twilioPhoneNumber) {
-      setErrorMessage('Please enter your phone number to receive the test message');
+    if (!formData.twilioAccountSid) {
+      setErrorMessage('Please enter your Twilio Account SID');
       return;
     }
-    
+    if (!formData.twilioAuthToken) {
+      setErrorMessage('Please enter your Twilio Auth Token');
+      return;
+    }
     if (!formData.twilioSenderPhoneNumber) {
       setErrorMessage('Please enter your Twilio sender phone number (e.g., +14155238886 for sandbox)');
+      return;
+    }
+    if (!formData.twilioPhoneNumber) {
+      setErrorMessage('Please enter your phone number to receive the test message');
       return;
     }
 
@@ -233,8 +247,10 @@ export default function SetupScreen({ navigation }: SetupScreenProps) {
       const requestBody = {
         phone: formData.twilioPhoneNumber,
         twilio_sender_phone_number: formData.twilioSenderPhoneNumber,
+        twilio_account_sid: formData.twilioAccountSid,
+        twilio_auth_token: formData.twilioAuthToken,
       };
-      console.log('Sending WhatsApp test request:', requestBody);
+      console.log('Sending WhatsApp test request:', { ...requestBody, twilio_auth_token: '***' });
       
       const response = await fetch(`${API_BASE_URL}/verify/test-whatsapp`, {
         method: 'POST',
@@ -477,6 +493,31 @@ export default function SetupScreen({ navigation }: SetupScreenProps) {
         <Text style={[styles.sectionTitle, { color: colors.primary }]}>💬 WhatsApp Configuration (Optional)</Text>
 
         <Input
+          label="Twilio Account SID"
+          placeholder="ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+          value={formData.twilioAccountSid}
+          onChangeText={(v) => handleChange('twilioAccountSid', v)}
+          hint="🔑 From twilio.com/console — starts with AC"
+          autoCapitalize="none"
+          editable={!loading && !testingWhatsApp}
+        />
+        <Input
+          key={`twilio-token-${showTwilioAuthToken}`}
+          label="Twilio Auth Token"
+          placeholder="Your Twilio Auth Token"
+          value={formData.twilioAuthToken}
+          onChangeText={(v) => handleChange('twilioAuthToken', v)}
+          hint="🔑 From twilio.com/console — keep this secret"
+          secureTextEntry={!showTwilioAuthToken}
+          autoCapitalize="none"
+          editable={!loading && !testingWhatsApp}
+        />
+        <Pressable style={styles.showPasswordButton} onPress={() => setShowTwilioAuthToken(!showTwilioAuthToken)}>
+          <Text style={[styles.showPasswordText, { color: colors.primary }]}>
+            {showTwilioAuthToken ? '🙈 Hide Auth Token' : '👁️ Show Auth Token'}
+          </Text>
+        </Pressable>
+        <Input
           label="Twilio Sender Phone Number"
           placeholder="e.g., +14155238886 (sandbox)"
           value={formData.twilioSenderPhoneNumber}
@@ -498,7 +539,7 @@ export default function SetupScreen({ navigation }: SetupScreenProps) {
           label={testingWhatsApp ? '⏳ Sending…' : '💬 Send Test WhatsApp'}
           onPress={handleTestWhatsApp}
           loading={testingWhatsApp}
-          disabled={!formData.twilioSenderPhoneNumber || !formData.twilioPhoneNumber || testingWhatsApp}
+          disabled={!formData.twilioAccountSid || !formData.twilioAuthToken || !formData.twilioSenderPhoneNumber || !formData.twilioPhoneNumber || testingWhatsApp}
           variant="accent"
           fullWidth
         />
@@ -586,9 +627,14 @@ export default function SetupScreen({ navigation }: SetupScreenProps) {
           </>
         ) : null}
 
-        {formData.twilioSenderPhoneNumber || formData.twilioPhoneNumber ? (
+        {formData.twilioSenderPhoneNumber || formData.twilioPhoneNumber || formData.twilioAccountSid ? (
           <>
             <Text style={[styles.confirmLabel, { color: colors.textSecondary }]}>💬 WhatsApp Config:</Text>
+            {formData.twilioAccountSid ? (
+              <Text style={[styles.confirmValue, { color: colors.text }]}>
+                SID: {formData.twilioAccountSid.slice(0, 8)}…
+              </Text>
+            ) : null}
             {formData.twilioSenderPhoneNumber ? (
               <Text style={[styles.confirmValue, { color: colors.text }]}>
                 Sender: {formData.twilioSenderPhoneNumber}

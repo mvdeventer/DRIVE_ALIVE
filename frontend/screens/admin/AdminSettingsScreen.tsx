@@ -35,6 +35,7 @@ export default function AdminSettingsScreen({ navigation }: any) {
   const [testingEmail, setTestingEmail] = useState(false);
   const [testingWhatsApp, setTestingWhatsApp] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [showTwilioAuthToken, setShowTwilioAuthToken] = useState(false);
   const [actualPassword, setActualPassword] = useState('');  // Store actual password for masking
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [showUnsavedModal, setShowUnsavedModal] = useState(false);
@@ -48,9 +49,15 @@ export default function AdminSettingsScreen({ navigation }: any) {
     autoArchiveAfterDays: '14',
     twilioPhoneNumber: '',
     adminPhoneNumber: '',
+    twilioAccountSid: '',   // blank = no change; enter new to update
+    twilioAuthToken: '',    // blank = no change; enter new to update
     testRecipient: '',
     inactivityTimeout: '15',  // Auto-logout timeout in minutes
   });
+
+  // Track whether SID/token are configured in DB (to show ✅ hint)
+  const [twilioSidConfigured, setTwilioSidConfigured] = useState(false);
+  const [twilioTokenConfigured, setTwilioTokenConfigured] = useState(false);
 
   const [originalData, setOriginalData] = useState({
     smtpEmail: '',
@@ -63,6 +70,10 @@ export default function AdminSettingsScreen({ navigation }: any) {
     adminPhoneNumber: '',
     inactivityTimeout: '15',
   });
+
+  // Track whether SID/token are configured in DB for originalData comparison
+  const [originalTwilioSid, setOriginalTwilioSid] = useState('');
+  const [originalTwilioToken, setOriginalTwilioToken] = useState('');
 
   const loadSettings = async () => {
     try {
@@ -78,9 +89,14 @@ export default function AdminSettingsScreen({ navigation }: any) {
         autoArchiveAfterDays: data.auto_archive_after_days?.toString() || '14',
         twilioPhoneNumber: data.twilio_sender_phone_number || '',
         adminPhoneNumber: data.twilio_phone_number || '',
+        twilioAccountSid: '',  // never pre-fill; show configured hint instead
+        twilioAuthToken: '',   // never pre-fill; show configured hint instead
         testRecipient: '',
         inactivityTimeout: data.inactivity_timeout_minutes?.toString() || '15',
       };
+
+      setTwilioSidConfigured(!!data.twilio_account_sid);
+      setTwilioTokenConfigured(!!data.twilio_auth_token);
 
       setFormData(settingsData);
       setActualPassword(data.smtp_password || '');  // Store decrypted password
@@ -95,6 +111,8 @@ export default function AdminSettingsScreen({ navigation }: any) {
         adminPhoneNumber: settingsData.adminPhoneNumber,
         inactivityTimeout: settingsData.inactivityTimeout,
       });
+      setOriginalTwilioSid(settingsData.twilioAccountSid);
+      setOriginalTwilioToken(settingsData.twilioAuthToken);
     } catch (err: any) {
       scrollViewRef.current?.scrollTo({ y: 0, animated: true });
       setErrorMessage(err.response?.data?.detail || 'Failed to load settings');
@@ -137,7 +155,9 @@ export default function AdminSettingsScreen({ navigation }: any) {
       formData.retentionDays !== originalData.retentionDays ||
       formData.autoArchiveAfterDays !== originalData.autoArchiveAfterDays ||
       formData.twilioPhoneNumber !== originalData.twilioPhoneNumber ||
-      formData.adminPhoneNumber !== originalData.adminPhoneNumber
+      formData.adminPhoneNumber !== originalData.adminPhoneNumber ||
+      formData.twilioAccountSid !== originalTwilioSid ||
+      formData.twilioAuthToken !== originalTwilioToken
     );
   };
 
@@ -170,6 +190,8 @@ export default function AdminSettingsScreen({ navigation }: any) {
         auto_archive_after_days: parseInt(formData.autoArchiveAfterDays) || 14,
         twilio_sender_phone_number: formData.twilioPhoneNumber || null,
         twilio_phone_number: formData.adminPhoneNumber || null,
+        twilio_account_sid: formData.twilioAccountSid.trim() || null,
+        twilio_auth_token: formData.twilioAuthToken.trim() || null,
         inactivity_timeout_minutes: parseInt(formData.inactivityTimeout) || 15,
       } as any);
 
@@ -188,6 +210,12 @@ export default function AdminSettingsScreen({ navigation }: any) {
         adminPhoneNumber: formData.adminPhoneNumber,
         inactivityTimeout: formData.inactivityTimeout,
       });
+      // If we just saved new SID/token, mark them as configured & clear fields
+      if (formData.twilioAccountSid.trim()) setTwilioSidConfigured(true);
+      if (formData.twilioAuthToken.trim()) setTwilioTokenConfigured(true);
+      setOriginalTwilioSid('');
+      setOriginalTwilioToken('');
+      setFormData(prev => ({ ...prev, twilioAccountSid: '', twilioAuthToken: '' }));
 
       // Clear success message after 4 seconds
       setTimeout(() => setSuccessMessage(''), 4000);
@@ -254,6 +282,9 @@ export default function AdminSettingsScreen({ navigation }: any) {
       const response = await apiService.post('/verify/test-whatsapp', {
         phone: formData.adminPhoneNumber,
         twilio_sender_phone_number: formData.twilioPhoneNumber,
+        // Pass new SID/token if user entered them in the form; otherwise backend uses DB
+        ...(formData.twilioAccountSid.trim() && { twilio_account_sid: formData.twilioAccountSid.trim() }),
+        ...(formData.twilioAuthToken.trim() && { twilio_auth_token: formData.twilioAuthToken.trim() }),
       });
 
       const data = response.data;
@@ -501,8 +532,41 @@ export default function AdminSettingsScreen({ navigation }: any) {
           <Card variant="elevated" style={{ marginBottom: 16 }}>
             <Text style={[styles.sectionTitle, { color: colors.text }]}>WhatsApp Configuration</Text>
             <Text style={[styles.sectionSubtitle, { color: colors.textSecondary }]}>
-              Configure Twilio sender number (global for all admins) and test WhatsApp delivery
+              Configure Twilio credentials and sender number (global for all admins)
             </Text>
+
+            <View style={styles.formGroup}>
+              <Text style={[styles.label, { color: colors.textSecondary }]}>Twilio Account SID</Text>
+              <TextInput
+                style={[styles.input, { borderColor: colors.border, backgroundColor: colors.card, color: colors.text }]}
+                placeholder={twilioSidConfigured ? '✅ Configured — enter new SID to replace' : 'ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx'}
+                placeholderTextColor={colors.textMuted}
+                value={formData.twilioAccountSid}
+                onChangeText={(value) => handleChange('twilioAccountSid', value)}
+                autoCapitalize="none"
+                editable={!saving}
+              />
+            </View>
+
+            <View style={styles.formGroup}>
+              <Text style={[styles.label, { color: colors.textSecondary }]}>Twilio Auth Token</Text>
+              <View style={[styles.passwordContainer, { borderColor: colors.border, backgroundColor: colors.card }]}>
+                <TextInput
+                  style={[styles.passwordInput, { color: colors.text }]}
+                  placeholder={twilioTokenConfigured ? '✅ Configured — enter new token to replace' : 'Your Twilio Auth Token'}
+                  placeholderTextColor={colors.textMuted}
+                  value={formData.twilioAuthToken}
+                  onChangeText={(value) => handleChange('twilioAuthToken', value)}
+                  secureTextEntry={!showTwilioAuthToken}
+                  autoCapitalize="none"
+                  editable={!saving}
+                />
+                <Pressable style={styles.eyeButton} onPress={() => setShowTwilioAuthToken(!showTwilioAuthToken)}>
+                  <Text style={styles.eyeIcon}>{showTwilioAuthToken ? 'Hide' : 'Show'}</Text>
+                </Pressable>
+              </View>
+              <Text style={[styles.hint, { color: colors.textMuted }]}>Found at console.twilio.com — never share this token</Text>
+            </View>
 
             <View style={styles.formGroup}>
               <Text style={[styles.label, { color: colors.textSecondary }]}>Twilio Sender Phone Number (FROM)</Text>

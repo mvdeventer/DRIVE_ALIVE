@@ -11,7 +11,7 @@ title Drive Alive - Installer
 ::    - Python 3.11          (via winget if missing)
 ::    - Node.js 20 LTS       (via winget if missing)
 ::    - Git                  (via winget if missing)
-::    - PostgreSQL 16        (handled by bootstrap.py)
+::    - PostgreSQL 16        (via winget if missing, STEP 4)
 ::    - Python venv + all pip packages from requirements.txt
 ::    - All npm packages from package.json
 ::    - .env file with secure auto-generated keys
@@ -58,6 +58,7 @@ echo     - build\, dist\, backend\dist\
 echo     - .installed marker
 echo     - Optionally: backend\.env
 echo     - Optionally: DROP the PostgreSQL database
+echo     - Optionally: UNINSTALL PostgreSQL software
 echo.
 set /p "CONFIRM=Are you sure you want to uninstall everything? (y/N): "
 if /i not "!CONFIRM!"=="y" (
@@ -83,36 +84,118 @@ if exist "%PROJECT_ROOT%\backend\.env" (
     if /i "!DELENV!"=="y" del /f /q "%PROJECT_ROOT%\backend\.env"
 )
 
-set /p "DROPDB=Drop the PostgreSQL database (driving_school_db)? (y/N): "
-if /i "!DROPDB!"=="y" (
-    echo   Attempting to drop database 'driving_school_db' (requires psql)...
-    set "PGUSER=postgres"
-    set "PGDB=driving_school_db"
-    set /p "PGUSER=Enter PostgreSQL superuser (default: postgres): "
-    if "!PGUSER!"=="" set "PGUSER=postgres"
-    set /p "PGPORT=Enter PostgreSQL port (default: 5432): "
-    if "!PGPORT!"=="" set "PGPORT=5432"
-    set /p "PGHOST=Enter PostgreSQL host (default: localhost): "
-    if "!PGHOST!"=="" set "PGHOST=localhost"
-    set /p "PGPASS=Enter PostgreSQL password (leave blank to prompt): "
-    set "PGPASSFILE=%TEMP%\pgpass.txt"
-    if not "!PGPASS!"=="" echo !PGHOST!:!PGPORT!:*:%PGUSER%:!PGPASS! > !PGPASSFILE!
-    set "PGPASSFILE_ARG="
-    if exist "!PGPASSFILE!" set "PGPASSFILE_ARG=--no-password --username=%PGUSER% --host=%PGHOST% --port=%PGPORT% --file=!PGPASSFILE!"
-    echo   Terminating connections and dropping database...
-    setlocal
-    set PGPASSWORD=!PGPASS!
-    psql -U !PGUSER! -h !PGHOST! -p !PGPORT! -c "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname='driving_school_db';" postgres
-    psql -U !PGUSER! -h !PGHOST! -p !PGPORT! -c "DROP DATABASE IF EXISTS driving_school_db;" postgres
-    endlocal
-    if exist "!PGPASSFILE!" del /f /q "!PGPASSFILE!"
-)
+:: Gather all DB drop variables first
+call :drop_database_prompt
+call :uninstall_postgresql_prompt
 
 echo.
 echo   Uninstall complete.
 echo.
 pause
 exit /b 0
+
+:drop_database_prompt
+set "DROPDB=n"
+set "PGUSER=postgres"
+set "PGDB=driving_school_db"
+set "PGPORT=5432"
+set "PGHOST=localhost"
+set "PGPASS="
+set "PGPASSFILE=%TEMP%\pgpass.txt"
+set /p "DROPDB=Drop the PostgreSQL database (driving_school_db)? (y/N): "
+set "_DROPDB_FIRST=!DROPDB:~0,1!"
+if /i "!_DROPDB_FIRST!"=="y" goto :drop_db_yes
+goto :eof
+
+:uninstall_postgresql_prompt
+set "UNPG=n"
+set /p "UNPG=Uninstall PostgreSQL software from this PC? (y/N): "
+set "_UNPG_FIRST=!UNPG:~0,1!"
+if /i "!_UNPG_FIRST!"=="y" goto :uninstall_pg_yes
+goto :eof
+
+:uninstall_pg_yes
+echo.
+echo   Searching for PostgreSQL uninstaller...
+:: Strategy 1: Use the bundled uninstaller shipped with PostgreSQL
+set "PG_UNINSTALLER="
+for %%V in (17 16 15 14 13) do (
+    if "!PG_UNINSTALLER!"=="" (
+        if exist "C:\Program Files\PostgreSQL\%%V\uninstall-postgresql.exe" (
+            set "PG_UNINSTALLER=C:\Program Files\PostgreSQL\%%V\uninstall-postgresql.exe"
+            set "PG_VERSION=%%V"
+        )
+    )
+)
+if defined PG_UNINSTALLER (
+    echo   Found bundled uninstaller for PostgreSQL !PG_VERSION!.
+    echo   Running silent uninstall ^(a UAC prompt may appear^)...
+    "!PG_UNINSTALLER!" --mode unattended
+    if !errorlevel! equ 0 (
+        echo   [OK] PostgreSQL !PG_VERSION! uninstalled.
+    ) else (
+        echo   [WARN] Silent uninstall exited non-zero.
+        echo         Launching interactive uninstaller...
+        start "" "!PG_UNINSTALLER!"
+    )
+    goto :eof
+)
+:: Strategy 2: Open Add/Remove Programs as fallback
+echo   [INFO] Bundled uninstaller not found.
+if exist "C:\Program Files\PostgreSQL" (
+    echo   PostgreSQL directory exists at C:\Program Files\PostgreSQL
+)
+echo   Opening Add/Remove Programs - locate PostgreSQL and uninstall from there.
+start "" appwiz.cpl
+goto :eof
+
+:drop_db_yes
+echo   Attempting to drop database 'driving_school_db' (requires psql)...
+:: Find psql in common PostgreSQL directories if not already in PATH
+where psql >nul 2>&1
+if errorlevel 1 (
+    for %%D in (
+        "C:\Program Files\PostgreSQL\17\bin"
+        "C:\Program Files\PostgreSQL\16\bin"
+        "C:\Program Files\PostgreSQL\15\bin"
+        "C:\Program Files\PostgreSQL\14\bin"
+        "C:\Program Files\PostgreSQL\13\bin"
+    ) do (
+        if exist "%%~D\psql.exe" (
+            set "PATH=%%~D;!PATH!"
+            echo   [INFO] Found psql at %%~D
+            goto :pg_psql_found
+        )
+    )
+    echo   [ERROR] psql not found - cannot drop database automatically.
+    echo           Start pgAdmin or psql manually and run:
+    echo             DROP DATABASE IF EXISTS driving_school_db;
+    goto :eof
+)
+:pg_psql_found
+set /p "PGUSER=Enter PostgreSQL superuser (default: postgres): "
+if "!PGUSER!"=="" set "PGUSER=postgres"
+set /p "PGPORT=Enter PostgreSQL port (default: 5432): "
+if "!PGPORT!"=="" set "PGPORT=5432"
+set /p "PGHOST=Enter PostgreSQL host (default: localhost): "
+if "!PGHOST!"=="" set "PGHOST=localhost"
+set /p "PGPASS=Enter PostgreSQL password (required; leave blank only if pg_hba.conf uses trust auth): "
+echo   Terminating connections and dropping database...
+if not "!PGPASS!"=="" (
+    set "PGPASSWORD=!PGPASS!"
+    echo !PGHOST!:!PGPORT!:*:!PGUSER!:!PGPASS! > "!PGPASSFILE!"
+    psql -U !PGUSER! -h !PGHOST! -p !PGPORT! -c "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname='driving_school_db';" postgres
+    psql -U !PGUSER! -h !PGHOST! -p !PGPORT! -c "DROP DATABASE IF EXISTS driving_school_db;" postgres
+    set "PGPASSWORD="
+    if exist "!PGPASSFILE!" del /f /q "!PGPASSFILE!"
+) else (
+    echo   [INFO] No password entered - connecting with trust/pgpass auth ^(-w^)...
+    echo         If this fails, re-run with your password or set pg_hba.conf to trust.
+    psql -w -U !PGUSER! -h !PGHOST! -p !PGPORT! -c "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname='driving_school_db';" postgres
+    psql -w -U !PGUSER! -h !PGHOST! -p !PGPORT! -c "DROP DATABASE IF EXISTS driving_school_db;" postgres
+)
+echo   [OK] Database drop complete.
+goto :eof
 
 :: ── Check if already installed (skip unless --force) ─────────────────────────
 if "!FORCE!"=="0" (
@@ -134,7 +217,7 @@ winget --version >nul 2>&1
 if !errorlevel! equ 0 set "HAS_WINGET=1"
 
 :: ── STEP 1: Ensure Git is available ──────────────────────────────────────────
-call :step_header "1" "5" "Checking Git"
+call :step_header "1" "6" "Checking Git"
 git --version >nul 2>&1
 if !errorlevel! equ 0 (
     for /f "tokens=*" %%v in ('git --version 2^>nul') do echo   [OK] %%v
@@ -158,7 +241,7 @@ if !errorlevel! equ 0 (
 )
 
 :: ── STEP 2: Ensure Python 3.9+ is available ──────────────────────────────────
-call :step_header "2" "5" "Checking Python"
+call :step_header "2" "6" "Checking Python"
 set "PYTHON_CMD="
 set "PYTHON_OK=0"
 
@@ -214,7 +297,7 @@ exit /b 1
 :python_ready
 
 :: ── STEP 3: Ensure Node.js 18+ is available ──────────────────────────────────
-call :step_header "3" "5" "Checking Node.js"
+call :step_header "3" "6" "Checking Node.js"
 set "NODE_OK=0"
 node --version >nul 2>&1
 if !errorlevel! equ 0 (
@@ -257,8 +340,12 @@ if "!NODE_OK!"=="0" (
     )
 )
 
-:: ── STEP 4: Install Expo CLI globally (needed for frontend) ──────────────────
-call :step_header "4" "5" "Installing Expo CLI"
+:: ── STEP 4: Ensure PostgreSQL 16 is available ─────────────────────────────────
+call :step_header "4" "6" "Checking PostgreSQL"
+call :ensure_postgresql
+
+:: ── STEP 5: Install Expo CLI globally (needed for frontend) ──────────────────
+call :step_header "5" "6" "Installing Expo CLI"
 npm list -g eas-cli >nul 2>&1
 if !errorlevel! equ 0 (
     echo   [OK] eas-cli already installed globally.
@@ -280,8 +367,8 @@ if !errorlevel! equ 0 (
 )
 echo   Note: expo-cli is used via npx - no global install needed.
 
-:: ── STEP 5: Run bootstrap.py (handles everything else) ─────────────────────
-call :step_header "5" "5" "Running Drive Alive bootstrap"
+:: ── STEP 6: Run bootstrap.py (handles everything else) ─────────────────────
+call :step_header "6" "6" "Running Drive Alive bootstrap"
 echo.
 echo   This handles:
 echo     - PostgreSQL install (if needed)
@@ -366,6 +453,41 @@ echo.
 echo  This script sets up everything needed to run Drive Alive
 echo  on a fresh Windows PC.
 echo.
+goto :eof
+
+:ensure_postgresql
+echo.
+where psql >nul 2>&1
+if not errorlevel 1 goto :ensurePG_ok
+REM Check common install directories (17 down to 13)
+if exist "C:\Program Files\PostgreSQL\17\bin\psql.exe" set "PATH=C:\Program Files\PostgreSQL\17\bin;!PATH!" & goto :ensurePG_ok
+if exist "C:\Program Files\PostgreSQL\16\bin\psql.exe" set "PATH=C:\Program Files\PostgreSQL\16\bin;!PATH!" & goto :ensurePG_ok
+if exist "C:\Program Files\PostgreSQL\15\bin\psql.exe" set "PATH=C:\Program Files\PostgreSQL\15\bin;!PATH!" & goto :ensurePG_ok
+if exist "C:\Program Files\PostgreSQL\14\bin\psql.exe" set "PATH=C:\Program Files\PostgreSQL\14\bin;!PATH!" & goto :ensurePG_ok
+if exist "C:\Program Files\PostgreSQL\13\bin\psql.exe" set "PATH=C:\Program Files\PostgreSQL\13\bin;!PATH!" & goto :ensurePG_ok
+REM Not found - try winget
+echo   [WARN] PostgreSQL ^(psql^) not found.
+if "!HAS_WINGET!"=="1" goto :ensurePG_winget
+call :manual_install_prompt "PostgreSQL 16" "https://www.postgresql.org/download/windows/"
+echo   [WARN] PostgreSQL not installed - bootstrap.py will attempt a download install.
+goto :eof
+
+:ensurePG_winget
+echo   Installing PostgreSQL 16 via winget...
+winget install --id PostgreSQL.PostgreSQL.16 -e --source winget --silent --accept-package-agreements --accept-source-agreements
+if errorlevel 1 goto :ensurePG_winget_failed
+echo   [OK] PostgreSQL installed.
+if exist "C:\Program Files\PostgreSQL\16\bin\psql.exe" set "PATH=C:\Program Files\PostgreSQL\16\bin;!PATH!"
+if exist "C:\Program Files\PostgreSQL\17\bin\psql.exe" set "PATH=C:\Program Files\PostgreSQL\17\bin;!PATH!"
+goto :ensurePG_ok
+
+:ensurePG_winget_failed
+call :manual_install_prompt "PostgreSQL 16" "https://www.postgresql.org/download/windows/"
+echo   [WARN] PostgreSQL not installed - bootstrap.py will attempt a download install.
+goto :eof
+
+:ensurePG_ok
+for /f "tokens=*" %%v in ('psql --version 2^>nul') do echo   [OK] %%v
 goto :eof
 
 :step_header

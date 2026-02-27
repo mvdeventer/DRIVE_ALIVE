@@ -1,6 +1,8 @@
 """
 System initialization endpoints for first-time setup
 """
+from pathlib import Path
+import logging
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
@@ -11,7 +13,25 @@ from ..schemas.admin import AdminCreateRequest
 from ..utils.auth import get_password_hash
 from ..utils.encryption import EncryptionService  # For SMTP password encryption
 
+logger = logging.getLogger(__name__)
+
 router = APIRouter(prefix="/setup", tags=["setup"])
+
+
+def _persist_twilio_to_env(account_sid: str | None, auth_token: str | None) -> None:
+    """Write Twilio credentials into the project .env file so they survive server restarts."""
+    if not account_sid and not auth_token:
+        return
+    try:
+        from dotenv import set_key
+        env_path = Path(__file__).resolve().parents[3] / ".env"
+        if env_path.exists():
+            if account_sid:
+                set_key(str(env_path), "TWILIO_ACCOUNT_SID", account_sid.strip())
+            if auth_token:
+                set_key(str(env_path), "TWILIO_AUTH_TOKEN", auth_token.strip())
+    except Exception as exc:
+        logger.warning("Could not write Twilio credentials to .env: %s", exc)
 
 
 @router.get("/status")
@@ -74,11 +94,17 @@ def create_initial_admin(admin_data: AdminCreateRequest, db: Session = Depends(g
         verification_link_validity_minutes=admin_data.verification_link_validity_minutes or 30,
         twilio_sender_phone_number=admin_data.twilio_sender_phone_number,
         twilio_phone_number=admin_data.twilio_phone_number,
+        # Encrypt Twilio credentials before saving to database
+        twilio_account_sid=EncryptionService.encrypt(admin_data.twilio_account_sid) if admin_data.twilio_account_sid else None,
+        twilio_auth_token=EncryptionService.encrypt(admin_data.twilio_auth_token) if admin_data.twilio_auth_token else None,
     )
 
     db.add(new_admin)
     db.commit()
     db.refresh(new_admin)
+
+    # Persist Twilio credentials to .env so WhatsAppService picks them up on next request
+    _persist_twilio_to_env(admin_data.twilio_account_sid, admin_data.twilio_auth_token)
 
     return {
         "message": "Admin account created successfully! You can now log in.",

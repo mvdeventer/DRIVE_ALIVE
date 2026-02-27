@@ -62,6 +62,8 @@ class AdminCreateRequest(BaseModel):
     verification_link_validity_minutes: Optional[int] = 30  # Default 30 minutes
     twilio_sender_phone_number: Optional[str] = None  # Twilio sender number (FROM in messages) - e.g., +14155238886
     twilio_phone_number: Optional[str] = None  # Admin's phone number for receiving test messages (TO in test messages)
+    twilio_account_sid: Optional[str] = None  # Twilio Account SID (written to .env)
+    twilio_auth_token: Optional[str] = None   # Twilio Auth Token (written to .env)
 
     @field_validator('phone', 'twilio_sender_phone_number', 'twilio_phone_number')
     @classmethod
@@ -96,6 +98,8 @@ class AdminSettingsUpdate(BaseModel):
     )
     twilio_sender_phone_number: Optional[str] = None  # Twilio sender number (FROM in messages)
     twilio_phone_number: Optional[str] = None  # Admin's phone number for test messages (TO)
+    twilio_account_sid: Optional[str] = None  # Twilio Account SID (will be encrypted in DB)
+    twilio_auth_token: Optional[str] = None   # Twilio Auth Token (will be encrypted in DB)
     backup_interval_minutes: Optional[int] = Field(
         default=10, ge=5, le=60
     )

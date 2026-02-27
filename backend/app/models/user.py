@@ -65,6 +65,8 @@ class User(Base):
     auto_archive_after_days = Column(Integer, default=14)  # Archive to ZIP after 14 days
 
     # Twilio WhatsApp configuration (for admin only)
+    twilio_account_sid = Column(String, nullable=True)   # Encrypted Twilio Account SID
+    twilio_auth_token = Column(String, nullable=True)    # Encrypted Twilio Auth Token
     twilio_sender_phone_number = Column(String, nullable=True)  # Twilio sender number (e.g., +14155238886) - used as FROM in all messages
     twilio_phone_number = Column(String, nullable=True)  # Admin's Twilio phone number for receiving test messages
 

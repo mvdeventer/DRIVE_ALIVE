@@ -33,6 +33,50 @@ if defined MODE_SWITCH (
     echo.
 )
 
+
+REM --- Ensure PostgreSQL is running ---
+
+call :start_postgres_service
+goto :continue_startup
+
+:start_postgres_service
+setlocal enabledelayedexpansion
+echo.
+echo ============================================
+echo  Checking PostgreSQL service status...
+echo ============================================
+set "PGSERVICE="
+powershell -NoProfile -Command "$svc = Get-Service | Where-Object {$_.Name -like '*postgres*'} | Select-Object -First 1; if ($svc) { Set-Content -Path '%TEMP%\_pgservice.tmp' -Value $svc.Name }" 2>nul
+if exist "%TEMP%\_pgservice.tmp" (
+    set /p PGSERVICE=<"%TEMP%\_pgservice.tmp"
+    del "%TEMP%\_pgservice.tmp" >nul 2>&1
+)
+if defined PGSERVICE goto :pg_found
+
+echo   [INFO] No PostgreSQL Windows service detected - skipping auto-start.
+echo   ^(PostgreSQL may be running via Docker or another method^)
+endlocal
+goto :EOF
+
+:pg_found
+echo   [INFO] Using PostgreSQL service: !PGSERVICE!
+net start | find /I "!PGSERVICE!" >nul 2>&1
+if errorlevel 1 (
+    echo   Starting PostgreSQL service: !PGSERVICE! ...
+    net start !PGSERVICE!
+    if errorlevel 1 (
+        echo   [ERROR] Could not start PostgreSQL ^(!PGSERVICE!^). Start it manually.
+        pause
+    ) else (
+        echo   PostgreSQL service started: !PGSERVICE!.
+    )
+) else (
+    echo   PostgreSQL service is already running: !PGSERVICE!.
+)
+endlocal
+goto :EOF
+:continue_startup
+
 REM First-run bootstrap: auto-setup if .installed marker is missing
 if not exist "%~dp0.installed" (
     echo.
@@ -40,6 +84,10 @@ if not exist "%~dp0.installed" (
     echo  First-run detected - running auto-setup...
     echo ============================================
     echo.
+
+    REM --- Ensure PostgreSQL is installed before bootstrap ---
+    call :ensure_postgresql_install
+
     python "%~dp0bootstrap.py"
     if errorlevel 1 (
         echo.
@@ -68,6 +116,46 @@ if not defined ARGS (
 ) else (
     .\scripts\drive-alive.bat !ARGS!
 )
+goto :eof
+
+:ensure_postgresql_install
+echo.
+echo ============================================
+echo  Checking PostgreSQL installation...
+echo ============================================
+where psql >nul 2>&1
+if not errorlevel 1 goto :pg_install_ok
+REM Check common install directories (17 down to 13)
+if exist "C:\Program Files\PostgreSQL\17\bin\psql.exe" set "PATH=C:\Program Files\PostgreSQL\17\bin;!PATH!" & goto :pg_install_ok
+if exist "C:\Program Files\PostgreSQL\16\bin\psql.exe" set "PATH=C:\Program Files\PostgreSQL\16\bin;!PATH!" & goto :pg_install_ok
+if exist "C:\Program Files\PostgreSQL\15\bin\psql.exe" set "PATH=C:\Program Files\PostgreSQL\15\bin;!PATH!" & goto :pg_install_ok
+if exist "C:\Program Files\PostgreSQL\14\bin\psql.exe" set "PATH=C:\Program Files\PostgreSQL\14\bin;!PATH!" & goto :pg_install_ok
+if exist "C:\Program Files\PostgreSQL\13\bin\psql.exe" set "PATH=C:\Program Files\PostgreSQL\13\bin;!PATH!" & goto :pg_install_ok
+REM Not found - try winget install
+echo   [WARN] PostgreSQL not found. Attempting install via winget...
+winget --version >nul 2>&1
+if errorlevel 1 goto :pg_no_winget
+winget install --id PostgreSQL.PostgreSQL.16 -e --source winget --silent --accept-package-agreements --accept-source-agreements
+if errorlevel 1 goto :pg_winget_failed
+echo   [OK] PostgreSQL installed via winget.
+if exist "C:\Program Files\PostgreSQL\16\bin\psql.exe" set "PATH=C:\Program Files\PostgreSQL\16\bin;!PATH!"
+if exist "C:\Program Files\PostgreSQL\17\bin\psql.exe" set "PATH=C:\Program Files\PostgreSQL\17\bin;!PATH!"
+goto :pg_install_ok
+
+:pg_no_winget
+echo   [WARN] winget not available.
+echo         bootstrap.py will attempt to download and install PostgreSQL.
+echo         Or install manually: https://www.postgresql.org/download/windows/
+goto :eof
+
+:pg_winget_failed
+echo   [WARN] winget install failed.
+echo         bootstrap.py will attempt to download and install PostgreSQL.
+echo         Or install manually: https://www.postgresql.org/download/windows/
+goto :eof
+
+:pg_install_ok
+for /f "tokens=*" %%v in ('psql --version 2^>nul') do echo   [OK] %%v
 goto :eof
 
 :show_help
