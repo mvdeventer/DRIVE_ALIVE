@@ -24,6 +24,7 @@ from .routes import (
     bookings,
     database,
     database_interface,
+    db_setup,
     instructor_setup,
     instructors,
     payments,
@@ -35,8 +36,13 @@ from .services.reminder_scheduler import reminder_scheduler
 from .services.backup_scheduler import backup_scheduler
 from .services.verification_cleanup_scheduler import verification_cleanup_scheduler
 
-# Create database tables
-Base.metadata.create_all(bind=engine)
+# Create database tables (guarded – DB may not be configured on first run)
+try:
+    if engine is not None:
+        Base.metadata.create_all(bind=engine)
+except Exception as _create_all_err:
+    print(f"⚠️  Could not create tables at startup: {_create_all_err}")
+    print("   Visit http://localhost:8000/db-setup to configure the database.")
 
 
 def _apply_incremental_migrations():
@@ -45,6 +51,9 @@ def _apply_incremental_migrations():
     (adding columns to existing tables).  Each operation is idempotent.
     """
     from sqlalchemy import inspect, text
+
+    if engine is None:
+        return  # DB not yet configured – skip
 
     inspector = inspect(engine)
     try:
@@ -120,8 +129,11 @@ async def lifespan(app: FastAPI):
     print("\n📊 Ensuring database tables exist...")
     try:
         from .database import Base, engine
-        Base.metadata.create_all(bind=engine)
-        print("✅ Database tables ready")
+        if engine is not None:
+            Base.metadata.create_all(bind=engine)
+            print("✅ Database tables ready")
+        else:
+            print("⚠️  Skipping table creation – DB not configured yet.")
     except Exception as e:
         print(f"⚠️  Warning initializing tables: {e}")
 
@@ -129,21 +141,27 @@ async def lifespan(app: FastAPI):
     try:
         from sqlalchemy import inspect, text
         from .database import engine as _engine
-        _insp = inspect(_engine)
-        existing_cols = {c["name"] for c in _insp.get_columns("users")}
-        with _engine.connect() as _conn:
-            if "twilio_account_sid" not in existing_cols:
-                _conn.execute(text("ALTER TABLE users ADD COLUMN twilio_account_sid VARCHAR"))
-                print("✅ Added users.twilio_account_sid column")
-            if "twilio_auth_token" not in existing_cols:
-                _conn.execute(text("ALTER TABLE users ADD COLUMN twilio_auth_token VARCHAR"))
-                print("✅ Added users.twilio_auth_token column")
-            _conn.commit()
+        if _engine is not None:
+            _insp = inspect(_engine)
+            existing_cols = {c["name"] for c in _insp.get_columns("users")}
+            with _engine.connect() as _conn:
+                if "twilio_account_sid" not in existing_cols:
+                    _conn.execute(text("ALTER TABLE users ADD COLUMN twilio_account_sid VARCHAR"))
+                    print("✅ Added users.twilio_account_sid column")
+                if "twilio_auth_token" not in existing_cols:
+                    _conn.execute(text("ALTER TABLE users ADD COLUMN twilio_auth_token VARCHAR"))
+                    print("✅ Added users.twilio_auth_token column")
+                _conn.commit()
     except Exception as _mig_err:
         print(f"⚠️  Column migration warning: {_mig_err}")
 
     # Check admin status (no longer auto-creating admin - use setup screen)
     print("\n🔐 Checking for admin user...")
+    if SessionLocal is None:
+        print("⚠️  Database not configured – visit http://localhost:8000/db-setup")
+        # Skip schedulers and yield immediately
+        yield
+        return
     db = SessionLocal()
     try:
         # Use a simple approach: try to query, catch if table structure issue
@@ -274,6 +292,29 @@ app.add_middleware(
 
 
 @app.middleware("http")
+async def redirect_to_db_setup(request: Request, call_next):
+    """
+    When the database is not configured, redirect browser requests to /db-setup.
+    API calls (Accept: application/json) receive a 503 JSON response instead.
+    """
+    from .database import engine as _engine
+    _bypass = (
+        request.url.path.startswith("/db-setup") or
+        request.url.path in ("/health", "/docs", "/redoc", "/openapi.json")
+    )
+    if not _bypass and _engine is None:
+        accept = request.headers.get("accept", "")
+        if "application/json" in accept:
+            return JSONResponse(
+                status_code=503,
+                content={"detail": "Database not configured. Visit /db-setup"},
+            )
+        from fastapi.responses import RedirectResponse
+        return RedirectResponse(url="/db-setup")
+    return await call_next(request)
+
+
+@app.middleware("http")
 async def add_security_headers(request: Request, call_next):
     """
     Add security headers to all responses
@@ -334,6 +375,7 @@ async def validation_exception_handler(_request: Request, exc: RequestValidation
 
 
 # Include routers
+app.include_router(db_setup.router)   # 🛠️  First-run DB setup wizard
 app.include_router(setup.router)  # ⚠️ REMOVE AFTER CREATING ADMIN USER
 app.include_router(admin.router)
 app.include_router(database.router)

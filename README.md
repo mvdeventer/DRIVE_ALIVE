@@ -1,397 +1,588 @@
-# Drive Alive - Driving School Booking App
+﻿# Drive Alive (RoadReady) — Driving School Booking Platform
 
-Cross-platform booking app for South African driving schools. Instructors register, students book lessons, payments handled in-app, GPS pickup/drop-off, WhatsApp reminders, compliance with POPIA/PCI DSS.
+> Cross-platform booking app for South African driving schools. Instructors register, students book lessons, payments handled in-app, GPS pickup/drop-off, WhatsApp reminders, compliant with POPIA/PCI DSS.
+
+**Version:** `2.0.7` | **Platform:** iOS · Android · Web | **Region:** South Africa (ZAR)
+
+---
+
+## Table of Contents
+
+- [Quick Start](#-quick-start)
+- [Tech Stack](#-tech-stack)
+- [Project Structure](#-project-structure)
+- [Environment Variables](#-environment-variables)
+- [API Routes](#-api-routes)
+- [Database Models](#-database-models)
+- [Scripts & Commands](#-scripts--commands)
+- [Testing](#-testing)
+- [Deployment](#-deployment-rendercom)
+- [Security & Compliance](#-security--compliance)
+- [Troubleshooting](#-troubleshooting)
+- [Roadmap](#-roadmap)
+
+---
 
 ## 🚀 Quick Start
 
 ### Prerequisites
-- Python 3.9+
-- Node.js 16+
-- Git
 
-### Initial Setup
+| Requirement | Version |
+|---|---|
+| Python | 3.9+ (3.14 supported) |
+| Node.js | 16+ |
+| PostgreSQL | 13–17 |
+| Git | any |
+
+### One-Command Startup
 
 ```powershell
-# Clone repository
+# Clone and start
 git clone https://github.com/mvdeventer/DRIVE_ALIVE.git
 cd DRIVE_ALIVE
+.\s.bat
+```
 
-# Backend setup
+`s.bat` auto-creates the Python venv, installs all dependencies, and starts both servers. On first run it detects a missing venv and repairs it automatically.
+
+### Manual Setup (if needed)
+
+```powershell
+# Backend
 cd backend
 python -m venv venv
 venv\Scripts\activate
 pip install -r requirements.txt
+copy .env.example .env        # then edit .env
 
-# Configure environment
-copy .env.example .env
-# Edit .env with your settings (see Configuration section below)
-
-# Frontend setup
+# Frontend
 cd ..\frontend
 npm install
 
-# Start development servers
+# Start (from repo root)
 cd ..
-.\s.bat -d
+.\s.bat -d                    # -d = debug/development mode
 ```
 
-## 🌐 Environment Configuration
+### s.bat Flags
 
-**Critical:** Verification links, password resets, and payment redirects use `FRONTEND_URL`
+| Flag | Description |
+|---|---|
+| *(none)* | Standard start |
+| `-d` | Debug/development mode |
+| `-b` | Backend only |
+| `-f` | Frontend only |
+| `-n` | Network mode (mobile testing) |
+| `-l` | Localhost mode (HTTPS) |
+| `-m` | Mobile/network mode (auto-switch env) |
+| `stop` | Stop all servers |
 
-### For Local Development (Computer Only)
+---
+
+## 🧰 Tech Stack
+
+### Backend
+
+| Package | Version | Purpose |
+|---|---|---|
+| fastapi | 0.109.0 | API framework |
+| uvicorn | 0.27.0 | ASGI server |
+| python-dotenv | 1.0.0 | Env var loading |
+| sqlalchemy | ≥2.0.36 | ORM |
+| alembic | ≥1.14.0 | DB migrations |
+| psycopg (binary) | ≥3.2.0 | PostgreSQL async driver |
+| psycopg2-binary | ≥2.9.9 | PostgreSQL sync driver (Render) |
+| python-jose[cryptography] | 3.3.0 | JWT tokens |
+| passlib | 1.7.4 | Password hashing |
+| bcrypt | 4.0.1 | bcrypt hashing |
+| python-multipart | 0.0.6 | Form data parsing |
+| firebase-admin | 6.4.0 | Firebase authentication |
+| stripe | 7.11.0 | International payments |
+| requests | 2.31.0 | HTTP client |
+| geopy | 2.4.1 | GPS reverse geocoding |
+| twilio | 8.11.1 | WhatsApp Business API |
+| pydantic | ≥2.0.0 | Data validation |
+| pydantic-settings | ≥2.0.0 | Settings management |
+| email-validator | ≥2.0.0 | Email validation |
+| fastapi-cors | 0.0.6 | CORS middleware |
+| slowapi | 0.1.9 | Rate limiting |
+| redis | 7.1.0 | Rate limit storage |
+| cryptography | 46.0.4 | AES-256 encryption |
+| pytest | 7.4.4 | Testing |
+| pytest-asyncio | 0.23.3 | Async test support |
+| httpx | 0.26.0 | Test HTTP client |
+| python-dateutil | 2.8.2 | Date utilities |
+| pytz | 2023.3 | Timezone (Africa/Johannesburg) |
+
+### Frontend
+
+| Package | Version | Purpose |
+|---|---|---|
+| expo | ~54.0.33 | Cross-platform framework |
+| react | 19.1.0 | UI library |
+| react-native | 0.81.5 | Mobile runtime |
+| react-native-web | ^0.21.0 | Web support |
+| @react-navigation/native | ^6.1.18 | Navigation |
+| @react-navigation/native-stack | ^6.11.0 | Stack navigator |
+| @react-navigation/bottom-tabs | ^6.6.1 | Tab navigator |
+| @stripe/stripe-react-native | 0.50.3 | Stripe payments |
+| @tanstack/react-query | ^5.90.20 | Server state management |
+| expo-location | ~19.0.8 | GPS location |
+| expo-notifications | ~0.32.16 | Push notifications |
+| expo-secure-store | ~15.0.8 | Secure token storage |
+| firebase | ^11.1.0 | Firebase auth client |
+| axios | ^1.7.9 | HTTP client |
+| nativewind | ^4.2.1 | Tailwind for RN |
+| react-native-maps | 1.20.1 | Maps integration |
+| exceljs | ^4.4.0 | Excel export |
+| jspdf | ^4.1.0 | PDF export |
+
+---
+
+## 🏗️ Project Structure
+
+```
+DRIVE_ALIVE/
+├── s.bat                           # One-command startup script
+├── scripts/
+│   ├── drive-alive.bat             # Server management (start/stop/restart)
+│   └── INSTALL.bat                 # Install / --uninstall support
+├── backend/
+│   ├── .env                        # ← your secrets (DO NOT COMMIT)
+│   ├── .env.example                # Template for all env vars
+│   ├── requirements.txt            # Python dependencies
+│   ├── switch-env.ps1              # Switch between loc/net/prod environments
+│   └── app/
+│       ├── main.py                 # FastAPI app entry point + migration runner
+│       ├── config.py               # Pydantic settings (all env vars)
+│       ├── database.py             # SQLAlchemy engine + session factory
+│       ├── models/
+│       │   ├── user.py             # User, UserRole, admin settings
+│       │   ├── booking.py          # Lesson bookings
+│       │   ├── booking_credit.py   # Booking fee credits
+│       │   ├── availability.py     # Instructor time slots
+│       │   ├── payment.py          # Payment records
+│       │   ├── payment_session.py  # PayFast session tracking
+│       │   ├── verification_token.py        # Email/WhatsApp tokens
+│       │   ├── instructor_verification.py   # Admin verification flow
+│       │   └── password_reset.py   # Password reset tokens
+│       ├── routes/
+│       │   ├── auth.py             # Login, register, JWT
+│       │   ├── verification.py     # Token verify endpoints
+│       │   ├── bookings.py         # CRUD bookings
+│       │   ├── availability.py     # Instructor slots
+│       │   ├── instructors.py      # Instructor listing/search
+│       │   ├── instructor_setup.py # Onboarding & profile setup
+│       │   ├── students.py         # Student profile
+│       │   ├── payments.py         # Stripe & PayFast endpoints
+│       │   ├── admin.py            # Admin dashboard APIs
+│       │   ├── database.py         # DB export/import
+│       │   ├── database_interface.py # Admin DB browser
+│       │   └── setup.py            # First-run admin setup
+│       ├── services/
+│       │   ├── auth.py             # JWT creation/validation
+│       │   ├── email_service.py    # SMTP email sender
+│       │   ├── whatsapp_service.py # Twilio WhatsApp
+│       │   ├── verification_service.py           # Token generation/validation
+│       │   ├── instructor_verification_service.py # Admin notify/approve flow
+│       │   ├── reminder_scheduler.py  # 1h student / 15min instructor reminders
+│       │   ├── backup_scheduler.py    # Auto-backup every 10 min
+│       │   └── verification_cleanup_scheduler.py # Expire old tokens
+│       └── utils/
+│           ├── encryption.py       # Fernet AES-256
+│           └── rate_limiter.py     # SlowAPI + Redis config
+├── frontend/
+│   ├── app.json                    # Expo config (slug: roadready, v2.0.7)
+│   ├── App.tsx                     # Navigation root
+│   ├── screens/
+│   │   ├── auth/                   # Login, Register (Student/Instructor)
+│   │   ├── student/                # Home, Instructor list, Booking
+│   │   ├── instructor/             # Home, Availability, Earnings
+│   │   ├── admin/                  # Dashboard, Users, Verification, Revenue
+│   │   └── verification/           # Pending, VerifyAccount, InstructorVerify
+│   ├── components/
+│   │   ├── InlineMessage.tsx
+│   │   ├── WebNavigationHeader.tsx
+│   │   └── AddressAutocomplete.tsx
+│   └── services/api/index.ts       # Axios API client
+├── migrations/                     # Alembic migration scripts
+├── tests/                          # Integration tests
+├── render.yaml                     # Render.com IaC blueprint
+└── docker-compose.yml              # Local Docker (PostgreSQL)
+```
+
+---
+
+## 🔑 Environment Variables
+
+All variables live in `backend/.env`. Copy from `backend/.env.example`.
+
+### Database
+
+| Variable | Example | Required |
+|---|---|---|
+| `DATABASE_URL` | `postgresql://user:pass@localhost:5432/driving_school_db` | ✅ |
+
+### Authentication
+
+| Variable | Default | Required |
+|---|---|---|
+| `SECRET_KEY` | *(generate)* | ✅ |
+| `ALGORITHM` | `HS256` | |
+| `ACCESS_TOKEN_EXPIRE_MINUTES` | `30` | |
+| `ENCRYPTION_KEY` | *(generate — Fernet base64)* | ✅ |
+
+> Generate ENCRYPTION_KEY:
+> ```powershell
+> cd backend
+> venv\Scripts\python.exe -c "from app.utils.encryption import EncryptionService; print(EncryptionService.generate_key())"
+> ```
+
+### Firebase
+
+| Variable | Example |
+|---|---|
+| `FIREBASE_CREDENTIALS_PATH` | `path/to/firebase-credentials.json` |
+
+### Stripe (International Payments)
+
+| Variable |
+|---|
+| `STRIPE_SECRET_KEY` |
+| `STRIPE_PUBLISHABLE_KEY` |
+| `STRIPE_WEBHOOK_SECRET` |
+
+### PayFast (South Africa)
+
+| Variable | Default |
+|---|---|
+| `PAYFAST_MERCHANT_ID` | |
+| `PAYFAST_MERCHANT_KEY` | |
+| `PAYFAST_PASSPHRASE` | |
+| `PAYFAST_MODE` | `sandbox` |
+
+### Twilio (WhatsApp)
+
+| Variable | Notes |
+|---|---|
+| `TWILIO_ACCOUNT_SID` | |
+| `TWILIO_AUTH_TOKEN` | |
+| Sender number | Configured in Admin Settings (stored in DB) |
+
+### SMTP (Email)
+
+| Variable | Default |
+|---|---|
+| `SMTP_SERVER` | `smtp.gmail.com` |
+| `SMTP_PORT` | `587` |
+| `SMTP_USERNAME` | |
+| `SMTP_PASSWORD` | *(encrypted in DB)* |
+| `FROM_EMAIL` | `noreply@roadready.co.za` |
+
+### App Settings
+
+| Variable | Dev Default | Production |
+|---|---|---|
+| `FRONTEND_URL` | `http://localhost:8081` | `https://drive-alive-web.onrender.com` |
+| `ALLOWED_ORIGINS` | `http://localhost:3000,http://localhost:8081` | your domain |
+| `ENVIRONMENT` | `development` | `production` |
+| `DEBUG` | `True` | `False` |
+| `AUTO_VERIFY_INSTRUCTORS` | `False` | `False` |
+| `DEFAULT_TIMEZONE` | `Africa/Johannesburg` | `Africa/Johannesburg` |
+| `DEFAULT_CURRENCY` | `ZAR` | `ZAR` |
+
+### Environment Switching
+
+```powershell
+# Localhost only (HTTPS)
+.\backend\switch-env.ps1 -Env loc
+
+# Home network / mobile testing (auto-detects your IP)
+.\backend\switch-env.ps1 -Env net
+
+# Interactive menu
+.\backend\switch-env.ps1
+```
+
+| Mode | `FRONTEND_URL` | Use Case |
+|---|---|---|
+| `loc` | `http://localhost:8081` | Computer only |
+| `net` | `http://<YOUR-IP>:8081` | Mobile on same WiFi |
+| Production | `https://drive-alive-web.onrender.com` | Live |
+
+---
+
+## 🌐 API Routes
+
+**Base URL (local):** `http://localhost:8000`
+**Health check:** `GET /health`
+
+| Prefix | File | Description |
+|---|---|---|
+| `/api/auth` | `routes/auth.py` | Register, login, JWT refresh |
+| `/api/verification` | `routes/verification.py` | Email/WhatsApp token verify |
+| `/api/bookings` | `routes/bookings.py` | Create/manage lesson bookings |
+| `/api/availability` | `routes/availability.py` | Instructor time slot management |
+| `/api/instructors` | `routes/instructors.py` | List, search, filter instructors |
+| `/api/instructor-setup` | `routes/instructor_setup.py` | Onboarding & profile setup |
+| `/api/students` | `routes/students.py` | Student profile management |
+| `/api/payments` | `routes/payments.py` | Stripe & PayFast payment flows |
+| `/api/admin` | `routes/admin.py` | Admin dashboard, user management |
+| `/api/database` | `routes/database.py` | DB export / import |
+| `/api/database-interface` | `routes/database_interface.py` | Admin DB browser |
+| `/api/setup` | `routes/setup.py` | First-run admin account creation |
+
+**Interactive API docs:** `http://localhost:8000/docs`
+
+---
+
+## 🗄️ Database Models
+
+| Model | Table | Description |
+|---|---|---|
+| `User` / `UserRole` | `users` | Multi-role (Student, Instructor, Admin) |
+| `Booking` | `bookings` | Lesson booking records |
+| `BookingCredit` | `booking_credits` | R10 booking fee tracking |
+| `Availability` | `availability` | Instructor time slots |
+| `Payment` | `payments` | Stripe/PayFast payment records |
+| `PaymentSession` | `payment_sessions` | PayFast session state |
+| `VerificationToken` | `verification_tokens` | Email/WhatsApp verification |
+| `InstructorVerification` | `instructor_verifications` | Admin approval workflow |
+| `PasswordReset` | `password_resets` | Secure reset tokens |
+
+**Migrations:** Alembic (`backend/migrations/`) + incremental `ALTER TABLE` applied on startup via `_apply_incremental_migrations()`.
+
+---
+
+## 📜 Scripts & Commands
+
+### Startup
+
+```powershell
+.\s.bat               # Standard start
+.\s.bat -d            # Debug mode
+.\s.bat -b            # Backend only
+.\s.bat -f            # Frontend only
+.\s.bat -l            # Switch to localhost + start
+.\s.bat -m            # Switch to network/mobile + start
+.\scripts\drive-alive.bat stop    # Stop all servers
+```
+
+### Backend (manual)
+
 ```powershell
 cd backend
-.\switch-env.ps1 -Env loc
-# Or just run .\switch-env.ps1 for interactive menu
+venv\Scripts\activate
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
-Links will use: `http://localhost:8081/verify-account?token=...`
 
-### For Home Network Testing (Mobile Devices)
+### Frontend (manual)
+
+```powershell
+cd frontend
+npx expo start           # Tunnel + HTTPS (default)
+npx expo start --lan     # LAN only
+npx expo start --web     # Web only
+```
+
+### Database
+
 ```powershell
 cd backend
-.\switch-env.ps1 -Env net  # Auto-detects your IP
-# Or just run .\switch-env.ps1 for interactive menu
-```
-Links will use: `http://YOUR-IP:8081/verify-account?token=...`
+# Run migrations
+venv\Scripts\python.exe -m alembic upgrade head
 
-### For Production (Render Deployment)
-Set in Render Dashboard:
-```
-FRONTEND_URL=https://your-app-name.onrender.com
-```
-Links will use: `https://your-app-name.onrender.com/verify-account?token=...`
-
-**📖 Complete Guide:** See [`ENVIRONMENT_CONFIGURATION_SUMMARY.md`](ENVIRONMENT_CONFIGURATION_SUMMARY.md)
-
-## 📚 Documentation
-
-### Setup & Configuration
-- **[Quick Start Setup](QUICK_START_SETUP.md)** - First-time setup guide
-- **[Environment Configuration](ENVIRONMENT_CONFIGURATION_SUMMARY.md)** - Complete environment setup
-- **[Network Configuration](NETWORK_CONFIGURATION_GUIDE.md)** - Detailed network setup for all scenarios
-- **[Quick Fix: Verification Links](QUICK_FIX_VERIFICATION_LINKS.md)** - Troubleshooting verification issues
-
-### Implementation Guides
-- **[Agents Guide](AGENTS.md)** - Complete implementation roadmap
-- **[Multi-Role Users](MULTI_ROLE_USERS.md)** - One user, multiple roles implementation
-- **[System Initialization](SYSTEM_INITIALIZATION.md)** - Admin account setup flow
-- **[Email Verification](EMAIL_VERIFICATION_SYSTEM.md)** - Complete verification system guide
-- **[Instructor Verification](INSTRUCTOR_VERIFICATION_SYSTEM.md)** - Admin-verified instructor flow
-
-### Features
-- **[GPS Location Capture](GPS_LOCATION_CAPTURE.md)** - High-accuracy GPS with reverse geocoding
-- **[Booking Fee Structure](BOOKING_FEE_STRUCTURE.md)** - R10 booking fee implementation
-- **[WhatsApp Automation](AGENTS.md#recent-updates-whatsapp-automation)** - Twilio Business API integration
-- **[Password Reset](PASSWORD_RESET_GUIDE.md)** - Secure password reset flow
-- **[Admin Settings](ADMIN_SETTINGS_GUIDE.md)** - Admin configuration management
-
-### Database & Backup
-- **[Database Interface](DATABASE_INTERFACE_SCREEN.md)** - Admin database management
-- **[Automated Backup](AUTOMATED_BACKUP_SYSTEM.md)** - Scheduled database backups
-
-### Deployment
-- **[Deployment Guide](DEPLOYMENT.md)** - Render.com production deployment
-- **[Render Configuration](render.yaml)** - Render service configuration
-
-## 🏗️ Architecture
-
-### Backend (FastAPI + Python)
-```
-backend/
-├── app/
-│   ├── main.py                 # Application entry point
-│   ├── config.py               # Environment configuration
-│   ├── database.py             # SQLAlchemy setup
-│   ├── models/                 # Database models
-│   │   ├── user.py
-│   │   ├── verification_token.py
-│   │   ├── instructor_verification.py
-│   │   └── availability.py
-│   ├── routes/                 # API endpoints
-│   │   ├── auth.py
-│   │   ├── verification.py
-│   │   ├── booking.py
-│   │   ├── payments.py
-│   │   └── admin.py
-│   ├── services/               # Business logic
-│   │   ├── auth.py
-│   │   ├── verification_service.py
-│   │   ├── email_service.py
-│   │   ├── whatsapp_service.py
-│   │   └── instructor_verification_service.py
-│   └── utils/                  # Utilities
-│       └── encryption.py
-├── migrations/                 # Database migrations
-└── .env                        # Environment variables (DO NOT COMMIT)
+# Create new migration
+venv\Scripts\python.exe -m alembic revision --autogenerate -m "description"
 ```
 
-### Frontend (React Native + Expo)
-```
-frontend/
-├── screens/
-│   ├── auth/                   # Authentication screens
-│   │   ├── LoginScreen.tsx
-│   │   ├── RegisterStudentScreen.tsx
-│   │   ├── RegisterInstructorScreen.tsx
-│   │   └── SetupScreen.tsx
-│   ├── student/                # Student features
-│   │   ├── StudentHomeScreen.tsx
-│   │   ├── InstructorListScreen.tsx
-│   │   └── BookingScreen.tsx
-│   ├── instructor/             # Instructor features
-│   │   ├── InstructorHomeScreen.tsx
-│   │   ├── ManageAvailabilityScreen.tsx
-│   │   └── EarningsReportScreen.tsx
-│   ├── admin/                  # Admin features
-│   │   ├── AdminDashboardScreen.tsx
-│   │   ├── UserManagementScreen.tsx
-│   │   ├── InstructorVerificationScreen.tsx
-│   │   └── RevenueAnalyticsScreen.tsx
-│   └── verification/           # Verification screens
-│       ├── VerificationPendingScreen.tsx
-│       ├── VerifyAccountScreen.tsx
-│       └── InstructorVerifyScreen.tsx
-├── components/                 # Reusable components
-│   ├── InlineMessage.tsx
-│   ├── WebNavigationHeader.tsx
-│   └── AddressAutocomplete.tsx
-├── services/
-│   └── api/
-│       └── index.ts            # API client
-├── utils/
-│   └── textEncodingPolyfill.ts # iOS/Android polyfill
-└── App.tsx                     # Navigation root
-```
-
-## 🔑 Key Features
-
-### ✅ Implemented
-- **Multi-Role System** - One user can be Student, Instructor, and/or Admin
-- **Email & WhatsApp Verification** - Dual-channel account verification
-- **Admin Verification for Instructors** - All admins notified, verify via link or dashboard
-- **GPS Location Capture** - High-accuracy GPS with OpenStreetMap reverse geocoding
-- **Booking Management** - Students book lessons, instructors manage schedules
-- **Real-time Conflict Detection** - Prevents overlapping bookings across all instructors
-- **Rating System** - Students rate completed lessons (1-5 stars with emoji feedback)
-- **WhatsApp Automation** - Booking confirmations, 1-hour student reminders, 15-minute instructor reminders, daily summaries
-- **Payment Integration** - Stripe (international) + PayFast (South Africa) + R10 booking fee
-- **Admin Dashboard** - User management, instructor verification, booking oversight, revenue analytics
-- **Database Backup** - Automated backups every 10 minutes + manual export/import
-- **Cross-Platform** - Windows, iOS, Android, Web
-
-### 🔧 In Development
-- Certification tracking
-- Multi-language support (Afrikaans, Zulu, Xhosa)
-- Advanced analytics
-
-## 🛠️ Configuration
-
-### Required Environment Variables
-
-**Backend `.env` file:**
-```env
-# Backend URL - CRITICAL for verification links
-FRONTEND_URL=http://localhost:8081  # Update based on environment
-
-# Database
-DATABASE_URL=sqlite:///./drive_alive.db
-
-# JWT Authentication
-# See .env.example for SECRET_KEY and ENCRYPTION_KEY
-
-# Twilio WhatsApp
-# See .env.example for TWILIO_* values
-
-# Payment Gateways (optional for development)
-# See .env.example for STRIPE_* values
-PAYFAST_MERCHANT_ID=...
-
-# CORS
-ALLOWED_ORIGINS=http://localhost:8081,http://YOUR-IP:8081
-```
-
-**See `.env.example` for complete list**
+---
 
 ## 🧪 Testing
 
-### Local Development Testing (Computer Only)
+### Backend Tests
+
 ```powershell
-# 1. Configure for localhost
 cd backend
-.\switch-env.ps1 -Env loc
-
-# 2. Start servers
-cd ..
-.\s.bat -d
-
-# 3. Open browser: http://localhost:8081
+venv\Scripts\python.exe -m pytest -v
 ```
 
-### Home Network Testing (Mobile Devices)
+Tests live in `backend/tests/`. Async tests use `pytest-asyncio`.
+
+### Frontend Tests
+
 ```powershell
-# 1. Configure for network (auto-detects your IP)
-cd backend
-.\switch-env.ps1 -Env net
-
-# 2. Start servers
-cd ..
-.\s.bat -d
-
-# 3. On mobile:
-#    - Connect to same WiFi
-#    - Open Expo Go
-#    - Scan QR code or enter: exp://YOUR-IP:8081
-
-# 4. Test verification:
-#    - Register student account
-#    - Check email/WhatsApp on phone
-#    - Click verification link
-#    - Should open in phone browser and verify account
+cd frontend
+npm test                    # Jest
+npm run test:coverage       # Coverage report
+npm run cypress:run         # E2E (Cypress)
+npm run test:e2e            # Database interface E2E
 ```
 
-### Production Testing (Render)
+---
+
+## ☁️ Deployment (Render.com)
+
+Configured via [`render.yaml`](render.yaml):
+
+| Service | Type | Plan | Port |
+|---|---|---|---|
+| `drive-alive-api` | Web Service (Python) | Free | `$PORT` |
+| `drive-alive-db` | PostgreSQL | Free | 5432 |
+
+**Build command:** `pip install -r requirements.txt`
+**Start command:** `uvicorn app.main:app --host 0.0.0.0 --port $PORT`
+**Health check path:** `/health`
+
+### Deploy
+
 ```powershell
-# Deploy to Render
 git add .
-git commit -m "Deploy to production"
+git commit -m "deploy: your message"
 git push origin main
-
-# Render auto-deploys, then test:
-# 1. Register student on live site
-# 2. Check email/WhatsApp
-# 3. Verification link: https://your-app.onrender.com/verify-account?token=...
-# 4. Click and verify it works worldwide
+# Render auto-deploys on push to main
 ```
+
+### Production Environment Variables (set in Render Dashboard)
+
+```
+DATABASE_URL         → auto-injected from render-postgres
+SECRET_KEY           → auto-generated by Render
+ENCRYPTION_KEY       → generate locally and paste
+FRONTEND_URL         → https://drive-alive-web.onrender.com
+ALLOWED_ORIGINS      → https://drive-alive-web.onrender.com
+ENVIRONMENT          → production
+DEBUG                → False
+STRIPE_SECRET_KEY    → from Stripe Dashboard
+PAYFAST_MERCHANT_ID  → from PayFast Dashboard
+PAYFAST_MERCHANT_KEY
+TWILIO_ACCOUNT_SID   → from Twilio Console
+TWILIO_AUTH_TOKEN
+SMTP_USERNAME        → Gmail address
+SMTP_PASSWORD        → Gmail App Password
+```
+
+---
+
+## 🔐 Security & Compliance
+
+| Area | Implementation |
+|---|---|
+| Password hashing | bcrypt via passlib |
+| JWT auth | HS256, 30-min expiry, single-session enforcement |
+| Sensitive data | AES-256 (Fernet) encryption |
+| Verification tokens | 32-byte URL-safe random, time-limited |
+| SQL injection | Prevented by SQLAlchemy ORM |
+| Rate limiting | SlowAPI + Redis |
+| HTTPS | Enforced in production (Render TLS) |
+| POPIA | South African data protection compliance |
+| PCI DSS | SAQ A (no cardholder data stored) |
+
+---
 
 ## 🚨 Troubleshooting
 
-### "Site can't be reached" on mobile
+### venv missing after reinstall
+
 ```powershell
-# Allow backend through Windows Firewall
-New-NetFirewallRule -DisplayName "Drive Alive Backend" -Direction Inbound -LocalPort 8081 -Protocol TCP -Action Allow
+# s.bat auto-repairs this now. Or manually:
+cd backend
+python -m venv venv
+venv\Scripts\python.exe -m pip install -r requirements.txt
 ```
 
-### Verification links show wrong URL
+### "Site can't be reached" on mobile
+
 ```powershell
-# Update FRONTEND_URL and restart backend
+# Allow backend through Windows Firewall
+New-NetFirewallRule -DisplayName "Drive Alive Backend" -Direction Inbound -LocalPort 8000 -Protocol TCP -Action Allow
+New-NetFirewallRule -DisplayName "Drive Alive Frontend" -Direction Inbound -LocalPort 8081 -Protocol TCP -Action Allow
+
+# Switch to network mode
+.\backend\switch-env.ps1 -Env net
+.\s.bat
+```
+
+### Verification links use wrong URL
+
+```powershell
 cd backend
-.\switch-env.ps1 -Env net
-cd ..
-# Restart backend (Ctrl+C, then .\s.bat -d)
+.\switch-env.ps1 -Env net   # or loc
+# Restart: Ctrl+C then .\s.bat
 ```
 
 ### IP address changed
+
 ```powershell
-# Check new IP
-ipconfig | findstr IPv4
-
-# Update configuration
-cd backend
-.\switch-env.ps1 -Env net
-
-# Restart backend
+ipconfig | findstr IPv4              # check new IP
+.\backend\switch-env.ps1 -Env net   # re-detect and update
 ```
 
-**📖 Complete Troubleshooting:** See [`QUICK_FIX_VERIFICATION_LINKS.md`](QUICK_FIX_VERIFICATION_LINKS.md)
+### PostgreSQL not starting
 
-## 📦 Deployment to Render
-
-### Step 1: Prepare Repository
 ```powershell
-git add .
-git commit -m "Ready for production"
-git push origin main
+Get-Service | Where-Object {$_.Name -like '*postgres*'}
+Start-Service postgresql-x64-17   # adjust version number
 ```
 
-### Step 2: Create Render Web Service
-1. Go to https://dashboard.render.com
-2. New → Web Service
-3. Connect GitHub repository: `mvdeventer/DRIVE_ALIVE`
-4. Configure:
-   - **Name:** `drivealive` (or your preferred name)
-   - **Region:** Oregon (or closest to South Africa)
-   - **Branch:** `main`
-   - **Root Directory:** `backend`
-   - **Runtime:** Python 3
-   - **Build Command:** `pip install -r requirements.txt`
-   - **Start Command:** `uvicorn app.main:app --host 0.0.0.0 --port $PORT`
+---
 
-### Step 3: Set Environment Variables
-```
-FRONTEND_URL=https://drivealive.onrender.com
-ALLOWED_ORIGINS=https://drivealive.onrender.com
-ENVIRONMENT=production
-DEBUG=False
-DATABASE_URL=<render-postgres-url>
-# Set SECRET_KEY, ENCRYPTION_KEY, TWILIO_*, STRIPE_* in Render (see .env.example)
-# ... all other production secrets
-```
+## ✅ Features
 
-### Step 4: Deploy & Test
-- Render auto-deploys on git push
-- Monitor build logs
-- Test verification flow on live site
+### Implemented
+- Multi-role accounts — one user can be Student + Instructor + Admin
+- Email & WhatsApp dual-channel account verification
+- Admin approval flow for instructors (all admins notified, approve via link or dashboard)
+- GPS pickup/drop-off capture with OpenStreetMap reverse geocoding
+- Booking management with real-time conflict detection
+- 1–5 star rating system with emoji feedback
+- WhatsApp automation: booking confirmations, 1h student reminders, 15min instructor reminders, daily summaries
+- Stripe (international) + PayFast (ZAR) payments + R10 booking fee
+- Admin dashboard: user management, verification, bookings, revenue analytics
+- Automated database backups every 10 minutes + manual export/import
+- Secure password reset flow (email token)
+- Cross-platform: Windows, iOS, Android, Web
 
-**📖 Complete Deployment Guide:** See [`DEPLOYMENT.md`](DEPLOYMENT.md)
+### In Development
+- Certification / learner's licence tracking
+- Multi-language support (Afrikaans, Zulu, Xhosa)
+- Advanced analytics & reporting
 
-## 🔐 Security
+---
 
-### Data Protection
-- **Encryption:** SMTP passwords encrypted with AES-256
-- **JWT Auth:** Secure token-based authentication
-- **Verification Tokens:** 32-byte URL-safe random tokens with expiry
-- **Password Hashing:** bcrypt with salt
-- **SQL Injection:** Prevented by SQLAlchemy ORM
-- **HTTPS:** Enforced in production (Render provides automatically)
+## 🗺️ Roadmap
 
-### Compliance
-- **POPIA:** South African data protection compliance
-- **PCI DSS:** SAQ A compliant (no cardholder data stored)
-- **Privacy:** User data encrypted, minimal third-party sharing
+### Phase 1 — MVP ✅
+- [x] JWT authentication + multi-role users
+- [x] Booking system with conflict detection
+- [x] WhatsApp notifications (Twilio)
+- [x] Payment integration (Stripe + PayFast)
 
-## 🤝 Contributing
-
-1. Fork the repository
-2. Create feature branch: `git checkout -b feature/amazing-feature`
-3. Commit changes: `git commit -m 'Add amazing feature'`
-4. Push to branch: `git push origin feature/amazing-feature`
-5. Open Pull Request
-
-## 📄 License
-
-See [LICENSE](LICENSE) file for details.
-
-## 📞 Support
-
-- **GitHub Issues:** https://github.com/mvdeventer/DRIVE_ALIVE/issues
-- **Documentation:** See docs list above
-- **Quick Fixes:** See troubleshooting section
-
-## 🎯 Roadmap
-
-### Phase 1: MVP ✅
-- [x] User authentication
-- [x] Student/Instructor/Admin roles
-- [x] Booking system
-- [x] WhatsApp notifications
-- [x] Payment integration
-
-### Phase 2: Enhanced UX ✅
+### Phase 2 — Enhanced UX ✅
 - [x] Email + WhatsApp verification
 - [x] GPS location capture
 - [x] Rating system
 - [x] Admin dashboard
-- [x] Database backup
+- [x] Database backup system
 
-### Phase 3: Advanced Features 🚧
+### Phase 3 — Advanced Features 🚧
 - [ ] Certification tracking
 - [ ] Multi-language support
 - [ ] Advanced analytics
-- [ ] Mobile app (React Native standalone)
+- [ ] Standalone mobile app build
 
-### Phase 4: Scale & Optimize
-- [ ] Performance optimization
-- [ ] Load testing
+### Phase 4 — Scale
+- [ ] Performance optimisation & load testing
 - [ ] CDN integration
 - [ ] Multi-region deployment
+
+---
+
+## 📄 License
+
+See [LICENSE](LICENSE) for details.
+
+## 📞 Support
+
+- **GitHub Issues:** https://github.com/mvdeventer/DRIVE_ALIVE/issues
+- **API Docs (local):** http://localhost:8000/docs

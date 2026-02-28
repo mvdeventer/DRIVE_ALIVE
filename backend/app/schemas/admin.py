@@ -50,7 +50,7 @@ class AdminCreateRequest(BaseModel):
 
     email: str
     phone: str
-    password: str = Field(..., min_length=6)
+    password: str = Field(..., min_length=12)
     first_name: str
     last_name: str
     id_number: str = Field(..., min_length=13, max_length=13)
@@ -58,6 +58,24 @@ class AdminCreateRequest(BaseModel):
     address_latitude: Optional[float] = -33.9249  # Default: Cape Town
     address_longitude: Optional[float] = 18.4241
     smtp_email: Optional[str] = None  # Gmail address for sending verification emails
+
+    @field_validator("password")
+    @classmethod
+    def password_complexity(cls, v: str) -> str:
+        errors = []
+        if len(v) < 12:
+            errors.append("at least 12 characters")
+        if not re.search(r"[A-Z]", v):
+            errors.append("an uppercase letter")
+        if not re.search(r"[a-z]", v):
+            errors.append("a lowercase letter")
+        if not re.search(r"\d", v):
+            errors.append("a digit")
+        if not re.search(r"[!@#$%^&*()_+\-=\[\]{};':\"\\|,.<>\/?`~]", v):
+            errors.append("a special character (!@#$%^&* …)")
+        if errors:
+            raise ValueError("Password must contain: " + ", ".join(errors) + ".")
+        return v
     smtp_password: Optional[str] = None  # Gmail app password
     verification_link_validity_minutes: Optional[int] = 30  # Default 30 minutes
     twilio_sender_phone_number: Optional[str] = None  # Twilio sender number (FROM in messages) - e.g., +14155238886

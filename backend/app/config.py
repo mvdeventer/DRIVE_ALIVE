@@ -10,8 +10,9 @@ from pydantic_settings import BaseSettings
 class Settings(BaseSettings):
     """Application settings"""
 
-    # Database
-    DATABASE_URL: str
+    # Database – optional so the server can start without a configured DB
+    # (first-run wizard writes the real URL to .env)
+    DATABASE_URL: str = "not_configured"
 
     # JWT
     SECRET_KEY: str
