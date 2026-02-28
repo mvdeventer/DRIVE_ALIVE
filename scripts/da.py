@@ -254,11 +254,17 @@ def _create_venv() -> None:
     )
 
 
-def ensure_venv() -> None:
-    """Create venv if missing or corrupted; install/verify deps."""
+def ensure_venv(fresh: bool = False) -> None:
+    """Create venv if missing or corrupted; install/verify deps.
+
+    Pass fresh=True when the caller has already removed the directory
+    (e.g. --force install) so the status message is accurate.
+    """
     header("Python Virtual Environment")
     if not _venv_is_healthy():
-        if VENV_DIR.exists():
+        if fresh:
+            info("Creating fresh virtual environment …")
+        elif VENV_DIR.exists():
             warn("Virtual environment is corrupted – recreating …")
             shutil.rmtree(VENV_DIR, ignore_errors=True)
         else:
@@ -636,10 +642,11 @@ def cmd_install(force: bool = False, offline: bool = False) -> None:
 
     # ── Step 4: Backend setup ───────────────────────────────────────────────────
     step(4, total_steps, "Backend – venv + dependencies")
-    if VENV_DIR.exists() and force:
+    force_venv = VENV_DIR.exists() and force
+    if force_venv:
         info("--force: removing existing venv …")
         shutil.rmtree(VENV_DIR, ignore_errors=True)
-    ensure_venv()
+    ensure_venv(fresh=force_venv)
     ensure_env_file()
 
     # ── Step 5: Frontend setup ──────────────────────────────────────────────────
