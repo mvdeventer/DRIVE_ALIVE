@@ -1,6 +1,7 @@
 /**
  * Instructor Verification Screen
- * Allow admins to verify or reject pending instructor registrations
+ * Allow admins to view all instructors filtered by verification status,
+ * approve / reject / resend verification links.
  */
 import { useFocusEffect } from '@react-navigation/native';
 import React, { useCallback, useState } from 'react';
@@ -9,8 +10,10 @@ import {
   FlatList,
   Platform,
   RefreshControl,
+  ScrollView,
   StyleSheet,
   Text,
+  TouchableOpacity,
   View,
 } from 'react-native';
 import { Button, Card, ThemedModal } from '../../components';
@@ -19,7 +22,9 @@ import InlineMessage from '../../components/InlineMessage';
 import WebNavigationHeader from '../../components/WebNavigationHeader';
 import apiService from '../../services/api';
 
-interface PendingInstructor {
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+interface InstructorRecord {
   id: number;
   user_id: number;
   email: string;
@@ -33,28 +38,178 @@ interface PendingInstructor {
   vehicle_model: string;
   vehicle_year: number;
   is_verified: boolean;
+  verification_status: string | null;
+  company_id: number | null;
+  company_name: string | null;
+  is_company_owner: boolean;
   created_at: string;
 }
 
+type FilterTab = 'all' | 'pending_admin' | 'pending_company' | 'verified' | 'rejected';
+
+const TABS: { key: FilterTab; label: string }[] = [
+  { key: 'all', label: 'All' },
+  { key: 'pending_admin', label: 'Pending Admin' },
+  { key: 'pending_company', label: 'Pending Company' },
+  { key: 'verified', label: 'Verified' },
+  { key: 'rejected', label: 'Rejected' },
+];
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function badgeInfo(status: string | null, colors: any) {
+  if (status === 'verified') { return { bg: colors.successBg, text: colors.success, label: '✓ Verified' }; }
+  if (status === 'pending_admin') { return { bg: colors.warningBg, text: colors.warning, label: '⏳ Pending Admin' }; }
+  if (status === 'pending_company') { return { bg: colors.infoBg, text: colors.info, label: '🏢 Pending Company' }; }
+  if (status === 'rejected') { return { bg: colors.dangerBg, text: colors.danger, label: '✗ Rejected' }; }
+  return { bg: colors.backgroundSecondary, text: colors.textSecondary, label: '? Unknown' };
+}
+
+// ─── Sub-components ───────────────────────────────────────────────────────────
+
+function StatusBadge({ status, colors }: { status: string | null; colors: any }) {
+  const b = badgeInfo(status, colors);
+  return (
+    <View style={[styles.badge, { backgroundColor: b.bg }]}>
+      <Text style={[styles.badgeText, { color: b.text }]}>{b.label}</Text>
+    </View>
+  );
+}
+
+function DetailRow({ label, value, colors }: { label: string; value: string; colors: any }) {
+  return (
+    <View style={styles.detailRow}>
+      <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>{label}:</Text>
+      <Text style={[styles.detailValue, { color: colors.text }]}>{value}</Text>
+    </View>
+  );
+}
+
+function InstructorCardActions({
+  item,
+  colors,
+  onApprove,
+  onReject,
+  onResend,
+}: {
+  item: InstructorRecord;
+  colors: any;
+  onApprove: () => void;
+  onReject: () => void;
+  onResend: () => void;
+}) {
+  const isPending = item.verification_status === 'pending_admin';
+  const isRejected = item.verification_status === 'rejected';
+
+  if (isPending) {
+    return (
+      <View style={styles.actions}>
+        <Button style={{ flex: 1, backgroundColor: colors.success }} onPress={onApprove}>
+          ✓ Approve
+        </Button>
+        <Button variant="danger" style={{ flex: 1 }} onPress={onReject}>
+          ✗ Reject
+        </Button>
+      </View>
+    );
+  }
+  if (isRejected) {
+    return (
+      <View style={styles.actions}>
+        <Button variant="secondary" style={{ flex: 1 }} onPress={onResend}>
+          🔁 Re-send for review
+        </Button>
+      </View>
+    );
+  }
+  return (
+    <View style={styles.actions}>
+      <Button variant="secondary" style={{ flex: 1 }} onPress={onResend}>
+        📧 Resend link
+      </Button>
+    </View>
+  );
+}
+
+function InstructorCard({
+  item,
+  colors,
+  onApprove,
+  onReject,
+  onResend,
+}: {
+  item: InstructorRecord;
+  colors: any;
+  onApprove: () => void;
+  onReject: () => void;
+  onResend: () => void;
+}) {
+  const vehicleStr = `${item.vehicle_make} ${item.vehicle_model} (${item.vehicle_year})`;
+
+  return (
+    <Card variant="elevated" style={{ marginBottom: 10 }}>
+      <View style={[styles.cardHeader, { borderBottomColor: colors.border }]}>
+        <View style={{ flex: 1 }}>
+          <Text style={[styles.name, { color: colors.text }]}>{item.full_name}</Text>
+          <Text style={[styles.sub, { color: colors.textSecondary }]}>{item.email}</Text>
+          <Text style={[styles.sub, { color: colors.textSecondary }]}>{item.phone}</Text>
+          {item.company_name ? (
+            <Text style={[styles.companyTag, { color: colors.primary }]}>
+              🏢 {item.company_name}{item.is_company_owner ? ' (owner)' : ''}
+            </Text>
+          ) : null}
+        </View>
+        <View style={{ alignItems: 'flex-end', gap: 4 }}>
+          <StatusBadge status={item.verification_status} colors={colors} />
+          <Text style={[styles.dateText, { color: colors.textTertiary }]}>
+            {new Date(item.created_at).toLocaleDateString()}
+          </Text>
+        </View>
+      </View>
+
+      <View style={styles.details}>
+        <DetailRow label="License" value={item.license_number} colors={colors} />
+        <DetailRow label="Types" value={item.license_types} colors={colors} />
+        <DetailRow label="ID No." value={item.id_number} colors={colors} />
+        <DetailRow label="Vehicle" value={vehicleStr} colors={colors} />
+        <DetailRow label="Reg." value={item.vehicle_registration} colors={colors} />
+      </View>
+
+      <InstructorCardActions
+        item={item}
+        colors={colors}
+        onApprove={onApprove}
+        onReject={onReject}
+        onResend={onResend}
+      />
+    </Card>
+  );
+}
+
+// ─── Main Screen ──────────────────────────────────────────────────────────────
+
 export default function InstructorVerificationScreen({ navigation }: any) {
   const { colors } = useTheme();
-  const [instructors, setInstructors] = useState<PendingInstructor[]>([]);
+
+  const [instructors, setInstructors] = useState<InstructorRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [activeTab, setActiveTab] = useState<FilterTab>('pending_admin');
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [confirmAction, setConfirmAction] = useState<{
-    instructor: PendingInstructor;
-    approve: boolean;
+    instructor: InstructorRecord;
+    action: 'approve' | 'reject' | 'resend';
   } | null>(null);
 
-  const loadPendingInstructors = async () => {
+  const loadInstructors = async (tab: FilterTab = activeTab) => {
     try {
       setError('');
-      const data = await apiService.getPendingInstructors();
+      const filterParam = tab === 'all' ? undefined : tab;
+      const data = await apiService.getAllInstructorsAdmin(filterParam);
       setInstructors(data);
     } catch (err: any) {
-      setError(err.response?.data?.detail || 'Failed to load pending instructors');
+      setError(err.response?.data?.detail || 'Failed to load instructors');
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -63,117 +218,125 @@ export default function InstructorVerificationScreen({ navigation }: any) {
 
   useFocusEffect(
     useCallback(() => {
-      loadPendingInstructors();
-    }, [])
+      loadInstructors();
+    }, [activeTab])
   );
+
+  const switchTab = (tab: FilterTab) => {
+    setActiveTab(tab);
+    setLoading(true);
+    loadInstructors(tab);
+  };
 
   const onRefresh = () => {
     setRefreshing(true);
-    loadPendingInstructors();
+    loadInstructors();
   };
 
-  const handleVerify = (instructor: PendingInstructor, approve: boolean) => {
-    setConfirmAction({ instructor, approve });
-  };
-
-  const confirmVerification = async () => {
-    if (!confirmAction) return;
-
-    const { instructor, approve } = confirmAction;
-    const action = approve ? 'verify' : 'reject';
-
+  const executeAction = async () => {
+    if (!confirmAction) { return; }
+    const { instructor, action } = confirmAction;
+    setError('');
+    setConfirmAction(null);
     try {
-      setError('');
-      setConfirmAction(null);
-      await apiService.verifyInstructor(instructor.id, approve, !approve);
-      setSuccess(`Successfully ${approve ? 'verified' : 'rejected'} ${instructor.full_name}`);
+      if (action === 'approve') {
+        await apiService.verifyInstructor(instructor.id, true);
+        setSuccess(`Approved: ${instructor.full_name}`);
+      } else if (action === 'reject') {
+        await apiService.adminRejectInstructor(instructor.id);
+        setSuccess(`Rejected: ${instructor.full_name}`);
+      } else {
+        await apiService.adminResendVerification(instructor.id);
+        setSuccess(`Link resent for ${instructor.full_name}`);
+      }
       setTimeout(() => setSuccess(''), 5000);
-      loadPendingInstructors();
+      loadInstructors();
     } catch (err: any) {
-      setError(err.response?.data?.detail || `Failed to ${action} instructor`);
+      setError(err.response?.data?.detail || 'Action failed');
     }
   };
 
-  const renderInstructor = ({ item }: { item: PendingInstructor }) => (
-    <Card variant="elevated" style={{ marginBottom: 10 }}>
-      <View style={[styles.instructorHeader, { borderBottomColor: colors.border }]}>
-        <View>
-          <Text style={[styles.instructorName, { color: colors.text }]}>{item.full_name}</Text>
-          <Text style={[styles.instructorEmail, { color: colors.textSecondary }]}>{item.email}</Text>
-          <Text style={[styles.instructorPhone, { color: colors.textSecondary }]}>{item.phone}</Text>
-        </View>
-        <Text style={[styles.registrationDate, { color: colors.textMuted }]}>
-          {new Date(item.created_at).toLocaleDateString()}
-        </Text>
-      </View>
-
-      <View style={styles.detailsSection}>
-        <View style={styles.detailRow}>
-          <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>License Number:</Text>
-          <Text style={[styles.detailValue, { color: colors.text }]}>{item.license_number}</Text>
-        </View>
-        <View style={styles.detailRow}>
-          <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>License Types:</Text>
-          <Text style={[styles.detailValue, { color: colors.text }]}>{item.license_types}</Text>
-        </View>
-        <View style={styles.detailRow}>
-          <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>ID Number:</Text>
-          <Text style={[styles.detailValue, { color: colors.text }]}>{item.id_number}</Text>
-        </View>
-        <View style={styles.detailRow}>
-          <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>Vehicle:</Text>
-          <Text style={[styles.detailValue, { color: colors.text }]}>
-            {item.vehicle_make} {item.vehicle_model} ({item.vehicle_year})
-          </Text>
-        </View>
-        <View style={styles.detailRow}>
-          <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>Registration:</Text>
-          <Text style={[styles.detailValue, { color: colors.text }]}>{item.vehicle_registration}</Text>
-        </View>
-      </View>
-
-      <View style={styles.actionButtons}>
-        <Button variant="primary" style={{ flex: 1, backgroundColor: colors.success }} onPress={() => handleVerify(item, true)}>
-          ✓ Verify
-        </Button>
-        <Button variant="danger" style={{ flex: 1 }} onPress={() => handleVerify(item, false)}>
-          ✗ Reject
-        </Button>
-      </View>
-    </Card>
+  const renderItem = ({ item }: { item: InstructorRecord }) => (
+    <InstructorCard
+      item={item}
+      colors={colors}
+      onApprove={() => setConfirmAction({ instructor: item, action: 'approve' })}
+      onReject={() => setConfirmAction({ instructor: item, action: 'reject' })}
+      onResend={() => setConfirmAction({ instructor: item, action: 'resend' })}
+    />
   );
 
-  if (loading) {
-    return (
-      <View style={[styles.centerContainer, { backgroundColor: colors.background }]}>
-        <ActivityIndicator size="large" color={colors.primary} />
-        <Text style={[styles.loadingText, { color: colors.textSecondary }]}>Loading pending instructors...</Text>
-      </View>
-    );
-  }
+  const modalTitle = (): string => {
+    if (!confirmAction) { return 'Confirm'; }
+    if (confirmAction.action === 'approve') { return '✓ Approve Instructor'; }
+    if (confirmAction.action === 'reject') { return '✗ Reject Instructor'; }
+    return '📧 Resend Verification';
+  };
+
+  const modalConfirmLabel = (): string => {
+    if (!confirmAction) { return 'Confirm'; }
+    if (confirmAction.action === 'approve') { return 'Approve'; }
+    if (confirmAction.action === 'reject') { return 'Reject'; }
+    return 'Resend';
+  };
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <WebNavigationHeader
-        title="Instructor Verification"
+        title="Instructor Management"
         onBack={() => navigation.goBack()}
         showBackButton={true}
       />
 
-      {error && <InlineMessage message={error} type="error" />}
-      {success && <InlineMessage message={success} type="success" />}
+      {/* Filter Tabs */}
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        style={[styles.tabStrip, { borderBottomColor: colors.divider }]}
+        contentContainerStyle={styles.tabContent}
+      >
+        {TABS.map(tab => (
+          <TouchableOpacity
+            key={tab.key}
+            onPress={() => switchTab(tab.key)}
+            style={[
+              styles.tab,
+              activeTab === tab.key && { borderBottomColor: colors.primary, borderBottomWidth: 2 },
+            ]}
+          >
+            <Text
+              style={[
+                styles.tabLabel,
+                { color: activeTab === tab.key ? colors.primary : colors.textSecondary },
+              ]}
+            >
+              {tab.label}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </ScrollView>
 
-      {instructors.length === 0 ? (
-        <View style={styles.emptyContainer}>
-          <Text style={[styles.emptyText, { color: colors.success }]}>✓ All instructors verified!</Text>
-          <Text style={[styles.emptySubtext, { color: colors.textSecondary }]}>No pending verifications at this time.</Text>
+      {error ? <InlineMessage message={error} type="error" /> : null}
+      {success ? <InlineMessage message={success} type="success" /> : null}
+
+      {loading ? (
+        <View style={styles.center}>
+          <ActivityIndicator size="large" color={colors.primary} />
+          <Text style={[styles.loadingText, { color: colors.textSecondary }]}>Loading…</Text>
+        </View>
+      ) : instructors.length === 0 ? (
+        <View style={styles.center}>
+          <Text style={[styles.emptyText, { color: colors.success }]}>✓ Nothing here</Text>
+          <Text style={[styles.emptySub, { color: colors.textSecondary }]}>
+            No instructors match this filter.
+          </Text>
         </View>
       ) : (
         <FlatList
           data={instructors}
-          renderItem={renderInstructor}
+          renderItem={renderItem}
           keyExtractor={item => item.id.toString()}
-          contentContainerStyle={styles.listContainer}
+          contentContainerStyle={styles.list}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
         />
       )}
@@ -182,7 +345,7 @@ export default function InstructorVerificationScreen({ navigation }: any) {
       <ThemedModal
         visible={!!confirmAction}
         onClose={() => setConfirmAction(null)}
-        title={`${confirmAction?.approve ? '✅ Verify' : '❌ Reject'} Instructor`}
+        title={modalTitle()}
         size="sm"
         footer={
           <View style={styles.modalButtons}>
@@ -190,111 +353,58 @@ export default function InstructorVerificationScreen({ navigation }: any) {
               Cancel
             </Button>
             <Button
-              variant={confirmAction?.approve ? 'primary' : 'danger'}
-              style={confirmAction?.approve ? { flex: 1, backgroundColor: colors.success } : { flex: 1 }}
-              onPress={confirmVerification}
+              variant={confirmAction?.action === 'reject' ? 'danger' : 'primary'}
+              style={{ flex: 1 }}
+              onPress={executeAction}
             >
-              {confirmAction?.approve ? 'Verify' : 'Reject'}
+              {modalConfirmLabel()}
             </Button>
           </View>
         }
       >
-        <Text style={[styles.modalMessage, { color: colors.textSecondary }]}>
-          Are you sure you want to {confirmAction?.approve ? 'verify' : 'reject'}{' '}
-          {confirmAction?.instructor.full_name}?
+        <Text style={[styles.modalMsg, { color: colors.textSecondary }]}>
+          {confirmAction?.action === 'resend'
+            ? `Resend verification for ${confirmAction?.instructor.full_name}?`
+            : `${confirmAction?.action === 'approve' ? 'Approve' : 'Reject'} ${confirmAction?.instructor.full_name}?`}
         </Text>
       </ThemedModal>
     </View>
   );
 }
 
+// ─── Styles ───────────────────────────────────────────────────────────────────
+
+const IS_WEB = Platform.OS === 'web';
+
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  centerContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  loadingText: {
-    marginTop: 10,
-    fontSize: 16,
-    fontFamily: 'Inter_400Regular',
-  },
-  listContainer: {
-    padding: 15,
-  },
-  instructorHeader: {
+  container: { flex: 1 },
+  center: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20 },
+  loadingText: { marginTop: 10, fontSize: 16 },
+  list: { padding: 15 },
+  tabStrip: { maxHeight: 44, borderBottomWidth: 1 },
+  tabContent: { paddingHorizontal: 12 },
+  tab: { paddingHorizontal: 14, paddingVertical: 10, marginRight: 4 },
+  tabLabel: { fontSize: IS_WEB ? 14 : 13, fontWeight: '600' },
+  badge: { borderRadius: 12, paddingHorizontal: 8, paddingVertical: 3 },
+  badgeText: { fontSize: 11, fontWeight: '700' },
+  cardHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'flex-start',
     marginBottom: 10,
     paddingBottom: 10,
     borderBottomWidth: 1,
   },
-  instructorName: {
-    fontSize: Platform.OS === 'web' ? 16 : 15,
-    fontFamily: 'Inter_700Bold',
-    marginBottom: 4,
-  },
-  instructorEmail: {
-    fontSize: Platform.OS === 'web' ? 13 : 12,
-    fontFamily: 'Inter_400Regular',
-    marginBottom: 2,
-  },
-  instructorPhone: {
-    fontSize: 12,
-    fontFamily: 'Inter_400Regular',
-  },
-  registrationDate: {
-    fontSize: 10,
-    fontFamily: 'Inter_400Regular',
-  },
-  detailsSection: {
-    marginBottom: 10,
-  },
-  detailRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 6,
-  },
-  detailLabel: {
-    fontSize: 12,
-    fontFamily: 'Inter_600SemiBold',
-  },
-  detailValue: {
-    fontSize: 12,
-    fontFamily: 'Inter_400Regular',
-  },
-  actionButtons: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: 8,
-  },
-  emptyContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
-  },
-  emptyText: {
-    fontSize: 24,
-    fontFamily: 'Inter_700Bold',
-    marginBottom: 10,
-  },
-  emptySubtext: {
-    fontSize: 16,
-    fontFamily: 'Inter_400Regular',
-    textAlign: 'center',
-  },
-  modalButtons: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  modalMessage: {
-    fontSize: Platform.OS === 'web' ? 16 : 15,
-    fontFamily: 'Inter_400Regular',
-    textAlign: 'center',
-  },
+  name: { fontSize: IS_WEB ? 16 : 15, fontWeight: '700', marginBottom: 3 },
+  sub: { fontSize: IS_WEB ? 13 : 12, marginBottom: 2 },
+  companyTag: { fontSize: 12, fontWeight: '600', marginTop: 4 },
+  dateText: { fontSize: 11 },
+  details: { marginBottom: 10 },
+  detailRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 5 },
+  detailLabel: { fontSize: 12, fontWeight: '600' },
+  detailValue: { fontSize: 12 },
+  actions: { flexDirection: 'row', gap: 8 },
+  emptyText: { fontSize: 22, fontWeight: '700', marginBottom: 8 },
+  emptySub: { fontSize: 15, textAlign: 'center' },
+  modalButtons: { flexDirection: 'row', gap: 12 },
+  modalMsg: { fontSize: IS_WEB ? 16 : 15, textAlign: 'center', lineHeight: 22 },
 });

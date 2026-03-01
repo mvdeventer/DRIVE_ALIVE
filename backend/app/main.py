@@ -16,12 +16,14 @@ from slowapi.errors import RateLimitExceeded
 from .config import settings
 from .database import Base, engine, SessionLocal
 from .models.user import User, UserRole
+from .models.company import Company  # noqa: F401 – ensures table is created by metadata
 from .utils.rate_limiter import limiter, rate_limit_exceeded_handler
 from .routes import (
     admin,
     auth,
     availability,
     bookings,
+    companies,
     database,
     database_interface,
     db_setup,
@@ -81,6 +83,32 @@ def _apply_incremental_migrations():
             print("✅ [MIGRATION] Added setup_token column to instructors table")
     except Exception as exc:
         print(f"⚠️  [MIGRATION] Could not add setup_token to instructors: {exc}")
+
+    # ── Instructor company & verification workflow (Mar 2026) ─────────────────
+    try:
+        existing_instructor_cols = [col["name"] for col in inspector.get_columns("instructors")]
+        new_instructor_cols = [
+            ("verification_status",          "VARCHAR(30) DEFAULT 'pending_admin'"),
+            ("verified_by_admin_id",          "INTEGER REFERENCES users(id)"),
+            ("verified_by_instructor_id",     "INTEGER"),
+            ("admin_verification_token",      "VARCHAR(200) UNIQUE"),
+            ("company_verification_token",    "VARCHAR(200) UNIQUE"),
+            ("verification_token_expires",    "TIMESTAMP WITH TIME ZONE"),
+            ("company_id",                    "INTEGER REFERENCES companies(id)"),
+            ("is_company_owner",              "BOOLEAN DEFAULT FALSE"),
+        ]
+        with engine.connect() as conn:
+            for col_name, col_def in new_instructor_cols:
+                if col_name not in existing_instructor_cols:
+                    try:
+                        conn.execute(text(f"ALTER TABLE instructors ADD COLUMN {col_name} {col_def}"))
+                        conn.commit()
+                        print(f"✅ [MIGRATION] Added {col_name} to instructors")
+                    except Exception as col_exc:
+                        conn.rollback()
+                        print(f"⚠️  [MIGRATION] Could not add {col_name}: {col_exc}")
+    except Exception as exc:
+        print(f"⚠️  [MIGRATION] Instructor company columns: {exc}")
 
 
 _apply_incremental_migrations()
@@ -299,7 +327,10 @@ async def redirect_to_db_setup(request: Request, call_next):
     """
     from .database import engine as _engine
     _bypass = (
+        request.method == "OPTIONS" or          # Always pass CORS preflights through
         request.url.path.startswith("/db-setup") or
+        request.url.path.startswith("/setup/") or  # Setup wizard routes
+        request.url.path.startswith("/verify/") or  # Verification test routes
         request.url.path in ("/health", "/docs", "/redoc", "/openapi.json")
     )
     if not _bypass and _engine is None:
@@ -321,6 +352,11 @@ async def add_security_headers(request: Request, call_next):
     """
     response = await call_next(request)
     is_docs = request.url.path in {"/docs", "/redoc", "/openapi.json"}
+    is_html_wizard = (
+        request.url.path.startswith("/db-setup") or
+        request.url.path.startswith("/setup/wizard") or
+        request.url.path.startswith("/setup/admin-reset")
+    )
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["X-Frame-Options"] = "DENY"
     response.headers["Referrer-Policy"] = "no-referrer"
@@ -331,6 +367,14 @@ async def add_security_headers(request: Request, call_next):
             "style-src 'self' https://cdn.jsdelivr.net 'unsafe-inline'; "
             "script-src 'self' https://cdn.jsdelivr.net 'unsafe-inline'; "
             "img-src 'self' https://fastapi.tiangolo.com data:; "
+            "connect-src 'self'; "
+            "frame-ancestors 'none'; base-uri 'none'"
+        )
+    elif is_html_wizard:
+        response.headers["Content-Security-Policy"] = (
+            "default-src 'none'; "
+            "style-src 'unsafe-inline'; "
+            "script-src 'unsafe-inline'; "
             "connect-src 'self'; "
             "frame-ancestors 'none'; base-uri 'none'"
         )
@@ -382,6 +426,7 @@ app.include_router(database.router)
 app.include_router(database_interface.router)  # 🗄️ Database Interface (Admin CRUD)
 app.include_router(auth.router)
 app.include_router(verification.router)
+app.include_router(companies.router)  # 🏢 Company management
 app.include_router(availability.router)
 app.include_router(bookings.router)
 app.include_router(instructors.router)

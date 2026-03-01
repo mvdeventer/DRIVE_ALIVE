@@ -325,6 +325,41 @@ If you didn't create an account with us, please ignore this email.
             logger.error("Failed to send test email to %s: %s", to_email, e)
             return False
 
+    def send_simple_email(self, to_email: str, subject: str, body: str) -> bool:
+        """
+        Send a plain-text email with a custom subject and body.
+
+        Args:
+            to_email: Recipient email address
+            subject:  Email subject line
+            body:     Plain-text message body
+
+        Returns:
+            bool: True if sent successfully
+        """
+        if not self.smtp_username or not self.smtp_password:
+            logger.warning("SMTP not configured. Cannot send email to %s.", to_email)
+            return False
+
+        try:
+            msg = MIMEMultipart("alternative")
+            msg["Subject"] = subject
+            msg["From"] = self.from_email
+            msg["To"] = to_email
+            msg.attach(MIMEText(body, "plain"))
+
+            with smtplib.SMTP(self.smtp_server, self.smtp_port) as server:
+                server.starttls()
+                server.login(self.smtp_username, self.smtp_password)
+                server.send_message(msg)
+
+            logger.info("Simple email sent to %s", to_email)
+            return True
+
+        except Exception as exc:
+            logger.error("Failed to send email to %s: %s", to_email, exc)
+            return False
+
     def send_admin_student_registration_notification(
         self,
         admin_email: str,

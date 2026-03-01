@@ -60,32 +60,37 @@ export default function RegisterStudentScreen({ navigation }: any) {
   const scrollViewRef = useRef<ScrollView>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
+  const STUDENT_FIELD_LABELS: Record<string, string> = {
+    first_name: 'First Name',
+    last_name: 'Last Name',
+    email: 'Email Address',
+    phone: 'Phone Number',
+    password: 'Password',
+    confirmPassword: 'Confirm Password',
+  };
+
   const handleRegister = async () => {
-    // Validation
-    if (!formData.email || !formData.password || !formData.first_name || !formData.last_name) {
-      setMessage({
-        type: 'error',
-        text: '❌ Missing Fields: Please fill in all required fields',
-      });
-      scrollViewRef.current?.scrollTo({ y: 0, animated: true });
-      return;
-    }
+    const newErrors: Record<string, string> = {};
 
+    if (!formData.first_name.trim()) newErrors.first_name = 'First name is required';
+    if (!formData.last_name.trim()) newErrors.last_name = 'Last name is required';
+    if (!formData.email.trim()) {
+      newErrors.email = 'Email is required';
+    } else if (!formData.email.includes('@')) {
+      newErrors.email = 'Valid email is required';
+    }
+    if (!formData.phone.trim()) newErrors.phone = 'Phone number is required';
+    if (!formData.password) {
+      newErrors.password = 'Password is required';
+    } else if (formData.password.length < 6) {
+      newErrors.password = 'Password must be at least 6 characters';
+    }
     if (formData.password !== formData.confirmPassword) {
-      setMessage({
-        type: 'error',
-        text: '🔒 Password Mismatch: Passwords do not match. Please make sure both passwords are identical.',
-      });
-      scrollViewRef.current?.scrollTo({ y: 0, animated: true });
-      return;
+      newErrors.confirmPassword = 'Passwords do not match';
     }
 
-    if (formData.password.length < 6) {
-      setMessage({
-        type: 'error',
-        text: '🔒 Password Too Short: Password must be at least 6 characters long for security.',
-      });
-      scrollViewRef.current?.scrollTo({ y: 0, animated: true });
+    if (Object.keys(newErrors).length > 0) {
+      setFieldErrors(prev => ({ ...prev, ...newErrors }));
       return;
     }
 
@@ -352,6 +357,20 @@ export default function RegisterStudentScreen({ navigation }: any) {
         </Pressable>
       </Card>
 
+      {/* Validation Summary */}
+      {Object.values(fieldErrors).some(Boolean) && (
+        <View style={[styles.validationSummary, { backgroundColor: colors.dangerBg, borderColor: colors.danger }]}>
+          <Text style={[styles.validationSummaryTitle, { color: colors.danger }]}>⚠️ Please fix the following:</Text>
+          {Object.entries(fieldErrors).map(([field, msg]) =>
+            msg ? (
+              <Text key={field} style={[styles.validationSummaryItem, { color: colors.danger }]}>
+                • {STUDENT_FIELD_LABELS[field] ?? field}: {msg}
+              </Text>
+            ) : null
+          )}
+        </View>
+      )}
+
       {/* Register Button */}
       <Button
         label="Register"
@@ -484,6 +503,21 @@ const styles = StyleSheet.create({
   },
   linkText: {
     fontSize: Platform.OS === 'web' ? 15 : 13,
+  },
+  validationSummary: {
+    borderWidth: 1,
+    borderRadius: 8,
+    padding: Platform.OS === 'web' ? 14 : 10,
+    marginBottom: 12,
+  },
+  validationSummaryTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    marginBottom: 6,
+  },
+  validationSummaryItem: {
+    fontSize: 13,
+    lineHeight: 20,
   },
   modalButtons: {
     flexDirection: 'row',

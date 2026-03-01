@@ -765,3 +765,152 @@ async def get_unverified_instructors(
             responses.append(response)
 
     return responses
+
+
+# ==================== Instructor Company Management ====================
+
+
+@router.get("/company/my-instructors")
+async def get_my_company_instructors(
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Session = Depends(get_db),
+):
+    """
+    Company-owner endpoint: list all instructors belonging to the same company.
+    Requires the authenticated user to be a company owner.
+    """
+    instructor = (
+        db.query(InstructorModel)
+        .filter(InstructorModel.user_id == current_user.id)
+        .first()
+    )
+    if not instructor:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Instructor profile not found")
+    if not instructor.is_company_owner:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only company owners can view company instructors",
+        )
+    if not instructor.company_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="You are not associated with a company",
+        )
+
+    members = (
+        db.query(InstructorModel)
+        .filter(
+            InstructorModel.company_id == instructor.company_id,
+            InstructorModel.id != instructor.id,
+        )
+        .all()
+    )
+
+    result = []
+    for member in members:
+        member_user = db.query(User).filter(User.id == member.user_id).first()
+        if member_user:
+            result.append(
+                {
+                    "id": member.id,
+                    "user_id": member_user.id,
+                    "full_name": member_user.full_name,
+                    "email": member_user.email,
+                    "phone": member_user.phone,
+                    "license_number": member.license_number,
+                    "license_types": member.license_types,
+                    "verification_status": getattr(member, "verification_status", None),
+                    "is_verified": member.is_verified,
+                    "created_at": member_user.created_at.isoformat() if member_user.created_at else None,
+                }
+            )
+    return result
+
+
+@router.post("/company/instructors/{instructor_id}/verify")
+async def company_verify_instructor(
+    instructor_id: int,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Session = Depends(get_db),
+):
+    """
+    Company-owner approves a pending instructor from the same company.
+    Changes status from 'pending_company' → 'verified'.
+    """
+    from ..models.user import InstructorVerificationStatus as IVS
+
+    owner = (
+        db.query(InstructorModel)
+        .filter(InstructorModel.user_id == current_user.id)
+        .first()
+    )
+    if not owner or not owner.is_company_owner:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only company owners can approve instructors",
+        )
+
+    member = db.query(InstructorModel).filter(InstructorModel.id == instructor_id).first()
+    if not member:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Instructor not found")
+    if member.company_id != owner.company_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Instructor is not part of your company",
+        )
+
+    member_user = db.query(User).filter(User.id == member.user_id).first()
+
+    member.verification_status = IVS.VERIFIED.value
+    member.is_verified = True
+    if member_user:
+        from ..models.user import UserStatus as US
+        member_user.status = US.ACTIVE
+    db.commit()
+
+    return {
+        "status": "verified",
+        "instructor_id": instructor_id,
+    }
+
+
+@router.post("/company/instructors/{instructor_id}/reject")
+async def company_reject_instructor(
+    instructor_id: int,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Session = Depends(get_db),
+):
+    """
+    Company-owner rejects a pending instructor from the same company.
+    Changes status to 'rejected'.
+    """
+    from ..models.user import InstructorVerificationStatus as IVS
+
+    owner = (
+        db.query(InstructorModel)
+        .filter(InstructorModel.user_id == current_user.id)
+        .first()
+    )
+    if not owner or not owner.is_company_owner:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only company owners can reject instructors",
+        )
+
+    member = db.query(InstructorModel).filter(InstructorModel.id == instructor_id).first()
+    if not member:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Instructor not found")
+    if member.company_id != owner.company_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Instructor is not part of your company",
+        )
+
+    member.verification_status = IVS.REJECTED.value
+    member.is_verified = False
+    db.commit()
+
+    return {
+        "status": "rejected",
+        "instructor_id": instructor_id,
+    }

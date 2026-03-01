@@ -2,8 +2,9 @@
 Authentication service
 """
 
+import secrets
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from typing import Optional
 
 from fastapi import HTTPException, status
@@ -11,7 +12,8 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from ..config import settings
-from ..models.user import Instructor, Student, User, UserRole, UserStatus
+from ..models.availability import InstructorSchedule
+from ..models.user import Instructor, InstructorVerificationStatus, Student, User, UserRole, UserStatus
 from ..schemas.user import InstructorCreate, StudentCreate, UserCreate
 from ..utils.auth import create_access_token, get_password_hash, verify_password
 
@@ -139,16 +141,64 @@ class AuthService:
             if settings.should_auto_verify_instructors:
                 instructor.is_verified = True
                 instructor.verified_at = datetime.now(timezone.utc)
+                instructor.verification_status = InstructorVerificationStatus.VERIFIED.value
                 print(f"[DEBUG] Auto-verified instructor {instructor.id} (debug mode enabled)")
             else:
+                instructor.verification_status = InstructorVerificationStatus.PENDING_ADMIN.value
                 print(f"[INFO] Instructor {instructor.id} created - requires manual verification")
 
-            # Generate a one-time setup token for pre-auth schedule setup
+            # Generate one-time setup token for pre-auth schedule setup
             instructor.setup_token = str(uuid.uuid4())
 
-            db.add(instructor)
+            # —— Verification tokens ——
+            token_expiry = datetime.now(timezone.utc) + timedelta(hours=72)
+            instructor.admin_verification_token = secrets.token_urlsafe(32)
+            instructor.verification_token_expires = token_expiry
 
-            # Commit both user and instructor together
+            db.add(instructor)
+            db.flush()  # get instructor.id so we can link company/schedule
+
+            # —— Company logic ——
+            if instructor_data.company_name:
+                # Create a brand-new company owned by this instructor
+                from ..services.company_service import create_company
+                company = create_company(db, instructor_data.company_name)
+                company.owner_instructor_id = instructor.id
+                instructor.company_id = company.id
+                instructor.is_company_owner = True
+                # Company owner is still verified by admin (they ARE the main instructor)
+                print(f"[INFO] Created new company '{company.name}' owned by instructor {instructor.id}")
+
+            elif instructor_data.company_id:
+                # Join an existing company — if it already has a verified owner,
+                # both admin AND the company owner must verify this instructor.
+                from ..services.company_service import get_company_by_id
+                company = get_company_by_id(db, instructor_data.company_id)
+                if not company or not company.is_active:
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail="The selected company does not exist or is inactive.",
+                    )
+                instructor.company_id = company.id
+                instructor.is_company_owner = False
+
+                # Generate company verification token as well
+                instructor.company_verification_token = secrets.token_urlsafe(32)
+                instructor.verification_status = InstructorVerificationStatus.PENDING_COMPANY.value
+                print(f"[INFO] Instructor {instructor.id} joining company {company.id} – pending company + admin verification")
+
+            # —— Schedule ——
+            for slot in instructor_data.schedule:
+                schedule_entry = InstructorSchedule(
+                    instructor_id=instructor.id,
+                    day_of_week=slot.day_of_week,
+                    start_time=slot.start_time,
+                    end_time=slot.end_time,
+                    is_active=slot.is_active,
+                )
+                db.add(schedule_entry)
+
+            # Commit everything
             db.commit()
             db.refresh(user)
             db.refresh(instructor)

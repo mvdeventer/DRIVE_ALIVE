@@ -41,6 +41,10 @@ import VerificationPendingScreen from './screens/auth/VerificationPendingScreen'
 
 // Verification Screens
 import InstructorVerifyScreen from './screens/verification/InstructorVerifyScreen';
+import InstructorCompanyVerifyScreen from './screens/verification/InstructorCompanyVerifyScreen';
+
+// Instructor Screens
+import MyInstructorsScreen from './screens/instructor/MyInstructorsScreen';
 
 // Payment Screens (root stack — shared across flows, deep-linked)
 import MockPaymentScreen from './screens/payment/MockPaymentScreen';
@@ -69,6 +73,7 @@ const linking = {
     screens: {
       VerifyAccount: 'verify-account',
       InstructorVerify: 'instructor-verify',
+      InstructorCompanyVerify: 'company-instructor-verify',
       ResetPassword: 'reset-password',
       PaymentMock: 'payment/mock',
       PaymentSuccess: 'payment/success',
@@ -352,6 +357,7 @@ function AppContent() {
               <Stack.Screen name="PaymentMock" component={MockPaymentScreen} />
               <Stack.Screen name="PaymentSuccess" component={PaymentSuccessScreen} />
               <Stack.Screen name="PaymentCancel" component={PaymentCancelScreen} />
+              <Stack.Screen name="MyInstructors" component={MyInstructorsScreen} options={{ headerShown: true, title: 'My Company Instructors' }} />
             </Stack.Group>
           ) : (
             <Stack.Group>
@@ -371,6 +377,7 @@ function AppContent() {
           <Stack.Group>
             <Stack.Screen name="VerifyAccount" component={VerifyAccountScreen} options={{ title: 'Verify Account' }} />
             <Stack.Screen name="InstructorVerify" component={InstructorVerifyScreen} options={{ title: 'Verify Instructor' }} />
+            <Stack.Screen name="InstructorCompanyVerify" component={InstructorCompanyVerifyScreen} options={{ title: 'Approve Instructor' }} />
             <Stack.Screen name="ResetPassword" component={ResetPasswordScreen} options={{ title: 'Reset Password' }} />
           </Stack.Group>
         </Stack.Navigator>

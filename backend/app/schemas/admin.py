@@ -183,6 +183,10 @@ class InstructorVerificationResponse(BaseModel):
     vehicle_model: str
     vehicle_year: int
     is_verified: bool
+    verification_status: Optional[str] = None
+    company_id: Optional[int] = None
+    company_name: Optional[str] = None
+    is_company_owner: bool = False
     created_at: datetime
 
     class Config:

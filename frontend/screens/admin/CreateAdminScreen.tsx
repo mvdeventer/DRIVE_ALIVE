@@ -186,6 +186,16 @@ export default function CreateAdminScreen({ navigation }: any) {
     }
   };
 
+  const ADMIN_FIELD_LABELS: Record<string, string> = {
+    first_name: 'First Name',
+    last_name: 'Last Name',
+    email: 'Email Address',
+    phone: 'Phone Number',
+    id_number: 'ID Number',
+    password: 'Password',
+    confirmPassword: 'Confirm Password',
+  };
+
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <WebNavigationHeader
@@ -387,6 +397,20 @@ export default function CreateAdminScreen({ navigation }: any) {
           />
         </View>
 
+        {/* Validation Summary */}
+        {Object.values(fieldErrors).some(Boolean) && (
+          <View style={[styles.validationSummary, { backgroundColor: colors.dangerBg, borderColor: colors.danger }]}>
+            <Text style={[styles.validationSummaryTitle, { color: colors.danger }]}>⚠️ Please fix the following:</Text>
+            {(Object.entries(fieldErrors) as [string, string][]).map(([field, msg]) =>
+              msg ? (
+                <Text key={field} style={[styles.validationSummaryItem, { color: colors.danger }]}>
+                  • {ADMIN_FIELD_LABELS[field] ?? field}: {msg}
+                </Text>
+              ) : null
+            )}
+          </View>
+        )}
+
         <Button
           variant="primary"
           fullWidth
@@ -544,5 +568,22 @@ const styles = StyleSheet.create({
     fontSize: Platform.OS === 'web' ? 14 : 12,
     fontFamily: 'Inter_400Regular',
     marginBottom: 4,
+  },
+  validationSummary: {
+    borderWidth: 1,
+    borderRadius: 8,
+    padding: Platform.OS === 'web' ? 14 : 10,
+    marginBottom: 0,
+    marginHorizontal: Platform.OS === 'web' ? 20 : 16,
+    marginTop: 8,
+  },
+  validationSummaryTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    marginBottom: 6,
+  },
+  validationSummaryItem: {
+    fontSize: 13,
+    lineHeight: 20,
   },
 });

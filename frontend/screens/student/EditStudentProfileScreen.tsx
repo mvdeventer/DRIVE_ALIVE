@@ -349,6 +349,19 @@ export default function EditStudentProfileScreen({ navigation: navProp }: any) {
     );
   }
 
+  const STUDENT_EDIT_FIELD_LABELS: Record<string, string> = {
+    first_name: 'First Name',
+    last_name: 'Last Name',
+    email: 'Email Address',
+    phone: 'Phone Number',
+    id_number: 'ID Number',
+    emergency_contact_name: 'Emergency Contact Name',
+    emergency_contact_phone: 'Emergency Contact Phone',
+    address_line1: 'Address Line 1',
+    city: 'City',
+    postal_code: 'Postal Code',
+  };
+
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <WebNavigationHeader
@@ -538,6 +551,20 @@ export default function EditStudentProfileScreen({ navigation: navProp }: any) {
             {isAdminEditing ? 'Reset Password' : 'Change Password'}
           </Button>
 
+          {/* Validation Summary */}
+          {Object.values(fieldErrors).some(Boolean) && (
+            <View style={[styles.validationSummary, { backgroundColor: colors.dangerBg, borderColor: colors.danger }]}>
+              <Text style={[styles.validationSummaryTitle, { color: colors.danger }]}>⚠️ Please fix the following:</Text>
+              {Object.entries(fieldErrors).map(([field, msg]) =>
+                msg ? (
+                  <Text key={field} style={[styles.validationSummaryItem, { color: colors.danger }]}>
+                    • {STUDENT_EDIT_FIELD_LABELS[field] ?? field}: {msg}
+                  </Text>
+                ) : null
+              )}
+            </View>
+          )}
+
           <Button
             variant="primary"
             fullWidth
@@ -719,5 +746,21 @@ const styles = StyleSheet.create({
     lineHeight: 22,
     fontFamily: 'Inter_400Regular',
     marginBottom: 8,
+  },
+  validationSummary: {
+    borderWidth: 1,
+    borderRadius: 8,
+    padding: Platform.OS === 'web' ? 14 : 10,
+    marginBottom: 12,
+    marginTop: 8,
+  },
+  validationSummaryTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    marginBottom: 6,
+  },
+  validationSummaryItem: {
+    fontSize: 13,
+    lineHeight: 20,
   },
 });

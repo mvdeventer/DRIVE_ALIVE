@@ -411,6 +411,21 @@ export default function EditInstructorProfileScreen({ navigation: navProp }: any
     );
   }
 
+  const INSTRUCTOR_EDIT_FIELD_LABELS: Record<string, string> = {
+    first_name: 'First Name',
+    last_name: 'Last Name',
+    email: 'Email Address',
+    phone: 'Phone Number',
+    license_number: 'License Number',
+    license_types: 'License Types',
+    vehicle_registration: 'Vehicle Registration',
+    vehicle_make: 'Vehicle Make',
+    vehicle_model: 'Vehicle Model',
+    vehicle_year: 'Vehicle Year',
+    city: 'City',
+    hourly_rate: 'Hourly Rate',
+  };
+
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <WebNavigationHeader
@@ -648,6 +663,20 @@ export default function EditInstructorProfileScreen({ navigation: navProp }: any
           {isAdminEditing ? '🔒 Reset Password' : '🔒 Change Password'}
         </Button>
 
+        {/* Validation Summary */}
+        {Object.values(fieldErrors).some(Boolean) && (
+          <View style={[styles.validationSummary, { backgroundColor: colors.dangerBg, borderColor: colors.danger }]}>
+            <Text style={[styles.validationSummaryTitle, { color: colors.danger }]}>⚠️ Please fix the following:</Text>
+            {Object.entries(fieldErrors).map(([field, msg]) =>
+              msg ? (
+                <Text key={field} style={[styles.validationSummaryItem, { color: colors.danger }]}>
+                  • {INSTRUCTOR_EDIT_FIELD_LABELS[field] ?? field}: {msg}
+                </Text>
+              ) : null
+            )}
+          </View>
+        )}
+
         <Button
           variant="primary"
           onPress={handleSaveProfile}
@@ -829,5 +858,21 @@ const styles = StyleSheet.create({
   confirmModalButtons: {
     flexDirection: 'row',
     gap: 12,
+  },
+  validationSummary: {
+    borderWidth: 1,
+    borderRadius: 8,
+    padding: Platform.OS === 'web' ? 14 : 10,
+    marginBottom: 12,
+    marginTop: 8,
+  },
+  validationSummaryTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    marginBottom: 6,
+  },
+  validationSummaryItem: {
+    fontSize: 13,
+    lineHeight: 20,
   },
 });

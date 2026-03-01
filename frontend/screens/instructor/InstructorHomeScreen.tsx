@@ -57,6 +57,10 @@ interface InstructorProfile {
   booking_fee?: number; // Per-instructor booking fee
   is_available: boolean;
   total_earnings: number;
+  // Company fields (added in verification overhaul)
+  is_company_owner?: boolean;
+  company_id?: number | null;
+  company_name?: string | null;
 }
 
 export default function InstructorHomeScreen() {
@@ -834,6 +838,17 @@ export default function InstructorHomeScreen() {
               >
                 Edit Profile
               </Button>
+              {profile?.is_company_owner && (
+                <Button
+                  variant="secondary"
+                  fullWidth
+                  onPress={() => (navigation as any).navigate('MyInstructors')}
+                  icon="🏢"
+                  style={{ marginBottom: 12 }}
+                >
+                  My Company Instructors
+                </Button>
+              )}
               <Pressable
                 style={[styles.earningsButton, { backgroundColor: colors.success }]}
                 onPress={handleViewEarnings}

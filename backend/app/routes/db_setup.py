@@ -99,6 +99,27 @@ def _setup_is_complete() -> bool:
     return bool(_read_env_key("SETUP_COMPLETED_AT"))
 
 
+def _prefill_db_defaults() -> dict:
+    """Parse DATABASE_URL from .env and return form field defaults."""
+    defaults = {
+        "host": "localhost",
+        "port": "5432",
+        "dbname": "driving_school_db",
+        "user": "postgres",
+    }
+    db_url = _read_env_key("DATABASE_URL") or ""
+    m = re.match(
+        r"^postgresql(?:\+psycopg2)?://([^:]+):[^@]+@([^:/]+):(\d+)/([^?]+)",
+        db_url,
+    )
+    if m:
+        defaults["user"] = m.group(1)
+        defaults["host"] = m.group(2)
+        defaults["port"] = m.group(3)
+        defaults["dbname"] = m.group(4)
+    return defaults
+
+
 def _client_ip(request: Request) -> str:
     fwd = request.headers.get("x-forwarded-for")
     return fwd.split(",")[0].strip() if fwd else (request.client.host if request.client else "unknown")
@@ -232,7 +253,7 @@ def configure_database(creds: DBCredentials, request: Request):
         "success": True,
         "message": "Database configured and tables created.",
         "admin_exists": admin_exists,
-        "next_step": "/setup/status" if admin_exists else "/setup/create-initial-admin",
+        "next_step": "/" if admin_exists else "/setup/wizard",
     }
 
 
@@ -489,7 +510,19 @@ def setup_wizard():
     from ..database import engine as _engine
     if _setup_is_complete() or _engine is not None:
         return RedirectResponse(url="/")
-    return HTMLResponse(content=_WIZARD_HTML)
+
+    p = _prefill_db_defaults()
+    html = (
+        _WIZARD_HTML
+        .replace('value="5432" placeholder="5432"', f'value="{p["port"]}" placeholder="5432"')
+        .replace('parseInt(document.getElementById(\'port\').value) || 5432',
+                 f'parseInt(document.getElementById(\'port\').value) || {p["port"]}')
+        .replace('value="localhost" placeholder="localhost"', f'value="{p["host"]}" placeholder="localhost"')
+        .replace('value="driving_school_db" placeholder="driving_school_db"',
+                 f'value="{p["dbname"]}" placeholder="driving_school_db"')
+        .replace('value="postgres" placeholder="postgres"', f'value="{p["user"]}" placeholder="postgres"')
+    )
+    return HTMLResponse(content=html)
 
 
 # ── Admin DB-reset page ─────────────────────────────────────────────────────────
@@ -633,4 +666,15 @@ def admin_reset_page():
     """Admin-only page to change DB credentials after first setup."""
     if not _setup_is_complete():
         return RedirectResponse(url="/db-setup")
-    return HTMLResponse(content=_ADMIN_RESET_HTML)
+
+    p = _prefill_db_defaults()
+    html = (
+        _ADMIN_RESET_HTML
+        .replace('value="5432"', f'value="{p["port"]}"')
+        .replace('parseInt(document.getElementById(\'port\').value) || 5432',
+                 f'parseInt(document.getElementById(\'port\').value) || {p["port"]}')
+        .replace('value="localhost"', f'value="{p["host"]}"', 1)
+        .replace('value="driving_school_db"', f'value="{p["dbname"]}"', 1)
+        .replace('value="postgres"', f'value="{p["user"]}"', 1)
+    )
+    return HTMLResponse(content=html)

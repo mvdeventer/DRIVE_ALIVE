@@ -510,3 +510,147 @@ async def verify_instructor(
             status_code=500,
             detail=f"Error verifying instructor: {str(e)}"
         )
+
+
+def _notify_instructor_decision(svc, db, instructor, outcome: str, reason: str = "") -> None:
+    """Send approval or rejection notification to an instructor (best-effort)."""
+    try:
+        if outcome == "verified":
+            svc.send_approval_notification(db=db, instructor=instructor)
+        elif outcome == "rejected":
+            svc.send_rejection_notification(db=db, instructor=instructor, reason=reason)
+    except Exception:
+        pass
+
+
+class AdminVerifyRequest(BaseModel):
+    """Body for admin approve/reject action via token link."""
+    token: str
+    approve: bool = True
+    reason: str = ""
+
+
+@router.post("/instructor/admin")
+@limiter.limit("10/minute")
+async def admin_decide_instructor(
+    request: Request,
+    response: Response,
+    body: AdminVerifyRequest,
+    db: Session = Depends(get_db),
+):
+    """
+    Admin approves or rejects an instructor using the token from their email/WhatsApp link.
+    POST /verify/instructor/admin  { token, approve, reason? }
+    """
+    if not body.token:
+        raise HTTPException(status_code=400, detail="Verification token is required")
+
+    try:
+        from app.services.instructor_verification_service import InstructorVerificationService
+        from app.models.user import Instructor, InstructorVerificationStatus, UserStatus
+
+        instructor = (
+            db.query(Instructor)
+            .filter(Instructor.admin_verification_token == body.token)
+            .first()
+        )
+        if not instructor:
+            raise HTTPException(status_code=400, detail="Invalid or expired verification token")
+
+        from datetime import datetime, timezone as tz
+        if instructor.verification_token_expires:
+            if instructor.verification_token_expires.tzinfo is None:
+                expires = instructor.verification_token_expires.replace(tzinfo=tz.utc)
+            else:
+                expires = instructor.verification_token_expires
+            if datetime.now(tz.utc) > expires:
+                raise HTTPException(status_code=400, detail="Verification token has expired")
+
+        user = db.query(User).filter(User.id == instructor.user_id).first()
+        if not user:
+            raise HTTPException(status_code=400, detail="Associated user not found")
+
+        if body.approve:
+            is_company_member = (
+                getattr(instructor, "company_id", None) is not None
+                and not getattr(instructor, "is_company_owner", False)
+            )
+            instructor.is_verified = True
+            if is_company_member:
+                instructor.verification_status = InstructorVerificationStatus.PENDING_COMPANY.value
+            else:
+                instructor.verification_status = InstructorVerificationStatus.VERIFIED.value
+                user.status = UserStatus.ACTIVE
+            # Invalidate the admin token
+            instructor.admin_verification_token = None
+            db.commit()
+            outcome = "pending_company" if is_company_member else "verified"
+            _notify_instructor_decision(InstructorVerificationService, db, instructor, outcome)
+            return {
+                "status": "success",
+                "outcome": outcome,
+                "message": (
+                    "Instructor approved! Awaiting company owner confirmation."
+                    if is_company_member
+                    else "Instructor has been verified and can now accept bookings."
+                ),
+            }
+        else:
+            instructor.is_verified = False
+            instructor.verification_status = InstructorVerificationStatus.REJECTED.value
+            instructor.admin_verification_token = None
+            db.commit()
+            _notify_instructor_decision(InstructorVerificationService, db, instructor, "rejected", body.reason)
+            return {
+                "status": "success",
+                "outcome": "rejected",
+                "message": "Instructor has been rejected.",
+            }
+
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.error("Error in admin instructor verification: %s", str(exc))
+        raise HTTPException(status_code=500, detail=f"Verification failed: {str(exc)}")
+
+
+class CompanyVerifyRequest(BaseModel):
+    """Body for company owner approve/reject action."""
+    token: str
+    approve: bool = True
+
+
+@router.post("/instructor/company")
+@limiter.limit("10/minute")
+async def verify_instructor_by_company(
+    request: Request,
+    response: Response,
+    body: CompanyVerifyRequest,
+    db: Session = Depends(get_db),
+):
+    """
+    Company owner approves or rejects an instructor joining their company.
+    POST /verify/instructor/company  { token, approve }
+    """
+    if not body.token:
+        raise HTTPException(status_code=400, detail="Verification token is required")
+
+    try:
+        from app.services.instructor_verification_service import InstructorVerificationService
+
+        success, message = InstructorVerificationService.verify_company_token(
+            db=db,
+            token=body.token,
+            approve=body.approve,
+        )
+
+        if success:
+            return {"status": "success", "message": message}
+
+        raise HTTPException(status_code=400, detail=message)
+
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.error("Error in company instructor verification: %s", str(exc))
+        raise HTTPException(status_code=500, detail=f"Verification failed: {str(exc)}")

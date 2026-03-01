@@ -21,8 +21,9 @@ START OPTIONS
     -b / --backend-only     Only start backend
     -f / --frontend-only    Only start frontend
     -d / --dev              Open browser with DevTools
-    -l / --local            Switch to localhost env then start
-    -m / --mobile           Switch to network/mobile env then start
+    -e / --env <target>     Switch env before starting  (loc | net | prod)
+    -l / --local            Switch to localhost env then start  (alias for -e loc)
+    -m / --mobile           Switch to network/mobile env then start  (alias for -e net)
 
 INSTALL OPTIONS
     --force                 Re-run even if already installed
@@ -208,6 +209,9 @@ def ensure_postgres_running() -> None:
         err(f"Could not start {svc}. Start PostgreSQL manually and retry.")
 
 
+DB_APP_NAME = "driving_school_db"
+
+
 def _find_psql() -> Path | None:
     """Find psql.exe in PATH or common install locations."""
     if shutil.which("psql"):
@@ -217,6 +221,146 @@ def _find_psql() -> Path | None:
         if p.exists():
             return p
     return None
+
+
+def _detect_pg_port() -> str:
+    """Read the port PostgreSQL is actually listening on from postgresql.conf."""
+    for v in range(17, 12, -1):
+        conf = Path(f"C:/Program Files/PostgreSQL/{v}/data/postgresql.conf")
+        if conf.exists():
+            for line in conf.read_text(encoding="utf-8", errors="ignore").splitlines():
+                m = re.match(r"^\s*port\s*=\s*(\d+)", line)
+                if m:
+                    return m.group(1)
+    return "5432"
+
+
+def _pg_env(password: str) -> dict:
+    """Return OS environment with PGPASSWORD set (or cleared)."""
+    env = os.environ.copy()
+    if password:
+        env["PGPASSWORD"] = password
+    else:
+        env.pop("PGPASSWORD", None)
+    return env
+
+
+def _pg_authenticate(psql: Path, host: str, port: str) -> str | None:
+    """
+    Try to connect as 'postgres' superuser.  Tries the default password first,
+    then prompts up to 3 times.  Returns the working password, or None on failure.
+    """
+    import getpass
+    for candidate in ("postgres", ""):
+        r = subprocess.run(
+            [str(psql), "-U", "postgres", "-h", host, "-p", port,
+             "-c", "SELECT 1", "-t", "postgres"],
+            capture_output=True, text=True, env=_pg_env(candidate),
+        )
+        if r.returncode == 0:
+            return candidate
+    print()
+    warn("Cannot connect as 'postgres' with the default password.")
+    warn("Enter the PostgreSQL superuser password once to provision the database.")
+    for _ in range(3):
+        attempt = getpass.getpass("  postgres password: ")
+        r = subprocess.run(
+            [str(psql), "-U", "postgres", "-h", host, "-p", port,
+             "-c", "SELECT 1", "-t", "postgres"],
+            capture_output=True, text=True, env=_pg_env(attempt),
+        )
+        if r.returncode == 0:
+            return attempt
+        err("Incorrect password, try again.")
+    return None
+
+
+def _psql_run(psql: Path, host: str, port: str, pg_env: dict, sql: str) -> subprocess.CompletedProcess:
+    """Run a single SQL statement as the postgres superuser."""
+    return subprocess.run(
+        [str(psql), "-U", "postgres", "-h", host, "-p", port, "-c", sql, "postgres"],
+        capture_output=True, text=True, env=pg_env,
+    )
+
+
+def provision_database(force: bool = False) -> bool:
+    """
+    Auto-create a dedicated PostgreSQL role + database with generated credentials
+    and write DATABASE_URL to backend/.env.  Fully zero-interaction on a fresh
+    install (tries default password 'postgres' first).  Idempotent – skipped if
+    credentials are already valid unless force=True.
+    """
+    import secrets as _secrets
+
+    psql = _find_psql()
+    if not psql:
+        warn("psql not found – skipping automatic database provisioning.")
+        warn("Install PostgreSQL and re-run, or configure the DB manually via the setup wizard.")
+        return False
+
+    pg_host = "localhost"
+    pg_port = _detect_pg_port()
+
+    # ── Already provisioned? ───────────────────────────────────────────────────
+    existing_url = read_env().get("DATABASE_URL", "")
+    is_placeholder = not existing_url or "user:password@" in existing_url
+    if not is_placeholder and not force:
+        ok(f"Database already provisioned.")
+        info(f"  {existing_url.split('@')[-1] if '@' in existing_url else existing_url}")
+        return True
+
+    # ── Connect as superuser ───────────────────────────────────────────────────
+    info(f"Connecting to PostgreSQL on port {pg_port} as superuser…")
+    su_pass = _pg_authenticate(psql, pg_host, pg_port)
+    if su_pass is None:
+        err("Could not authenticate to PostgreSQL – database provisioning skipped.")
+        return False
+    ok(f"Connected to PostgreSQL on port {pg_port}.")
+    pg_e = _pg_env(su_pass)
+
+    # ── Generate app credentials ───────────────────────────────────────────────
+    app_user = f"drivalive_{_secrets.token_hex(4)}"
+    app_pass = _secrets.token_urlsafe(24)
+
+    # ── --force: drop existing DB + old role ──────────────────────────────────
+    if force:
+        for sql in [
+            f"SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname='{DB_APP_NAME}';",
+            f"DROP DATABASE IF EXISTS {DB_APP_NAME};",
+        ]:
+            _psql_run(psql, pg_host, pg_port, pg_e, sql)
+        if "://" in existing_url:
+            old_user = existing_url.split("://")[1].split(":")[0]
+            if old_user not in ("postgres", "user", ""):
+                _psql_run(psql, pg_host, pg_port, pg_e, f"DROP ROLE IF EXISTS {old_user};")
+
+    # ── Create role ───────────────────────────────────────────────────────────
+    r = _psql_run(psql, pg_host, pg_port, pg_e,
+                  f"CREATE ROLE {app_user} WITH LOGIN PASSWORD '{app_pass}';")
+    if r.returncode != 0 and "already exists" not in r.stderr:
+        err(f"Could not create DB role: {r.stderr.strip()}")
+        return False
+    ok(f"DB role created: {app_user}")
+
+    # ── Create database ───────────────────────────────────────────────────────
+    r = _psql_run(psql, pg_host, pg_port, pg_e,
+                  f"CREATE DATABASE {DB_APP_NAME} OWNER {app_user};")
+    if r.returncode != 0:
+        if "already exists" in r.stderr:
+            _psql_run(psql, pg_host, pg_port, pg_e,
+                      f"GRANT ALL PRIVILEGES ON DATABASE {DB_APP_NAME} TO {app_user};")
+            ok(f"Database '{DB_APP_NAME}' already exists – permissions granted to {app_user}.")
+        else:
+            err(f"Could not create database: {r.stderr.strip()}")
+            return False
+    else:
+        ok(f"Database '{DB_APP_NAME}' created.")
+
+    # ── Write DATABASE_URL to .env ─────────────────────────────────────────────
+    db_url = f"postgresql://{app_user}:{app_pass}@{pg_host}:{pg_port}/{DB_APP_NAME}"
+    write_env_value("DATABASE_URL", db_url)
+    ok("DATABASE_URL written to backend/.env  (credentials are auto-generated & encoded).")
+    return True
 
 
 # ── Venv helpers ───────────────────────────────────────────────────────────────
@@ -277,7 +421,22 @@ def ensure_venv(fresh: bool = False) -> None:
     # Verify fastapi importable; install if not
     if not run_silent([str(VENV_PYTHON), "-c", "import fastapi"]):
         info("Installing backend dependencies …")
-        run([str(VENV_PYTHON), "-m", "pip", "install", "--quiet", "-r", str(REQUIREMENTS)])
+        result = run(
+            [str(VENV_PYTHON), "-m", "pip", "install", "--quiet", "-r", str(REQUIREMENTS)],
+            check=False,
+        )
+        if result.returncode != 0:
+            # Retry once with --force-reinstall in case of locked/partial files
+            warn("First pip attempt failed – retrying with --force-reinstall …")
+            result2 = run(
+                [str(VENV_PYTHON), "-m", "pip", "install", "--quiet",
+                 "--force-reinstall", "-r", str(REQUIREMENTS)],
+                check=False,
+            )
+            if result2.returncode != 0:
+                err("pip install failed. If you see 'Access is denied', stop running servers first.")
+                err("Run: s.bat stop  then  s.bat install --force")
+                sys.exit(1)
         ok("Backend dependencies installed.")
     else:
         ok("Backend dependencies already satisfied.")
@@ -313,15 +472,54 @@ def ensure_node_modules() -> None:
 # ── .env helpers ───────────────────────────────────────────────────────────────
 
 def ensure_env_file() -> None:
-    """Create .env from .env.example if missing."""
-    if not ENV_FILE.exists():
-        if ENV_EXAMPLE.exists():
-            shutil.copy(ENV_EXAMPLE, ENV_FILE)
-            ok(".env created from .env.example – fill in your credentials.")
+    """Create .env from .env.example if missing, auto-generating required secrets."""
+    import secrets as _secrets
+
+    def _patch_env(content: str) -> tuple[str, list[str]]:
+        """Fill in any empty generated fields; return (patched_content, list_of_changes)."""
+        changes: list[str] = []
+
+        # Auto-generate SECRET_KEY if blank
+        if re.search(r"^SECRET_KEY\s*=\s*$", content, re.MULTILINE):
+            secret_key = _secrets.token_urlsafe(48)
+            content = re.sub(
+                r"^(SECRET_KEY\s*=)\s*$", f"\\g<1>{secret_key}", content, flags=re.MULTILINE
+            )
+            changes.append("SECRET_KEY")
+
+        # Auto-generate ENCRYPTION_KEY if blank or still placeholder
+        if re.search(r"^ENCRYPTION_KEY\s*=\s*(your-.*)?$", content, re.MULTILINE):
+            try:
+                from cryptography.fernet import Fernet
+                enc_key = Fernet.generate_key().decode()
+            except ImportError:
+                enc_key = _secrets.token_urlsafe(32)
+            content = re.sub(
+                r"^(ENCRYPTION_KEY\s*=)\s*(your-.*)?$", f"\\g<1>{enc_key}", content, flags=re.MULTILINE
+            )
+            changes.append("ENCRYPTION_KEY")
+
+        return content, changes
+
+    if ENV_FILE.exists():
+        existing = ENV_FILE.read_text(encoding="utf-8")
+        patched, changes = _patch_env(existing)
+        if changes:
+            ENV_FILE.write_text(patched, encoding="utf-8")
+            ok(f".env updated – auto-generated: {', '.join(changes)}")
         else:
-            warn(".env.example not found – .env must be created manually.")
+            ok(".env file present.")
+        return
+
+    if ENV_EXAMPLE.exists():
+        content = ENV_EXAMPLE.read_text(encoding="utf-8")
+        content, changes = _patch_env(content)
+        ENV_FILE.write_text(content, encoding="utf-8")
+        ok(f".env created with auto-generated: {', '.join(changes) or 'secrets'}.")
+        info("Edit backend/.env to add your DATABASE_URL, SMTP, and other credentials.")
+        info("Or visit http://localhost:8000/db-setup after starting to configure via the wizard.")
     else:
-        ok(".env file present.")
+        warn(".env.example not found – .env must be created manually.")
 
 
 def read_env() -> dict[str, str]:
@@ -364,6 +562,48 @@ def detect_local_ip() -> str | None:
             return s.getsockname()[0]
     except Exception:
         return None
+
+
+def _find_chromium_browser() -> Path | None:
+    """
+    Find Chrome or Edge executable (searches PATH then common Windows install dirs).
+    Returns the first one found, or None.
+    """
+    # PATH search first
+    for name in ("google-chrome", "chrome", "chromium", "msedge", "microsoft-edge"):
+        if shutil.which(name):
+            return Path(shutil.which(name))  # type: ignore[arg-type]
+
+    # Common Windows install locations
+    candidates = [
+        Path(os.environ.get("ProgramFiles", r"C:\Program Files"))
+        / "Google" / "Chrome" / "Application" / "chrome.exe",
+        Path(os.environ.get("ProgramFiles(x86)", r"C:\Program Files (x86)"))
+        / "Google" / "Chrome" / "Application" / "chrome.exe",
+        Path(os.environ.get("LOCALAPPDATA", "")) / "Google" / "Chrome" / "Application" / "chrome.exe",
+        Path(os.environ.get("ProgramFiles", r"C:\Program Files"))
+        / "Microsoft" / "Edge" / "Application" / "msedge.exe",
+        Path(os.environ.get("ProgramFiles(x86)", r"C:\Program Files (x86)"))
+        / "Microsoft" / "Edge" / "Application" / "msedge.exe",
+        Path(os.environ.get("LOCALAPPDATA", "")) / "Microsoft" / "Edge" / "Application" / "msedge.exe",
+    ]
+    for candidate in candidates:
+        if candidate.exists():
+            return candidate
+    return None
+
+
+def _open_with_devtools(url: str) -> None:
+    """Open url in Chrome/Edge with DevTools pre-opened; fall back to default browser."""
+    browser = _find_chromium_browser()
+    if browser:
+        info(f"Opening {browser.name} with DevTools: {url}")
+        subprocess.Popen(
+            [str(browser), "--auto-open-devtools-for-tabs", url]
+        )
+    else:
+        warn("Chrome/Edge not found in common locations – opening default browser (no DevTools).")
+        webbrowser.open(url)
 
 
 # ── Environment switcher ───────────────────────────────────────────────────────
@@ -560,7 +800,8 @@ def cmd_start(
         # Use quoted set syntax: set "VAR=value" prevents cmd.exe from
         # including trailing spaces (before &&) in the variable value.
         # EXPO_OFFLINE must be "1" not "true" – Expo uses getenv.boolish().
-        expo_env = 'set "EXPO_OFFLINE=1" && set "BROWSER=none" && '
+        # NOTE: Do NOT set BROWSER=none – that kills Expo's interactive 'w' keypress too.
+        expo_env = 'set "EXPO_OFFLINE=1" && '
         frontend_cmd = (
             f"{expo_env}npx expo start --web {expo_flag}"
         )
@@ -574,15 +815,7 @@ def cmd_start(
         # Open browser
         time.sleep(3)
         if dev_mode:
-            # msedge with DevTools – fall back to default browser if not found
-            msedge = shutil.which("msedge") or shutil.which("microsoft-edge")
-            if msedge:
-                subprocess.Popen(
-                    [msedge, "--auto-open-devtools-for-tabs",
-                     f"http://localhost:{FRONTEND_PORT}"]
-                )
-            else:
-                webbrowser.open(f"http://localhost:{FRONTEND_PORT}")
+            _open_with_devtools(f"http://localhost:{FRONTEND_PORT}")
         else:
             webbrowser.open(f"http://localhost:{FRONTEND_PORT}")
 
@@ -606,7 +839,13 @@ def cmd_install(force: bool = False, offline: bool = False) -> None:
         print(f"\n  Start the app:  s.bat\n")
         return
 
-    total_steps = 5
+    # Stop any running servers before touching venv/node_modules files
+    if force:
+        info("Stopping any running servers before reinstall …")
+        cmd_stop(silent=True)
+        time.sleep(1)
+
+    total_steps = 6
     errors: list[str] = []
 
     # ── Step 1: Python ──────────────────────────────────────────────────────────
@@ -636,7 +875,7 @@ def cmd_install(force: bool = False, offline: bool = False) -> None:
         warn("psql not found in PATH or common locations.")
         warn("If PostgreSQL is installed, ensure its bin folder is in PATH.")
         warn("Download: https://www.postgresql.org/download/windows/")
-        errors.append("psql not in PATH (PostgreSQL may still work)")
+        errors.append("psql not in PATH – database provisioning skipped")
 
     ensure_postgres_running()
 
@@ -649,8 +888,13 @@ def cmd_install(force: bool = False, offline: bool = False) -> None:
     ensure_venv(fresh=force_venv)
     ensure_env_file()
 
-    # ── Step 5: Frontend setup ──────────────────────────────────────────────────
-    step(5, total_steps, "Frontend – npm install")
+    # ── Step 5: Database provisioning ──────────────────────────────────────────
+    step(5, total_steps, "Database – auto-provision")
+    if not provision_database(force=force):
+        errors.append("Database provisioning failed – configure manually via /db-setup")
+
+    # ── Step 6: Frontend setup ──────────────────────────────────────────────────
+    step(6, total_steps, "Frontend – npm install")
     if (FRONTEND_DIR / "node_modules").exists() and force:
         info("--force: removing existing node_modules …")
         shutil.rmtree(FRONTEND_DIR / "node_modules", ignore_errors=True)
@@ -669,14 +913,13 @@ def cmd_install(force: bool = False, offline: bool = False) -> None:
     print(_c("green", bar))
     print()
     print("  Next steps:")
-    print("    1. Edit  backend\\.env  with your credentials")
-    print("       (DATABASE_URL, SMTP settings, Twilio, PayFast, Stripe)")
+    print("    1. Start the app:")
+    print("       s.bat start")
     print()
-    print("    2. Run database migrations:")
-    print("       backend\\venv\\Scripts\\python.exe -m alembic upgrade head")
-    print()
-    print("    3. Start the app:")
-    print("       s.bat")
+    print("    2. Open http://localhost:8081 in a browser")
+    print("       Complete the setup wizard:")
+    print("         - Create your admin account")
+    print("         - Configure Email (SMTP), WhatsApp (Twilio), PayFast, Stripe")
     print()
     if errors:
         print(_c("yellow", "  Warnings encountered:"))
@@ -738,32 +981,33 @@ def cmd_uninstall(yes: bool = False) -> None:
         else:
             info(".env kept.")
 
-    # Optionally drop database
+    # Drop database + app role (reads credentials from .env)
     psql = _find_psql()
     if psql:
-        if yes:
-            drop = "n"
-        else:
-            drop = input("  Drop PostgreSQL database 'driving_school_db'? (y/N): ").strip().lower()
+        drop = "n" if yes else input(f"  Drop PostgreSQL database '{DB_APP_NAME}'? (y/N): ").strip().lower()
         if drop == "y":
-            pg_user = input("  PostgreSQL username [postgres]: ").strip() or "postgres"
-            pg_host = input("  PostgreSQL host [localhost]: ").strip() or "localhost"
-            pg_port = input("  PostgreSQL port [5432]: ").strip() or "5432"
-            import getpass
-            pg_pass = getpass.getpass("  PostgreSQL password (blank for trust auth): ")
-            env = os.environ.copy()
-            if pg_pass:
-                env["PGPASSWORD"] = pg_pass
-            for sql in [
-                "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname='driving_school_db';",
-                "DROP DATABASE IF EXISTS driving_school_db;",
-            ]:
-                subprocess.run(
-                    [str(psql), "-U", pg_user, "-h", pg_host, "-p", pg_port,
-                     "-c", sql, "postgres"],
-                    env=env, check=False
-                )
-            ok("Database dropped.")
+            pg_host = "localhost"
+            pg_port = _detect_pg_port()
+            info(f"Authenticating to PostgreSQL on port {pg_port}…")
+            su_pass = _pg_authenticate(psql, pg_host, pg_port)
+            if su_pass is None:
+                err("Could not authenticate – database NOT dropped. Remove it manually.")
+            else:
+                pg_e = _pg_env(su_pass)
+                # Determine app role from .env
+                db_url = read_env().get("DATABASE_URL", "")
+                app_role = ""
+                if "://" in db_url:
+                    app_role = db_url.split("://")[1].split(":")[0]
+                for sql in [
+                    f"SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname='{DB_APP_NAME}';",
+                    f"DROP DATABASE IF EXISTS {DB_APP_NAME};",
+                ]:
+                    _psql_run(psql, pg_host, pg_port, pg_e, sql)
+                if app_role and app_role not in ("postgres", "user", ""):
+                    _psql_run(psql, pg_host, pg_port, pg_e, f"DROP ROLE IF EXISTS {app_role};")
+                    ok(f"DB role '{app_role}' dropped.")
+                ok(f"Database '{DB_APP_NAME}' dropped.")
     else:
         info("psql not found – skipping database drop.")
 
@@ -834,8 +1078,9 @@ def main() -> None:
     p_start.add_argument("-b", "--backend-only", action="store_true")
     p_start.add_argument("-f", "--frontend-only", action="store_true")
     p_start.add_argument("-d", "--dev", action="store_true", help="Open browser with DevTools")
-    p_start.add_argument("-l", "--local", action="store_true", help="Switch to localhost env first")
-    p_start.add_argument("-m", "--mobile", action="store_true", help="Switch to network/mobile env first")
+    p_start.add_argument("-e", "--env", metavar="TARGET", help="Switch env before starting (loc|net|prod)")
+    p_start.add_argument("-l", "--local", action="store_true", help="Switch to localhost env first (alias for -e loc)")
+    p_start.add_argument("-m", "--mobile", action="store_true", help="Switch to network/mobile env first (alias for -e net)")
 
     # stop
     sub.add_parser("stop", help="Stop running servers")
@@ -845,6 +1090,9 @@ def main() -> None:
     p_restart.add_argument("-b", "--backend-only", action="store_true")
     p_restart.add_argument("-f", "--frontend-only", action="store_true")
     p_restart.add_argument("-d", "--dev", action="store_true")
+    p_restart.add_argument("-e", "--env", metavar="TARGET", help="Switch env before restarting (loc|net|prod)")
+    p_restart.add_argument("-l", "--local", action="store_true", help="Switch to localhost env first")
+    p_restart.add_argument("-m", "--mobile", action="store_true", help="Switch to network/mobile env first")
 
     # install
     p_install = sub.add_parser("install", help="Full setup")
@@ -868,10 +1116,10 @@ def main() -> None:
         args = parser.parse_args(["start"] + sys.argv[1:])
 
     if args.command == "start":
-        switch = None
-        if args.local:
+        switch = getattr(args, "env", None)
+        if not switch and getattr(args, "local", False):
             switch = "loc"
-        elif args.mobile:
+        elif not switch and getattr(args, "mobile", False):
             switch = "net"
         cmd_start(
             backend_only=args.backend_only,
@@ -884,12 +1132,18 @@ def main() -> None:
         cmd_stop()
 
     elif args.command == "restart":
+        switch = getattr(args, "env", None)
+        if not switch and getattr(args, "local", False):
+            switch = "loc"
+        elif not switch and getattr(args, "mobile", False):
+            switch = "net"
         cmd_stop()
         time.sleep(1)
         cmd_start(
             backend_only=args.backend_only,
             frontend_only=args.frontend_only,
             dev_mode=args.dev,
+            switch_env=switch,
         )
 
     elif args.command == "install":

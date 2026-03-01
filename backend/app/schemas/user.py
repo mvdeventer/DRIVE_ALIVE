@@ -2,11 +2,12 @@
 Pydantic schemas for request/response validation
 """
 
-from datetime import datetime
-from typing import Optional
+from datetime import datetime, time as time_type
+from typing import List, Optional
 
-from pydantic import BaseModel, EmailStr, Field, field_validator
+from pydantic import BaseModel, EmailStr, Field, field_validator, model_validator
 
+from ..models.availability import DayOfWeek
 from ..models.user import UserRole, UserStatus
 
 # ==================== Auth Schemas ====================
@@ -208,10 +209,39 @@ class InstructorBase(BaseModel):
         return v
 
 
+class ScheduleSlotCreate(BaseModel):
+    """A single schedule slot for registration"""
+
+    day_of_week: DayOfWeek
+    start_time: time_type
+    end_time: time_type
+    is_active: bool = True
+
+    @field_validator("end_time")
+    @classmethod
+    def validate_end_time(cls, v: time_type, info) -> time_type:
+        if "start_time" in info.data and v <= info.data["start_time"]:
+            raise ValueError("end_time must be after start_time")
+        return v
+
+
 class InstructorCreate(UserCreate, InstructorBase):
-    """Instructor creation schema"""
+    """Instructor creation schema — includes optional schedule and company fields"""
 
     role: UserRole = UserRole.INSTRUCTOR
+    schedule: List[ScheduleSlotCreate] = []
+
+    # Company: provide one of these, or neither (independent instructor)
+    company_id: Optional[int] = None    # Join an existing company
+    company_name: Optional[str] = Field(None, min_length=3, max_length=200)  # Create new company
+
+    @model_validator(mode="after")
+    def _validate_company_fields(self) -> "InstructorCreate":
+        if self.company_id is not None and self.company_name is not None:
+            raise ValueError(
+                "Provide either company_id (join existing) or company_name (create new), not both."
+            )
+        return self
 
 
 class InstructorUpdate(BaseModel):
@@ -271,6 +301,10 @@ class InstructorResponse(UserResponse):
     is_verified: bool
     current_latitude: Optional[float] = None
     current_longitude: Optional[float] = None
+    # Verification workflow
+    verification_status: Optional[str] = None
+    company_id: Optional[int] = None
+    is_company_owner: bool = False
 
     class Config:
         from_attributes = True

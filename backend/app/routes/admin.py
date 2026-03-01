@@ -15,6 +15,7 @@ from ..models.availability import InstructorSchedule, TimeOffException
 from ..models.booking import Booking, BookingStatus
 from ..models.booking_credit import BookingCredit, CreditStatus
 from ..models.user import Instructor, Student, User, UserRole, UserStatus
+from ..models.company import Company
 from ..schemas.admin import (
     AdminCreateRequest,
     AdminCreateResponse,
@@ -217,89 +218,28 @@ async def get_admin_stats(
 # ==================== Instructor Verification ====================
 
 
-@router.get(
-    "/instructors/pending-verification",
-    response_model=List[InstructorVerificationResponse],
-)
-async def get_pending_instructors(
-    current_admin: Annotated[User, Depends(require_admin)],
-    db: Session = Depends(get_db),
-    skip: int = Query(0, ge=0),
-    limit: int = Query(50, ge=1, le=100),
-):
-    """
-    Get list of instructors pending verification
-    """
-    instructors = (
-        db.query(Instructor)
-        .filter(Instructor.is_verified == False)
-        .offset(skip)
-        .limit(limit)
-        .all()
-    )
-
-    result = []
-    for instructor in instructors:
-        user = db.query(User).filter(User.id == instructor.user_id).first()
-        if user:
-            result.append(
-                InstructorVerificationResponse(
-                    id=instructor.id,
-                    user_id=user.id,
-                    email=user.email,
-                    phone=user.phone,
-                    full_name=user.full_name,
-                    license_number=instructor.license_number,
-                    license_types=instructor.license_types,
-                    id_number=instructor.id_number,
-                    vehicle_registration=instructor.vehicle_registration,
-                    vehicle_make=instructor.vehicle_make,
-                    vehicle_model=instructor.vehicle_model,
-                    vehicle_year=instructor.vehicle_year,
-                    is_verified=instructor.is_verified,
-                    created_at=user.created_at,
-                )
-            )
-
-    return result
+def _notify_after_admin_decision(svc, db, instructor, approved: bool, reason: str = "") -> None:
+    """Fire-and-forget notification to instructor after admin approve/reject."""
+    try:
+        if approved:
+            svc.send_approval_notification(db=db, instructor=instructor)
+        else:
+            svc.send_rejection_notification(db=db, instructor=instructor, reason=reason)
+    except Exception:
+        pass
 
 
-@router.post(
-    "/instructors/{instructor_id}/verify", response_model=InstructorVerificationResponse
-)
-async def verify_instructor(
-    instructor_id: int,
-    verification_data: InstructorVerificationRequest,
-    current_admin: Annotated[User, Depends(require_admin)],
-    db: Session = Depends(get_db),
-):
-    """
-    Verify or reject an instructor's registration
-    """
-    instructor = db.query(Instructor).filter(Instructor.id == instructor_id).first()
-    if not instructor:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Instructor not found",
-        )
-
-    user = db.query(User).filter(User.id == instructor.user_id).first()
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="User not found",
-        )
-
-    # Update verification status
-    instructor.is_verified = verification_data.is_verified
-
-    # If rejecting, optionally deactivate the account
-    if not verification_data.is_verified and verification_data.deactivate_account:
-        user.status = UserStatus.SUSPENDED
-
-    db.commit()
-    db.refresh(instructor)
-    db.refresh(user)
+def _build_instructor_verification_response(
+    instructor: Instructor,
+    user: User,
+    db: Session,
+) -> InstructorVerificationResponse:
+    """Build a full InstructorVerificationResponse including company name."""
+    company_name: Optional[str] = None
+    if instructor.company_id:
+        company = db.query(Company).filter(Company.id == instructor.company_id).first()
+        if company:
+            company_name = company.name
 
     return InstructorVerificationResponse(
         id=instructor.id,
@@ -315,8 +255,199 @@ async def verify_instructor(
         vehicle_model=instructor.vehicle_model,
         vehicle_year=instructor.vehicle_year,
         is_verified=instructor.is_verified,
+        verification_status=getattr(instructor, "verification_status", None),
+        company_id=getattr(instructor, "company_id", None),
+        company_name=company_name,
+        is_company_owner=getattr(instructor, "is_company_owner", False) or False,
         created_at=user.created_at,
     )
+
+
+@router.get(
+    "/instructors",
+    response_model=List[InstructorVerificationResponse],
+)
+async def get_all_instructors_admin(
+    current_admin: Annotated[User, Depends(require_admin)],
+    db: Session = Depends(get_db),
+    verification_status: Optional[str] = Query(None),
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=200),
+):
+    """
+    Get list of all instructors with optional verification_status filter.
+    Replaces the old pending-only endpoint with a filterable view.
+    """
+    query = db.query(Instructor)
+    if verification_status:
+        query = query.filter(
+            Instructor.verification_status == verification_status
+        )
+
+    instructors = query.offset(skip).limit(limit).all()
+    result = []
+    for instructor in instructors:
+        user = db.query(User).filter(User.id == instructor.user_id).first()
+        if user:
+            result.append(_build_instructor_verification_response(instructor, user, db))
+    return result
+
+
+@router.get(
+    "/instructors/pending-verification",
+    response_model=List[InstructorVerificationResponse],
+)
+async def get_pending_instructors(
+    current_admin: Annotated[User, Depends(require_admin)],
+    db: Session = Depends(get_db),
+    skip: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=100),
+):
+    """
+    Get list of instructors pending verification (legacy endpoint kept for backwards compat).
+    """
+    instructors = (
+        db.query(Instructor)
+        .filter(Instructor.is_verified == False)
+        .offset(skip)
+        .limit(limit)
+        .all()
+    )
+
+    result = []
+    for instructor in instructors:
+        user = db.query(User).filter(User.id == instructor.user_id).first()
+        if user:
+            result.append(_build_instructor_verification_response(instructor, user, db))
+    return result
+
+
+@router.post(
+    "/instructors/{instructor_id}/verify", response_model=InstructorVerificationResponse
+)
+async def verify_instructor(
+    instructor_id: int,
+    verification_data: InstructorVerificationRequest,
+    current_admin: Annotated[User, Depends(require_admin)],
+    db: Session = Depends(get_db),
+):
+    """
+    Admin approves an instructor.
+    - Independent / company owner → status = 'verified'
+    - Company member → status = 'pending_company' (company owner must also approve)
+    """
+    from ..models.user import InstructorVerificationStatus as IVS
+
+    instructor = db.query(Instructor).filter(Instructor.id == instructor_id).first()
+    if not instructor:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Instructor not found")
+
+    user = db.query(User).filter(User.id == instructor.user_id).first()
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+
+    if verification_data.is_verified:
+        instructor.is_verified = True
+        instructor.verified_by_admin_id = current_admin.id
+        is_company_member = (
+            getattr(instructor, "company_id", None) is not None
+            and not getattr(instructor, "is_company_owner", False)
+        )
+        if is_company_member:
+            # Admin approved but still needs company owner
+            instructor.verification_status = IVS.PENDING_COMPANY.value
+        else:
+            instructor.verification_status = IVS.VERIFIED.value
+            user.status = UserStatus.ACTIVE
+    else:
+        # Reject
+        instructor.is_verified = False
+        instructor.verification_status = IVS.REJECTED.value
+        if verification_data.deactivate_account:
+            user.status = UserStatus.SUSPENDED
+
+    db.commit()
+    db.refresh(instructor)
+    db.refresh(user)
+    # Notify instructor of admin decision
+    from ..services.instructor_verification_service import InstructorVerificationService as IVSvc
+    _notify_after_admin_decision(
+        IVSvc, db, instructor,
+        approved=verification_data.is_verified and instructor.verification_status == IVS.VERIFIED.value,
+    )
+    return _build_instructor_verification_response(instructor, user, db)
+
+
+@router.post("/instructors/{instructor_id}/reject")
+async def reject_instructor(
+    instructor_id: int,
+    current_admin: Annotated[User, Depends(require_admin)],
+    db: Session = Depends(get_db),
+    reason: Optional[str] = Query(None),
+):
+    """
+    Admin explicitly rejects an instructor with optional reason.
+    """
+    from ..models.user import InstructorVerificationStatus as IVS
+
+    instructor = db.query(Instructor).filter(Instructor.id == instructor_id).first()
+    if not instructor:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Instructor not found")
+
+    user = db.query(User).filter(User.id == instructor.user_id).first()
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+
+    instructor.is_verified = False
+    instructor.verification_status = IVS.REJECTED.value
+    user.status = UserStatus.SUSPENDED
+    db.commit()
+
+    from ..services.instructor_verification_service import InstructorVerificationService as IVSvc
+    _notify_after_admin_decision(IVSvc, db, instructor, approved=False, reason=reason or "")
+
+    return {"status": "rejected", "instructor_id": instructor_id, "reason": reason}
+
+
+@router.post("/instructors/{instructor_id}/resend-verification")
+async def resend_instructor_verification(
+    instructor_id: int,
+    current_admin: Annotated[User, Depends(require_admin)],
+    db: Session = Depends(get_db),
+):
+    """
+    Regenerate verification tokens and resend all relevant verification links.
+    """
+    import secrets
+    from datetime import timedelta
+    from ..models.user import InstructorVerificationStatus as IVS
+
+    instructor = db.query(Instructor).filter(Instructor.id == instructor_id).first()
+    if not instructor:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Instructor not found")
+
+    user = db.query(User).filter(User.id == instructor.user_id).first()
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+
+    new_token = secrets.token_urlsafe(32)
+    instructor.admin_verification_token = new_token
+    instructor.verification_token_expires = datetime.now(timezone.utc) + timedelta(hours=72)
+    instructor.verification_status = IVS.PENDING_ADMIN.value
+    instructor.is_verified = False
+    db.commit()
+
+    # Re-send notification to all admins
+    try:
+        from ..services.instructor_verification_service import InstructorVerificationService
+        from ..models.user import UserRole as UR
+        admins = db.query(User).filter(User.role == UR.ADMIN, User.status == UserStatus.ACTIVE).all()
+        base_url = "https://roadready.co.za"
+        InstructorVerificationService.send_admin_verification_links(db, instructor, admins, base_url)
+    except Exception:
+        pass  # Don't fail the endpoint if notifications error
+
+    return {"status": "resent", "instructor_id": instructor_id, "new_token_expires_in_hours": 72}
 
 
 # ==================== User Management ====================

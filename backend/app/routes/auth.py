@@ -209,45 +209,43 @@ async def register_instructor(
     db: Session = Depends(get_db)
 ):
     """
-    Register a new instructor
-    - Creates instructor with pending verification status
-    - Sends user account verification link to the instructor (email + WhatsApp)
-    - Sends instructor credential verification link to all admins (email + WhatsApp)
-    - Instructor can setup schedule immediately (before admin verification)
-    - Admin can verify instructor credentials via link or manually from dashboard
+    Register a new instructor.
+    Creates instructor with pending verification status, sends account verification
+    to instructor, credential verification to all admins, and (if joining a company)
+    a verification request to the company owner.
     """
     from ..services.initialization import InitializationService
     from ..services.instructor_verification_service import InstructorVerificationService
     from ..services.verification_service import VerificationService
     from ..config import settings
-    
-    # Check if admin exists
+
     if not InitializationService.admin_exists(db):
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="System is not initialized. Please contact administrator to complete initial setup first.",
         )
-    
+
     try:
         print(f"[DEBUG] Received instructor registration data: {instructor_data}")
-        
-        # Create instructor (user will be INACTIVE, instructor not verified)
+
+        # Create instructor (user INACTIVE, instructor pending verification)
         user, instructor = AuthService.create_instructor(db, instructor_data)
-        
-        # Get admin settings for token validity
+
         admin = db.query(User).filter(User.role == UserRole.ADMIN).first()
         validity_minutes = admin.verification_link_validity_minutes if admin else 60
-        
-        # 1. Send USER ACCOUNT verification to the instructor (to activate their login)
+
+        # 1. User account verification link → instructor
         user_verification_token = VerificationService.create_verification_token(
             db=db,
             user_id=user.id,
             token_type="email",
             validity_minutes=validity_minutes,
         )
-        
-        smtp_password = EncryptionService.decrypt(admin.smtp_password) if admin and admin.smtp_password else None
-        
+        smtp_password = (
+            EncryptionService.decrypt(admin.smtp_password)
+            if admin and admin.smtp_password
+            else None
+        )
         user_verification_result = VerificationService.send_verification_messages(
             db=db,
             user=user,
@@ -256,26 +254,43 @@ async def register_instructor(
             admin_smtp_email=admin.smtp_email if admin else None,
             admin_smtp_password=smtp_password,
         )
-        
-        # 2. Send INSTRUCTOR CREDENTIAL verification to all admins
-        instructor_verification_token = InstructorVerificationService.create_verification_token(
+
+        # 2. Instructor credential verification link → all admins
+        instructor_ver_token = InstructorVerificationService.create_verification_token(
             db=db,
             instructor_id=instructor.id,
-            validity_minutes=validity_minutes
+            validity_minutes=validity_minutes,
         )
-        
         admin_verification_result = InstructorVerificationService.send_verification_to_all_admins(
             db=db,
             instructor=instructor,
-            verification_token=instructor_verification_token,
+            verification_token=instructor_ver_token,
             frontend_url=settings.FRONTEND_URL,
         )
-        
+
+        # 3. If joining a company, notify company owner as well
+        company_verification_result: dict = {"sent": False}
+        if instructor.company_id and not instructor.is_company_owner:
+            company_verification_result = InstructorVerificationService.send_company_verification(
+                db=db,
+                instructor=instructor,
+                frontend_url=settings.FRONTEND_URL,
+            )
+
+        # 4. Notify instructor that registration is received and pending
+        try:
+            InstructorVerificationService.send_pending_notification(db=db, instructor=instructor)
+        except Exception:
+            pass
+
         return {
-            "message": "Registration successful! Please verify your account via email/WhatsApp. Admins have also been notified to verify your instructor credentials.",
+            "message": "Registration successful! Please verify your account via email/WhatsApp.",
             "user_id": user.id,
             "instructor_id": instructor.id,
             "setup_token": instructor.setup_token,
+            "verification_status": instructor.verification_status,
+            "company_id": instructor.company_id,
+            "is_company_owner": instructor.is_company_owner,
             "verification_sent": {
                 "email_sent": user_verification_result.get("email_sent", False),
                 "whatsapp_sent": user_verification_result.get("whatsapp_sent", False),
@@ -283,13 +298,18 @@ async def register_instructor(
                 "emails_sent": admin_verification_result["emails_sent"],
                 "whatsapp_sent_to_admins": admin_verification_result["whatsapp_sent"],
                 "total_admins": admin_verification_result["total_admins"],
+                "company_owner_notified": company_verification_result.get("sent", False),
             },
-            "note": f"Please verify your account to log in. Admins ({admin_verification_result['total_admins']}) have been notified to verify your instructor credentials.",
+            "note": (
+                f"Please verify your account to log in. "
+                f"Admins ({admin_verification_result['total_admins']}) have been notified."
+            ),
         }
+    except HTTPException:
+        raise
     except Exception as e:
         print(f"[ERROR] Registration failed: {type(e).__name__}: {str(e)}")
         import traceback
-
         traceback.print_exc()
         raise
 
@@ -311,7 +331,7 @@ async def login(
     """
     # authenticate_user now raises HTTPException with specific error messages
     user = AuthService.authenticate_user(db, form_data.username, form_data.password)
-    
+
     print(f"🔐 [LOGIN] User: {user.email}, Received role param: {role}, force_login: {force_login}")
 
     # ── Single-session check ──────────────────────────────────────────────────
@@ -354,6 +374,34 @@ async def login(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Invalid role selection for this account.",
         )
+
+    # ── Instructor pending-verification guard ────────────────────────────────
+    # Block instructor login until their credentials have been verified by admin
+    # (or company owner). Admins are never blocked even if they hold an instructor profile.
+    if selected_role == UserRole.INSTRUCTOR.value and user.role != UserRole.ADMIN:
+        from ..models.user import InstructorVerificationStatus as IVS
+        instructor = db.query(Instructor).filter(Instructor.user_id == user.id).first()
+        if instructor and instructor.verification_status not in (
+            IVS.VERIFIED.value, None
+        ):
+            admin = db.query(User).filter(User.role == UserRole.ADMIN).first()
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail={
+                    "code": "ACCOUNT_PENDING_VERIFICATION",
+                    "message": (
+                        "Your instructor account is pending verification. "
+                        "Please contact the administrator."
+                    ),
+                    "verification_status": instructor.verification_status,
+                    "admin_email": admin.email if admin else None,
+                    "admin_phone": admin.phone if admin else None,
+                    "admin_name": (
+                        f"{admin.first_name} {admin.last_name}".strip() if admin else None
+                    ),
+                },
+            )
+    # ─────────────────────────────────────────────────────────────────────────
 
     print(f"🔐 [LOGIN] Creating token with selected_role: {selected_role}")
     access_token = AuthService.create_user_token(user, selected_role, db=db)

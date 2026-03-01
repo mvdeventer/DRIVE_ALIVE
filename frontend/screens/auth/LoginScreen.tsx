@@ -52,6 +52,8 @@ export default function LoginScreen({ navigation, onAuthChange }: any) {
   const [roleSelectionIsForceLogin, setRoleSelectionIsForceLogin] = useState(false);
   const [showForceLoginModal, setShowForceLoginModal] = useState(false);
   const [pendingForceLoginRole, setPendingForceLoginRole] = useState<string | undefined>(undefined);
+  const [showPendingVerificationModal, setShowPendingVerificationModal] = useState(false);
+  const [pendingVerificationDetail, setPendingVerificationDetail] = useState<any>(null);
   const [message, setMessage] = useState<{
     type: 'success' | 'error' | 'warning' | 'info';
     text: string;
@@ -109,6 +111,7 @@ export default function LoginScreen({ navigation, onAuthChange }: any) {
       const err: any = new Error(detailMsg || 'Login failed');
       err.httpStatus = fetchResponse.status;
       err.errorCode = errorCode;
+      err.rawDetail = data.detail;
       throw err;
     }
 
@@ -177,6 +180,12 @@ export default function LoginScreen({ navigation, onAuthChange }: any) {
     } catch (error: any) {
       console.error('Login error:', error);
 
+      // ── Pending verification guard ──────────────────────────────────────────
+      if (error.httpStatus === 403 && error.rawDetail?.code === 'ACCOUNT_PENDING_VERIFICATION') {
+        setPendingVerificationDetail(error.rawDetail);
+        setShowPendingVerificationModal(true);
+        return;
+      }
       // ── Single-session conflict ────────────────────────────────────────────
       if (error.httpStatus === 409 || error.errorCode === 'ALREADY_LOGGED_IN') {
         setPendingForceLoginRole(selectedRole);
@@ -429,6 +438,57 @@ export default function LoginScreen({ navigation, onAuthChange }: any) {
           label="Cancel"
           variant="ghost"
           onPress={() => { setShowForceLoginModal(false); setPendingForceLoginRole(undefined); }}
+          fullWidth
+        />
+      </ThemedModal>
+
+      {/* Pending Verification Modal — shown when instructor account is awaiting approval */}
+      <ThemedModal
+        visible={showPendingVerificationModal}
+        onClose={() => setShowPendingVerificationModal(false)}
+        title="Account Pending Verification"
+        size="sm"
+      >
+        <Text style={{ color: colors.textSecondary, fontSize: 14, lineHeight: 20, marginBottom: 16 }}>
+          Your instructor account is currently being reviewed.
+          {pendingVerificationDetail?.verification_status === 'pending_company'
+            ? ' The driving school owner needs to approve your membership first.'
+            : ' An administrator will approve your account shortly.'}
+        </Text>
+        {(pendingVerificationDetail?.admin_name ||
+          pendingVerificationDetail?.admin_email ||
+          pendingVerificationDetail?.admin_phone) && (
+          <View
+            style={{
+              borderRadius: 8,
+              padding: 12,
+              backgroundColor: colors.backgroundSecondary,
+              marginBottom: 16,
+            }}
+          >
+            <Text style={{ color: colors.textSecondary, fontSize: 12, fontWeight: '600', marginBottom: 4 }}>
+              CONTACT ADMINISTRATOR
+            </Text>
+            {pendingVerificationDetail?.admin_name ? (
+              <Text style={{ color: colors.text, fontSize: 14, marginBottom: 2 }}>
+                👤 {pendingVerificationDetail.admin_name}
+              </Text>
+            ) : null}
+            {pendingVerificationDetail?.admin_email ? (
+              <Text style={{ color: colors.text, fontSize: 14, marginBottom: 2 }}>
+                ✉️ {pendingVerificationDetail.admin_email}
+              </Text>
+            ) : null}
+            {pendingVerificationDetail?.admin_phone ? (
+              <Text style={{ color: colors.text, fontSize: 14 }}>
+                📞 {pendingVerificationDetail.admin_phone}
+              </Text>
+            ) : null}
+          </View>
+        )}
+        <Button
+          label="OK"
+          onPress={() => setShowPendingVerificationModal(false)}
           fullWidth
         />
       </ThemedModal>

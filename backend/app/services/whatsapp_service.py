@@ -54,6 +54,39 @@ class WhatsAppService:
             self.client = Client(self.account_sid, self.auth_token)
             logger.info("WhatsApp service initialized successfully")
 
+    def _ensure_client(self) -> bool:
+        """
+        Ensure the Twilio client is initialized.
+        If client is None (e.g. Twilio was configured after server start),
+        attempt a late re-initialization from the database.
+        Returns True if the client is ready, False otherwise.
+        """
+        if self.client is not None:
+            return True
+
+        # Re-attempt DB lookup in case credentials were saved after server start
+        try:
+            from ..database import SessionLocal
+            from ..models.user import User, UserRole
+            from ..utils.encryption import EncryptionService
+            _db = SessionLocal()
+            try:
+                admin = _db.query(User).filter(User.role == UserRole.ADMIN).first()
+                if admin and admin.twilio_account_sid and admin.twilio_auth_token:
+                    account_sid = EncryptionService.decrypt(admin.twilio_account_sid)
+                    auth_token = EncryptionService.decrypt(admin.twilio_auth_token)
+                    if account_sid and auth_token:
+                        self.account_sid = account_sid
+                        self.auth_token = auth_token
+                        self.client = Client(account_sid, auth_token)
+                        logger.info("WhatsApp client initialized from DB credentials (late init)")
+            finally:
+                _db.close()
+        except Exception as e:
+            logger.warning(f"Could not initialize WhatsApp client from DB: {e}")
+
+        return self.client is not None
+
     @staticmethod
     def get_admin_twilio_sender_phone(db=None) -> str:
         """
@@ -154,7 +187,7 @@ class WhatsAppService:
         Returns:
             bool: True if successful, False otherwise
         """
-        if not self.client:
+        if not self._ensure_client():
             logger.warning("Twilio client not initialized. Skipping WhatsApp message.")
             return False
 
@@ -188,7 +221,7 @@ class WhatsAppService:
         """
         Send booking confirmation message to student
         """
-        if not self.client:
+        if not self._ensure_client():
             logger.warning(
                 "Twilio client not initialized. Skipping confirmation message."
             )
@@ -244,7 +277,7 @@ Drive Safe! 🚗
         """
         Send 1-hour reminder to student before lesson
         """
-        if not self.client:
+        if not self._ensure_client():
             logger.warning("Twilio client not initialized. Skipping student reminder.")
             return False
 
@@ -301,7 +334,7 @@ Drive Safe! 🚗
         """
         Send 15-minute reminder to instructor before lesson
         """
-        if not self.client:
+        if not self._ensure_client():
             logger.warning(
                 "Twilio client not initialized. Skipping instructor reminder."
             )
@@ -364,7 +397,7 @@ Drive Safe! 🚗
         """
         Send immediate notification to instructor for same-day bookings that are paid/confirmed
         """
-        if not self.client:
+        if not self._ensure_client():
             logger.warning(
                 "Twilio client not initialized. Skipping same-day notification."
             )
@@ -421,7 +454,7 @@ Drive Safe! 🚗
         """
         Send daily summary of all bookings to instructor
         """
-        if not self.client:
+        if not self._ensure_client():
             logger.warning("Twilio client not initialized. Skipping daily summary.")
             return False
 
@@ -470,10 +503,9 @@ Drive Safe! 🚗
         Returns:
             bool: True if successful, False otherwise
         """
-        if not self.client:
+        if not self._ensure_client():
             logger.warning("Twilio client not initialized. Skipping verification message.")
             return False
-
         try:
             to_number = self._format_phone_number(phone)
             from_number = self.get_admin_twilio_sender_phone()
@@ -524,7 +556,7 @@ Drive Safe! 🚗
         Returns:
             bool: True if successful, False otherwise
         """
-        if not self.client:
+        if not self._ensure_client():
             logger.warning("Twilio client not initialized. Skipping admin notification.")
             return False
 

@@ -331,6 +331,40 @@ class ApiService {
     return response.data;
   }
 
+  async getAllInstructorsAdmin(verificationStatus?: string, skip = 0, limit = 100) {
+    const params: any = { skip, limit };
+    if (verificationStatus) params.verification_status = verificationStatus;
+    const response = await this.api.get('/admin/instructors', { params });
+    return response.data;
+  }
+
+  async adminRejectInstructor(instructorId: number, reason?: string) {
+    const params: any = {};
+    if (reason) params.reason = reason;
+    const response = await this.api.post(`/admin/instructors/${instructorId}/reject`, null, { params });
+    return response.data;
+  }
+
+  async adminResendVerification(instructorId: number) {
+    const response = await this.api.post(`/admin/instructors/${instructorId}/resend-verification`);
+    return response.data;
+  }
+
+  async getMyCompanyInstructors() {
+    const response = await this.api.get('/instructors/company/my-instructors');
+    return response.data;
+  }
+
+  async companyVerifyInstructor(instructorId: number) {
+    const response = await this.api.post(`/instructors/company/instructors/${instructorId}/verify`);
+    return response.data;
+  }
+
+  async companyRejectInstructor(instructorId: number) {
+    const response = await this.api.post(`/instructors/company/instructors/${instructorId}/reject`);
+    return response.data;
+  }
+
   async getAllUsers(role?: string, status?: string, skip = 0, limit = 50) {
     const params: any = { skip, limit };
     if (role) params.role = role;

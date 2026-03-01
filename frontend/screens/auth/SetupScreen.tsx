@@ -1,10 +1,10 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import {
+  ScrollView,
   StyleSheet,
   View,
   Text,
   Pressable,
-  ScrollView,
   Platform,
 } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -73,6 +73,7 @@ export default function SetupScreen({ navigation }: SetupScreenProps) {
   const [successMessage, setSuccessMessage] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
   const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const scrollViewRef = useRef<ScrollView>(null);
 
   const validateForm = (): boolean => {
     const newErrors: Partial<FormData> = {};
@@ -103,8 +104,16 @@ export default function SetupScreen({ navigation }: SetupScreenProps) {
     }
     if (!formData.password) {
       newErrors.password = 'Password is required';
-    } else if (formData.password.length < 8) {
-      newErrors.password = 'Password must be at least 8 characters';
+    } else {
+      const pwdErrors: string[] = [];
+      if (formData.password.length < 12) pwdErrors.push('at least 12 characters');
+      if (!/[A-Z]/.test(formData.password)) pwdErrors.push('an uppercase letter');
+      if (!/[a-z]/.test(formData.password)) pwdErrors.push('a lowercase letter');
+      if (!/\d/.test(formData.password)) pwdErrors.push('a digit');
+      if (!/[!@#$%^&*()_+\-=\[\]{};':\"\\|,.<>\/?`~]/.test(formData.password)) pwdErrors.push('a special character');
+      if (pwdErrors.length > 0) {
+        newErrors.password = 'Password must contain: ' + pwdErrors.join(', ');
+      }
     }
     if (formData.password !== formData.confirmPassword) {
       newErrors.confirmPassword = 'Passwords do not match';
@@ -114,9 +123,19 @@ export default function SetupScreen({ navigation }: SetupScreenProps) {
     return Object.keys(newErrors).length === 0;
   };
 
+  const FIELD_LABELS: Record<string, string> = {
+    firstName: 'First Name',
+    lastName: 'Last Name',
+    email: 'Email Address',
+    phone: 'Phone Number',
+    idNumber: 'ID Number',
+    address: 'Address',
+    password: 'Password',
+    confirmPassword: 'Confirm Password',
+  };
+
   const handleCreateAdmin = async () => {
     if (!validateForm()) {
-      setErrorMessage('Please fix the errors above');
       return;
     }
 
@@ -169,9 +188,17 @@ export default function SetupScreen({ navigation }: SetupScreenProps) {
         }, 2000);
       } else {
         const errorData = await response.json();
-        setErrorMessage(
-          errorData.detail || 'Failed to create admin account. Please try again.'
-        );
+        let detail = errorData.detail;
+        if (Array.isArray(detail)) {
+          // Pydantic 422 validation errors — format into readable message
+          detail = detail
+            .map((e: { loc?: string[]; msg?: string }) => {
+              const field = e.loc ? e.loc.slice(1).join('.') : 'field';
+              return `${field}: ${e.msg}`;
+            })
+            .join('\n');
+        }
+        setErrorMessage(detail || 'Failed to create admin account. Please try again.');
       }
     } catch (error) {
       setErrorMessage('Network error. Please check your connection and try again.');
@@ -297,6 +324,7 @@ export default function SetupScreen({ navigation }: SetupScreenProps) {
   return (
     <>
     <ScrollView
+      ref={scrollViewRef}
       style={[styles.container, { backgroundColor: colors.background }]}
       contentContainerStyle={styles.contentContainer}
       showsVerticalScrollIndicator={false}
@@ -545,6 +573,20 @@ export default function SetupScreen({ navigation }: SetupScreenProps) {
         />
       </Card>
 
+      {/* Inline validation summary – visible right above the button */}
+      {Object.keys(errors).length > 0 && (
+        <View style={[styles.validationSummary, { backgroundColor: colors.dangerBg, borderColor: colors.danger }]}>
+          <Text style={[styles.validationSummaryTitle, { color: colors.danger }]}>⚠️ Please fix the following:</Text>
+          {(Object.entries(errors) as [string, string][]).map(([field, msg]) =>
+            msg ? (
+              <Text key={field} style={[styles.validationSummaryItem, { color: colors.danger }]}>
+                • {FIELD_LABELS[field] ?? field}: {msg}
+              </Text>
+            ) : null
+          )}
+        </View>
+      )}
+
       {/* Submit */}
       <Button
         label="Create Admin Account"
@@ -724,6 +766,21 @@ const styles = StyleSheet.create({
     padding: Platform.OS === 'web' ? 16 : 12,
     borderRadius: 8,
     marginTop: 24,
+  },
+  validationSummary: {
+    borderWidth: 1,
+    borderRadius: 8,
+    padding: Platform.OS === 'web' ? 14 : 10,
+    marginBottom: 12,
+  },
+  validationSummaryTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    marginBottom: 6,
+  },
+  validationSummaryItem: {
+    fontSize: 13,
+    lineHeight: 20,
   },
   infoTitle: {
     fontSize: 14,

@@ -14,6 +14,15 @@ from sqlalchemy.sql import func
 from ..database import Base
 
 
+class InstructorVerificationStatus(str, enum.Enum):
+    """Instructor verification workflow status"""
+
+    PENDING_ADMIN = "pending_admin"      # Awaiting any admin to approve
+    PENDING_COMPANY = "pending_company"  # Admin approved; awaiting company owner
+    VERIFIED = "verified"               # Fully approved; can log in
+    REJECTED = "rejected"               # Rejected by admin or company owner
+
+
 class UserRole(str, enum.Enum):
     """User role enumeration"""
 
@@ -143,9 +152,23 @@ class Instructor(Base):
     # Bio
     bio = Column(Text, nullable=True)
 
-    # Verification
+    # Verification (legacy boolean – kept for backwards compat)
     is_verified = Column(Boolean, default=False)
     verified_at = Column(DateTime(timezone=True), nullable=True)
+
+    # Verification workflow (new)
+    verification_status = Column(
+        String(30), default=InstructorVerificationStatus.PENDING_ADMIN.value, nullable=True
+    )
+    verified_by_admin_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    verified_by_instructor_id = Column(Integer, ForeignKey("instructors.id"), nullable=True)
+    admin_verification_token = Column(String(200), unique=True, nullable=True, index=True)
+    company_verification_token = Column(String(200), unique=True, nullable=True, index=True)
+    verification_token_expires = Column(DateTime(timezone=True), nullable=True)
+
+    # Company membership
+    company_id = Column(Integer, ForeignKey("companies.id"), nullable=True)
+    is_company_owner = Column(Boolean, default=False)
 
     # Initial setup token (one-time UUID issued at registration for pre-auth schedule setup)
     setup_token = Column(String, nullable=True)
@@ -168,6 +191,23 @@ class Instructor(Base):
     )
     verification_tokens = relationship(
         "InstructorVerificationToken", back_populates="instructor", cascade="all, delete-orphan"
+    )
+    # Company relationships
+    company = relationship(
+        "Company",
+        foreign_keys=[company_id],
+        back_populates="instructors",
+    )
+    owned_company = relationship(
+        "Company",
+        foreign_keys="Company.owner_instructor_id",
+        back_populates="owner",
+        uselist=False,
+    )
+    # Verifier relationships
+    verified_by_admin = relationship("User", foreign_keys=[verified_by_admin_id])
+    verified_by_instructor = relationship(
+        "Instructor", foreign_keys=[verified_by_instructor_id], remote_side="Instructor.id"
     )
 
 
