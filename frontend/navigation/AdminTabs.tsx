@@ -12,6 +12,7 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import React from 'react';
 import { Platform, Pressable, Text } from 'react-native';
 
+import { useResponsiveTabBar } from '../hooks/useResponsiveTabBar';
 import { useTheme } from '../theme/ThemeContext';
 import { useAuthActions } from './AuthContext';
 
@@ -259,6 +260,7 @@ function SettingsStackScreen() {
 
 export default function AdminTabs() {
   const { colors } = useTheme();
+  const { tabBarPosition, tabBarStyle } = useResponsiveTabBar(colors);
 
   return (
     <Tab.Navigator
@@ -266,13 +268,8 @@ export default function AdminTabs() {
         headerShown: false,
         tabBarActiveTintColor: colors.tabBarActive,
         tabBarInactiveTintColor: colors.tabBarInactive,
-        tabBarStyle: {
-          backgroundColor: colors.tabBarBackground,
-          borderTopColor: colors.border,
-          borderTopWidth: 1,
-          height: Platform.OS === 'web' ? 56 : undefined,
-          paddingBottom: Platform.OS === 'web' ? 4 : undefined,
-        },
+        tabBarPosition,
+        tabBarStyle,
         tabBarLabelStyle: {
           fontFamily: 'Inter_500Medium',
           fontSize: 11,

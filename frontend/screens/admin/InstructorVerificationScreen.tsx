@@ -7,7 +7,6 @@ import { useFocusEffect } from '@react-navigation/native';
 import React, { useCallback, useState } from 'react';
 import {
   ActivityIndicator,
-  FlatList,
   Platform,
   RefreshControl,
   ScrollView,
@@ -17,6 +16,7 @@ import {
   View,
 } from 'react-native';
 import { Button, Card, ThemedModal } from '../../components';
+import VirtualList from '../../components/VirtualList';
 import { useTheme } from '../../theme/ThemeContext';
 import InlineMessage from '../../components/InlineMessage';
 import WebNavigationHeader from '../../components/WebNavigationHeader';
@@ -332,10 +332,11 @@ export default function InstructorVerificationScreen({ navigation }: any) {
           </Text>
         </View>
       ) : (
-        <FlatList
+        <VirtualList
           data={instructors}
           renderItem={renderItem}
           keyExtractor={item => item.id.toString()}
+          estimatedItemSize={140}
           contentContainerStyle={styles.list}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
         />

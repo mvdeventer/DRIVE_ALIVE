@@ -5,7 +5,6 @@
 import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
-  FlatList,
   Platform,
   Pressable,
   RefreshControl,
@@ -15,6 +14,7 @@ import {
   View,
 } from 'react-native';
 import { Button, Card, ThemedModal } from '../../components';
+import VirtualList from '../../components/VirtualList';
 import InlineMessage from '../../components/InlineMessage';
 import WebNavigationHeader from '../../components/WebNavigationHeader';
 import { useTheme } from '../../theme/ThemeContext';
@@ -709,10 +709,11 @@ export default function InstructorEarningsOverviewScreen({ navigation }: any) {
       {successMessage ? <InlineMessage type="success" message={successMessage} /> : null}
       {errorMessage ? <InlineMessage type="error" message={errorMessage} /> : null}
 
-      <FlatList
+      <VirtualList
         data={instructors}
         renderItem={renderInstructorCard}
         keyExtractor={item => item.instructor_id.toString()}
+        estimatedItemSize={160}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
         ListHeaderComponent={
           <View style={[styles.header, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>

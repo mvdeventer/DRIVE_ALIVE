@@ -24,6 +24,10 @@ import {
 // Theme
 import { ThemeProvider, useTheme } from './theme/ThemeContext';
 
+// React Query
+import { QueryClientProvider } from '@tanstack/react-query';
+import { queryClient } from './services/queryClient';
+
 // Global Top Bar
 import GlobalTopBar from './components/GlobalTopBar';
 
@@ -116,9 +120,11 @@ export default function App() {
   }
 
   return (
-    <ThemeProvider>
-      <AppContent />
-    </ThemeProvider>
+    <QueryClientProvider client={queryClient}>
+      <ThemeProvider>
+        <AppContent />
+      </ThemeProvider>
+    </QueryClientProvider>
   );
 }
 

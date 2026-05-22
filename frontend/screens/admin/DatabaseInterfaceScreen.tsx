@@ -19,7 +19,7 @@ import {
 import { useTheme } from '../../theme/ThemeContext';
 import ThemedModal from '../../components/ui/Modal';
 import { Button } from '../../components/ui';
-import { useQuery, useQueryClient, QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { useNavigation } from '@react-navigation/native';
 import WebNavigationHeader from '../../components/WebNavigationHeader';
@@ -2520,22 +2520,5 @@ const TableRow = React.memo(({
   );
 });
 
-// Create QueryClient instance
-const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: {
-      staleTime: 5 * 60 * 1000, // 5 minutes
-      gcTime: 10 * 60 * 1000, // 10 minutes (formerly cacheTime)
-      refetchOnWindowFocus: false,
-    },
-  },
-});
-
-// Wrapper component with QueryClientProvider
-const DatabaseInterfaceScreenWithQuery = (props: any) => (
-  <QueryClientProvider client={queryClient}>
-    <DatabaseInterfaceScreen {...props} />
-  </QueryClientProvider>
-);
-
-export default DatabaseInterfaceScreenWithQuery;
+// QueryClientProvider is now mounted app-wide in App.tsx.
+export default DatabaseInterfaceScreen;

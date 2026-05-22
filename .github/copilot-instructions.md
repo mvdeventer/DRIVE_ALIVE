@@ -23,7 +23,7 @@
 
 ## Conventions
 
-- Backend: SQLAlchemy models, Pydantic schemas, route files grouped by domain. Black/isort formatted.
+- Backend: SQLAlchemy models, Pydantic schemas, route files grouped by domain. Black formatted. **Do NOT run `isort` during agent work** — skip import sorting on edits.
 - Frontend: Functional components, hooks, theme via `useTheme()` from `frontend/theme/ThemeContext`. API calls via `ApiService` from `frontend/services/api`.
 - Auth tokens via Bearer JWT. Multi-role users (admin/instructor/student/school-owner).
 - Never commit secrets — `KEYS.txt`, `.env`, `*.pem` are gitignored.
