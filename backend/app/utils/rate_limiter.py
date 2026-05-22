@@ -3,13 +3,17 @@ Rate Limiting Utility
 Prevents brute force attacks on authentication and critical endpoints
 """
 
-from slowapi import Limiter
-from slowapi.util import get_remote_address
-from slowapi.errors import RateLimitExceeded
+import logging
+import os
+
+import redis
 from fastapi import Request, Response
 from fastapi.responses import JSONResponse
-import redis
-import os
+from slowapi import Limiter
+from slowapi.errors import RateLimitExceeded
+from slowapi.util import get_remote_address
+
+logger = logging.getLogger(__name__)
 
 # Redis connection for distributed rate limiting
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
@@ -19,11 +23,9 @@ try:
     # Test connection
     redis_client.ping()
     storage_uri = REDIS_URL
-    print(f"✅ Rate limiter connected to Redis: {REDIS_URL}")
+    logger.info("Rate limiter connected to Redis: %s", REDIS_URL)
 except (redis.ConnectionError, redis.RedisError) as e:
-    # Fallback to in-memory storage for development
-    print(f"⚠️  Redis connection failed: {e}")
-    print("   Using in-memory rate limiter (NOT suitable for production)")
+    logger.warning("Redis connection failed (%s). Using in-memory rate limiter (NOT suitable for production).", e)
     storage_uri = "memory://"
     redis_client = None
 

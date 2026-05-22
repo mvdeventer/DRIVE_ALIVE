@@ -2,6 +2,7 @@
 Authentication routes
 """
 
+import logging
 from datetime import datetime, timezone
 from typing import Annotated, Optional
 
@@ -30,6 +31,7 @@ from ..utils.rate_limiter import limiter
 from ..utils.encryption import EncryptionService  # For SMTP password decryption
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
+logger = logging.getLogger(__name__)
 
 
 # Handle CORS preflight requests for registration endpoints
@@ -109,7 +111,7 @@ async def get_current_user(
 
     token_role = payload.get("role")
     if token_role:
-        print(f"🔐 [AUTH] JWT token role: {token_role}, Database role: {user.role.value}")
+        logger.debug("JWT token role: %s, database role: %s", token_role, user.role.value)
         setattr(user, "active_role", token_role)
     else:
         # Fallback to database role if no role in JWT
@@ -152,7 +154,8 @@ async def register_student(
         )
     
     # Create student (user will be inactive)
-    user, student = AuthService.create_student(db, student_data)
+    client_ip = request.client.host if request.client else None
+    user, student = AuthService.create_student(db, student_data, client_ip=client_ip)
     
     # Get admin SMTP settings
     admin = db.query(User).filter(User.role == UserRole.ADMIN).first()
@@ -226,10 +229,11 @@ async def register_instructor(
         )
 
     try:
-        print(f"[DEBUG] Received instructor registration data: {instructor_data}")
+        logger.debug("Instructor registration data received for: %s", getattr(instructor_data, 'email', 'unknown'))
 
         # Create instructor (user INACTIVE, instructor pending verification)
-        user, instructor = AuthService.create_instructor(db, instructor_data)
+        client_ip = request.client.host if request.client else None
+        user, instructor = AuthService.create_instructor(db, instructor_data, client_ip=client_ip)
 
         admin = db.query(User).filter(User.role == UserRole.ADMIN).first()
         validity_minutes = admin.verification_link_validity_minutes if admin else 60
@@ -308,7 +312,7 @@ async def register_instructor(
     except HTTPException:
         raise
     except Exception as e:
-        print(f"[ERROR] Registration failed: {type(e).__name__}: {str(e)}")
+        logger.error("Registration failed: %s: %s", type(e).__name__, str(e))
         import traceback
         traceback.print_exc()
         raise
@@ -332,7 +336,7 @@ async def login(
     # authenticate_user now raises HTTPException with specific error messages
     user = AuthService.authenticate_user(db, form_data.username, form_data.password)
 
-    print(f"🔐 [LOGIN] User: {user.email}, Received role param: {role}, force_login: {force_login}")
+    logger.debug("Login attempt for user: %s", user.email)
 
     # ── Single-session check ──────────────────────────────────────────────────
     if user.active_session_token is not None and not force_login:
@@ -359,10 +363,8 @@ async def login(
     if db.query(Student).filter(Student.user_id == user.id).first():
         available_roles.add(UserRole.STUDENT.value)
 
-    print(f"🔐 [LOGIN] Available roles for {user.email}: {available_roles}")
 
     if role is None and len(available_roles) > 1:
-        print(f"🔐 [LOGIN] Multiple roles available, returning role selection required")
         return {
             "requires_role_selection": True,
             "available_roles": sorted(list(available_roles)),
@@ -403,7 +405,6 @@ async def login(
             )
     # ─────────────────────────────────────────────────────────────────────────
 
-    print(f"🔐 [LOGIN] Creating token with selected_role: {selected_role}")
     access_token = AuthService.create_user_token(user, selected_role, db=db)
     
     # Set HTTP-only cookie for web security (prevents XSS token theft)
@@ -417,7 +418,6 @@ async def login(
         max_age=3600 * 24 * 7,  # 7 days
     )
 
-    print(f"🔐 [LOGIN] Returning role: {selected_role}")
     return {
         "access_token": access_token,  # Still return for mobile/API clients
         "token_type": "bearer",
@@ -453,7 +453,7 @@ async def logout(
                 if user:
                     user.active_session_token = None
                     db.commit()
-                    print(f"🔓 [LOGOUT] Cleared active_session_token for user {user.email}")
+                    logger.debug("Cleared active session token for user_id: %s", user.id)
 
     response.delete_cookie(key="access_token")
     return {"message": "Successfully logged out"}
@@ -543,7 +543,7 @@ async def get_inactivity_timeout(db: Session = Depends(get_db)):
         # Default to 15 minutes if not configured
         return {"inactivity_timeout_minutes": 15}
     except Exception as e:
-        print(f"Error fetching inactivity timeout: {str(e)}")
+        logger.error("Error fetching inactivity timeout: %s", str(e))
         # Return default on error
         return {"inactivity_timeout_minutes": 15}
 
@@ -700,7 +700,7 @@ async def forgot_password(
 
     if not email_sent:
         # Log the token for development/testing purposes
-        print(f"🔑 Password reset token for {user.email}: {reset_token}")
+        logger.warning("Password reset email could not be sent (SMTP not configured).")
 
     return {
         "message": "If an account with that email exists, a password reset link has been sent."

@@ -17,6 +17,7 @@ from .config import settings
 from .database import Base, engine, SessionLocal
 from .models.user import User, UserRole
 from .models.company import Company  # noqa: F401 – ensures table is created by metadata
+from .utils.logging_config import setup_logging
 from .utils.rate_limiter import limiter, rate_limit_exceeded_handler
 from .routes import (
     admin,
@@ -32,7 +33,9 @@ from .routes import (
     payments,
     setup,
     students,
+    unsubscribe,
     verification,
+    webhooks,
 )
 from .services.reminder_scheduler import reminder_scheduler
 from .services.backup_scheduler import backup_scheduler
@@ -148,7 +151,8 @@ async def lifespan(app: FastAPI):
         print(f"Frontend URL (env var): {env_frontend_url}")
     print("=" * 80)
 
-    # Set ENCRYPTION_KEY in os.environ for EncryptionService
+    if settings.PAYFAST_MODE == "sandbox" and settings.ENVIRONMENT == "production":
+        print("WARNING: PAYFAST_MODE=sandbox in a production environment. Set PAYFAST_MODE=live.")
     if settings.ENCRYPTION_KEY:
         os.environ["ENCRYPTION_KEY"] = settings.ENCRYPTION_KEY
         print("🔐 Encryption key loaded from settings")
@@ -260,11 +264,20 @@ async def lifespan(app: FastAPI):
 
 
 # Create FastAPI app with lifespan
+_is_production = settings.ENVIRONMENT == "production"
+
+# Initialise logging (PII redaction + optional JSON) before app is built so all
+# startup events are captured under the same config.
+setup_logging()
+
 app = FastAPI(
     title="Driving School Booking API",
     description="API for South African driving school booking system",
     version="1.0.0",
     lifespan=lifespan,
+    docs_url=None if _is_production else "/docs",
+    redoc_url=None if _is_production else "/redoc",
+    openapi_url=None if _is_production else "/openapi.json",
 )
 
 # Add rate limiter to app state
@@ -274,23 +287,18 @@ app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, rate_limit_exceeded_handler)
 
 # Configure CORS - Allow specific origins with credentials
-origins = [
-    # HTTP local dev
-    "http://localhost:8081",  # Web version on localhost
+# Static localhost/127.0.0.1 dev origins; network/production origins come from
+# ALLOWED_ORIGINS env var (injected via settings.origins_list).
+_static_origins = [
+    "http://localhost:8081",
     "http://localhost:8082",
     "http://localhost:8080",
     "http://localhost:3000",
-    "http://10.0.0.121:8081",
-    "http://10.0.0.121:8082",
-    "http://10.0.0.121:8080",
-    "http://10.0.0.121:3000",
     "http://127.0.0.1:8081",
     "http://127.0.0.1:8082",
     "http://127.0.0.1:8080",
     "http://127.0.0.1:3000",
-    "http://10.0.0.121:19000",
-    "http://10.0.0.121:19001",
-    "http://10.0.0.121:19006",
+    "http://localhost:19000",
     # HTTPS local dev (SSL proxy on 8443)
     "https://localhost:8443",
     "https://localhost:8081",
@@ -301,22 +309,27 @@ origins = [
     "https://127.0.0.1:8082",
     "https://127.0.0.1:8080",
     "https://127.0.0.1:3000",
-    "https://10.0.0.121:8081",
-    "https://10.0.0.121:8082",
-    "https://10.0.0.121:8080",
     # Production
     "https://roadready.onrender.com",
     "https://drive-alive-web.onrender.com",
 ]
+# Merge with env-var origins (for mobile/network testing and production domain)
+origins = list(dict.fromkeys(_static_origins + settings.origins_list))
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,  # Specific origins for credentials support
-    allow_credentials=True,  # Must be True with specific origins
-    allow_methods=["*"],
-    allow_headers=["*"],
-    expose_headers=["*"],
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=["Content-Type", "Authorization", "Accept", "X-Requested-With", "Idempotency-Key"],
+    expose_headers=["X-RateLimit-Limit", "X-RateLimit-Remaining", "X-RateLimit-Reset", "Idempotent-Replayed"],
 )
+
+# Idempotency-Key replay protection (Stripe-style). Applies to all mutating
+# methods; ignored on GET/HEAD/OPTIONS. Cache is in-memory — swap for Redis
+# when scaling beyond one worker.
+from .middleware.idempotency import IdempotencyMiddleware  # noqa: E402
+app.add_middleware(IdempotencyMiddleware)
 
 
 @app.middleware("http")
@@ -433,6 +446,8 @@ app.include_router(instructors.router)
 app.include_router(instructor_setup.router)
 app.include_router(payments.router)
 app.include_router(students.router)
+app.include_router(webhooks.router)  # Twilio status callbacks etc.
+app.include_router(unsubscribe.router)  # RFC 8058 one-click unsubscribe
 
 
 @app.get("/")
@@ -447,8 +462,23 @@ async def root():
 
 @app.get("/health")
 async def health_check():
-    """Health check endpoint"""
-    return {"status": "healthy"}
+    """Health check endpoint — verifies DB connectivity."""
+    from .database import engine as _engine
+    if _engine is None:
+        return JSONResponse(
+            status_code=503,
+            content={"status": "unhealthy", "detail": "Database not configured"},
+        )
+    try:
+        from sqlalchemy import text as _text
+        with _engine.connect() as conn:
+            conn.execute(_text("SELECT 1"))
+        return {"status": "healthy"}
+    except Exception as exc:
+        return JSONResponse(
+            status_code=503,
+            content={"status": "unhealthy", "detail": str(exc)},
+        )
 
 
 if __name__ == "__main__":

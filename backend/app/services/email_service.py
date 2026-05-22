@@ -6,14 +6,89 @@ import logging
 import smtplib
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
+from typing import Optional
 
 from ..config import settings
+from .notifiers.base import EmailNotifier
 
 logger = logging.getLogger(__name__)
 
 
-class EmailService:
-    """Service for sending emails via SMTP"""
+class EmailService(EmailNotifier):
+    """Service for sending emails via SMTP."""
+
+    name = "smtp"
+
+    # ─── Compliance helpers (RFC 2369 / 8058, CAN-SPAM, POPIA §69) ───────────
+    def _unsubscribe_addr(self) -> str:
+        return getattr(settings, "UNSUBSCRIBE_EMAIL", "unsubscribe@roadready.co.za")
+
+    def _unsubscribe_token(self, email: str) -> str:
+        """HMAC-SHA256 token so the one-click endpoint can verify the address."""
+        import hashlib
+        import hmac
+        secret = (getattr(settings, "SECRET_KEY", "") or "").encode()
+        return hmac.new(secret, email.lower().strip().encode(), hashlib.sha256).hexdigest()[:32]
+
+    def _unsubscribe_url(self, email: str | None = None) -> str:
+        base = getattr(settings, "FRONTEND_URL", "https://roadready.co.za").rstrip("/")
+        if email:
+            from urllib.parse import quote
+            return f"{base}/unsubscribe?email={quote(email)}&token={self._unsubscribe_token(email)}"
+        return f"{base}/unsubscribe"
+
+    def _apply_compliance_headers(self, msg: MIMEMultipart) -> None:
+        """Add List-Unsubscribe + one-click headers if not already set."""
+        to_addr = msg.get("To", "") or None
+        if "List-Unsubscribe" not in msg:
+            msg["List-Unsubscribe"] = (
+                f"<mailto:{self._unsubscribe_addr()}>, <{self._unsubscribe_url(to_addr)}>"
+            )
+        if "List-Unsubscribe-Post" not in msg:
+            msg["List-Unsubscribe-Post"] = "List-Unsubscribe=One-Click"
+
+    def _smtp_send(self, msg: MIMEMultipart) -> None:
+        """Apply compliance headers and dispatch a prepared MIME message."""
+        self._apply_compliance_headers(msg)
+        with smtplib.SMTP(self.smtp_server, self.smtp_port) as server:
+            server.starttls()
+            server.login(self.smtp_username, self.smtp_password)
+            server.send_message(msg)
+
+    def send_email(
+        self,
+        *,
+        to: str,
+        subject: str,
+        html: str,
+        text: Optional[str] = None,
+        from_addr: Optional[str] = None,
+        headers: Optional[dict] = None,
+    ) -> bool:
+        """Generic SMTP send used by the EmailNotifier interface."""
+        if not self.smtp_username or not self.smtp_password:
+            logger.warning("SMTP not configured. Email to %s suppressed.", to)
+            return False
+
+        try:
+            msg = MIMEMultipart("alternative")
+            msg["Subject"] = subject
+            msg["From"] = from_addr or self.from_email
+            msg["To"] = to
+            for key, value in (headers or {}).items():
+                msg[key] = value
+
+            if text:
+                msg.attach(MIMEText(text, "plain"))
+            msg.attach(MIMEText(html, "html"))
+
+            self._smtp_send(msg)
+
+            logger.info("Email sent to %s (subject=%r)", to, subject)
+            return True
+        except Exception as e:
+            logger.error("Failed to send email to %s: %s", to, e)
+            return False
 
     def __init__(self, smtp_email: str = None, smtp_password: str = None):
         """
@@ -53,7 +128,11 @@ class EmailService:
             logger.warning(
                 "SMTP not configured. Password reset email not sent to %s", to_email
             )
-            logger.info("Reset token for %s: %s", to_email, reset_token)
+            # SECURITY: Never log the raw reset token (it is a one-time credential).
+            # Log only a short non-reversible prefix for support debugging.
+            import hashlib
+            token_fp = hashlib.sha256(reset_token.encode()).hexdigest()[:8]
+            logger.info("Password reset requested for %s (token_fp=%s)", to_email, token_fp)
             return False
 
         try:
@@ -144,10 +223,7 @@ This is an automated email. Please do not reply.
             msg.attach(part2)
 
             # Send email
-            with smtplib.SMTP(self.smtp_server, self.smtp_port) as server:
-                server.starttls()
-                server.login(self.smtp_username, self.smtp_password)
-                server.send_message(msg)
+            self._smtp_send(msg)
 
             logger.info("Password reset email sent to %s", to_email)
             return True
@@ -249,10 +325,7 @@ If you didn't create an account with us, please ignore this email.
             msg.attach(part1)
             msg.attach(part2)
 
-            with smtplib.SMTP(self.smtp_server, self.smtp_port) as server:
-                server.starttls()
-                server.login(self.smtp_username, self.smtp_password)
-                server.send_message(msg)
+            self._smtp_send(msg)
 
             logger.info("Verification email sent to %s", to_email)
             return True
@@ -313,10 +386,7 @@ If you didn't create an account with us, please ignore this email.
             msg.attach(part1)
             msg.attach(part2)
 
-            with smtplib.SMTP(self.smtp_server, self.smtp_port) as server:
-                server.starttls()
-                server.login(self.smtp_username, self.smtp_password)
-                server.send_message(msg)
+            self._smtp_send(msg)
 
             logger.info("Test email sent to %s", to_email)
             return True
@@ -348,10 +418,7 @@ If you didn't create an account with us, please ignore this email.
             msg["To"] = to_email
             msg.attach(MIMEText(body, "plain"))
 
-            with smtplib.SMTP(self.smtp_server, self.smtp_port) as server:
-                server.starttls()
-                server.login(self.smtp_username, self.smtp_password)
-                server.send_message(msg)
+            self._smtp_send(msg)
 
             logger.info("Simple email sent to %s", to_email)
             return True
@@ -478,10 +545,7 @@ The student has been sent this link to verify their account. Once verified, they
             msg.attach(part1)
             msg.attach(part2)
 
-            with smtplib.SMTP(self.smtp_server, self.smtp_port) as server:
-                server.starttls()
-                server.login(self.smtp_username, self.smtp_password)
-                server.send_message(msg)
+            self._smtp_send(msg)
 
             logger.info("Admin notification email sent to %s", admin_email)
             return True
@@ -638,10 +702,7 @@ You can also verify from the admin dashboard.
             msg.attach(part1)
             msg.attach(part2)
 
-            with smtplib.SMTP(self.smtp_server, self.smtp_port) as server:
-                server.starttls()
-                server.login(self.smtp_username, self.smtp_password)
-                server.send_message(msg)
+            self._smtp_send(msg)
 
             logger.info("Admin instructor verification email sent to %s", admin_email)
             return True
@@ -799,10 +860,7 @@ You can also verify from the admin dashboard.
             msg.attach(part1)
             msg.attach(part2)
 
-            with smtplib.SMTP(self.smtp_server, self.smtp_port) as server:
-                server.starttls()
-                server.login(self.smtp_username, self.smtp_password)
-                server.send_message(msg)
+            self._smtp_send(msg)
 
             logger.info(
                 "Booking %s email sent to %s", action_type, to_email

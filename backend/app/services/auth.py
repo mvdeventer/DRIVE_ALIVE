@@ -21,6 +21,32 @@ from ..utils.auth import create_access_token, get_password_hash, verify_password
 class AuthService:
     """Authentication service"""
 
+    # Bump this string whenever the public privacy policy changes; it is
+    # written to user.privacy_policy_version at registration to prove which
+    # version of the policy the user agreed to (POPIA / GDPR Art.7 evidence).
+    CURRENT_PRIVACY_POLICY_VERSION = "2026-05-22"
+
+    @staticmethod
+    def _apply_consent(user: User, data, client_ip: Optional[str]) -> None:
+        """Stamp opt-in timestamps + terms acceptance onto a new User row.
+
+        Idempotent: never *revokes* a prior opt-in if the schema is reused.
+        """
+        now = datetime.now(timezone.utc)
+        # Terms / privacy: required at registration
+        if getattr(data, "accept_terms", False):
+            user.terms_accepted_at = user.terms_accepted_at or now
+            user.privacy_policy_version = AuthService.CURRENT_PRIVACY_POLICY_VERSION
+        # Channel opt-ins (only stamp if user opted in; never overwrite an existing timestamp)
+        if getattr(data, "opt_in_email_marketing", False) and not user.email_marketing_opt_in_at:
+            user.email_marketing_opt_in_at = now
+        if getattr(data, "opt_in_sms", False) and not user.sms_opt_in_at:
+            user.sms_opt_in_at = now
+        if getattr(data, "opt_in_whatsapp", False) and not user.whatsapp_opt_in_at:
+            user.whatsapp_opt_in_at = now
+        if client_ip and not user.consent_ip:
+            user.consent_ip = client_ip
+
     @staticmethod
     def create_user(db: Session, user_data: UserCreate) -> User:
         """
@@ -52,7 +78,11 @@ class AuthService:
         return user
 
     @staticmethod
-    def create_instructor(db: Session, instructor_data: InstructorCreate) -> tuple[User, Instructor]:
+    def create_instructor(
+        db: Session,
+        instructor_data: InstructorCreate,
+        client_ip: Optional[str] = None,
+    ) -> tuple[User, Instructor]:
         """
         Create a new instructor with profile
         """
@@ -108,6 +138,9 @@ class AuthService:
                 db.add(user)
                 db.flush()  # Flush to get user.id without committing
                 print(f"[DEBUG] Created new user {user.id} with email {user.email} for instructor role (INACTIVE - awaiting verification)")
+
+            # Record POPIA/GDPR consent (terms + channel opt-ins + IP)
+            AuthService._apply_consent(user, instructor_data, client_ip)
 
             # Check if license number exists
             existing_license = db.query(Instructor).filter(Instructor.license_number == instructor_data.license_number).first()
@@ -236,7 +269,11 @@ class AuthService:
             raise
 
     @staticmethod
-    def create_student(db: Session, student_data: StudentCreate) -> tuple[User, Student]:
+    def create_student(
+        db: Session,
+        student_data: StudentCreate,
+        client_ip: Optional[str] = None,
+    ) -> tuple[User, Student]:
         """
         Create a new student with profile
         """
@@ -293,6 +330,9 @@ class AuthService:
                 )
                 db.add(user)
                 db.flush()  # Flush to get user.id without committing
+
+            # Record POPIA/GDPR consent (terms + channel opt-ins + IP)
+            AuthService._apply_consent(user, student_data, client_ip)
 
             # Create student profile
             student = Student(

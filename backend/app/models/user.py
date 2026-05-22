@@ -83,6 +83,16 @@ class User(Base):
     # If set, only the JWT with this jti is valid. Cleared on logout.
     active_session_token = Column(String, nullable=True)
 
+    # ── Communications consent (POPIA / GDPR Art.7, TCPA) ──────────────────
+    # Each opt-in is recorded with a timestamp (proof of consent + when given).
+    # `*_consent_ip` stores the IP from which consent was given.
+    email_marketing_opt_in_at = Column(DateTime(timezone=True), nullable=True)
+    sms_opt_in_at = Column(DateTime(timezone=True), nullable=True)
+    whatsapp_opt_in_at = Column(DateTime(timezone=True), nullable=True)
+    consent_ip = Column(String, nullable=True)
+    terms_accepted_at = Column(DateTime(timezone=True), nullable=True)
+    privacy_policy_version = Column(String, nullable=True)  # e.g. "2026-05-22"
+
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
@@ -90,7 +100,7 @@ class User(Base):
 
     # Relationships
     instructor_profile = relationship(
-        "Instructor", back_populates="user", uselist=False, cascade="all, delete-orphan"
+        "Instructor", foreign_keys="[Instructor.user_id]", back_populates="user", uselist=False, cascade="all, delete-orphan"
     )
     student_profile = relationship("Student", back_populates="user", uselist=False, cascade="all, delete-orphan")
     password_reset_tokens = relationship(
@@ -178,7 +188,7 @@ class Instructor(Base):
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
     # Relationships
-    user = relationship("User", back_populates="instructor_profile")
+    user = relationship("User", foreign_keys=[user_id], back_populates="instructor_profile")
     bookings = relationship("Booking", back_populates="instructor")
     schedules = relationship(
         "InstructorSchedule", back_populates="instructor", cascade="all, delete-orphan"

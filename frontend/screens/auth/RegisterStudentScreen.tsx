@@ -20,6 +20,56 @@ import { DEBUG_CONFIG } from '../../config';
 import ApiService from '../../services/api';
 import { formatPhoneNumber } from '../../utils/phoneFormatter';
 
+// ── Consent checkbox row (POPIA / GDPR / TCPA) ─────────────────────────────
+function ConsentRow({
+  checked,
+  onToggle,
+  colors,
+  required = false,
+  error,
+  children,
+}: {
+  checked: boolean;
+  onToggle: () => void;
+  colors: any;
+  required?: boolean;
+  error?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <View style={{ marginVertical: 6 }}>
+      <Pressable
+        onPress={onToggle}
+        style={{ flexDirection: 'row', alignItems: 'flex-start', paddingVertical: 4 }}
+      >
+        <View
+          style={{
+            width: 22,
+            height: 22,
+            borderRadius: 4,
+            borderWidth: 2,
+            borderColor: error ? colors.danger : checked ? colors.primary : colors.border,
+            backgroundColor: checked ? colors.primary : 'transparent',
+            alignItems: 'center',
+            justifyContent: 'center',
+            marginRight: 10,
+            marginTop: 2,
+          }}
+        >
+          {checked && <Text style={{ color: '#fff', fontWeight: '700', fontSize: 14 }}>✓</Text>}
+        </View>
+        <Text style={{ flex: 1, color: colors.text, fontSize: 13, lineHeight: 18 }}>
+          {children}
+          {required && <Text style={{ color: colors.danger }}> *</Text>}
+        </Text>
+      </Pressable>
+      {error && (
+        <Text style={{ color: colors.danger, fontSize: 12, marginLeft: 32 }}>{error}</Text>
+      )}
+    </View>
+  );
+}
+
 export default function RegisterStudentScreen({ navigation }: any) {
   const { colors } = useTheme();
   // Create refs for all input fields
@@ -50,6 +100,10 @@ export default function RegisterStudentScreen({ navigation }: any) {
     address_line1: DEBUG_CONFIG.ENABLED ? '123 Main Street' : '',
     address_line2: DEBUG_CONFIG.ENABLED ? 'Apartment 4B' : '',
     postal_code: DEBUG_CONFIG.ENABLED ? '2000' : '',
+    accept_terms: DEBUG_CONFIG.ENABLED,
+    opt_in_email_marketing: false,
+    opt_in_sms: false,
+    opt_in_whatsapp: false,
   });
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<{
@@ -67,6 +121,7 @@ export default function RegisterStudentScreen({ navigation }: any) {
     phone: 'Phone Number',
     password: 'Password',
     confirmPassword: 'Confirm Password',
+    accept_terms: 'Terms & Privacy',
   };
 
   const handleRegister = async () => {
@@ -87,6 +142,9 @@ export default function RegisterStudentScreen({ navigation }: any) {
     }
     if (formData.password !== formData.confirmPassword) {
       newErrors.confirmPassword = 'Passwords do not match';
+    }
+    if (!formData.accept_terms) {
+      newErrors.accept_terms = 'You must accept the Terms of Service and Privacy Policy';
     }
 
     if (Object.keys(newErrors).length > 0) {
@@ -355,6 +413,52 @@ export default function RegisterStudentScreen({ navigation }: any) {
             {showPassword ? '🙈 Hide Password' : '👁️ Show Password'}
           </Text>
         </Pressable>
+      </Card>
+
+      {/* Consent (POPIA / GDPR / TCPA) */}
+      <Card style={{ marginBottom: 16 }}>
+        <Text style={[styles.sectionTitle, { color: colors.text }]}>Consent & Communications</Text>
+        <ConsentRow
+          checked={formData.accept_terms}
+          onToggle={() => updateField('accept_terms', !formData.accept_terms)}
+          colors={colors}
+          required
+          error={fieldErrors.accept_terms}
+        >
+          I accept the{' '}
+          <Text style={{ color: colors.primary, fontWeight: '600' }} onPress={() => navigation.navigate('Terms')}>
+            Terms of Service
+          </Text>{' '}
+          and{' '}
+          <Text style={{ color: colors.primary, fontWeight: '600' }} onPress={() => navigation.navigate('Privacy')}>
+            Privacy Policy
+          </Text>
+          .
+        </ConsentRow>
+        <ConsentRow
+          checked={formData.opt_in_email_marketing}
+          onToggle={() => updateField('opt_in_email_marketing', !formData.opt_in_email_marketing)}
+          colors={colors}
+        >
+          Send me lesson tips, promotions and product updates by email (optional).
+        </ConsentRow>
+        <ConsentRow
+          checked={formData.opt_in_sms}
+          onToggle={() => updateField('opt_in_sms', !formData.opt_in_sms)}
+          colors={colors}
+        >
+          Send me SMS reminders and notifications (optional).
+        </ConsentRow>
+        <ConsentRow
+          checked={formData.opt_in_whatsapp}
+          onToggle={() => updateField('opt_in_whatsapp', !formData.opt_in_whatsapp)}
+          colors={colors}
+        >
+          Send me WhatsApp reminders and notifications (optional).
+        </ConsentRow>
+        <Text style={{ fontSize: 11, color: colors.textSecondary, marginTop: 8 }}>
+          You can change these preferences any time in Settings. Transactional messages (booking confirmations, password resets) are always sent.
+        </Text>
       </Card>
 
       {/* Validation Summary */}

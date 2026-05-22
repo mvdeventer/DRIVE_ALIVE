@@ -2,6 +2,7 @@
 Admin dashboard routes for system management
 """
 
+import logging
 from datetime import datetime, timezone
 from typing import Annotated, List, Optional
 
@@ -36,6 +37,7 @@ from ..utils.auth import get_password_hash
 from ..utils.encryption import EncryptionService
 
 router = APIRouter(prefix="/admin", tags=["Admin Dashboard"])
+logger = logging.getLogger(__name__)
 
 
 # ==================== Admin Management ====================
@@ -90,7 +92,7 @@ async def create_admin(
                 f"role_creation_admin_{existing_user.id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
             )
         except Exception as e:
-            print(f"Warning: Backup after admin role creation failed: {e}")
+            logger.warning("Backup after admin role creation failed: %s", e)
         
         return {
             "message": f"Admin role added for {existing_user.first_name} {existing_user.last_name}. Account is active immediately.",
@@ -138,7 +140,7 @@ async def create_admin(
             f"role_creation_admin_{new_admin.id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
         )
     except Exception as e:
-        print(f"Warning: Backup after admin creation failed: {e}")
+        logger.warning("Backup after admin creation failed: %s", e)
 
     return {
         "message": f"Admin account created for {new_admin.first_name} {new_admin.last_name}. Account is active immediately.",
@@ -1049,15 +1051,10 @@ async def get_all_bookings(
         query.order_by(Booking.lesson_date.desc()).offset(skip).limit(limit).all()
     )
 
-    # DEBUG: Log query details
-    print(
-        f"🔍 Admin bookings query - instructor_id: {instructor_id}, status_filter: {status_filter}, total found: {len(bookings)}"
-    )
     if len(bookings) > 0:
         status_counts = {}
         for b in bookings:
             status_counts[b.status.value] = status_counts.get(b.status.value, 0) + 1
-        print(f"  Status breakdown: {status_counts}")
 
     result = []
     for booking in bookings:
@@ -1475,8 +1472,6 @@ async def get_instructor_schedule(
     """
     Get instructor's weekly schedule (admin view)
     """
-    print(f"🔍 Fetching schedule for instructor_id: {instructor_id}")
-
     instructor = db.query(Instructor).filter(Instructor.id == instructor_id).first()
     if not instructor:
         raise HTTPException(
@@ -1484,19 +1479,11 @@ async def get_instructor_schedule(
             detail="Instructor not found",
         )
 
-    print(f"✅ Found instructor: {instructor.id}")
-
     schedules = (
         db.query(InstructorSchedule)
         .filter(InstructorSchedule.instructor_id == instructor_id)
         .all()
     )
-
-    print(f"📅 Found {len(schedules)} schedule records")
-    for sched in schedules:
-        print(
-            f"   - {sched.day_of_week.value}: {sched.start_time} - {sched.end_time} (Active: {sched.is_active})"
-        )
 
     result = [
         {
@@ -1508,9 +1495,6 @@ async def get_instructor_schedule(
         }
         for sched in schedules
     ]
-
-    print(f"📤 Returning {len(result)} schedule items")
-    print(f"   Result: {result}")
 
     return result
 
@@ -2093,11 +2077,7 @@ async def get_admin_settings(
         
         first_admin = admins[0]
         
-        smtp_password = (
-            EncryptionService.decrypt(first_admin.smtp_password)
-            if first_admin.smtp_password
-            else None
-        )
+        smtp_password_set = bool(first_admin.smtp_password)
 
         # Mask Twilio credentials for API response
         raw_sid = EncryptionService.decrypt(first_admin.twilio_account_sid) if first_admin.twilio_account_sid else None
@@ -2109,7 +2089,7 @@ async def get_admin_settings(
             "user_id": first_admin.id,
             "email": first_admin.email,
             "smtp_email": first_admin.smtp_email,
-            "smtp_password": smtp_password,
+            "smtp_password": ("*" * 8) if smtp_password_set else None,
             "verification_link_validity_minutes": first_admin.verification_link_validity_minutes or 30,
             "backup_interval_minutes": first_admin.backup_interval_minutes or 10,
             "retention_days": first_admin.retention_days or 30,
@@ -2123,7 +2103,7 @@ async def get_admin_settings(
     except HTTPException:
         raise
     except Exception as e:
-        print(f"Error fetching admin settings: {str(e)}")
+        logger.error("Error fetching admin settings: %s", str(e))
         raise HTTPException(status_code=500, detail=f"Failed to fetch settings: {str(e)}")
 
 
@@ -2206,7 +2186,7 @@ async def update_admin_settings(
         raise
     except Exception as e:
         db.rollback()
-        print(f"Error updating admin settings: {str(e)}")
+        logger.error("Error updating admin settings: %s", str(e))
         raise HTTPException(status_code=500, detail=f"Failed to update settings: {str(e)}")
 
 

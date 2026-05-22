@@ -421,6 +421,4 @@ def get_admin_contact(db: Session = Depends(get_db)):
         )
     return {
         "name": f"{admin.first_name or ''} {admin.last_name or ''}".strip() or "Administrator",
-        "email": admin.email,
-        "phone": admin.phone,
     }

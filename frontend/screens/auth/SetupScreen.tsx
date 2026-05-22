@@ -12,7 +12,7 @@ import AddressAutocomplete from '../../components/AddressAutocomplete';
 import { Button, Card, Input, ThemedModal } from '../../components/ui';
 import { useTheme } from '../../theme/ThemeContext';
 import { formatPhoneNumber } from '../../utils/phoneFormatter';
-import { API_BASE_URL } from '../../config';
+import { API_BASE_URL, DEBUG_CONFIG } from '../../config';
 
 interface FormData {
   firstName: string;
@@ -40,22 +40,22 @@ interface SetupScreenProps {
 export default function SetupScreen({ navigation }: SetupScreenProps) {
   const { colors } = useTheme();
   const [formData, setFormData] = useState<FormData>({
-    firstName: '',
-    lastName: '',
-    email: '',
-    phone: '',
-    idNumber: '',
-    password: '',
-    confirmPassword: '',
-    address: '',
-    smtpEmail: '',
-    smtpPassword: '',
-    linkValidity: '30',
-    testRecipient: '',
-    twilioSenderPhoneNumber: '',  // Twilio sender number
-    twilioPhoneNumber: '',  // Admin's test recipient phone
-    twilioAccountSid: '',
-    twilioAuthToken: '',
+    firstName:              DEBUG_CONFIG.ENABLED ? DEBUG_CONFIG.ADMIN_FIRST_NAME    : '',
+    lastName:               DEBUG_CONFIG.ENABLED ? DEBUG_CONFIG.ADMIN_LAST_NAME     : '',
+    email:                  DEBUG_CONFIG.ENABLED ? DEBUG_CONFIG.DEFAULT_EMAIL        : '',
+    phone:                  DEBUG_CONFIG.ENABLED ? DEBUG_CONFIG.DEFAULT_PHONE        : '',
+    idNumber:               DEBUG_CONFIG.ENABLED ? DEBUG_CONFIG.ADMIN_ID_NUMBER      : '',
+    password:               DEBUG_CONFIG.ENABLED ? DEBUG_CONFIG.DEFAULT_PASSWORD     : '',
+    confirmPassword:        DEBUG_CONFIG.ENABLED ? DEBUG_CONFIG.DEFAULT_PASSWORD     : '',
+    address:                DEBUG_CONFIG.ENABLED ? DEBUG_CONFIG.ADMIN_ADDRESS        : '',
+    smtpEmail:              DEBUG_CONFIG.ENABLED ? DEBUG_CONFIG.SMTP_EMAIL           : '',
+    smtpPassword:           DEBUG_CONFIG.ENABLED ? DEBUG_CONFIG.SMTP_PASSWORD        : '',
+    linkValidity:           '30',
+    testRecipient:          DEBUG_CONFIG.ENABLED ? DEBUG_CONFIG.DEFAULT_EMAIL        : '',
+    twilioSenderPhoneNumber:DEBUG_CONFIG.ENABLED ? DEBUG_CONFIG.TWILIO_SENDER_PHONE  : '',
+    twilioPhoneNumber:      DEBUG_CONFIG.ENABLED ? DEBUG_CONFIG.TWILIO_TEST_PHONE    : '',
+    twilioAccountSid:       DEBUG_CONFIG.ENABLED ? DEBUG_CONFIG.TWILIO_ACCOUNT_SID   : '',
+    twilioAuthToken:        DEBUG_CONFIG.ENABLED ? DEBUG_CONFIG.TWILIO_AUTH_TOKEN    : '',
   });
 
   const [pickupCoordinates, setPickupCoordinates] = useState<{

@@ -26,6 +26,56 @@ import { DEBUG_CONFIG } from '../../config';
 import ApiService from '../../services/api';
 import { formatPhoneNumber } from '../../utils/phoneFormatter';
 
+// ── Consent checkbox row (POPIA / GDPR / TCPA) ─────────────────────────────
+function ConsentRow({
+  checked,
+  onToggle,
+  colors,
+  required = false,
+  error,
+  children,
+}: {
+  checked: boolean;
+  onToggle: () => void;
+  colors: any;
+  required?: boolean;
+  error?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <View style={{ marginVertical: 6 }}>
+      <Pressable
+        onPress={onToggle}
+        style={{ flexDirection: 'row', alignItems: 'flex-start', paddingVertical: 4 }}
+      >
+        <View
+          style={{
+            width: 22,
+            height: 22,
+            borderRadius: 4,
+            borderWidth: 2,
+            borderColor: error ? colors.danger : checked ? colors.primary : colors.border,
+            backgroundColor: checked ? colors.primary : 'transparent',
+            alignItems: 'center',
+            justifyContent: 'center',
+            marginRight: 10,
+            marginTop: 2,
+          }}
+        >
+          {checked && <Text style={{ color: '#fff', fontWeight: '700', fontSize: 14 }}>✓</Text>}
+        </View>
+        <Text style={{ flex: 1, color: colors.text, fontSize: 13, lineHeight: 18 }}>
+          {children}
+          {required && <Text style={{ color: colors.danger }}> *</Text>}
+        </Text>
+      </Pressable>
+      {error && (
+        <Text style={{ color: colors.danger, fontSize: 12, marginLeft: 32 }}>{error}</Text>
+      )}
+    </View>
+  );
+}
+
 interface CompanyOption {
   id: number;
   name: string;
@@ -61,6 +111,10 @@ export default function RegisterInstructorScreen({ navigation }: any) {
     bio: DEBUG_CONFIG.ENABLED
       ? 'Experienced driving instructor with 15 years teaching Code B, EB, and C1.'
       : '',
+    accept_terms: DEBUG_CONFIG.ENABLED,
+    opt_in_email_marketing: false,
+    opt_in_sms: false,
+    opt_in_whatsapp: false,
   });
 
   // ── Company state (step 3) ──────────────────────────────
@@ -131,6 +185,10 @@ export default function RegisterInstructorScreen({ navigation }: any) {
       if (companyChoice === 'create' && !newCompanyName.trim()) {
         errors.company = 'Please enter a name for your driving school';
       }
+    } else if (step === 4) {
+      if (!formData.accept_terms) {
+        errors.accept_terms = 'You must accept the Terms of Service and Privacy Policy';
+      }
     }
     setFieldErrors(errors);
     return Object.keys(errors).length === 0;
@@ -177,6 +235,10 @@ export default function RegisterInstructorScreen({ navigation }: any) {
         max_travel_distance_km: parseFloat(formData.max_travel_distance_km),
         rate_per_km_beyond_radius: parseFloat(formData.rate_per_km_beyond_radius),
         bio: formData.bio || null,
+        accept_terms: formData.accept_terms,
+        opt_in_email_marketing: formData.opt_in_email_marketing,
+        opt_in_sms: formData.opt_in_sms,
+        opt_in_whatsapp: formData.opt_in_whatsapp,
         schedule: schedule.map(s => ({
           day_of_week: s.day_of_week,
           start_time: s.start_time,
@@ -590,13 +652,59 @@ export default function RegisterInstructorScreen({ navigation }: any) {
   );
 
   const renderStep4 = () => (
-    <Card variant="outlined" padding="md" style={styles.section}>
-      <Text style={[styles.sectionTitle, { color: colors.primary }]}>Weekly Schedule (Optional)</Text>
-      <Text style={[styles.stepHint, { color: colors.textSecondary }]}>
-        Set your typical working hours. You can update this anytime from your profile.
-      </Text>
-      <ScheduleEditor value={schedule} onChange={setSchedule} />
-    </Card>
+    <>
+      <Card variant="outlined" padding="md" style={styles.section}>
+        <Text style={[styles.sectionTitle, { color: colors.primary }]}>Weekly Schedule (Optional)</Text>
+        <Text style={[styles.stepHint, { color: colors.textSecondary }]}>
+          Set your typical working hours. You can update this anytime from your profile.
+        </Text>
+        <ScheduleEditor value={schedule} onChange={setSchedule} />
+      </Card>
+      <Card variant="outlined" padding="md" style={styles.section}>
+        <Text style={[styles.sectionTitle, { color: colors.primary }]}>Consent & Communications</Text>
+        <ConsentRow
+          checked={formData.accept_terms}
+          onToggle={() => updateFormData('accept_terms', !formData.accept_terms as any)}
+          colors={colors}
+          required
+          error={fieldErrors.accept_terms}
+        >
+          I accept the{' '}
+          <Text style={{ color: colors.primary, fontWeight: '600' }} onPress={() => navigation.navigate('Terms')}>
+            Terms of Service
+          </Text>{' '}
+          and{' '}
+          <Text style={{ color: colors.primary, fontWeight: '600' }} onPress={() => navigation.navigate('Privacy')}>
+            Privacy Policy
+          </Text>
+          .
+        </ConsentRow>
+        <ConsentRow
+          checked={formData.opt_in_email_marketing}
+          onToggle={() => updateFormData('opt_in_email_marketing', !formData.opt_in_email_marketing as any)}
+          colors={colors}
+        >
+          Send me lesson tips, promotions and product updates by email (optional).
+        </ConsentRow>
+        <ConsentRow
+          checked={formData.opt_in_sms}
+          onToggle={() => updateFormData('opt_in_sms', !formData.opt_in_sms as any)}
+          colors={colors}
+        >
+          Send me SMS reminders and notifications (optional).
+        </ConsentRow>
+        <ConsentRow
+          checked={formData.opt_in_whatsapp}
+          onToggle={() => updateFormData('opt_in_whatsapp', !formData.opt_in_whatsapp as any)}
+          colors={colors}
+        >
+          Send me WhatsApp reminders and notifications (optional).
+        </ConsentRow>
+        <Text style={{ fontSize: 11, color: colors.textSecondary, marginTop: 8 }}>
+          You can change these preferences any time in Settings. Transactional messages are always sent.
+        </Text>
+      </Card>
+    </>
   );
 
   // ── Registered success view ──────────────────────────────

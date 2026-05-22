@@ -9,12 +9,52 @@ from typing import Optional
 from twilio.rest import Client
 
 from ..config import settings
+from .notifiers.base import WhatsAppNotifier
 
 logger = logging.getLogger(__name__)
 
 
-class WhatsAppService:
-    """Service for sending WhatsApp messages via Twilio"""
+class WhatsAppService(WhatsAppNotifier):
+    """Service for sending WhatsApp messages via Twilio."""
+
+    name = "twilio"
+
+    def send_text(self, *, to_phone: str, message: str) -> bool:
+        """WhatsAppNotifier interface — delegates to legacy send_message."""
+        return self.send_message(to_phone, message)
+
+    def send_template(
+        self,
+        *,
+        to_phone: str,
+        template_id: str,
+        variables: Optional[dict] = None,
+    ) -> bool:
+        """Send a Twilio Content API approved template (P1-7 will wire this
+        up properly; current Twilio sandbox falls back to plain text)."""
+        if not self._ensure_client():
+            logger.warning("Twilio client not initialized. Skipping template send.")
+            return False
+        try:
+            from_number = self.get_admin_twilio_sender_phone()
+            to_number = self._format_phone_number(to_phone)
+            kwargs: dict = {"from_": from_number, "to": to_number, "content_sid": template_id}
+            if variables:
+                import json as _json
+                kwargs["content_variables"] = _json.dumps(variables)
+            msg = self.client.messages.create(**kwargs)
+            logger.info(
+                "WhatsApp template %s sent to %s: %s", template_id, to_phone, msg.sid
+            )
+            return True
+        except Exception as e:
+            logger.error(
+                "Failed to send WhatsApp template %s to %s: %s",
+                template_id,
+                to_phone,
+                e,
+            )
+            return False
 
     def __init__(self):
         """Initialize Twilio client — tries encrypted DB credentials first, falls back to .env"""
@@ -115,13 +155,27 @@ class WhatsAppService:
             
             # Get sender number from database, fallback to sandbox
             sender_number = admin.twilio_sender_phone_number if admin and admin.twilio_sender_phone_number else "+14155238886"
-            
+
+            # SECURITY: Twilio sandbox sender (+1 415 523 8886) is for development only.
+            # Meta WhatsApp Business Policy forbids its use in production, and recipients
+            # must "join sandbox" first — so production messages would silently fail anyway.
+            if sender_number == "+14155238886" and settings.ENVIRONMENT == "production":
+                logger.error(
+                    "Twilio sandbox sender used in production environment — refusing to send. "
+                    "Configure a real WhatsApp Business sender on the admin profile."
+                )
+                raise RuntimeError("WhatsApp sender not configured for production")
+
             # Format for WhatsApp
             return f"whatsapp:{sender_number}"
             
+        except RuntimeError:
+            raise
         except Exception as e:
             logger.warning(f"Failed to get admin Twilio sender phone: {str(e)}")
-            return "whatsapp:+14155238886"  # Default sandbox number
+            if settings.ENVIRONMENT == "production":
+                raise RuntimeError("WhatsApp sender lookup failed in production") from e
+            return "whatsapp:+14155238886"  # Default sandbox number (dev only)
     
     @staticmethod
     def get_admin_twilio_phone(db=None) -> Optional[str]:

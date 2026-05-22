@@ -21,6 +21,8 @@ START OPTIONS
     -b / --backend-only     Only start backend
     -f / --frontend-only    Only start frontend
     -d / --dev              Open browser with DevTools
+    --debug                 Verbose debug mode: DEBUG=True backend, log-level debug,
+                            EXPO_PUBLIC_DEBUG_MODE=true (pre-fills forms on all screens)
     -e / --env <target>     Switch env before starting  (loc | net | prod)
     -l / --local            Switch to localhost env then start  (alias for -e loc)
     -m / --mobile           Switch to network/mobile env then start  (alias for -e net)
@@ -360,6 +362,9 @@ def provision_database(force: bool = False) -> bool:
     db_url = f"postgresql://{app_user}:{app_pass}@{pg_host}:{pg_port}/{DB_APP_NAME}"
     write_env_value("DATABASE_URL", db_url)
     ok("DATABASE_URL written to backend/.env  (credentials are auto-generated & encoded).")
+    info(f"  DB host  : {pg_host}:{pg_port}")
+    info(f"  DB name  : {DB_APP_NAME}")
+    info(f"  DB user  : {app_user}")
     return True
 
 
@@ -375,7 +380,10 @@ def _create_venv() -> None:
     Create the venv, working around Python 3.14's venvlauncher.exe copy bug.
     Falls back to 'virtualenv' package when the built-in venv fails.
     """
+    info(f"Python executable : {sys.executable}")
+    info(f"Venv target       : {VENV_DIR}")
     # First attempt: built-in venv
+    info("Running: python -m venv …")
     result = subprocess.run(
         [sys.executable, "-m", "venv", str(VENV_DIR)],
         capture_output=True, text=True
@@ -420,16 +428,18 @@ def ensure_venv(fresh: bool = False) -> None:
 
     # Verify fastapi importable; install if not
     if not run_silent([str(VENV_PYTHON), "-c", "import fastapi"]):
-        info("Installing backend dependencies …")
+        info(f"Installing backend dependencies …")
+        info(f"  Requirements : {REQUIREMENTS}")
+        info(f"  Pip          : {VENV_PIP}")
         result = run(
-            [str(VENV_PYTHON), "-m", "pip", "install", "--quiet", "-r", str(REQUIREMENTS)],
+            [str(VENV_PYTHON), "-m", "pip", "install", "-r", str(REQUIREMENTS)],
             check=False,
         )
         if result.returncode != 0:
             # Retry once with --force-reinstall in case of locked/partial files
             warn("First pip attempt failed – retrying with --force-reinstall …")
             result2 = run(
-                [str(VENV_PYTHON), "-m", "pip", "install", "--quiet",
+                [str(VENV_PYTHON), "-m", "pip", "install",
                  "--force-reinstall", "-r", str(REQUIREMENTS)],
                 check=False,
             )
@@ -755,6 +765,7 @@ def cmd_start(
     backend_only: bool = False,
     frontend_only: bool = False,
     dev_mode: bool = False,
+    debug_mode: bool = False,
     switch_env: str | None = None,
 ) -> None:
     """Start backend and/or frontend servers."""
@@ -775,20 +786,31 @@ def cmd_start(
 
     header("Starting servers")
 
+    if debug_mode:
+        print(_c("yellow", "  ⚠  DEBUG MODE ACTIVE — verbose logging enabled, forms pre-filled"))
+        print(_c("yellow", "     Do NOT use this in production."))
+        print()
+
     env_mode, expo_flag = _detect_env_mode()
     info(f"Environment mode: {env_mode.upper()}")
 
     # ── Backend ────────────────────────────────────────────────────────────────
     if not frontend_only:
+        uvicorn_log_level = "debug" if debug_mode else "info"
+        debug_env = 'set "DEBUG=True" && set "LOG_LEVEL=debug" && ' if debug_mode else ""
         backend_cmd = (
+            f"{debug_env}"
             f"call venv\\Scripts\\activate.bat && "
-            f"python -m uvicorn app.main:app --reload --host 0.0.0.0 --port {BACKEND_PORT}"
+            f"python -m uvicorn app.main:app --reload --log-level {uvicorn_log_level}"
+            f" --host 0.0.0.0 --port {BACKEND_PORT}"
         )
         pid = open_new_window("Drive Alive - Backend", backend_cmd, BACKEND_DIR)
         if pid:
             _write_pid(BACKEND_PID_FILE, pid)
             ok(f"Backend started (PID {pid}) → http://localhost:{BACKEND_PORT}")
             info(f"  API docs: http://localhost:{BACKEND_PORT}/docs")
+            if debug_mode:
+                info(f"  Debug: LOG_LEVEL=debug | DEBUG=True | --reload")
         else:
             warn("Could not determine backend PID.")
 
@@ -800,8 +822,13 @@ def cmd_start(
         # Use quoted set syntax: set "VAR=value" prevents cmd.exe from
         # including trailing spaces (before &&) in the variable value.
         # EXPO_OFFLINE must be "1" not "true" – Expo uses getenv.boolish().
-        # NOTE: Do NOT set BROWSER=none – that kills Expo's interactive 'w' keypress too.
+        # In dev mode set BROWSER=none so Expo doesn't auto-open; we open
+        # Chrome with DevTools ourselves instead.
         expo_env = 'set "EXPO_OFFLINE=1" && '
+        if debug_mode:
+            expo_env += 'set "EXPO_PUBLIC_DEBUG_MODE=true" && '
+        if dev_mode:
+            expo_env += 'set "BROWSER=none" && '
         frontend_cmd = (
             f"{expo_env}npx expo start --web {expo_flag}"
         )
@@ -809,15 +836,16 @@ def cmd_start(
         if pid:
             _write_pid(FRONTEND_PID_FILE, pid)
             ok(f"Frontend started (PID {pid}) → http://localhost:{FRONTEND_PORT}")
+            if debug_mode:
+                info(f"  Debug: EXPO_PUBLIC_DEBUG_MODE=true (forms pre-filled)")
         else:
             warn("Could not determine frontend PID.")
 
-        # Open browser
-        time.sleep(3)
+        # In dev mode open Chrome with DevTools; in normal mode Expo handles
+        # auto-opening the browser, so we don't open a second tab here.
         if dev_mode:
+            time.sleep(3)
             _open_with_devtools(f"http://localhost:{FRONTEND_PORT}")
-        else:
-            webbrowser.open(f"http://localhost:{FRONTEND_PORT}")
 
     print()
     print(_c("green", "  Servers are starting in separate windows."))
@@ -855,12 +883,17 @@ def cmd_install(force: bool = False, offline: bool = False) -> None:
         err(f"Python 3.9+ required (found {ver.major}.{ver.minor}).")
         sys.exit(1)
     ok(f"Python {ver.major}.{ver.minor}.{ver.micro}")
+    info(f"  Executable : {sys.executable}")
 
     # ── Step 2: Node.js ─────────────────────────────────────────────────────────
     step(2, total_steps, "Node.js")
     if shutil.which("node"):
         r = subprocess.run(["node", "--version"], capture_output=True, text=True)
         ok(f"Node.js {r.stdout.strip()}")
+        info(f"  Executable : {shutil.which('node')}")
+        npm_path = shutil.which("npm")
+        if npm_path:
+            info(f"  npm        : {npm_path}")
     else:
         err("Node.js not found. Install from https://nodejs.org")
         errors.append("Node.js missing")
@@ -871,6 +904,8 @@ def cmd_install(force: bool = False, offline: bool = False) -> None:
     if psql:
         r = subprocess.run([str(psql), "--version"], capture_output=True, text=True)
         ok(f"{r.stdout.strip()}")
+        info(f"  psql path  : {psql}")
+        info(f"  Port       : {_detect_pg_port()}")
     else:
         warn("psql not found in PATH or common locations.")
         warn("If PostgreSQL is installed, ensure its bin folder is in PATH.")
@@ -881,6 +916,8 @@ def cmd_install(force: bool = False, offline: bool = False) -> None:
 
     # ── Step 4: Backend setup ───────────────────────────────────────────────────
     step(4, total_steps, "Backend – venv + dependencies")
+    info(f"  Venv path  : {VENV_DIR}")
+    info(f"  Backend    : {BACKEND_DIR}")
     force_venv = VENV_DIR.exists() and force
     if force_venv:
         info("--force: removing existing venv …")
@@ -895,6 +932,7 @@ def cmd_install(force: bool = False, offline: bool = False) -> None:
 
     # ── Step 6: Frontend setup ──────────────────────────────────────────────────
     step(6, total_steps, "Frontend – npm install")
+    info(f"  Frontend   : {FRONTEND_DIR}")
     if (FRONTEND_DIR / "node_modules").exists() and force:
         info("--force: removing existing node_modules …")
         shutil.rmtree(FRONTEND_DIR / "node_modules", ignore_errors=True)
@@ -934,12 +972,12 @@ def cmd_uninstall(yes: bool = False) -> None:
     header("Drive Alive – Uninstall")
 
     print("  This will remove:")
-    print("    - backend\\venv")
-    print("    - frontend\\node_modules")
-    print("    - build/, dist/, backend/dist/")
-    print("    - .installed marker")
-    print("    - Optionally: backend\\.env")
-    print("    - Optionally: DROP the driving_school_db PostgreSQL database")
+    print(f"    - {VENV_DIR}")
+    print(f"    - {FRONTEND_DIR / 'node_modules'}")
+    print(f"    - {ROOT / 'build'}, {ROOT / 'dist'}, {BACKEND_DIR / 'dist'}")
+    print(f"    - {INSTALLED_MARKER}")
+    print(f"    - Optionally: {ENV_FILE}")
+    print(f"    - Optionally: DROP the {DB_APP_NAME} PostgreSQL database")
     print()
 
     if not yes:
@@ -948,12 +986,16 @@ def cmd_uninstall(yes: bool = False) -> None:
             print("  Aborted.")
             return
 
-    # Stop servers first
-    cmd_stop(silent=True)
+    # ── Stop servers ────────────────────────────────────────────────────────────
+    cmd_stop()
+
+    # ── Remove files ────────────────────────────────────────────────────────────
+    header("Removing files")
 
     def rm(p: Path, label: str) -> None:
         if p.exists():
             info(f"Removing {label} …")
+            info(f"  Path : {p}")
             if p.is_dir():
                 shutil.rmtree(p, ignore_errors=True)
             else:
@@ -961,16 +1003,19 @@ def cmd_uninstall(yes: bool = False) -> None:
             ok(f"{label} removed.")
         else:
             info(f"{label} not found – skipping.")
+            info(f"  Path : {p}")
 
     rm(VENV_DIR, "backend/venv")
     rm(FRONTEND_DIR / "node_modules", "frontend/node_modules")
     rm(ROOT / "build", "build/")
     rm(ROOT / "dist", "dist/")
     rm(BACKEND_DIR / "dist", "backend/dist/")
-    rm(INSTALLED_MARKER, ".installed")
+    rm(INSTALLED_MARKER, ".installed marker")
 
-    # Optionally remove .env
+    # ── .env ────────────────────────────────────────────────────────────────────
+    header(".env configuration")
     if ENV_FILE.exists():
+        info(f"  Path : {ENV_FILE}")
         if yes:
             del_env = "n"
         else:
@@ -979,35 +1024,47 @@ def cmd_uninstall(yes: bool = False) -> None:
             ENV_FILE.unlink()
             ok(".env removed.")
         else:
-            info(".env kept.")
+            info(".env kept (database credentials and secrets preserved).")
+    else:
+        info(".env not found – skipping.")
+        info(f"  Path : {ENV_FILE}")
 
-    # Drop database + app role (reads credentials from .env)
+    # ── Database ────────────────────────────────────────────────────────────────
+    header("PostgreSQL database")
     psql = _find_psql()
     if psql:
+        pg_host = "localhost"
+        pg_port = _detect_pg_port()
+        info(f"  psql path : {psql}")
+        info(f"  Host/port : {pg_host}:{pg_port}")
+        info(f"  Database  : {DB_APP_NAME}")
+        db_url = read_env().get("DATABASE_URL", "")
+        app_role = ""
+        if "://" in db_url:
+            app_role = db_url.split("://")[1].split(":")[0]
+        if app_role and app_role not in ("postgres", "user", ""):
+            info(f"  DB role   : {app_role}")
         drop = "n" if yes else input(f"  Drop PostgreSQL database '{DB_APP_NAME}'? (y/N): ").strip().lower()
         if drop == "y":
-            pg_host = "localhost"
-            pg_port = _detect_pg_port()
-            info(f"Authenticating to PostgreSQL on port {pg_port}…")
+            info(f"Authenticating to PostgreSQL on port {pg_port} …")
             su_pass = _pg_authenticate(psql, pg_host, pg_port)
             if su_pass is None:
                 err("Could not authenticate – database NOT dropped. Remove it manually.")
             else:
+                ok(f"Connected to PostgreSQL on port {pg_port}.")
                 pg_e = _pg_env(su_pass)
-                # Determine app role from .env
-                db_url = read_env().get("DATABASE_URL", "")
-                app_role = ""
-                if "://" in db_url:
-                    app_role = db_url.split("://")[1].split(":")[0]
-                for sql in [
-                    f"SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname='{DB_APP_NAME}';",
-                    f"DROP DATABASE IF EXISTS {DB_APP_NAME};",
-                ]:
-                    _psql_run(psql, pg_host, pg_port, pg_e, sql)
+                info(f"Terminating active connections to '{DB_APP_NAME}' …")
+                _psql_run(psql, pg_host, pg_port, pg_e,
+                          f"SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname='{DB_APP_NAME}';")
+                info(f"Dropping database '{DB_APP_NAME}' …")
+                _psql_run(psql, pg_host, pg_port, pg_e, f"DROP DATABASE IF EXISTS {DB_APP_NAME};")
+                ok(f"Database '{DB_APP_NAME}' dropped.")
                 if app_role and app_role not in ("postgres", "user", ""):
+                    info(f"Dropping DB role '{app_role}' …")
                     _psql_run(psql, pg_host, pg_port, pg_e, f"DROP ROLE IF EXISTS {app_role};")
                     ok(f"DB role '{app_role}' dropped.")
-                ok(f"Database '{DB_APP_NAME}' dropped.")
+        else:
+            info(f"Database '{DB_APP_NAME}' kept.")
     else:
         info("psql not found – skipping database drop.")
 
@@ -1078,6 +1135,7 @@ def main() -> None:
     p_start.add_argument("-b", "--backend-only", action="store_true")
     p_start.add_argument("-f", "--frontend-only", action="store_true")
     p_start.add_argument("-d", "--dev", action="store_true", help="Open browser with DevTools")
+    p_start.add_argument("--debug", action="store_true", help="Enable verbose debug mode (DEBUG=True, log-level debug, pre-fill forms)")
     p_start.add_argument("-e", "--env", metavar="TARGET", help="Switch env before starting (loc|net|prod)")
     p_start.add_argument("-l", "--local", action="store_true", help="Switch to localhost env first (alias for -e loc)")
     p_start.add_argument("-m", "--mobile", action="store_true", help="Switch to network/mobile env first (alias for -e net)")
@@ -1090,6 +1148,7 @@ def main() -> None:
     p_restart.add_argument("-b", "--backend-only", action="store_true")
     p_restart.add_argument("-f", "--frontend-only", action="store_true")
     p_restart.add_argument("-d", "--dev", action="store_true")
+    p_restart.add_argument("--debug", action="store_true", help="Enable verbose debug mode")
     p_restart.add_argument("-e", "--env", metavar="TARGET", help="Switch env before restarting (loc|net|prod)")
     p_restart.add_argument("-l", "--local", action="store_true", help="Switch to localhost env first")
     p_restart.add_argument("-m", "--mobile", action="store_true", help="Switch to network/mobile env first")
@@ -1110,8 +1169,10 @@ def main() -> None:
     # status
     sub.add_parser("status", help="Show status")
 
-    # If no subcommand given, default to "start"
-    args = parser.parse_args()
+    # If no subcommand given, default to "start".
+    # Use parse_known_args() first so that start-only flags like --debug / -d
+    # don't cause the top-level parser to error before we redirect to "start".
+    args, _unknown = parser.parse_known_args()
     if not args.command:
         args = parser.parse_args(["start"] + sys.argv[1:])
 
@@ -1125,6 +1186,7 @@ def main() -> None:
             backend_only=args.backend_only,
             frontend_only=args.frontend_only,
             dev_mode=args.dev,
+            debug_mode=args.debug,
             switch_env=switch,
         )
 
@@ -1143,6 +1205,7 @@ def main() -> None:
             backend_only=args.backend_only,
             frontend_only=args.frontend_only,
             dev_mode=args.dev,
+            debug_mode=args.debug,
             switch_env=switch,
         )
 

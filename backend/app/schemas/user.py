@@ -76,6 +76,24 @@ class UserCreate(UserBase):
     password: str
     role: UserRole
 
+    # ── Communications consent (POPIA / GDPR / TCPA) ──────────────────
+    # Required: user must accept terms & privacy policy.
+    # Optional: marketing/transactional channel opt-ins.
+    accept_terms: bool = Field(
+        ...,
+        description="User must accept Terms of Service and Privacy Policy.",
+    )
+    opt_in_email_marketing: bool = False
+    opt_in_sms: bool = False
+    opt_in_whatsapp: bool = False
+
+    @field_validator("accept_terms")
+    @classmethod
+    def must_accept_terms(cls, v: bool) -> bool:
+        if v is not True:
+            raise ValueError("You must accept the Terms of Service and Privacy Policy.")
+        return v
+
 
 class UserLogin(BaseModel):
     """User login schema"""

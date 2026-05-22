@@ -17,24 +17,39 @@ const getApiUrl = () => {
     return 'http://localhost:8000';
   }
   
-  // Mobile development: Use local network IP (update if needed)
-  return 'http://10.0.0.121:8000';
+  // Mobile development: Use EXPO_PUBLIC_API_URL if set, otherwise localhost
+  return process.env.EXPO_PUBLIC_API_URL || 'http://localhost:8000';
 };
 
 export const API_BASE_URL = getApiUrl();
 
-// Debug configuration
-// Set ENABLED to true to pre-fill registration forms for faster testing
-// Set to false for production-like behavior (empty forms with placeholders only)
-// Configure via environment variables in .env file (NOT committed to git)
+// Debug configuration — only active when EXPO_PUBLIC_DEBUG_MODE=true AND __DEV__.
+// Set values in frontend/.env (git-ignored). Never hard-code secrets here.
 export const DEBUG_CONFIG = {
-  ENABLED: process.env.EXPO_PUBLIC_DEBUG_MODE === 'true' && __DEV__, // Only in development
-  DEFAULT_EMAIL: process.env.EXPO_PUBLIC_DEBUG_EMAIL || '',
-  DEFAULT_PHONE: process.env.EXPO_PUBLIC_DEBUG_PHONE || '',
+  ENABLED: process.env.EXPO_PUBLIC_DEBUG_MODE === 'true' && __DEV__,
+
+  // ── Admin / personal ──────────────────────────────────────────────────────
+  DEFAULT_EMAIL:    process.env.EXPO_PUBLIC_DEBUG_EMAIL    || '',
+  DEFAULT_PHONE:    process.env.EXPO_PUBLIC_DEBUG_PHONE    || '',
   DEFAULT_PASSWORD: process.env.EXPO_PUBLIC_DEBUG_PASSWORD || '',
-  // Student-specific debug values
+  ADMIN_FIRST_NAME: process.env.EXPO_PUBLIC_DEBUG_ADMIN_FIRST_NAME || '',
+  ADMIN_LAST_NAME:  process.env.EXPO_PUBLIC_DEBUG_ADMIN_LAST_NAME  || '',
+  ADMIN_ID_NUMBER:  process.env.EXPO_PUBLIC_DEBUG_ADMIN_ID_NUMBER  || '',
+  ADMIN_ADDRESS:    process.env.EXPO_PUBLIC_DEBUG_ADMIN_ADDRESS    || '',
+
+  // ── Student-specific ──────────────────────────────────────────────────────
   STUDENT_EMAIL: process.env.EXPO_PUBLIC_DEBUG_STUDENT_EMAIL || '',
   STUDENT_PHONE: process.env.EXPO_PUBLIC_DEBUG_STUDENT_PHONE || '',
+
+  // ── SMTP / email ──────────────────────────────────────────────────────────
+  SMTP_EMAIL:    process.env.EXPO_PUBLIC_DEBUG_SMTP_EMAIL    || '',
+  SMTP_PASSWORD: process.env.EXPO_PUBLIC_DEBUG_SMTP_PASSWORD || '',
+
+  // ── Twilio / WhatsApp ─────────────────────────────────────────────────────
+  TWILIO_ACCOUNT_SID:  process.env.EXPO_PUBLIC_DEBUG_TWILIO_SID          || '',
+  TWILIO_AUTH_TOKEN:   process.env.EXPO_PUBLIC_DEBUG_TWILIO_TOKEN         || '',
+  TWILIO_SENDER_PHONE: process.env.EXPO_PUBLIC_DEBUG_TWILIO_SENDER_PHONE  || '',
+  TWILIO_TEST_PHONE:   process.env.EXPO_PUBLIC_DEBUG_TWILIO_TEST_PHONE    || '',
 };
 
 export const API_CONFIG = {
@@ -63,14 +78,16 @@ export const API_CONFIG = {
 };
 
 // Stripe Configuration
-export const STRIPE_PUBLISHABLE_KEY = 'pk_test_your_stripe_publishable_key';
+// Set EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY in your .env / Render dashboard.
+export const STRIPE_PUBLISHABLE_KEY = process.env.EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY || '';
 
 // Firebase Configuration
+// Set EXPO_PUBLIC_FIREBASE_* variables in your .env / Render dashboard.
 export const FIREBASE_CONFIG = {
-  apiKey: 'your-api-key',
-  authDomain: 'your-app.firebaseapp.com',
-  projectId: 'your-project-id',
-  storageBucket: 'your-app.appspot.com',
-  messagingSenderId: 'your-sender-id',
-  appId: 'your-app-id',
+  apiKey: process.env.EXPO_PUBLIC_FIREBASE_API_KEY || '',
+  authDomain: process.env.EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN || '',
+  projectId: process.env.EXPO_PUBLIC_FIREBASE_PROJECT_ID || '',
+  storageBucket: process.env.EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET || '',
+  messagingSenderId: process.env.EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID || '',
+  appId: process.env.EXPO_PUBLIC_FIREBASE_APP_ID || '',
 };

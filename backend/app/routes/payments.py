@@ -4,6 +4,7 @@ Students pay R10 booking fee BEFORE lessons are created
 """
 
 import json
+import logging
 import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Annotated
@@ -20,9 +21,11 @@ from ..models.payment_session import PaymentSession, PaymentSessionStatus
 from ..models.user import Instructor, Student, User, UserRole
 from ..routes.auth import get_current_user, get_active_role
 from ..schemas.payment import PaymentInitiateRequest, PaymentInitiateResponse
+from ..services.gateways import get_payment_gateway
 from ..services.whatsapp_service import whatsapp_service
 
 router = APIRouter(prefix="/payments", tags=["Payments"])
+logger = logging.getLogger(__name__)
 
 # Configure Stripe (use mock mode if no key provided)
 MOCK_PAYMENT_MODE = not settings.STRIPE_SECRET_KEY
@@ -192,41 +195,34 @@ async def initiate_payment(
         )
 
     # REAL STRIPE MODE
-    # Generate Stripe Checkout Session
+    # Generate Stripe Checkout Session via provider-agnostic gateway.
     try:
-        # Create Stripe Checkout Session
-        checkout_session = stripe.checkout.Session.create(
-            payment_method_types=["card"],
-            line_items=[
-                {
-                    "price_data": {
-                        "currency": "zar",
-                        "unit_amount": int(final_amount * 100),  # Convert to cents
-                        "product_data": {
-                            "name": item_name,
-                            "description": item_description,
-                        },
-                    },
-                    "quantity": 1,
-                },
-            ],
-            mode="payment",
-            success_url=f"{settings.FRONTEND_URL}/payment/success?session_id={{CHECKOUT_SESSION_ID}}",
+        gateway = get_payment_gateway()
+        checkout_session = gateway.create_checkout_session(
+            amount_cents=int(final_amount * 100),
+            currency="zar",
+            reference=payment_session_id,
+            success_url=(
+                f"{settings.FRONTEND_URL}/payment/success"
+                "?session_id={CHECKOUT_SESSION_ID}"
+            ),
             cancel_url=f"{settings.FRONTEND_URL}/payment/cancel",
+            item_name=item_name,
+            item_description=item_description,
+            customer_email=current_user.email,
             metadata={
                 "payment_session_id": payment_session_id,
                 "user_id": str(current_user.id),
                 "instructor_id": str(instructor.id),
             },
-            customer_email=current_user.email,
+            idempotency_key=f"checkout:{payment_session_id}",
         )
 
-        # Update payment session with Stripe session ID
+        # Update payment session with provider's session ID
         payment_session.gateway_transaction_id = checkout_session.id
         db.commit()
 
-        print(f"✅ Stripe Checkout URL: {checkout_session.url}")
-        print("=" * 80)
+        logger.info("Stripe Checkout session created (session_id=%s)", payment_session_id)
 
         return PaymentInitiateResponse(
             payment_url=checkout_session.url,
@@ -259,17 +255,26 @@ async def stripe_webhook(request: Request, db: Session = Depends(get_db)):
     payload = await request.body()
     sig_header = request.headers.get("stripe-signature")
 
-    try:
-        # Verify webhook signature (skip in development if no webhook secret)
-        if settings.STRIPE_WEBHOOK_SECRET:
-            event = stripe.Webhook.construct_event(
-                payload, sig_header, settings.STRIPE_WEBHOOK_SECRET
-            )
-        else:
-            # Development mode - parse without verification
-            event = stripe.Event.construct_from(json.loads(payload), stripe.api_key)
+    # Webhook signature verification is MANDATORY in all environments.
+    # If STRIPE_WEBHOOK_SECRET is unset, refuse the request — never accept
+    # unsigned webhooks (PCI-DSS 6.5.10 / OWASP A07). For local dev, use
+    # `stripe listen --forward-to localhost:8000/payments/webhook` which
+    # injects a valid signing secret.
+    if not settings.STRIPE_WEBHOOK_SECRET:
+        logger.error("STRIPE_WEBHOOK_SECRET is not configured — rejecting webhook")
+        raise HTTPException(
+            status_code=503,
+            detail="Webhook verification not configured",
+        )
+    if not sig_header:
+        logger.error("Missing stripe-signature header")
+        raise HTTPException(status_code=400, detail="Missing signature header")
 
-        logger.info(f"📧 Stripe webhook received: {event['type']}")
+    try:
+        gateway = get_payment_gateway()
+        webhook_event = gateway.verify_webhook(payload, sig_header)
+        event = webhook_event.raw  # Stripe Event object (downstream code uses dict-style access)
+        logger.info("Stripe webhook received: %s", webhook_event.type)
 
     except ValueError as e:
         logger.error(f"❌ Invalid payload: {e}")
@@ -548,6 +553,80 @@ async def stripe_webhook(request: Request, db: Session = Depends(get_db)):
         )
 
         return {"status": "success", "bookings_created": len(created_bookings)}
+
+    # ── charge.refunded ────────────────────────────────────────────────────────
+    # Fired when a refund is issued via the Stripe dashboard or our /refund API.
+    # We mark the originating payment session + every booking it created as
+    # refunded so the dashboards stay in sync.
+    if event["type"] == "charge.refunded":
+        charge = event["data"]["object"]
+        payment_intent = charge.get("payment_intent")
+        if not payment_intent:
+            logger.warning("charge.refunded received without payment_intent")
+            return {"status": "ignored"}
+
+        ps = (
+            db.query(PaymentSession)
+            .filter(PaymentSession.gateway_transaction_id == payment_intent)
+            .first()
+        )
+        if not ps:
+            logger.warning("charge.refunded for unknown payment_intent=%s", payment_intent)
+            return {"status": "ignored"}
+
+        refund_total_cents = int(charge.get("amount_refunded") or 0)
+        refund_total = refund_total_cents / 100.0
+        fully_refunded = bool(charge.get("refunded"))
+
+        ps.status = (
+            PaymentSessionStatus.CANCELLED if fully_refunded else PaymentSessionStatus.COMPLETED
+        )
+        db.query(Booking).filter(Booking.payment_id == payment_intent).update(
+            {
+                "payment_status": PaymentStatus.REFUNDED,
+                "refund_amount": refund_total,
+            }
+        )
+        db.commit()
+        logger.info(
+            "Refund processed: payment_intent=%s amount=R%.2f fully_refunded=%s",
+            payment_intent,
+            refund_total,
+            fully_refunded,
+        )
+        return {"status": "refund_processed"}
+
+    # ── charge.dispute.created ────────────────────────────────────────────────
+    # A cardholder has opened a chargeback. Per PCI-DSS / PSD2 we must log this
+    # immediately and surface it to admins. We do NOT auto-refund — disputes
+    # have an evidence-submission window managed in the Stripe dashboard.
+    if event["type"] == "charge.dispute.created":
+        dispute = event["data"]["object"]
+        payment_intent = dispute.get("payment_intent")
+        amount_cents = int(dispute.get("amount") or 0)
+        reason = dispute.get("reason", "unknown")
+        logger.error(
+            "STRIPE DISPUTE OPENED: payment_intent=%s amount=R%.2f reason=%s dispute_id=%s",
+            payment_intent,
+            amount_cents / 100.0,
+            reason,
+            dispute.get("id"),
+        )
+        # Best-effort: flag the related payment session for admin attention.
+        if payment_intent:
+            ps = (
+                db.query(PaymentSession)
+                .filter(PaymentSession.gateway_transaction_id == payment_intent)
+                .first()
+            )
+            if ps:
+                existing = ps.gateway_response or ""
+                ps.gateway_response = (
+                    existing
+                    + f"\n[DISPUTE {dispute.get('id')} reason={reason} amount={amount_cents}]"
+                )
+                db.commit()
+        return {"status": "dispute_logged"}
 
     # Return success for other event types
     return {"status": "success"}

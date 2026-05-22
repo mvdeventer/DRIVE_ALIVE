@@ -33,6 +33,13 @@ class Settings(BaseSettings):
     PAYFAST_PASSPHRASE: str = ""
     PAYFAST_MODE: str = "sandbox"
 
+    # Provider selectors (consumed by services/gateways + services/notifiers
+    # factories). Empty string → factory picks a sensible default based on
+    # which credentials are configured.
+    PAYMENT_PROVIDER: str = ""  # "stripe" | "mock" | "payfast"
+    EMAIL_PROVIDER: str = ""  # "smtp" (default); "ses" / "postmark" planned
+    WHATSAPP_PROVIDER: str = ""  # "twilio" (default); "meta_cloud" planned
+
     # Twilio
     TWILIO_ACCOUNT_SID: str = ""
     TWILIO_AUTH_TOKEN: str = ""
@@ -44,6 +51,7 @@ class Settings(BaseSettings):
     SMTP_USERNAME: str = ""
     SMTP_PASSWORD: str = ""
     FROM_EMAIL: str = "noreply@roadready.co.za"
+    UNSUBSCRIBE_EMAIL: str = "unsubscribe@roadready.co.za"
 
     # Encryption (for sensitive data like SMTP passwords)
     ENCRYPTION_KEY: str = ""
@@ -56,13 +64,17 @@ class Settings(BaseSettings):
 
     # App
     ENVIRONMENT: str = "development"
-    DEBUG: bool = True
+    DEBUG: bool = False
     ALLOWED_ORIGINS: str = (
         "http://localhost:3000,http://localhost:8081,http://localhost:19000"
     )
     AUTO_VERIFY_INSTRUCTORS: bool = (
         False  # Only True in debug mode (controlled by DEBUG)
     )
+
+    # Rate limiting (Redis)
+    REDIS_URL: str = ""
+    RATE_LIMIT_ENABLED: bool = True
 
     # South Africa
     DEFAULT_TIMEZONE: str = "Africa/Johannesburg"
@@ -82,6 +94,7 @@ class Settings(BaseSettings):
         env_file = "../.env"  # Look in parent directory (backend/)
         env_file_encoding = "utf-8"
         case_sensitive = True
+        extra = "ignore"  # Silently ignore unknown .env keys so the server never fails to start
 
 
 # Load settings

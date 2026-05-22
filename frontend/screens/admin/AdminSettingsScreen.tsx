@@ -20,6 +20,7 @@ import WebNavigationHeader from '../../components/WebNavigationHeader';
 import { Button, Card, ThemedModal } from '../../components';
 import { useTheme } from '../../theme/ThemeContext';
 import apiService from '../../services/api';
+import { DEBUG_CONFIG } from '../../config';
 
 const SCREEN_NAME = 'AdminSettingsScreen';
 
@@ -41,18 +42,18 @@ export default function AdminSettingsScreen({ navigation }: any) {
   const [showUnsavedModal, setShowUnsavedModal] = useState(false);
 
   const [formData, setFormData] = useState({
-    smtpEmail: '',
-    smtpPassword: '',
-    linkValidity: '30',
+    smtpEmail:             DEBUG_CONFIG.ENABLED ? DEBUG_CONFIG.SMTP_EMAIL           : '',
+    smtpPassword:          DEBUG_CONFIG.ENABLED ? DEBUG_CONFIG.SMTP_PASSWORD        : '',
+    linkValidity:          '30',
     backupIntervalMinutes: '10',
-    retentionDays: '30',
-    autoArchiveAfterDays: '14',
-    twilioPhoneNumber: '',
-    adminPhoneNumber: '',
-    twilioAccountSid: '',   // blank = no change; enter new to update
-    twilioAuthToken: '',    // blank = no change; enter new to update
-    testRecipient: '',
-    inactivityTimeout: '15',  // Auto-logout timeout in minutes
+    retentionDays:         '30',
+    autoArchiveAfterDays:  '14',
+    twilioPhoneNumber:     DEBUG_CONFIG.ENABLED ? DEBUG_CONFIG.TWILIO_SENDER_PHONE  : '',
+    adminPhoneNumber:      DEBUG_CONFIG.ENABLED ? DEBUG_CONFIG.TWILIO_TEST_PHONE    : '',
+    twilioAccountSid:      DEBUG_CONFIG.ENABLED ? DEBUG_CONFIG.TWILIO_ACCOUNT_SID   : '',  // blank = no change; enter new to update
+    twilioAuthToken:       DEBUG_CONFIG.ENABLED ? DEBUG_CONFIG.TWILIO_AUTH_TOKEN    : '',  // blank = no change; enter new to update
+    testRecipient:         DEBUG_CONFIG.ENABLED ? DEBUG_CONFIG.DEFAULT_EMAIL        : '',
+    inactivityTimeout:     '15',
   });
 
   // Track whether SID/token are configured in DB (to show ✅ hint)
@@ -94,6 +95,23 @@ export default function AdminSettingsScreen({ navigation }: any) {
         testRecipient: '',
         inactivityTimeout: data.inactivity_timeout_minutes?.toString() || '15',
       };
+
+      // In debug mode, inject credentials that the server never sends back
+      if (DEBUG_CONFIG.ENABLED) {
+        if (DEBUG_CONFIG.TWILIO_ACCOUNT_SID) settingsData.twilioAccountSid = DEBUG_CONFIG.TWILIO_ACCOUNT_SID;
+        if (DEBUG_CONFIG.TWILIO_AUTH_TOKEN)   settingsData.twilioAuthToken   = DEBUG_CONFIG.TWILIO_AUTH_TOKEN;
+        if (DEBUG_CONFIG.TWILIO_SENDER_PHONE && !settingsData.twilioPhoneNumber)
+          settingsData.twilioPhoneNumber = DEBUG_CONFIG.TWILIO_SENDER_PHONE;
+        if (DEBUG_CONFIG.TWILIO_TEST_PHONE && !settingsData.adminPhoneNumber)
+          settingsData.adminPhoneNumber  = DEBUG_CONFIG.TWILIO_TEST_PHONE;
+        if (DEBUG_CONFIG.SMTP_EMAIL && !settingsData.smtpEmail)
+          settingsData.smtpEmail    = DEBUG_CONFIG.SMTP_EMAIL;
+        // Replace the "********" mask with the real debug password
+        if (DEBUG_CONFIG.SMTP_PASSWORD)
+          settingsData.smtpPassword = DEBUG_CONFIG.SMTP_PASSWORD;
+        if (DEBUG_CONFIG.DEFAULT_EMAIL)
+          settingsData.testRecipient = DEBUG_CONFIG.DEFAULT_EMAIL;
+      }
 
       setTwilioSidConfigured(!!data.twilio_account_sid);
       setTwilioTokenConfigured(!!data.twilio_auth_token);

@@ -22,7 +22,14 @@ class Company(Base):
 
     # The instructor who created (owns) this company
     owner_instructor_id = Column(
-        Integer, ForeignKey("instructors.id", ondelete="SET NULL"), nullable=True
+        Integer,
+        ForeignKey(
+            "instructors.id",
+            ondelete="SET NULL",
+            use_alter=True,
+            name="fk_companies_owner_instructor_id",
+        ),
+        nullable=True,
     )
 
     is_active = Column(Boolean, default=True)

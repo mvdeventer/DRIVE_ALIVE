@@ -1,7 +1,6 @@
----
-    description: Configuration for AI behavior when interacting with Codacy's MCP Server
-    applyTo: '**'
----
+﻿---
+description: Codacy MCP rules — only loaded for source-code edits
+applyTo: '**/*.{py,ts,tsx,js,jsx}'
 ---
 # Codacy Rules
 Configuration for AI behavior when interacting with Codacy's MCP Server
@@ -69,4 +68,3 @@ Configuration for AI behavior when interacting with Codacy's MCP Server
 - If the user accepts, run the `codacy_setup_repository` tool
 - Do not ever try to run the `codacy_setup_repository` tool on your own
 - After setup, immediately retry the action that failed (only retry once)
----

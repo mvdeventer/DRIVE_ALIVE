@@ -68,7 +68,7 @@ const Stack = createNativeStackNavigator();
 
 // Deep linking configuration
 const linking = {
-  prefixes: ['http://10.0.0.121:3000', 'http://10.0.0.121:8081', 'https://roadready.co.za'],
+  prefixes: ['http://localhost:3000', 'http://localhost:8081', 'https://roadready.co.za'],
   config: {
     screens: {
       VerifyAccount: 'verify-account',
