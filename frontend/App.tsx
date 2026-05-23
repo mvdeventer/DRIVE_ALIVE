@@ -12,7 +12,7 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import * as SecureStore from 'expo-secure-store';
 import { StatusBar } from 'expo-status-bar';
 import React, { useEffect, useRef, useState } from 'react';
-import { Platform, StyleSheet } from 'react-native';
+import { Platform, StyleSheet, View } from 'react-native';
 import {
   useFonts,
   Inter_400Regular,
@@ -23,6 +23,7 @@ import {
 
 // Theme
 import { ThemeProvider, useTheme } from './theme/ThemeContext';
+import { I18nProvider } from './i18n';
 
 // React Query
 import { QueryClientProvider } from '@tanstack/react-query';
@@ -122,7 +123,9 @@ export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <ThemeProvider>
-        <AppContent />
+        <I18nProvider>
+          <AppContent />
+        </I18nProvider>
       </ThemeProvider>
     </QueryClientProvider>
   );
@@ -309,10 +312,10 @@ function AppContent() {
       {isAuthenticated && Platform.OS === 'web' && (
         <GlobalTopBar userName={userName} userRole={userRole} onLogout={handleLogout} />
       )}
+      <View style={isAuthenticated && Platform.OS === 'web' ? styles.navigationWithTopBar : styles.navigationFull}>
       <NavigationContainer
         ref={navigationRef}
         linking={linking}
-        style={isAuthenticated && Platform.OS === 'web' ? styles.navigationWithTopBar : {}}
       >
         <Stack.Navigator
           initialRouteName={requiresSetup ? 'Setup' : isAuthenticated ? 'Main' : 'Login'}
@@ -388,12 +391,17 @@ function AppContent() {
           </Stack.Group>
         </Stack.Navigator>
       </NavigationContainer>
+      </View>
     </AuthActionsContext.Provider>
   );
 }
 
 const styles = StyleSheet.create({
+  navigationFull: {
+    flex: 1,
+  },
   navigationWithTopBar: {
+    flex: 1,
     marginTop: Platform.OS === 'web' ? 56 : 0,
   },
 });

@@ -316,6 +316,7 @@ export default function AdminDashboardScreen({ navigation }: any) {
     { key: 'users', label: 'User Management', screen: 'UserManagement' },
     { key: 'bookings', label: 'Booking Oversight', screen: 'BookingOversight', badge: stats?.pending_bookings },
     { key: 'revenue', label: 'Revenue Analytics', screen: 'RevenueAnalytics' },
+    { key: 'analytics', label: 'Advanced Analytics', screen: 'AdvancedAnalytics' },
     { key: 'earnings', label: 'Instructor Earnings', screen: 'InstructorEarningsOverview' },
     { key: 'settings', label: 'Settings', screen: 'AdminSettings' },
     { key: 'createAdmin', label: 'Create Admin', screen: 'CreateAdmin' },

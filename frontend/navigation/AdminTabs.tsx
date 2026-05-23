@@ -26,6 +26,7 @@ import EditAdminProfileScreen from '../screens/admin/EditAdminProfileScreen';
 import InstructorEarningsOverviewScreen from '../screens/admin/InstructorEarningsOverviewScreen';
 import InstructorVerificationScreen from '../screens/admin/InstructorVerificationScreen';
 import RevenueAnalyticsScreen from '../screens/admin/RevenueAnalyticsScreen';
+import AdvancedAnalyticsScreen from '../screens/admin/AdvancedAnalyticsScreen';
 import UserManagementScreen from '../screens/admin/UserManagementScreen';
 import EditInstructorProfileScreen from '../screens/instructor/EditInstructorProfileScreen';
 import EditStudentProfileScreen from '../screens/student/EditStudentProfileScreen';
@@ -119,6 +120,11 @@ function DashboardStackScreen() {
         name="RevenueAnalytics"
         component={RevenueAnalyticsScreen}
         options={{ title: 'Revenue Analytics' }}
+      />
+      <DashboardStack.Screen
+        name="AdvancedAnalytics"
+        component={AdvancedAnalyticsScreen}
+        options={{ title: 'Advanced Analytics' }}
       />
       <DashboardStack.Screen
         name="InstructorEarningsOverview"
@@ -268,6 +274,7 @@ export default function AdminTabs() {
         headerShown: false,
         tabBarActiveTintColor: colors.tabBarActive,
         tabBarInactiveTintColor: colors.tabBarInactive,
+        tabBarActiveBackgroundColor: 'transparent',
         tabBarPosition,
         tabBarStyle,
         tabBarLabelStyle: {

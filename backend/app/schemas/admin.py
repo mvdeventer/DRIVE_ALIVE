@@ -267,3 +267,36 @@ class RevenueStats(BaseModel):
     completed_bookings: int
     avg_booking_value: float
     top_instructors: List[dict]  # List of top earning instructors
+
+
+class TimeseriesPoint(BaseModel):
+    """A single bucket in a time-series (daily)."""
+
+    date: str  # ISO YYYY-MM-DD
+    bookings: int
+    completed: int
+    cancelled: int
+    revenue: float
+
+
+class AnalyticsTimeseries(BaseModel):
+    """Daily booking + revenue time-series for the last N days."""
+
+    days: int
+    start_date: str
+    end_date: str
+    points: List[TimeseriesPoint]
+    totals: dict
+
+
+class AnalyticsBreakdown(BaseModel):
+    """Breakdown stats: status mix, cancellation/completion rates, role mix."""
+
+    status_counts: dict          # {pending, confirmed, completed, cancelled, ...}
+    completion_rate: float       # completed / (completed + cancelled)
+    cancellation_rate: float     # cancelled / total
+    role_counts: dict            # {admin, instructor, student, school_owner}
+    new_users_last_30d: int
+    new_bookings_last_30d: int
+    avg_lessons_per_student: float
+

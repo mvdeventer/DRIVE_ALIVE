@@ -894,13 +894,26 @@ def bootstrap(force=False, offline=False):
     total_steps = 9
 
     log("\n" + "=" * 70, Colors.BOLD)
-    log("  DRIVE ALIVE - First-Run Bootstrap", Colors.BOLD)
+    log("  First-Run Bootstrap", Colors.BOLD)
     log("=" * 70, Colors.BOLD)
 
     if not force and is_installed():
         log("\n  Application already installed.", Colors.GREEN)
         log("  Use --force to re-run bootstrap.", Colors.CYAN)
         return True
+
+    # Step 0: Brand / white-label name. Run the interactive rename tool on
+    # the very first install so all hard-coded names get replaced before
+    # anything else is configured. Skipped silently if a brand has already
+    # been chosen (.app_brand.json present) or stdin is non-interactive.
+    brand_marker = ROOT_DIR / ".app_brand.json"
+    rename_script = ROOT_DIR / "scripts" / "rename_app.py"
+    if not brand_marker.exists() and rename_script.exists() and sys.stdin.isatty():
+        log_step(0, total_steps, "Choose your app brand name")
+        try:
+            subprocess.call([sys.executable, str(rename_script)])
+        except Exception as exc:  # pragma: no cover - best-effort
+            log_warn(f"Brand rename skipped: {exc}")
 
     if offline:
         log("  Mode: OFFLINE (using vendor/ packages)", Colors.YELLOW)

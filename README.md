@@ -10,6 +10,7 @@
 
 - [Quick Start](#-quick-start)
 - [Tech Stack](#-tech-stack)
+- [Cross-Platform Architecture](#-cross-platform-architecture)
 - [Project Structure](#-project-structure)
 - [Environment Variables](#-environment-variables)
 - [API Routes](#-api-routes)
@@ -17,6 +18,7 @@
 - [Scripts & Commands](#-scripts--commands)
 - [Testing](#-testing)
 - [Deployment](#-deployment-rendercom)
+- [Mobile App Builds (EAS)](#-mobile-app-builds-eas)
 - [Security & Compliance](#-security--compliance)
 - [Troubleshooting](#-troubleshooting)
 - [Roadmap](#-roadmap)
@@ -139,6 +141,45 @@ cd ..
 
 ---
 
+## 📱 Cross-Platform Architecture
+
+The frontend is a **single Expo + React Native + TypeScript codebase** that runs on **iOS, Android, and Web** (via `react-native-web`). No separate web/mobile codepaths.
+
+### Rules (enforced for all new frontend code)
+
+| Concern | Use | Don't use |
+|---|---|---|
+| UI primitives | `View`, `Text`, `Pressable`, `ScrollView`, `FlatList`, `TextInput`, `Image` | `div`, `span`, `<a>`, `<img>`, `<button>` |
+| Navigation | `@react-navigation/native` + native-stack / bottom-tabs | `react-router`, `next/link`, raw URL handling |
+| Styling | NativeWind (`className`) or `StyleSheet.create` + `useTheme()` tokens | Global CSS files, `style jsx`, browser-only Tailwind features |
+| Platform branching | `Platform.OS === 'web' \| 'ios' \| 'android'` or `.web.tsx` / `.native.tsx` files | Assuming a single platform |
+| Responsiveness | `useWindowDimensions()` (see `useResponsiveTabBar`) | CSS media queries |
+| Storage | `AsyncStorage` / `frontend/services/storage` | `localStorage`, `sessionStorage` |
+| Icons & assets | `@expo/vector-icons`, `Image`, `expo-image` | Font Awesome `<i>`, raw `<img src>` |
+| Lists | `FlatList` / `SectionList` for any non-trivial data | `.map()` into a `ScrollView` for large data sets |
+| Browser APIs | Guard with `Platform.OS === 'web'` and feature-detect | Calling `window.*` / `document.*` in shared code |
+| New deps | Confirm `react-native-web` compatibility first | Web-only libraries in shared modules |
+
+### Responsive Layout
+
+- **<768px (mobile / narrow web)** — bottom tab bar
+- **≥768px (wide web)** — left sidebar (220px) via `tabBarPosition: 'left'`
+- Implemented in `frontend/hooks/useResponsiveTabBar.ts` and consumed by all tab navigators (`AdminTabs`, `InstructorTabs`, `StudentTabs`).
+- On web, a fixed `GlobalTopBar` (56px, role-coloured) shows the user/role/theme/logout above the navigation; the navigation container is offset by 56px so nothing sits behind the bar.
+
+### Platform-Specific Components
+
+Files with `.web.tsx` / `.native.tsx` extensions let Metro/Expo pick the right implementation:
+
+- `components/MapPreview.web.tsx` → iframe/Leaflet
+- `components/MapPreview.native.tsx` → `react-native-maps`
+
+### Theme
+
+`frontend/theme/ThemeContext.tsx` exposes `useTheme()` with light/dark palettes (role colours, tab-bar tokens, header background, etc.). Components should pull colours from `colors` rather than hard-coding them.
+
+---
+
 ## 🏗️ Project Structure
 
 ```
@@ -193,18 +234,40 @@ DRIVE_ALIVE/
 │           └── rate_limiter.py     # SlowAPI + Redis config
 ├── frontend/
 │   ├── app.json                    # Expo config (slug: roadready, v2.0.7)
-│   ├── App.tsx                     # Navigation root
+│   ├── App.tsx                     # Navigation root + GlobalTopBar (web)
 │   ├── screens/
-│   │   ├── auth/                   # Login, Register (Student/Instructor)
-│   │   ├── student/                # Home, Instructor list, Booking
-│   │   ├── instructor/             # Home, Availability, Earnings
-│   │   ├── admin/                  # Dashboard, Users, Verification, Revenue
-│   │   └── verification/           # Pending, VerifyAccount, InstructorVerify
+│   │   ├── auth/                   # Login, Register (Student/Instructor), Forgot/Reset Password
+│   │   ├── student/                # Home, Instructor list, Booking, Profile
+│   │   ├── instructor/             # Home, Availability, Earnings, Edit Profile
+│   │   ├── admin/                  # Dashboard, Users, Verification, Revenue, Database Browser
+│   │   ├── booking/                # Booking flow screens
+│   │   ├── payment/                # Stripe & PayFast checkout / success / cancel
+│   │   └── verification/           # Pending, VerifyAccount, InstructorVerify, CompanyVerify
 │   ├── components/
-│   │   ├── InlineMessage.tsx
-│   │   ├── WebNavigationHeader.tsx
-│   │   └── AddressAutocomplete.tsx
-│   └── services/api/index.ts       # Axios API client
+│   │   ├── GlobalTopBar.tsx        # Fixed web header (user/role/logout/theme)
+│   │   ├── WebNavigationHeader.tsx # Per-screen web back/title bar
+│   │   ├── ScreenContainer.tsx     # Common safe-area + padding wrapper
+│   │   ├── MapPreview.web.tsx      # Platform-split map
+│   │   ├── MapPreview.native.tsx   #  ↳ native (react-native-maps)
+│   │   ├── AddressAutocomplete.tsx # OSM Nominatim search
+│   │   ├── CalendarPicker.tsx / TimePickerWheel.tsx
+│   │   ├── ScheduleEditor.tsx / LocationSelector.tsx / LicenseTypeSelector.tsx
+│   │   ├── CreditBanner.tsx / InlineMessage.tsx / Skeleton.tsx
+│   │   ├── VirtualList.tsx / PressableScale.tsx / AppImage.tsx
+│   │   ├── DatabaseEditForm.tsx / DatabaseDeleteConfirm.tsx / FormFieldWithTip.tsx
+│   │   └── ui/                     # Button, Card, Input, Badge, ThemedModal
+│   ├── navigation/
+│   │   ├── AdminTabs.tsx           # Dashboard | Users | Bookings | Settings
+│   │   ├── InstructorTabs.tsx      # Home | Availability | Earnings | Profile
+│   │   ├── StudentTabs.tsx         # Home | Instructors | Profile
+│   │   ├── MainTabs.tsx            # Role-aware router
+│   │   └── AuthContext.tsx         # Shared logout / userName / userRole
+│   ├── hooks/
+│   │   └── useResponsiveTabBar.ts  # Bottom tabs <768px / left sidebar ≥768px (web)
+│   ├── theme/ThemeContext.tsx      # Light/dark palette + useTheme()
+│   └── services/
+│       ├── api/index.ts            # Axios API client + interceptors
+│       └── storage/                # AsyncStorage abstraction
 ├── migrations/                     # Alembic migration scripts
 ├── tests/                          # Integration tests
 ├── render.yaml                     # Render.com IaC blueprint
@@ -463,7 +526,69 @@ SMTP_PASSWORD        → Gmail App Password
 ```
 
 ---
+## 📦 Mobile App Builds (EAS)
 
+Standalone signed builds for the App Store and Google Play are produced with **Expo Application Services (EAS)**. Configuration lives in [`frontend/eas.json`](frontend/eas.json) with three profiles:
+
+| Profile | Use case | Android output | iOS output |
+|---|---|---|---|
+| `development` | Dev-client builds for `expo start --dev-client` | Debug APK | Simulator build |
+| `preview` | Internal QA / TestFlight / Play Internal | Release APK | Ad-hoc IPA |
+| `production` | Store submission | AAB (Play Store) | App Store IPA |
+
+### One-time setup
+
+```powershell
+cd frontend
+npm install -g eas-cli            # or use npx
+npm run eas:login                 # sign in to your Expo account
+npm run eas:init                  # creates the EAS project + writes its ID
+```
+
+After `eas init`, replace the three `REPLACE_WITH_EAS_PROJECT_ID` placeholders in [`frontend/app.json`](frontend/app.json) with the printed project ID (the CLI offers to do this automatically).
+
+For iOS store submission, also update `submit.production.ios` in `eas.json` with your `appleId`, `ascAppId`, and `appleTeamId`. For Play Store submission, drop a service-account JSON at `frontend/secrets/play-store-service-account.json` (gitignored).
+
+### Build commands
+
+```powershell
+cd frontend
+npm run eas:build:dev             # development clients (both platforms)
+npm run eas:build:preview         # internal preview (both platforms)
+npm run eas:build:android         # production AAB
+npm run eas:build:ios             # production IPA
+```
+
+### Submit to stores
+
+```powershell
+npm run eas:submit:android        # uploads AAB to Play Console (internal track, draft)
+npm run eas:submit:ios            # uploads IPA to App Store Connect
+```
+
+### OTA updates (JS-only changes, no rebuild)
+
+```powershell
+npm run eas:update                # auto-detects current branch/profile
+```
+
+Updates use the `runtimeVersion: { "policy": "appVersion" }` policy — bumping `expo.version` in `app.json` forces a new native build; same version = OTA-compatible.
+
+### Build environment variables
+
+The frontend reads `EXPO_PUBLIC_API_URL` at build time (set per profile in `eas.json`). Add more `EXPO_PUBLIC_*` vars to the `env` block of any profile to bake them into the bundle.
+
+### Required secrets (never commit)
+
+| File / value | Purpose |
+|---|---|
+| `frontend/secrets/play-store-service-account.json` | Play Store API access |
+| Apple ID + app-specific password | App Store Connect submission (EAS prompts at submit time, can be stored in EAS secrets) |
+| Push notification keys (APNs / FCM) | `eas credentials` manages these |
+
+All listed paths are covered by `frontend/.gitignore` (`secrets/`, `credentials.json`, `google-services.json`, `GoogleService-Info.plist`).
+
+---
 ## 🔐 Security & Compliance
 
 | Area | Implementation |
@@ -530,23 +655,25 @@ Start-Service postgresql-x64-17   # adjust version number
 ## ✅ Features
 
 ### Implemented
-- Multi-role accounts — one user can be Student + Instructor + Admin
-- Email & WhatsApp dual-channel account verification
-- Admin approval flow for instructors (all admins notified, approve via link or dashboard)
-- GPS pickup/drop-off capture with OpenStreetMap reverse geocoding
-- Booking management with real-time conflict detection
-- 1–5 star rating system with emoji feedback
-- WhatsApp automation: booking confirmations, 1h student reminders, 15min instructor reminders, daily summaries
-- Stripe (international) + PayFast (ZAR) payments + R10 booking fee
-- Admin dashboard: user management, verification, bookings, revenue analytics
-- Automated database backups every 10 minutes + manual export/import
-- Secure password reset flow (email token)
-- Cross-platform: Windows, iOS, Android, Web
+- **Multi-role accounts** — one user can hold Student + Instructor + Admin + School Owner roles simultaneously, with per-role dashboards
+- **Driving-school companies** — instructors can register a school, invite/approve other instructors, and earn from their company's bookings
+- **Email & WhatsApp dual-channel** account verification + admin approval workflow for instructors
+- **GPS pickup/drop-off** capture with OpenStreetMap reverse geocoding and address autocomplete (Nominatim)
+- **Booking management** with real-time conflict detection, rebooking, and cancellation-fee logic
+- **1–5 star rating** system with emoji feedback
+- **WhatsApp automation** (Twilio): booking confirmations, 1h student reminders, 15min instructor reminders, daily summaries
+- **Payments**: Stripe (international) + PayFast (ZAR) + per-instructor booking-fee credits
+- **Admin dashboard**: user management, verification queue, booking oversight, revenue analytics, embedded database browser
+- **Automated database backups** every 10 minutes + manual export/import
+- **Secure password reset** flow (email token)
+- **Cross-platform UI**: single Expo + React Native codebase runs on iOS, Android, and Web
+  - Responsive layout: bottom tabs on mobile / narrow web (<768px), left sidebar on wide web (≥768px) via `useResponsiveTabBar`
+  - Web-only `GlobalTopBar` (role-coloured) + native headers via React Navigation
+  - Platform-split components (`.web.tsx` / `.native.tsx`) for maps and platform APIs
+  - Light/dark theme with `useTheme()` and NativeWind utility classes
 
 ### In Development
-- Certification / learner's licence tracking
-- Multi-language support (Afrikaans, Zulu, Xhosa)
-- Advanced analytics & reporting
+- Standalone signed mobile app builds (EAS)
 
 ---
 
@@ -566,13 +693,13 @@ Start-Service postgresql-x64-17   # adjust version number
 - [x] Database backup system
 
 ### Phase 3 — Advanced Features 🚧
-- [ ] Certification tracking
-- [ ] Multi-language support
-- [ ] Advanced analytics
-- [ ] Standalone mobile app build
+- [x] Certification / learner's licence tracking (`/api/certifications` + `CertificationsScreen`)
+- [x] Multi-language support (en / af / zu / xh via `frontend/i18n` + `LanguageSwitcher`)
+- [x] Advanced analytics (`/api/admin/analytics/*` + `AdvancedAnalyticsScreen`)
+- [x] Standalone mobile app build (EAS profiles in `frontend/eas.json`)
 
 ### Phase 4 — Scale
-- [ ] Performance optimisation & load testing
+- [x] Performance optimisation & load testing (Locust scenarios in `backend/tests/load/`, booking indexes + N+1 fix on `/instructors`)
 - [ ] CDN integration
 - [ ] Multi-region deployment
 

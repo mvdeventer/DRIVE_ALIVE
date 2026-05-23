@@ -10,6 +10,14 @@ from pydantic_settings import BaseSettings
 class Settings(BaseSettings):
     """Application settings"""
 
+    # Brand / white-label identity. Set by scripts/rename_app.py during
+    # install or any time via backend/.env. A single source of truth that
+    # services and the frontend (via /api/config/branding) read at runtime.
+    APP_NAME: str = "Driving School"
+    APP_DOMAIN: str = "localhost"
+    APP_SLUG: str = "drivingschool"
+    APP_BUNDLE_ID: str = "com.drivingschool.app"
+
     # Database – optional so the server can start without a configured DB
     # (first-run wizard writes the real URL to .env)
     DATABASE_URL: str = "not_configured"

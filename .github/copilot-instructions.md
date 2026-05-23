@@ -28,6 +28,20 @@
 - Auth tokens via Bearer JWT. Multi-role users (admin/instructor/student/school-owner).
 - Never commit secrets — `KEYS.txt`, `.env`, `*.pem` are gitignored.
 
+## Cross-Platform Rules (MANDATORY for any frontend feature)
+
+All new frontend code MUST work on **iOS, Android, and Web** under **Expo + React Native + React Navigation**. No exceptions.
+
+- **Use only React Native primitives** (`View`, `Text`, `Pressable`, `ScrollView`, `FlatList`, `TextInput`, `Image`) and Expo SDK modules. **Never** use raw DOM elements (`div`, `span`, `button`, `<a>`, `<img>`), `window.*`, `document.*`, or browser-only APIs in shared code.
+- **Navigation**: use `@react-navigation/*` (existing stacks/tabs in `frontend/navigation/`). Do not introduce `react-router`, `next/link`, `expo-router`, or other routers.
+- **Styling**: NativeWind (`className`) or `StyleSheet.create` + theme tokens from `useTheme()`. No web-only CSS files, no `style jsx`, no Tailwind features that compile to unsupported CSS.
+- **Platform-specific code**: gate with `Platform.OS === 'web' | 'ios' | 'android'` or use `.web.tsx` / `.native.tsx` file extensions. Never assume one platform.
+- **Responsive**: use `useWindowDimensions()` (see `useResponsiveTabBar`) rather than CSS media queries.
+- **Storage**: `AsyncStorage` (or existing `frontend/services/storage`) — not `localStorage`.
+- **Icons/assets**: `@expo/vector-icons` and `expo-image` / `Image`; not `<i class="fa">` or `<img src>`.
+- **Lists**: `FlatList` / `SectionList` for scrollable data — not `.map()` into a `ScrollView` for large sets.
+- Before adding any new dependency, confirm it supports `react-native-web`.
+
 ## When acting in Agent Mode
 
 - Confirm understanding in ≤1 sentence, then act. Do not restate the plan.

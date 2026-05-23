@@ -7,7 +7,7 @@ from typing import Annotated, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from geopy.distance import geodesic
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from ..database import get_db
 from ..middleware.admin import require_admin
@@ -28,13 +28,23 @@ async def get_instructors(
     max_distance_km: Optional[float] = Query(None, ge=0),
     min_rating: Optional[float] = Query(None, ge=0, le=5),
     available_only: bool = Query(True),
+    limit: int = Query(100, ge=1, le=500),
+    offset: int = Query(0, ge=0),
     db: Session = Depends(get_db),
 ):
     """
-    Get list of instructors with optional filters
+    Get list of instructors with optional filters.
+
+    Performance: eager-loads the related ``User`` row via ``joinedload`` to avoid
+    an N+1 query (previously issued one ``SELECT user`` per instructor).
+    Supports ``limit``/``offset`` pagination (default 100, max 500).
     """
     try:
-        query = db.query(InstructorModel).filter(InstructorModel.is_verified == True)
+        query = (
+            db.query(InstructorModel)
+            .options(joinedload(InstructorModel.user))
+            .filter(InstructorModel.is_verified == True)
+        )
 
         if available_only:
             query = query.filter(InstructorModel.is_available == True)
@@ -42,14 +52,19 @@ async def get_instructors(
         if min_rating:
             query = query.filter(InstructorModel.rating >= min_rating)
 
-        instructors = query.all()
-
-        # Filter by distance if location provided
-        if (
+        # When no geo filter we can paginate at the DB level
+        geo_filter_active = (
             latitude is not None
             and longitude is not None
             and max_distance_km is not None
-        ):
+        )
+        if not geo_filter_active:
+            query = query.offset(offset).limit(limit)
+
+        instructors = query.all()
+
+        # Filter by distance if location provided
+        if geo_filter_active:
             student_location = (latitude, longitude)
             filtered_instructors = []
 
@@ -66,12 +81,12 @@ async def get_instructors(
                     if distance <= max_distance_km:
                         filtered_instructors.append(instructor)
 
-            instructors = filtered_instructors
+            instructors = filtered_instructors[offset : offset + limit]
 
-        # Build responses
+        # Build responses (user is already loaded via joinedload — no extra queries)
         responses = []
         for instructor in instructors:
-            user = db.query(User).filter(User.id == instructor.user_id).first()
+            user = instructor.user
             if user:
                 response = InstructorResponse(
                     id=user.id,

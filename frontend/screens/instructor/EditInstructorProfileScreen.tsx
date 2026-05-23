@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 import FormFieldWithTip from '../../components/FormFieldWithTip';
 import InlineMessage from '../../components/InlineMessage';
+import LanguageSwitcher from '../../components/LanguageSwitcher';
 import LicenseTypeSelector from '../../components/LicenseTypeSelector';
 import LocationSelector from '../../components/LocationSelector';
 import { Button, ThemedModal } from '../../components/ui';
@@ -655,10 +656,24 @@ export default function EditInstructorProfileScreen({ navigation: navProp }: any
         />
 
         {/* Action Buttons */}
+        {!isAdminEditing && (
+          <View style={{ marginTop: 24, padding: 12, borderWidth: 1, borderColor: colors.border, borderRadius: 8 }}>
+            <LanguageSwitcher />
+          </View>
+        )}
+        {!isAdminEditing && (
+          <Button
+            variant="secondary"
+            onPress={() => (navigation as any).navigate('Certifications')}
+            style={{ marginTop: 12 }}
+          >
+            📜 Manage Certifications
+          </Button>
+        )}
         <Button
           variant="secondary"
           onPress={() => setShowPasswordModal(true)}
-          style={{ marginTop: 24 }}
+          style={{ marginTop: 12 }}
         >
           {isAdminEditing ? '🔒 Reset Password' : '🔒 Change Password'}
         </Button>

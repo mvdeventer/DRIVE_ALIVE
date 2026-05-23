@@ -24,6 +24,7 @@ from .routes import (
     auth,
     availability,
     bookings,
+    certifications,
     companies,
     database,
     database_interface,
@@ -112,6 +113,27 @@ def _apply_incremental_migrations():
                         print(f"⚠️  [MIGRATION] Could not add {col_name}: {col_exc}")
     except Exception as exc:
         print(f"⚠️  [MIGRATION] Instructor company columns: {exc}")
+
+    # ── Performance indexes on bookings (May 2026) ─────────────────────────────
+    # Speeds up hot queries: by student, by instructor, by date range, by status
+    # (admin dashboards, instructor "my bookings", analytics timeseries).
+    try:
+        booking_indexes = [
+            ("ix_bookings_student_id", "bookings(student_id)"),
+            ("ix_bookings_instructor_id", "bookings(instructor_id)"),
+            ("ix_bookings_lesson_date", "bookings(lesson_date)"),
+            ("ix_bookings_status", "bookings(status)"),
+        ]
+        with engine.connect() as conn:
+            for idx_name, idx_target in booking_indexes:
+                try:
+                    conn.execute(text(f"CREATE INDEX IF NOT EXISTS {idx_name} ON {idx_target}"))
+                    conn.commit()
+                except Exception as idx_exc:
+                    conn.rollback()
+                    print(f"⚠️  [MIGRATION] Could not create {idx_name}: {idx_exc}")
+    except Exception as exc:
+        print(f"⚠️  [MIGRATION] Booking indexes: {exc}")
 
 
 _apply_incremental_migrations()
@@ -446,6 +468,7 @@ app.include_router(instructors.router)
 app.include_router(instructor_setup.router)
 app.include_router(payments.router)
 app.include_router(students.router)
+app.include_router(certifications.router)  # 📜 Certifications / licence tracking
 app.include_router(webhooks.router)  # Twilio status callbacks etc.
 app.include_router(unsubscribe.router)  # RFC 8058 one-click unsubscribe
 

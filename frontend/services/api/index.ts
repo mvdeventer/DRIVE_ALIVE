@@ -564,6 +564,62 @@ class ApiService {
     });
     return response.data;
   }
+
+  // Certifications / Licence tracking
+  async listMyCertifications() {
+    const response = await this.api.get('/certifications/me');
+    return response.data;
+  }
+
+  async createMyCertification(payload: {
+    cert_type: string;
+    cert_code?: string | null;
+    number?: string | null;
+    issuing_authority?: string | null;
+    issued_date?: string | null;
+    expiry_date?: string | null;
+    notes?: string | null;
+  }) {
+    const response = await this.api.post('/certifications/me', payload);
+    return response.data;
+  }
+
+  async updateMyCertification(
+    certId: number,
+    payload: Partial<{
+      cert_type: string;
+      cert_code: string | null;
+      number: string | null;
+      issuing_authority: string | null;
+      issued_date: string | null;
+      expiry_date: string | null;
+      notes: string | null;
+    }>
+  ) {
+    const response = await this.api.put(`/certifications/me/${certId}`, payload);
+    return response.data;
+  }
+
+  async deleteMyCertification(certId: number) {
+    const response = await this.api.delete(`/certifications/me/${certId}`);
+    return response.data;
+  }
+
+  async listUserCertifications(userId: number) {
+    const response = await this.api.get(`/certifications/user/${userId}`);
+    return response.data;
+  }
+
+  // Advanced Analytics
+  async getAnalyticsTimeseries(days: number = 30) {
+    const response = await this.api.get(`/admin/analytics/timeseries?days=${days}`);
+    return response.data;
+  }
+
+  async getAnalyticsBreakdown() {
+    const response = await this.api.get('/admin/analytics/breakdown');
+    return response.data;
+  }
 }
 
 export default new ApiService();

@@ -1223,6 +1223,138 @@ async def get_revenue_stats(
     )
 
 
+# ==================== Advanced Analytics ====================
+
+
+@router.get("/analytics/timeseries")
+async def get_analytics_timeseries(
+    current_admin: Annotated[User, Depends(require_admin)],
+    db: Session = Depends(get_db),
+    days: int = Query(30, ge=1, le=365),
+):
+    """
+    Daily booking + revenue series for the last `days` days.
+    Used by the Advanced Analytics dashboard.
+    """
+    from datetime import date, timedelta
+
+    end_date = date.today()
+    start_date = end_date - timedelta(days=days - 1)
+
+    # Pull all bookings in window in one query, bucket in Python.
+    bookings = (
+        db.query(Booking)
+        .filter(func.date(Booking.lesson_date) >= start_date)
+        .filter(func.date(Booking.lesson_date) <= end_date)
+        .all()
+    )
+
+    buckets: dict = {}
+    for i in range(days):
+        d = start_date + timedelta(days=i)
+        buckets[d.isoformat()] = {
+            "date": d.isoformat(),
+            "bookings": 0,
+            "completed": 0,
+            "cancelled": 0,
+            "revenue": 0.0,
+        }
+
+    for b in bookings:
+        d_key = b.lesson_date.date().isoformat()
+        bucket = buckets.get(d_key)
+        if not bucket:
+            continue
+        bucket["bookings"] += 1
+        if b.status == BookingStatus.COMPLETED:
+            bucket["completed"] += 1
+            bucket["revenue"] += float(b.amount or 0)
+        elif b.status == BookingStatus.CANCELLED:
+            bucket["cancelled"] += 1
+
+    points = list(buckets.values())
+    totals = {
+        "bookings": sum(p["bookings"] for p in points),
+        "completed": sum(p["completed"] for p in points),
+        "cancelled": sum(p["cancelled"] for p in points),
+        "revenue": round(sum(p["revenue"] for p in points), 2),
+    }
+
+    return {
+        "days": days,
+        "start_date": start_date.isoformat(),
+        "end_date": end_date.isoformat(),
+        "points": points,
+        "totals": totals,
+    }
+
+
+@router.get("/analytics/breakdown")
+async def get_analytics_breakdown(
+    current_admin: Annotated[User, Depends(require_admin)],
+    db: Session = Depends(get_db),
+):
+    """
+    Status mix, cancellation/completion rates, role mix, recent growth.
+    """
+    from datetime import datetime, timedelta, timezone as _tz
+
+    # Booking status counts
+    status_rows = (
+        db.query(Booking.status, func.count(Booking.id))
+        .group_by(Booking.status)
+        .all()
+    )
+    status_counts: dict = {}
+    for st, count in status_rows:
+        # st is an Enum value or string depending on backend
+        key = st.value if hasattr(st, "value") else str(st)
+        status_counts[key] = int(count)
+
+    total = sum(status_counts.values()) or 0
+    completed = status_counts.get(BookingStatus.COMPLETED.value, 0)
+    cancelled = status_counts.get(BookingStatus.CANCELLED.value, 0)
+    decided = completed + cancelled
+    completion_rate = round((completed / decided) * 100, 1) if decided else 0.0
+    cancellation_rate = round((cancelled / total) * 100, 1) if total else 0.0
+
+    # Role mix
+    role_rows = (
+        db.query(User.role, func.count(User.id)).group_by(User.role).all()
+    )
+    role_counts: dict = {}
+    for role, count in role_rows:
+        key = role.value if hasattr(role, "value") else str(role)
+        role_counts[key] = int(count)
+
+    # Growth (last 30 days)
+    cutoff = datetime.now(_tz.utc) - timedelta(days=30)
+    new_users_last_30d = (
+        db.query(func.count(User.id)).filter(User.created_at >= cutoff).scalar() or 0
+    )
+    new_bookings_last_30d = (
+        db.query(func.count(Booking.id)).filter(Booking.created_at >= cutoff).scalar() or 0
+    )
+
+    # Avg lessons (completed bookings) per student
+    total_students = (
+        db.query(func.count(User.id)).filter(User.role == UserRole.STUDENT).scalar() or 0
+    )
+    avg_lessons_per_student = (
+        round(completed / total_students, 2) if total_students else 0.0
+    )
+
+    return {
+        "status_counts": status_counts,
+        "completion_rate": completion_rate,
+        "cancellation_rate": cancellation_rate,
+        "role_counts": role_counts,
+        "new_users_last_30d": int(new_users_last_30d),
+        "new_bookings_last_30d": int(new_bookings_last_30d),
+        "avg_lessons_per_student": avg_lessons_per_student,
+    }
+
+
 @router.get("/revenue/by-instructor/{instructor_id}")
 async def get_instructor_revenue(
     instructor_id: int,

@@ -15,7 +15,16 @@
     "test:coverage": "jest --coverage",
     "cypress:open": "cypress open",
     "cypress:run": "cypress run",
-    "test:e2e": "cypress run --spec 'cypress/e2e/database-interface.cy.ts'"
+    "test:e2e": "cypress run --spec 'cypress/e2e/database-interface.cy.ts'",
+    "eas:login": "npx eas-cli login",
+    "eas:init": "npx eas-cli init",
+    "eas:build:android": "npx eas-cli build --platform android --profile production",
+    "eas:build:ios": "npx eas-cli build --platform ios --profile production",
+    "eas:build:preview": "npx eas-cli build --platform all --profile preview",
+    "eas:build:dev": "npx eas-cli build --platform all --profile development",
+    "eas:submit:android": "npx eas-cli submit --platform android --profile production",
+    "eas:submit:ios": "npx eas-cli submit --platform ios --profile production",
+    "eas:update": "npx eas-cli update --auto"
   },
   "dependencies": {
     "@expo-google-fonts/inter": "^0.4.2",

@@ -19,6 +19,7 @@ import EarningsReportScreen from '../screens/instructor/EarningsReportScreen';
 import EditInstructorProfileScreen from '../screens/instructor/EditInstructorProfileScreen';
 import InstructorHomeScreen from '../screens/instructor/InstructorHomeScreen';
 import ManageAvailabilityScreen from '../screens/instructor/ManageAvailabilityScreen';
+import CertificationsScreen from '../screens/profile/CertificationsScreen';
 
 const Tab = createBottomTabNavigator();
 const HomeStack = createNativeStackNavigator();
@@ -149,6 +150,11 @@ function ProfileStackScreen() {
         component={EditInstructorProfileScreen}
         options={{ title: 'Profile' }}
       />
+      <ProfileStack.Screen
+        name="Certifications"
+        component={CertificationsScreen}
+        options={{ title: 'My Certifications' }}
+      />
     </ProfileStack.Navigator>
   );
 }
@@ -165,6 +171,7 @@ export default function InstructorTabs() {
         headerShown: false,
         tabBarActiveTintColor: colors.tabBarActive,
         tabBarInactiveTintColor: colors.tabBarInactive,
+        tabBarActiveBackgroundColor: 'transparent',
         tabBarPosition,
         tabBarStyle,
         tabBarLabelStyle: {

@@ -10,6 +10,7 @@ from .availability import (
 )
 from .booking import Booking, BookingStatus, PaymentStatus, Review
 from .booking_credit import BookingCredit, CreditStatus
+from .certification import Certification, CertificationType
 from .password_reset import PasswordResetToken
 from .payment import Transaction, TransactionStatus, TransactionType
 from .payment_session import PaymentSession, PaymentSessionStatus
@@ -41,4 +42,6 @@ __all__ = [
     "DayOfWeek",
     "BookingCredit",
     "CreditStatus",
+    "Certification",
+    "CertificationType",
 ]

@@ -109,6 +109,9 @@ class User(Base):
     verification_tokens = relationship(
         "VerificationToken", back_populates="user", cascade="all, delete-orphan"
     )
+    certifications = relationship(
+        "Certification", back_populates="user", cascade="all, delete-orphan"
+    )
 
     @property
     def full_name(self):

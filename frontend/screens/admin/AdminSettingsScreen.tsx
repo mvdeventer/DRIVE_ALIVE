@@ -17,6 +17,7 @@ import {
 import { useFocusEffect } from '@react-navigation/native';
 import InlineMessage from '../../components/InlineMessage';
 import WebNavigationHeader from '../../components/WebNavigationHeader';
+import LanguageSwitcher from '../../components/LanguageSwitcher';
 import { Button, Card, ThemedModal } from '../../components';
 import { useTheme } from '../../theme/ThemeContext';
 import apiService from '../../services/api';
@@ -362,6 +363,15 @@ export default function AdminSettingsScreen({ navigation }: any) {
         {errorMessage ? <InlineMessage message={errorMessage} type="error" /> : null}
 
         <View style={styles.content}>
+          {/* Language Section */}
+          <Card variant="elevated" style={{ marginBottom: 16 }}>
+            <Text style={[styles.sectionTitle, { color: colors.text }]}>Language / Taal / Ulimi / Ulwimi</Text>
+            <Text style={[styles.sectionSubtitle, { color: colors.textSecondary }]}>
+              Choose your preferred language for the app interface.
+            </Text>
+            <LanguageSwitcher />
+          </Card>
+
           {/* Verification Settings Section */}
           <Card variant="elevated" style={{ marginBottom: 16 }}>
             <Text style={[styles.sectionTitle, { color: colors.text }]}>Email Configuration</Text>

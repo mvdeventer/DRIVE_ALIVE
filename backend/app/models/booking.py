@@ -43,11 +43,11 @@ class Booking(Base):
     booking_reference = Column(String, unique=True, index=True, nullable=False)
 
     # Relations
-    student_id = Column(Integer, ForeignKey("students.id"), nullable=False)
-    instructor_id = Column(Integer, ForeignKey("instructors.id"), nullable=False)
+    student_id = Column(Integer, ForeignKey("students.id"), nullable=False, index=True)
+    instructor_id = Column(Integer, ForeignKey("instructors.id"), nullable=False, index=True)
 
     # Lesson details
-    lesson_date = Column(DateTime(timezone=True), nullable=False)
+    lesson_date = Column(DateTime(timezone=True), nullable=False, index=True)
     duration_minutes = Column(Integer, nullable=False, default=60)
     lesson_type = Column(
         String, nullable=False
@@ -63,7 +63,7 @@ class Booking(Base):
     dropoff_address = Column(String, nullable=True)
 
     # Status
-    status = Column(SQLEnum(BookingStatus), default=BookingStatus.PENDING)
+    status = Column(SQLEnum(BookingStatus), default=BookingStatus.PENDING, index=True)
 
     # Payment
     amount = Column(Float, nullable=False)  # In ZAR

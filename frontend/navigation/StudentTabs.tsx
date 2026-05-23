@@ -19,6 +19,7 @@ import BookingScreen from '../screens/booking/BookingScreen';
 import EditStudentProfileScreen from '../screens/student/EditStudentProfileScreen';
 import InstructorListScreen from '../screens/student/InstructorListScreen';
 import StudentHomeScreen from '../screens/student/StudentHomeScreen';
+import CertificationsScreen from '../screens/profile/CertificationsScreen';
 
 const Tab = createBottomTabNavigator();
 const HomeStack = createNativeStackNavigator();
@@ -125,6 +126,11 @@ function ProfileStackScreen() {
         component={EditStudentProfileScreen}
         options={{ title: 'Profile' }}
       />
+      <ProfileStack.Screen
+        name="Certifications"
+        component={CertificationsScreen}
+        options={{ title: 'My Certifications' }}
+      />
     </ProfileStack.Navigator>
   );
 }
@@ -141,6 +147,7 @@ export default function StudentTabs() {
         headerShown: false,
         tabBarActiveTintColor: colors.tabBarActive,
         tabBarInactiveTintColor: colors.tabBarInactive,
+        tabBarActiveBackgroundColor: 'transparent',
         tabBarPosition,
         tabBarStyle,
         tabBarLabelStyle: {

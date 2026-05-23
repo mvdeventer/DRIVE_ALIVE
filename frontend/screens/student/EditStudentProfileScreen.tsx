@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 import FormFieldWithTip from '../../components/FormFieldWithTip';
 import InlineMessage from '../../components/InlineMessage';
+import LanguageSwitcher from '../../components/LanguageSwitcher';
 import LocationSelector from '../../components/LocationSelector';
 import WebNavigationHeader from '../../components/WebNavigationHeader';
 import CreditBanner from '../../components/CreditBanner';
@@ -542,6 +543,22 @@ export default function EditStudentProfileScreen({ navigation: navProp }: any) {
 
         {/* Action Buttons */}
         <View style={styles.actionsContainer}>
+          {!isAdminEditing && (
+            <Card style={{ marginBottom: 12, padding: 12 }}>
+              <LanguageSwitcher />
+            </Card>
+          )}
+          {!isAdminEditing && (
+            <Button
+              variant="secondary"
+              fullWidth
+              onPress={() => (navigation as any).navigate('Certifications')}
+              icon="📜"
+              style={{ marginBottom: 8 }}
+            >
+              Manage Certifications
+            </Button>
+          )}
           <Button
             variant="secondary"
             fullWidth

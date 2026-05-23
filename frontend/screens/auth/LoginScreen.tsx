@@ -1,15 +1,20 @@
 /**
  * Login Screen — RoadReady Modern UI
+ * Animated Road Hero + rotating tagline + live stats ticker
  */
+import { Ionicons } from '@expo/vector-icons';
 import * as SecureStore from 'expo-secure-store';
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
+  Animated,
+  Easing,
   KeyboardAvoidingView,
   Platform,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
+  useWindowDimensions,
   View,
 } from 'react-native';
 import InlineMessage from '../../components/InlineMessage';
@@ -18,6 +23,599 @@ import ThemedModal from '../../components/ui/Modal';
 import { API_CONFIG } from '../../config';
 import ApiService from '../../services/api';
 import { useTheme } from '../../theme/ThemeContext';
+
+// ─── Rotating tagline content ─────────────────────────────────────────────
+const TAGLINES = [
+  'Learn to drive with confidence.',
+  'Book instructors near you in seconds.',
+  'Track every lesson — pass every test.',
+  'Your K53 journey, all in one app.',
+];
+
+// ─── Animated Road Hero (story: meet → drive → arrive → graduate) ───────
+function RoadHero({ heroHeight }: { heroHeight: number }) {
+  const progress = useRef(new Animated.Value(0)).current; // 0 → 1 over 14s
+  const carBob = useRef(new Animated.Value(0)).current;
+  const [w, setW] = useState(0);
+
+  useEffect(() => {
+    let cancelled = false;
+    const runProgress = () => {
+      progress.setValue(0);
+      Animated.timing(progress, {
+        toValue: 1,
+        duration: 14000,
+        easing: Easing.linear,
+        useNativeDriver: false,
+      }).start(({ finished }) => {
+        if (finished && !cancelled) runProgress();
+      });
+    };
+    runProgress();
+
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(carBob, { toValue: -2, duration: 220, easing: Easing.inOut(Easing.quad), useNativeDriver: false }),
+        Animated.timing(carBob, { toValue: 0, duration: 220, easing: Easing.inOut(Easing.quad), useNativeDriver: false }),
+      ])
+    ).start();
+
+    return () => {
+      cancelled = true;
+      progress.stopAnimation();
+      carBob.stopAnimation();
+    };
+  }, [progress, carBob]);
+
+  // Story timeline (progress 0..1):
+  //   0.00-0.16  student + instructor walk in
+  //   0.16-0.22  meet & wave
+  //   0.22-0.30  enter car (people fade, car appears)
+  //   0.30-0.78  car drives — hills, traffic light, stop sign, zebra, oncoming car
+  //   0.78-0.84  arrival sparkle at flag
+  //   0.84-0.90  car fades, student + instructor re-appear at finish
+  //   0.90-1.00  instructor hands certificate → grad cap appears → "Certified!"
+  const centerX = w / 2;
+  const carStart = w * 0.18;
+  const carEnd = w * 0.78;
+  const finishStudentX = w - 110;
+  const finishInstructorX = w - 60;
+
+  // People (walk-in phase)
+  const studentX = progress.interpolate({
+    inputRange: [0, 0.16, 0.22, 0.30],
+    outputRange: [-80, centerX - 55, centerX - 55, centerX - 25],
+    extrapolate: 'clamp',
+  });
+  const instructorX = progress.interpolate({
+    inputRange: [0, 0.16, 0.22, 0.30],
+    outputRange: [w + 80, centerX + 15, centerX + 15, centerX - 5],
+    extrapolate: 'clamp',
+  });
+  const peopleOpacity = progress.interpolate({
+    inputRange: [0, 0.05, 0.27, 0.32],
+    outputRange: [0, 1, 1, 0],
+    extrapolate: 'clamp',
+  });
+  const waveOpacity = progress.interpolate({
+    inputRange: [0.15, 0.18, 0.22, 0.25],
+    outputRange: [0, 1, 1, 0],
+    extrapolate: 'clamp',
+  });
+  const waveBounce = progress.interpolate({
+    inputRange: [0.16, 0.20, 0.24],
+    outputRange: [0, -10, 0],
+    extrapolate: 'clamp',
+  });
+
+  // Car (drive phase)
+  const carOpacity = progress.interpolate({
+    inputRange: [0.28, 0.32, 0.83, 0.86],
+    outputRange: [0, 1, 1, 0],
+    extrapolate: 'clamp',
+  });
+  const carX = progress.interpolate({
+    inputRange: [0, 0.30, 0.78, 1],
+    outputRange: [carStart, carStart, carEnd, carEnd],
+    extrapolate: 'clamp',
+  });
+  // Hills — car rises/falls along the route
+  const carHill = progress.interpolate({
+    inputRange: [0.30, 0.40, 0.50, 0.60, 0.70, 0.78],
+    outputRange: [0, -10, 6, -12, 8, 0],
+    extrapolate: 'clamp',
+  });
+
+  // Scenery + road scroll (only during drive phase)
+  const sceneryX = progress.interpolate({
+    inputRange: [0, 0.30, 0.78, 1],
+    outputRange: [0, 0, -w * 1.6, -w * 1.6],
+    extrapolate: 'clamp',
+  });
+  const stripeX = progress.interpolate({
+    inputRange: [0, 0.30, 0.78, 1],
+    outputRange: [0, 0, -w * 2.2, -w * 2.2],
+    extrapolate: 'clamp',
+  });
+
+  // Oncoming car (passes once during the drive)
+  const oncomingX = progress.interpolate({
+    inputRange: [0.45, 0.58],
+    outputRange: [w + 60, -100],
+    extrapolate: 'clamp',
+  });
+  const oncomingOpacity = progress.interpolate({
+    inputRange: [0.44, 0.46, 0.57, 0.59],
+    outputRange: [0, 1, 1, 0],
+    extrapolate: 'clamp',
+  });
+
+  // Arrival sparkle
+  const sparkleOpacity = progress.interpolate({
+    inputRange: [0.77, 0.80, 0.84],
+    outputRange: [0, 1, 0],
+    extrapolate: 'clamp',
+  });
+  const sparkleScale = progress.interpolate({
+    inputRange: [0.77, 0.82],
+    outputRange: [0.5, 1.4],
+    extrapolate: 'clamp',
+  });
+
+  // Graduation scene — people reappear at finish line
+  const finalPeopleOpacity = progress.interpolate({
+    inputRange: [0.83, 0.88, 1],
+    outputRange: [0, 1, 1],
+    extrapolate: 'clamp',
+  });
+  const finalStudentX = progress.interpolate({
+    inputRange: [0.83, 0.88],
+    outputRange: [finishStudentX - 30, finishStudentX],
+    extrapolate: 'clamp',
+  });
+  const finalInstructorX = progress.interpolate({
+    inputRange: [0.83, 0.88],
+    outputRange: [finishInstructorX + 30, finishInstructorX],
+    extrapolate: 'clamp',
+  });
+
+  // Certificate hand-off: starts at instructor, slides to student
+  const certX = progress.interpolate({
+    inputRange: [0.90, 0.96],
+    outputRange: [finishInstructorX - 4, finishStudentX + 14],
+    extrapolate: 'clamp',
+  });
+  const certOpacity = progress.interpolate({
+    inputRange: [0.88, 0.91, 0.99, 1],
+    outputRange: [0, 1, 1, 1],
+    extrapolate: 'clamp',
+  });
+  const certLift = progress.interpolate({
+    inputRange: [0.88, 0.93, 0.96],
+    outputRange: [0, -14, 0],
+    extrapolate: 'clamp',
+  });
+  // Grad cap pops above student
+  const capOpacity = progress.interpolate({
+    inputRange: [0.95, 0.98],
+    outputRange: [0, 1],
+    extrapolate: 'clamp',
+  });
+  const capScale = progress.interpolate({
+    inputRange: [0.95, 1],
+    outputRange: [0.4, 1.2],
+    extrapolate: 'clamp',
+  });
+  const certifiedOpacity = progress.interpolate({
+    inputRange: [0.96, 0.99],
+    outputRange: [0, 1],
+    extrapolate: 'clamp',
+  });
+
+  // Dashed road stripes (horizontal) — tile twice for seamless scroll
+  const stripeCount = Math.max(8, Math.ceil(w / 40) + 2);
+  const stripes = Array.from({ length: stripeCount * 2 });
+
+  // Scenery items (positions are factors of width; >1 = second tile)
+  const sceneryItems = [
+    { kind: 'tree', x: 0.08, size: 24, color: '#0E5C49' },
+    { kind: 'tree', x: 0.18, size: 30, color: '#0E7A60' },
+    { kind: 'hill', x: 0.25, size: 80, color: 'rgba(14,92,73,0.4)' },
+    { kind: 'cone', x: 0.34, size: 22 },
+    { kind: 'tree', x: 0.42, size: 26, color: '#0E5C49' },
+    { kind: 'trafficLight', x: 0.50 },
+    { kind: 'tree', x: 0.60, size: 22, color: '#0E7A60' },
+    { kind: 'building', x: 0.68, size: 30 },
+    { kind: 'stopSign', x: 0.78 },
+    { kind: 'tree', x: 0.88, size: 28, color: '#0E5C49' },
+    { kind: 'hill', x: 0.95, size: 90, color: 'rgba(14,92,73,0.35)' },
+    // Second tile (x + 1.0)
+    { kind: 'tree', x: 1.08, size: 24, color: '#0E5C49' },
+    { kind: 'cone', x: 1.20, size: 22 },
+    { kind: 'tree', x: 1.32, size: 30, color: '#0E7A60' },
+    { kind: 'trafficLight', x: 1.45 },
+    { kind: 'building', x: 1.58, size: 30 },
+    { kind: 'tree', x: 1.72, size: 26, color: '#0E5C49' },
+    { kind: 'stopSign', x: 1.85 },
+    { kind: 'hill', x: 1.92, size: 80, color: 'rgba(14,92,73,0.4)' },
+  ] as const;
+
+  const renderSceneryItem = (item: typeof sceneryItems[number], i: number) => {
+    const baseTop = heroHeight * 0.68;
+    if (item.kind === 'tree') {
+      return (
+        <View key={i} style={{ position: 'absolute', left: item.x * w, top: baseTop - item.size }}>
+          <Ionicons name="leaf" size={item.size} color={item.color} />
+        </View>
+      );
+    }
+    if (item.kind === 'hill') {
+      return (
+        <View
+          key={i}
+          style={{
+            position: 'absolute',
+            left: item.x * w - item.size / 2,
+            top: baseTop - item.size * 0.55,
+            width: item.size,
+            height: item.size,
+            borderRadius: item.size / 2,
+            backgroundColor: item.color,
+          }}
+        />
+      );
+    }
+    if (item.kind === 'building') {
+      return (
+        <View key={i} style={{ position: 'absolute', left: item.x * w, top: baseTop - item.size }}>
+          <Ionicons name="business" size={item.size} color="#FFD166" />
+        </View>
+      );
+    }
+    if (item.kind === 'cone') {
+      return (
+        <View key={i} style={{ position: 'absolute', left: item.x * w, top: baseTop - item.size }}>
+          <Ionicons name="warning" size={item.size} color="#FF8C42" />
+        </View>
+      );
+    }
+    if (item.kind === 'trafficLight') {
+      return (
+        <View
+          key={i}
+          style={{
+            position: 'absolute',
+            left: item.x * w,
+            top: baseTop - 56,
+            alignItems: 'center',
+          }}
+        >
+          <View style={styles.trafficLightBox}>
+            <View style={[styles.trafficDot, { backgroundColor: '#EF4444' }]} />
+            <View style={[styles.trafficDot, { backgroundColor: '#F59E0B' }]} />
+            <View style={[styles.trafficDot, { backgroundColor: '#22C55E' }]} />
+          </View>
+          <View style={styles.trafficPole} />
+        </View>
+      );
+    }
+    if (item.kind === 'stopSign') {
+      return (
+        <View
+          key={i}
+          style={{
+            position: 'absolute',
+            left: item.x * w,
+            top: baseTop - 42,
+            alignItems: 'center',
+          }}
+        >
+          <View style={styles.stopSign}>
+            <Text style={styles.stopSignText}>STOP</Text>
+          </View>
+          <View style={styles.trafficPole} />
+        </View>
+      );
+    }
+    return null;
+  };
+
+  return (
+    <View
+      style={[styles.heroRoot, { height: heroHeight }]}
+      pointerEvents="none"
+      onLayout={(e) => setW(e.nativeEvent.layout.width)}
+    >
+      {/* Sky */}
+      <View style={[StyleSheet.absoluteFill, { backgroundColor: '#0E7A60' }]} />
+      <View style={[StyleSheet.absoluteFill, { backgroundColor: '#0A8F7D', opacity: 0.55 }]} />
+
+      {/* Sun + clouds */}
+      <View style={[styles.sun, { right: 24, top: 24 }]} />
+      <View style={[styles.cloud, { top: 30, left: '18%' }]} />
+      <View style={[styles.cloud, { top: 50, left: '55%', opacity: 0.7 }]} />
+      <View style={[styles.cloud, { top: 70, left: '30%', opacity: 0.4 }]} />
+
+      {/* Distant mountains (static) */}
+      <View style={[styles.mountain, { left: '5%', bottom: heroHeight * 0.32 }]} />
+      <View style={[styles.mountain, { left: '38%', bottom: heroHeight * 0.32, width: 140, height: 60 }]} />
+      <View style={[styles.mountain, { right: '8%', bottom: heroHeight * 0.32, width: 110, height: 45 }]} />
+
+      {/* Scenery layer (trees + signs + traffic light scroll past) */}
+      {w > 0 && (
+        <Animated.View
+          style={[StyleSheet.absoluteFill, { transform: [{ translateX: sceneryX }] }]}
+        >
+          {sceneryItems.map((item, i) => renderSceneryItem(item, i))}
+        </Animated.View>
+      )}
+
+      {/* Road band */}
+      <View style={[styles.roadBand, { height: heroHeight * 0.28 }]}>
+        {/* Dashed center line */}
+        <Animated.View
+          style={[styles.roadStripesRow, { transform: [{ translateX: stripeX }] }]}
+        >
+          {stripes.map((_, i) => (
+            <View key={i} style={styles.roadStripeH} />
+          ))}
+        </Animated.View>
+        {/* Zebra crossing — tiled with road, positioned every w*0.7 */}
+        {w > 0 && (
+          <Animated.View
+            style={{
+              position: 'absolute',
+              left: w * 0.65,
+              top: 0,
+              bottom: 0,
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: 5,
+              transform: [{ translateX: stripeX }],
+            }}
+          >
+            {[0, 1, 2, 3, 4].map((i) => (
+              <View key={i} style={styles.zebraBar} />
+            ))}
+          </Animated.View>
+        )}
+      </View>
+
+      {/* Finish flag (anchored right) */}
+      {w > 0 && (
+        <View
+          style={{
+            position: 'absolute',
+            right: 18,
+            top: heroHeight * 0.72 - 14,
+          }}
+        >
+          <Ionicons name="flag" size={28} color="#FFD166" />
+          <Animated.View
+            style={{
+              position: 'absolute',
+              left: -10,
+              top: -10,
+              opacity: sparkleOpacity,
+              transform: [{ scale: sparkleScale }],
+            }}
+          >
+            <Ionicons name="sparkles" size={44} color="#FFEC8A" />
+          </Animated.View>
+        </View>
+      )}
+
+      {/* Student (walks in from left) */}
+      {w > 0 && (
+        <Animated.View
+          style={{
+            position: 'absolute',
+            top: heroHeight * 0.55,
+            transform: [{ translateX: studentX }],
+            opacity: peopleOpacity,
+          }}
+        >
+          <View style={styles.personBadge}>
+            <Ionicons name="person" size={26} color="#0A8F7D" />
+          </View>
+          <Text style={styles.personLabel}>Student</Text>
+        </Animated.View>
+      )}
+
+      {/* Instructor (walks in from right) */}
+      {w > 0 && (
+        <Animated.View
+          style={{
+            position: 'absolute',
+            top: heroHeight * 0.55,
+            transform: [{ translateX: instructorX }],
+            opacity: peopleOpacity,
+          }}
+        >
+          <View style={[styles.personBadge, { backgroundColor: '#FFD166' }]}>
+            <Ionicons name="person-circle" size={28} color="#0A8F7D" />
+          </View>
+          <Text style={styles.personLabel}>Instructor</Text>
+        </Animated.View>
+      )}
+
+      {/* Wave emoji when they meet */}
+      {w > 0 && (
+        <Animated.Text
+          style={{
+            position: 'absolute',
+            left: centerX - 10,
+            top: heroHeight * 0.42,
+            fontSize: 26,
+            opacity: waveOpacity,
+            transform: [{ translateY: waveBounce }],
+          }}
+        >
+          👋
+        </Animated.Text>
+      )}
+
+      {/* Oncoming car — passes during the drive */}
+      {w > 0 && (
+        <Animated.View
+          style={{
+            position: 'absolute',
+            top: heroHeight * 0.78,
+            opacity: oncomingOpacity,
+            transform: [{ translateX: oncomingX }, { scaleX: -1 }],
+          }}
+        >
+          <Ionicons name="car" size={34} color="#EF4444" />
+        </Animated.View>
+      )}
+
+      {/* Main car — drives left → right with hills */}
+      {w > 0 && (
+        <Animated.View
+          style={{
+            position: 'absolute',
+            top: heroHeight * 0.62,
+            opacity: carOpacity,
+            transform: [
+              { translateX: carX },
+              { translateY: Animated.add(carBob, carHill) },
+            ],
+          }}
+        >
+          <View style={styles.carShadow} />
+          <Ionicons name="car-sport" size={48} color="#FFFFFF" />
+        </Animated.View>
+      )}
+
+      {/* Graduation scene — student + instructor reappear at finish */}
+      {w > 0 && (
+        <>
+          <Animated.View
+            style={{
+              position: 'absolute',
+              top: heroHeight * 0.55,
+              transform: [{ translateX: finalStudentX }],
+              opacity: finalPeopleOpacity,
+            }}
+          >
+            <View style={styles.personBadge}>
+              <Ionicons name="person" size={26} color="#0A8F7D" />
+            </View>
+            <Text style={styles.personLabel}>Student</Text>
+            {/* Grad cap above student */}
+            <Animated.Text
+              style={{
+                position: 'absolute',
+                top: -22,
+                left: 10,
+                fontSize: 24,
+                opacity: capOpacity,
+                transform: [{ scale: capScale }],
+              }}
+            >
+              🎓
+            </Animated.Text>
+          </Animated.View>
+
+          <Animated.View
+            style={{
+              position: 'absolute',
+              top: heroHeight * 0.55,
+              transform: [{ translateX: finalInstructorX }],
+              opacity: finalPeopleOpacity,
+            }}
+          >
+            <View style={[styles.personBadge, { backgroundColor: '#FFD166' }]}>
+              <Ionicons name="person-circle" size={28} color="#0A8F7D" />
+            </View>
+            <Text style={styles.personLabel}>Instructor</Text>
+          </Animated.View>
+
+          {/* Certificate sliding from instructor → student */}
+          <Animated.Text
+            style={{
+              position: 'absolute',
+              top: heroHeight * 0.58,
+              fontSize: 22,
+              opacity: certOpacity,
+              transform: [{ translateX: certX }, { translateY: certLift }],
+            }}
+          >
+            📜
+          </Animated.Text>
+
+          {/* Certified! banner */}
+          <Animated.View
+            style={{
+              position: 'absolute',
+              top: heroHeight * 0.40,
+              right: 30,
+              opacity: certifiedOpacity,
+            }}
+          >
+            <View style={styles.certifiedBadge}>
+              <Ionicons name="ribbon" size={14} color="#0A8F7D" />
+              <Text style={styles.certifiedText}>Certified!</Text>
+            </View>
+          </Animated.View>
+        </>
+      )}
+
+      {/* Brand title at bottom */}
+      <View style={styles.heroTextWrap}>
+        <Text style={styles.heroBrand}>RoadReady</Text>
+      </View>
+    </View>
+  );
+}
+
+// ─── Rotating tagline (cross-fades every 4s) ──────────────────────────────
+function RotatingTagline({ color }: { color: string }) {
+  const [index, setIndex] = useState(0);
+  const fade = useRef(new Animated.Value(1)).current;
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      Animated.timing(fade, { toValue: 0, duration: 300, useNativeDriver: true }).start(() => {
+        setIndex((i) => (i + 1) % TAGLINES.length);
+        Animated.timing(fade, { toValue: 1, duration: 300, useNativeDriver: true }).start();
+      });
+    }, 4000);
+    return () => clearInterval(timer);
+  }, [fade]);
+
+  return (
+    <Animated.Text style={[styles.taglineRot, { color, opacity: fade }]}>
+      {TAGLINES[index]}
+    </Animated.Text>
+  );
+}
+
+// ─── Live stats counter ────────────────────────────────────────────────────
+function StatsTicker({ color, target = 2431 }: { color: string; target?: number }) {
+  const [value, setValue] = useState(0);
+  useEffect(() => {
+    const duration = 1400;
+    const start = Date.now();
+    let raf: any;
+    const tick = () => {
+      const t = Math.min(1, (Date.now() - start) / duration);
+      const eased = 1 - Math.pow(1 - t, 3);
+      setValue(Math.round(target * eased));
+      if (t < 1) raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [target]);
+  return (
+    <View style={styles.statsRow}>
+      <View style={styles.pulseDot} />
+      <Text style={[styles.statsText, { color }]}>
+        Join <Text style={styles.statsNumber}>{value.toLocaleString()}+</Text> learners driving with RoadReady
+      </Text>
+    </View>
+  );
+}
 
 // Storage wrapper for web compatibility
 // Web: HTTP-only cookies (no JS access)
@@ -42,6 +640,8 @@ const storage = {
 
 export default function LoginScreen({ navigation, onAuthChange }: any) {
   const { colors, isDark } = useTheme();
+  const { width } = useWindowDimensions();
+  const heroHeight = Platform.OS === 'web' ? (width > 900 ? 360 : 300) : 280;
   const [emailOrPhone, setEmailOrPhone] = useState('');
   const [password, setPassword] = useState('');
   const [fieldErrors, setFieldErrors] = useState<{ emailOrPhone?: string; password?: string }>({});
@@ -285,18 +885,16 @@ export default function LoginScreen({ navigation, onAuthChange }: any) {
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
-        {/* Brand Header */}
-        <View style={styles.brandArea}>
-          <View style={[styles.logoCircle, { backgroundColor: colors.primary + '15' }]}>
-            <Text style={styles.logoEmoji}>🚗</Text>
-          </View>
-          <Text style={[styles.appName, { color: colors.primary }]}>RoadReady</Text>
-          <Text style={[styles.tagline, { color: colors.textSecondary }]}>
-            Login to your account
-          </Text>
+        {/* Animated Road Hero */}
+        <RoadHero heroHeight={heroHeight} />
+
+        {/* Tagline + stats just under the hero */}
+        <View style={styles.subHero}>
+          <RotatingTagline color={colors.textSecondary} />
+          <StatsTicker color={colors.textSecondary} />
         </View>
 
-        {/* Login Card */}
+        {/* Login Card (floats up over the hero edge) */}
         <Card variant="elevated" padding="lg" style={styles.formCard}>
           {message && (
             <View style={styles.messageWrap}>
@@ -309,39 +907,49 @@ export default function LoginScreen({ navigation, onAuthChange }: any) {
             </View>
           )}
 
-          <Input
-            label="Email or Phone"
-            placeholder="Email or phone number"
-            value={emailOrPhone}
-            onChangeText={(text) => { setEmailOrPhone(text); setFieldErrors(prev => ({ ...prev, emailOrPhone: undefined })); }}
-            autoCapitalize="none"
-            autoCorrect={false}
-            onSubmitEditing={handleLogin}
-            returnKeyType="next"
-            keyboardType="email-address"
-            error={fieldErrors.emailOrPhone}
-          />
+          <View style={styles.fieldRow}>
+            <Ionicons name="mail-outline" size={18} color={colors.textSecondary} style={styles.fieldIcon} />
+            <View style={{ flex: 1 }}>
+              <Input
+                label="Email or Phone"
+                placeholder="Email or phone number"
+                value={emailOrPhone}
+                onChangeText={(text) => { setEmailOrPhone(text); setFieldErrors(prev => ({ ...prev, emailOrPhone: undefined })); }}
+                autoCapitalize="none"
+                autoCorrect={false}
+                onSubmitEditing={handleLogin}
+                returnKeyType="next"
+                keyboardType="email-address"
+                error={fieldErrors.emailOrPhone}
+              />
+            </View>
+          </View>
 
-          <View style={styles.passwordRow}>
-            <Input
-              label="Password"
-              placeholder="Enter your password"
-              value={password}
-              onChangeText={(text) => { setPassword(text); setFieldErrors(prev => ({ ...prev, password: undefined })); }}
-              secureTextEntry={!showPassword}
-              onSubmitEditing={handleLogin}
-              returnKeyType="go"
-              error={fieldErrors.password}
-            />
-            <Pressable
-              onPress={() => setShowPassword(!showPassword)}
-              style={styles.togglePassword}
-              hitSlop={8}
-            >
-              <Text style={[styles.toggleText, { color: colors.primary }]}>
-                {showPassword ? 'Hide' : 'Show'}
-              </Text>
-            </Pressable>
+          <View style={[styles.fieldRow, styles.passwordRow]}>
+            <Ionicons name="lock-closed-outline" size={18} color={colors.textSecondary} style={styles.fieldIcon} />
+            <View style={{ flex: 1 }}>
+              <Input
+                label="Password"
+                placeholder="Enter your password"
+                value={password}
+                onChangeText={(text) => { setPassword(text); setFieldErrors(prev => ({ ...prev, password: undefined })); }}
+                secureTextEntry={!showPassword}
+                onSubmitEditing={handleLogin}
+                returnKeyType="go"
+                error={fieldErrors.password}
+              />
+              <Pressable
+                onPress={() => setShowPassword(!showPassword)}
+                style={styles.togglePassword}
+                hitSlop={8}
+              >
+                <Ionicons
+                  name={showPassword ? 'eye-off-outline' : 'eye-outline'}
+                  size={18}
+                  color={colors.primary}
+                />
+              </Pressable>
+            </View>
           </View>
 
           <Pressable
@@ -363,14 +971,33 @@ export default function LoginScreen({ navigation, onAuthChange }: any) {
           />
         </Card>
 
-        {/* Register link */}
-        <View style={styles.registerRow}>
+        {/* Register CTA — full-width outlined, equal weight to login */}
+        <View style={styles.registerWrap}>
           <Text style={[styles.registerLabel, { color: colors.textSecondary }]}>
-            Don't have an account?{' '}
+            New to RoadReady?
           </Text>
-          <Pressable onPress={() => navigation.navigate('RegisterChoice')} style={{ padding: 8 }}>
-            <Text style={[styles.registerLink, { color: colors.primary }]}>Register</Text>
-          </Pressable>
+          <Button
+            label="Create an account"
+            variant="outline"
+            onPress={() => navigation.navigate('RegisterChoice')}
+            fullWidth
+          />
+        </View>
+
+        {/* Trust badges */}
+        <View style={styles.trustRow}>
+          <View style={styles.trustItem}>
+            <Ionicons name="shield-checkmark" size={14} color={colors.primary} />
+            <Text style={[styles.trustText, { color: colors.textSecondary }]}>Secure login</Text>
+          </View>
+          <View style={styles.trustItem}>
+            <Ionicons name="school-outline" size={14} color={colors.primary} />
+            <Text style={[styles.trustText, { color: colors.textSecondary }]}>K53 ready</Text>
+          </View>
+          <View style={styles.trustItem}>
+            <Ionicons name="location-outline" size={14} color={colors.primary} />
+            <Text style={[styles.trustText, { color: colors.textSecondary }]}>Local instructors</Text>
+          </View>
         </View>
 
         {/* Debug Box (dev only) */}
@@ -502,78 +1129,270 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     flexGrow: 1,
+    paddingHorizontal: Platform.OS === 'web' ? '15%' : 0,
+    paddingBottom: 40,
+  },
+  // ─── Hero ─────────────────────────────────────────────
+  heroRoot: {
+    width: '100%',
+    overflow: 'hidden',
+    borderBottomLeftRadius: 32,
+    borderBottomRightRadius: 32,
+    justifyContent: 'flex-end',
+  },
+  sun: {
+    position: 'absolute',
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: '#FFD166',
+    opacity: 0.85,
+    shadowColor: '#FFD166',
+    shadowOpacity: 0.8,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 0 },
+  },
+  cloud: {
+    position: 'absolute',
+    width: 60,
+    height: 16,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255,255,255,0.55)',
+  },
+  roadBand: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 56,
+    backgroundColor: '#1F2937',
     justifyContent: 'center',
-    paddingHorizontal: Platform.OS === 'web' ? '20%' : 24,
-    paddingVertical: 40,
+    overflow: 'hidden',
   },
-  brandArea: {
+  roadStripesRow: {
+    flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 32,
+    gap: 20,
+    paddingHorizontal: 10,
   },
-  logoCircle: {
-    width: Platform.OS === 'web' ? 80 : 68,
-    height: Platform.OS === 'web' ? 80 : 68,
-    borderRadius: 40,
+  roadStripeH: {
+    width: 28,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: 'rgba(255,255,255,0.7)',
+  },
+  zebraBar: {
+    width: 8,
+    height: 24,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 1,
+  },
+  mountain: {
+    position: 'absolute',
+    width: 180,
+    height: 70,
+    borderTopLeftRadius: 90,
+    borderTopRightRadius: 90,
+    backgroundColor: 'rgba(14,92,73,0.55)',
+  },
+  trafficLightBox: {
+    width: 18,
+    height: 38,
+    borderRadius: 4,
+    backgroundColor: '#1F2937',
+    paddingVertical: 3,
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  trafficDot: {
+    width: 9,
+    height: 9,
+    borderRadius: 5,
+  },
+  trafficPole: {
+    width: 3,
+    height: 18,
+    backgroundColor: '#374151',
+  },
+  stopSign: {
+    width: 32,
+    height: 32,
+    borderRadius: 6,
+    backgroundColor: '#EF4444',
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 16,
+    transform: [{ rotate: '45deg' }],
   },
-  logoEmoji: {
-    fontSize: Platform.OS === 'web' ? 40 : 34,
+  stopSignText: {
+    color: '#FFFFFF',
+    fontSize: 8,
+    fontWeight: '900',
+    transform: [{ rotate: '-45deg' }],
   },
-  appName: {
-    fontSize: Platform.OS === 'web' ? 34 : 28,
+  certifiedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 12,
+    shadowColor: '#000',
+    shadowOpacity: 0.25,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 4,
+  },
+  certifiedText: {
+    color: '#0A8F7D',
     fontWeight: '800',
+    fontSize: 12,
+  },
+  personBadge: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOpacity: 0.25,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 4,
+  },
+  personLabel: {
+    marginTop: 2,
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    textAlign: 'center',
+    textShadowColor: 'rgba(0,0,0,0.4)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
+  },
+  carShadow: {
+    position: 'absolute',
+    bottom: -6,
+    left: 4,
+    right: 4,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: 'rgba(0,0,0,0.35)',
+  },
+  heroTextWrap: {
+    alignItems: 'center',
+    paddingBottom: 14,
+  },
+  heroBrand: {
+    fontSize: Platform.OS === 'web' ? 36 : 30,
+    fontWeight: '800',
+    color: '#FFFFFF',
     letterSpacing: -1,
-    marginBottom: 6,
+    textShadowColor: 'rgba(0,0,0,0.35)',
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 6,
   },
-  tagline: {
+  // ─── Sub-hero (tagline + stats) ───────────────────────
+  subHero: {
+    alignItems: 'center',
+    paddingHorizontal: 24,
+    paddingTop: 16,
+    paddingBottom: 8,
+  },
+  taglineRot: {
     fontSize: Platform.OS === 'web' ? 16 : 14,
+    fontWeight: '500',
+    textAlign: 'center',
+    marginBottom: 10,
   },
+  statsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  pulseDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#22C55E',
+    marginRight: 6,
+  },
+  statsText: {
+    fontSize: 12,
+  },
+  statsNumber: {
+    fontWeight: '700',
+  },
+  // ─── Form ─────────────────────────────────────────────
   formCard: {
-    marginBottom: 20,
+    marginHorizontal: Platform.OS === 'web' ? 0 : 16,
+    marginTop: 12,
+    marginBottom: 16,
   },
   messageWrap: {
     marginBottom: 12,
+  },
+  fieldRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+  },
+  fieldIcon: {
+    marginTop: Platform.OS === 'web' ? 38 : 36,
+    marginRight: 10,
+    width: 18,
   },
   passwordRow: {
     position: 'relative',
   },
   togglePassword: {
     position: 'absolute',
-    right: 0,
-    top: 0,
-    paddingVertical: 10,
-    paddingHorizontal: 10,
-  },
-  toggleText: {
-    fontSize: 13,
-    fontWeight: '600',
+    right: 8,
+    top: Platform.OS === 'web' ? 34 : 32,
+    padding: 6,
   },
   forgotLink: {
     alignSelf: 'flex-end',
-    marginBottom: 20,
+    marginBottom: 16,
     marginTop: -4,
     padding: 6,
   },
   forgotText: {
     fontSize: 13,
   },
-  registerRow: {
-    flexDirection: 'row',
-    justifyContent: 'center',
+  // ─── Register CTA ─────────────────────────────────────
+  registerWrap: {
+    marginHorizontal: Platform.OS === 'web' ? 0 : 16,
     alignItems: 'center',
-    marginTop: 8,
+    gap: 10,
+    marginBottom: 18,
   },
   registerLabel: {
-    fontSize: Platform.OS === 'web' ? 15 : 14,
+    fontSize: Platform.OS === 'web' ? 14 : 13,
   },
-  registerLink: {
-    fontSize: Platform.OS === 'web' ? 15 : 14,
-    fontWeight: '700',
+  // ─── Trust badges ─────────────────────────────────────
+  trustRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    flexWrap: 'wrap',
+    gap: 16,
+    marginTop: 4,
+    paddingHorizontal: 16,
   },
+  trustItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  trustText: {
+    fontSize: 11,
+    fontWeight: '500',
+  },
+  // ─── Debug ────────────────────────────────────────────
   debugBox: {
-    marginTop: 24,
+    marginTop: 16,
+    marginHorizontal: 16,
     padding: 8,
     borderRadius: 6,
     alignItems: 'center',
@@ -582,6 +1401,7 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
   },
+  // ─── Modals ───────────────────────────────────────────
   roleOption: {
     paddingVertical: Platform.OS === 'web' ? 14 : 12,
     paddingHorizontal: 16,
