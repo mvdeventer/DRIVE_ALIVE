@@ -1,10 +1,10 @@
 {
-  "version": "6.0.0",
-  "build": "5",
+  "version": "6.1.0",
+  "build": "6",
   "release_date": "2026-05-30",
-  "codename": "Major Release 6.0.0",
+  "codename": "Minor Release 6.1.0",
   "install_guide": "docs/INSTALL_WINDOWS.md",
   "update_guide": "docs/UPDATE_WINDOWS.md",
-  "release_notes": "docs/releases/v6.0.0.md",
+  "release_notes": "docs/releases/v6.1.0.md",
   "installer_definition": "scripts/installer.iss"
 }
