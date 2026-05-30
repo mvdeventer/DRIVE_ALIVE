@@ -515,7 +515,18 @@ def _build_plan(bump_type: str, branch: str, previous_tag: str | None) -> Releas
 
 def _stage_paths(paths: list[Path]) -> None:
     relative_paths = [str(path.relative_to(ROOT)) for path in paths]
-    _run(["git", "add", *relative_paths])
+    normal_paths: list[str] = []
+    forced_paths: list[str] = []
+    for relative_path in relative_paths:
+        check_ignore = _run(["git", "check-ignore", "-q", relative_path], check=False)
+        if check_ignore.returncode == 0:
+            forced_paths.append(relative_path)
+        else:
+            normal_paths.append(relative_path)
+    if normal_paths:
+        _run(["git", "add", *normal_paths])
+    if forced_paths:
+        _run(["git", "add", "-f", *forced_paths])
 
 
 def _commit_release(plan: ReleasePlan) -> None:
