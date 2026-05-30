@@ -2,7 +2,7 @@
 
 > Cross-platform booking app for South African driving schools. Instructors register, students book lessons, payments handled in-app, GPS pickup/drop-off, WhatsApp reminders, compliant with POPIA/PCI DSS.
 
-**Version:** `4.0.0` | **Platform:** iOS · Android · Web | **Region:** South Africa (ZAR)
+**Version:** `5.0.0` | **Platform:** iOS · Android · Web | **Region:** South Africa (ZAR)
 
 ---
 
@@ -244,7 +244,7 @@ DRIVE_ALIVE/
 │           ├── encryption.py       # Fernet AES-256
 │           └── rate_limiter.py     # SlowAPI + Redis config
 ├── frontend/
-│   ├── app.json                    # Expo config (slug: roadready, v4.0.0)
+│   ├── app.json                    # Expo config (slug: roadready, v5.0.0)
 │   ├── App.tsx                     # Navigation root + GlobalTopBar (web)
 │   ├── screens/
 │   │   ├── auth/                   # Login, Register (Student/Instructor), Forgot/Reset Password

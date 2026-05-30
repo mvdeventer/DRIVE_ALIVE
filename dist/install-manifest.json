@@ -1,10 +1,10 @@
 {
-  "version": "4.0.0",
-  "build": "3",
+  "version": "5.0.0",
+  "build": "4",
   "release_date": "2026-05-30",
-  "codename": "Major Release 4.0.0",
+  "codename": "Major Release 5.0.0",
   "install_guide": "docs/INSTALL_WINDOWS.md",
   "update_guide": "docs/UPDATE_WINDOWS.md",
-  "release_notes": "docs/releases/v4.0.0.md",
+  "release_notes": "docs/releases/v5.0.0.md",
   "installer_definition": "scripts/installer.iss"
 }

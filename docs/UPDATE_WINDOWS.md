@@ -1,6 +1,6 @@
 # Update Drive Alive On Windows
 
-This guide upgrades an existing installation to Drive Alive 4.0.0.
+This guide upgrades an existing installation to Drive Alive 5.0.0.
 
 ## Recommended Update Flow
 
@@ -23,7 +23,7 @@ cd backend
 ## Release Artifacts
 
 - Review the GitHub release notes for migration notes and install changes.
-- Review `docs/releases/v4.0.0.md` for the repository copy of the published release notes.
+- Review `docs/releases/v5.0.0.md` for the repository copy of the published release notes.
 
 ## Rollback Guidance
 
