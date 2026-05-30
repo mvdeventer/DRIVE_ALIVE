@@ -152,7 +152,8 @@ def _current_branch() -> str:
 
 
 def _working_tree_status() -> str:
-    return _git_output("status", "--short", check=False)
+    result = _run(["git", "status", "--short"], check=False)
+    return result.stdout.rstrip("\n")
 
 
 def _filter_release_status_lines(status_output: str) -> tuple[list[str], list[str]]:
