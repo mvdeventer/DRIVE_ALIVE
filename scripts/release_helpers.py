@@ -26,6 +26,22 @@ def _npm_command() -> list[str]:
     return ["npm"]
 
 
+def _ensure_pyinstaller(backend_python: Path, *, cwd: Path, info: Callable[[str], None]) -> None:
+    check = subprocess.run(
+        [str(backend_python), "-c", "import PyInstaller"],
+        cwd=cwd,
+        encoding="utf-8",
+        errors="replace",
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    if check.returncode == 0:
+        return
+    info("PyInstaller missing in backend venv. Installing...")
+    _run([str(backend_python), "-m", "pip", "install", "pyinstaller"], cwd=cwd, capture_output=False)
+
+
 def _find_inno_compiler() -> Path:
     env_path = os.environ.get("ISCC_PATH", "").strip()
     candidates: list[Path] = []
@@ -93,6 +109,8 @@ def build_release_installer(
     backend_python = backend_dir / "venv" / "Scripts" / "python.exe"
     if not backend_python.exists():
         raise RuntimeError(f"Backend venv Python not found at {backend_python}. Run s.bat install first.")
+
+    _ensure_pyinstaller(backend_python, cwd=backend_dir, info=info)
 
     info("Building backend executable with PyInstaller...")
     _run(
