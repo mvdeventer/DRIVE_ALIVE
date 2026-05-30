@@ -520,6 +520,9 @@ def _stage_paths(paths: list[Path]) -> None:
     normal_paths: list[str] = []
     forced_paths: list[str] = []
     for relative_path in relative_paths:
+        if relative_path.startswith("dist/"):
+            forced_paths.append(relative_path)
+            continue
         check_ignore = _run(["git", "check-ignore", "-q", "--", relative_path], check=False)
         if check_ignore.returncode == 0:
             forced_paths.append(relative_path)
