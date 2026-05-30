@@ -31,14 +31,11 @@ DisableProgramGroupPage=yes
 ; Output
 OutputDir=..\dist
 OutputBaseFilename=DriveAlive-Setup-{#APP_VERSION}
-SetupIconFile=..\image\logo.ico
 Compression=lzma2/max
 SolidCompression=yes
 
 ; Modern UI
 WizardStyle=modern
-WizardImageFile=compiler:WizModernImage-IS.bmp
-WizardSmallImageFile=compiler:WizModernSmallImage-IS.bmp
 
 ; Privileges
 PrivilegesRequired=admin
@@ -61,7 +58,7 @@ Name: "autostart"; Description: "Start Drive Alive API automatically"; GroupDesc
 Source: "..\backend\dist\drive-alive-api.exe"; DestDir: "{app}\backend"; Flags: ignoreversion
 
 ; Frontend web build
-Source: "..\frontend\web-build\*"; DestDir: "{app}\frontend"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "..\frontend\dist\*"; DestDir: "{app}\frontend"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 ; Configuration files
 Source: "..\VERSION"; DestDir: "{app}"; Flags: ignoreversion
@@ -95,10 +92,10 @@ Name: "{app}\frontend\static"; Permissions: users-full
 Name: "{app}\vendor"; Permissions: users-full
 
 [Icons]
-Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"
+Name: "{group}\{#MyAppName}"; Filename: "{app}\backend\{#MyAppExeName}"
 Name: "{group}\{cm:UninstallProgram,{#MyAppName}}"; Filename: "{uninstallexe}"
-Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon
-Name: "{commonstartmenu}\Programs\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: startmenuicon
+Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\backend\{#MyAppExeName}"; Tasks: desktopicon
+Name: "{commonstartmenu}\Programs\{#MyAppName}"; Filename: "{app}\backend\{#MyAppExeName}"; Tasks: startmenuicon
 
 [Run]
 ; Run bootstrap for first-time setup (installs dependencies, creates DB)

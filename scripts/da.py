@@ -16,6 +16,7 @@ COMMANDS
     uninstall Remove generated files / environments
     env       Switch FRONTEND_URL environment  (loc | net | prod)
     status    Show server + environment status
+    release   Create and publish a GitHub release  (--minor | --major)
 
 START OPTIONS
     -b / --backend-only     Only start backend
@@ -38,6 +39,16 @@ ENV OPTIONS
     loc | local             http://localhost:8081
     net | network           http://<YOUR-IP>:8081  (auto-detected)
     prod | production       Show production instructions
+
+RELEASE OPTIONS
+    --minor                 Bump minor version and publish release
+    --major                 Bump major version and publish release
+    --dry-run               Preview changes without writing/publishing
+
+RELEASE EXAMPLES
+    s.bat release --minor --dry-run
+    s.bat release --minor
+    s.bat release --major
 """
 
 from __future__ import annotations
@@ -1136,6 +1147,15 @@ def main() -> None:
     if sys.platform == "win32":
         os.system("")
 
+    # Compatibility: allow top-level release flags without explicitly typing
+    # the "release" subcommand (e.g. `s.bat --major`).
+    raw_argv = sys.argv[1:]
+    command_names = {"start", "stop", "restart", "install", "uninstall", "env", "status", "release"}
+    has_release_flag = any(flag in raw_argv for flag in ("--major", "--minor"))
+    parsed_argv = raw_argv
+    if raw_argv and raw_argv[0] not in command_names and has_release_flag:
+        parsed_argv = ["release"] + raw_argv
+
     parser = argparse.ArgumentParser(
         prog="da.py",
         description="Drive Alive project manager",
@@ -1184,18 +1204,18 @@ def main() -> None:
     sub.add_parser("status", help="Show status")
 
     # release
-    p_release = sub.add_parser("release", help="Create a project release")
+    p_release = sub.add_parser("release", help="Create and publish a GitHub release")
     bump_group = p_release.add_mutually_exclusive_group(required=True)
-    bump_group.add_argument("--minor", action="store_true", help="Create a minor release")
-    bump_group.add_argument("--major", action="store_true", help="Create a major release")
-    p_release.add_argument("--dry-run", action="store_true", help="Preview release changes without writing files")
+    bump_group.add_argument("--minor", action="store_true", help="Bump minor version and publish a release")
+    bump_group.add_argument("--major", action="store_true", help="Bump major version and publish a release")
+    p_release.add_argument("--dry-run", action="store_true", help="Preview release changes without writing, tagging, or publishing")
 
     # If no subcommand given, default to "start".
     # Use parse_known_args() first so that start-only flags like --debug / -d
     # don't cause the top-level parser to error before we redirect to "start".
-    args, _unknown = parser.parse_known_args()
+    args, _unknown = parser.parse_known_args(parsed_argv)
     if not args.command:
-        args = parser.parse_args(["start"] + sys.argv[1:])
+        args = parser.parse_args(["start"] + parsed_argv)
 
     if args.command == "start":
         switch = getattr(args, "env", None)

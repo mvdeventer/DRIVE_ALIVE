@@ -76,10 +76,12 @@ cd ..
 | `-d` | Debug/development mode |
 | `-b` | Backend only |
 | `-f` | Frontend only |
-| `-n` | Network mode (mobile testing) |
 | `-l` | Localhost mode (HTTPS) |
 | `-m` | Mobile/network mode (auto-switch env) |
 | `stop` | Stop all servers |
+| `release --minor` | Bump minor version and publish release |
+| `release --major` | Bump major version and publish release |
+| `release --minor --dry-run` | Preview release changes only |
 
 ## 📘 Install & Update Guides
 
@@ -194,8 +196,9 @@ Files with `.web.tsx` / `.native.tsx` extensions let Metro/Expo pick the right i
 DRIVE_ALIVE/
 ├── s.bat                           # One-command startup script
 ├── scripts/
-│   ├── drive-alive.bat             # Server management (start/stop/restart)
-│   └── INSTALL.bat                 # Install / --uninstall support
+│   ├── da.py                       # Main command surface for start/install/release
+│   ├── release_workflow.py         # Release orchestration (version/docs/tag/release)
+│   └── installer.iss               # Inno Setup installer definition
 ├── backend/
 │   ├── .env                        # ← your secrets (DO NOT COMMIT)
 │   ├── .env.example                # Template for all env vars
@@ -436,7 +439,7 @@ All variables live in `backend/.env`. Copy from `backend/.env.example`.
 .\s.bat -f            # Frontend only
 .\s.bat -l            # Switch to localhost + start
 .\s.bat -m            # Switch to network/mobile + start
-.\scripts\drive-alive.bat stop    # Stop all servers
+.\s.bat stop          # Stop all servers
 ```
 
 ### Backend (manual)
@@ -474,9 +477,28 @@ Use the repo-managed release workflow from the project root:
 ```powershell
 .\s.bat release --minor
 .\s.bat release --major
+.\s.bat release --minor --dry-run
 ```
 
 The release workflow validates git/GitHub CLI state, synchronizes version files, refreshes install/update documentation, writes release notes under `docs/releases/`, and publishes the GitHub release.
+
+### Build Installer EXE For GitHub Releases
+
+```powershell
+# Frontend web bundle
+npm --prefix .\frontend run build:web
+
+# Backend executable
+cd backend
+venv\Scripts\python.exe -m PyInstaller drive-alive.spec --clean
+cd ..
+
+# Installer setup executable
+& "C:\Users\$env:USERNAME\AppData\Local\Programs\Inno Setup 6\ISCC.exe" .\scripts\installer.iss
+
+# Upload installer to the existing release tag
+gh release upload v3.0.0 .\dist\DriveAlive-Setup-3.0.0.exe --clobber
+```
 
 ---
 

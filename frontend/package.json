@@ -9,7 +9,7 @@
     "ios": "expo start --ios",
     "web": "expo start --web",
     "expo": "npx expo",
-    "build:web": "npx expo export --platform web && cp public/_redirects dist/_redirects",
+    "build:web": "npx expo export --platform web && powershell -NoProfile -Command \"Copy-Item -Path public/_redirects -Destination dist/_redirects -Force\"",
     "test": "jest",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
