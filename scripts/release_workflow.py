@@ -84,6 +84,8 @@ def _run(
     return subprocess.run(
         cmd,
         cwd=cwd or ROOT,
+        encoding="utf-8",
+        errors="replace",
         text=True,
         capture_output=capture_output,
         check=check,
@@ -514,19 +516,25 @@ def _build_plan(bump_type: str, branch: str, previous_tag: str | None) -> Releas
 
 
 def _stage_paths(paths: list[Path]) -> None:
-    relative_paths = [str(path.relative_to(ROOT)) for path in paths]
+    relative_paths = [path.relative_to(ROOT).as_posix() for path in paths]
     normal_paths: list[str] = []
     forced_paths: list[str] = []
     for relative_path in relative_paths:
-        check_ignore = _run(["git", "check-ignore", "-q", relative_path], check=False)
+        check_ignore = _run(["git", "check-ignore", "-q", "--", relative_path], check=False)
         if check_ignore.returncode == 0:
             forced_paths.append(relative_path)
         else:
             normal_paths.append(relative_path)
-    if normal_paths:
-        _run(["git", "add", *normal_paths])
-    if forced_paths:
-        _run(["git", "add", "-f", *forced_paths])
+    try:
+        if normal_paths:
+            _run(["git", "add", "--", *normal_paths])
+        if forced_paths:
+            _run(["git", "add", "-f", "--", *forced_paths])
+    except subprocess.CalledProcessError as exc:
+        details = (exc.stderr or exc.stdout or "").strip()
+        if details:
+            raise ReleaseError(f"Failed to stage release files: {details}") from exc
+        raise ReleaseError("Failed to stage release files with git add.") from exc
 
 
 def _commit_release(plan: ReleasePlan) -> None:
