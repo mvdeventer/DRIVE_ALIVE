@@ -7,12 +7,6 @@ The project release entrypoint is the repository root command surface:
 .\s.bat release --major
 ```
 
-Command intent:
-
-- `--minor`: bump `x.y.z` to `x.(y+1).0`
-- `--major`: bump `x.y.z` to `(x+1).0.0`
-- `--dry-run`: preview release changes without committing, tagging, or publishing
-
 ## What The Release Workflow Does
 
 - validates git, GitHub CLI, and required local tooling
@@ -32,17 +26,3 @@ Command intent:
 ```
 
 Dry-run mode prints the planned version bump and validates the release inputs without writing files, tagging commits, or publishing to GitHub.
-
-## Typical Major Release Sequence
-
-```powershell
-# 1) verify help and auth
-.\s.bat --help
-gh auth status
-
-# 2) preview the release plan
-.\s.bat release --major --dry-run
-
-# 3) run the release
-.\s.bat release --major
-```

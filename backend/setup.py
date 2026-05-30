@@ -14,7 +14,7 @@ def get_version():
     if os.path.exists(version_file):
         with open(version_file, "r") as f:
             return f.read().strip()
-    return "3.0.0"
+    return "4.0.0"
 
 
 # Read requirements
