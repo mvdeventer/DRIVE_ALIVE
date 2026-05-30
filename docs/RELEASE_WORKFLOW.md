@@ -1,41 +1,28 @@
 # Release Workflow
 
-Drive Alive releases are created from the repository root.
-
-## Supported Commands
+The project release entrypoint is the repository root command surface:
 
 ```powershell
 .\s.bat release --minor
 .\s.bat release --major
-.\s.bat release --minor --dry-run
 ```
 
 ## What The Release Workflow Does
 
-- validates git state and required local tooling
-- validates GitHub CLI authentication before publish steps
+- validates git, GitHub CLI, and required local tooling
 - resolves the current project version from tracked version files
-- bumps the version for a minor or major release
-- synchronizes version consumers across backend, frontend, packaging, and docs
-- refreshes install and update guides
+- bumps the version and synchronizes all version consumers
+- refreshes install and update documentation
 - writes release notes to `docs/releases/`
-- creates a release commit and annotated tag
+- stages the generated changes
+- creates a release commit and annotated git tag
 - pushes the branch and tag
-- publishes the GitHub release
+- publishes a GitHub release with the generated notes
 
-## Preconditions
-
-- run releases from the `main` branch
-- start from a clean git working tree
-- ensure `git` and `gh` are installed and on `PATH`
-- ensure `gh auth status` succeeds
-
-## Validation
-
-Use a dry-run before a real release:
+## Safe Preview
 
 ```powershell
 .\s.bat release --minor --dry-run
 ```
 
-Dry-run mode shows the planned version bump and targeted files without modifying the repository.
+Dry-run mode prints the planned version bump and validates the release inputs without writing files, tagging commits, or publishing to GitHub.

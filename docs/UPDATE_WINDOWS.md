@@ -1,6 +1,6 @@
 # Update Drive Alive On Windows
 
-This guide updates an existing Drive Alive installation to the current repository state.
+This guide upgrades an existing installation to Drive Alive 3.0.0.
 
 ## Recommended Update Flow
 
@@ -20,15 +20,13 @@ cd backend
 .\venv\Scripts\python.exe -m alembic upgrade head
 ```
 
-## Verification Checklist
+## Release Artifacts
 
-- Confirm the frontend loads on `http://localhost:8081`
-- Confirm the backend responds on `http://localhost:8000/health`
-- Confirm `http://localhost:8000/docs` loads
-- Confirm your `backend/.env` still points at the correct database and external services
+- Review the GitHub release notes for migration notes and install changes.
+- Review `docs/releases/v3.0.0.md` for the repository copy of the published release notes.
 
 ## Rollback Guidance
 
-- Stop both services before restoring an older version
-- Restore the previous database backup before rolling back code
-- Reinstall dependencies if the target release used a different dependency set
+- Stop both services before restoring an older version.
+- Restore the previous database backup before rolling back application code.
+- Reinstall dependencies if the target release used a different dependency set.

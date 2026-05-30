@@ -1,6 +1,6 @@
 # Install Drive Alive On A New Windows PC
 
-This guide installs Drive Alive 2.0.7 from source on a fresh Windows machine.
+This guide installs Drive Alive 3.0.0 from the repository on a fresh Windows machine.
 
 ## Prerequisites
 
@@ -9,35 +9,36 @@ This guide installs Drive Alive 2.0.7 from source on a fresh Windows machine.
 - Python 3.9+
 - Node.js 18+
 - PostgreSQL 13+
+- GitHub CLI (`gh`) if you also plan to publish releases from this machine
 
-## Clone The Repository
+## Repository Setup
 
 ```powershell
 git clone https://github.com/mvdeventer/DRIVE_ALIVE.git
 cd DRIVE_ALIVE
 ```
 
-## Full Install
+## One-Command Install
 
 ```powershell
 .\s.bat install
 ```
 
-The install command prepares the backend virtual environment, installs backend and frontend dependencies, copies `backend/.env.example` to `backend/.env` when needed, and attempts PostgreSQL database provisioning.
+The install command prepares the backend virtual environment, installs backend and frontend dependencies, provisions the PostgreSQL database when possible, and writes `backend/.env` from `backend/.env.example`.
 
-## Start The Application
+## Start The Full Stack
 
 ```powershell
 .\s.bat start
 ```
 
-Service endpoints:
+Services:
 
 - Frontend: `http://localhost:8081`
 - Backend API: `http://localhost:8000`
 - API docs: `http://localhost:8000/docs`
 
-## Manual Recovery
+## Manual Recovery Steps
 
 ### Backend
 
@@ -58,14 +59,14 @@ npm install
 ### Database
 
 - Ensure PostgreSQL is installed and running.
-- Confirm `DATABASE_URL` in `backend/.env` points at the target PostgreSQL instance.
-- Apply migrations if needed:
+- Confirm `DATABASE_URL` in `backend/.env` points at your local PostgreSQL instance.
+- Run migrations if needed:
 
 ```powershell
 cd backend
 .\venv\Scripts\python.exe -m alembic upgrade head
 ```
 
-## Installer Inputs
+## Installer Assets
 
-The Windows installer definition is `scripts/installer.iss`. The release workflow refreshes the documentation shipped with the installer and validates the tracked setup files before publishing a release.
+The Windows installer definition lives in `scripts/installer.iss`. Release automation validates the installer inputs and refreshes the shipped documentation and install manifest before publishing a GitHub release.

@@ -1,0 +1,10 @@
+{
+  "version": "3.0.0",
+  "build": "2",
+  "release_date": "2026-05-30",
+  "codename": "Major Release 3.0.0",
+  "install_guide": "docs/INSTALL_WINDOWS.md",
+  "update_guide": "docs/UPDATE_WINDOWS.md",
+  "release_notes": "docs/releases/v3.0.0.md",
+  "installer_definition": "scripts/installer.iss"
+}
