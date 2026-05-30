@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 from typing import Callable
 
@@ -17,6 +18,12 @@ def _run(cmd: list[str], *, cwd: Path, capture_output: bool = True) -> subproces
         capture_output=capture_output,
         check=True,
     )
+
+
+def _npm_command() -> list[str]:
+    if sys.platform == "win32":
+        return ["cmd", "/c", "npm"]
+    return ["npm"]
 
 
 def _find_inno_compiler() -> Path:
@@ -81,7 +88,7 @@ def build_release_installer(
     _run(["python", "bootstrap.py", "--bundle"], cwd=root, capture_output=False)
 
     info("Building frontend web distribution...")
-    _run(["npm", "--prefix", str(frontend_dir), "run", "build:web"], cwd=root, capture_output=False)
+    _run([*_npm_command(), "--prefix", str(frontend_dir), "run", "build:web"], cwd=root, capture_output=False)
 
     backend_python = backend_dir / "venv" / "Scripts" / "python.exe"
     if not backend_python.exists():
