@@ -1,6 +1,6 @@
 # Install Drive Alive On A New Windows PC
 
-This guide installs Drive Alive 6.1.0 from the repository on a fresh Windows machine.
+This guide installs Drive Alive 6.2.0 from the repository on a fresh Windows machine.
 
 ## Prerequisites
 
@@ -69,4 +69,11 @@ cd backend
 
 ## Installer Assets
 
-The Windows installer definition lives in `scripts/installer.iss`. Release automation validates the installer inputs and refreshes the shipped documentation and install manifest before publishing a GitHub release.
+The Windows installer definition lives in `scripts/installer.iss`. Each release rebuilds the full installer pipeline automatically:
+
+- offline dependency bundle via `python bootstrap.py --bundle` (vendor packages)
+- frontend export via `npm --prefix frontend run build:web`
+- backend executable via `backend\venv\Scripts\python.exe -m PyInstaller drive-alive.spec --clean`
+- installer compilation via `ISCC scripts\installer.iss`
+
+The generated installer is saved locally to `dist/DriveAlive-Setup-<version>.exe` and uploaded to the matching GitHub release tag.
