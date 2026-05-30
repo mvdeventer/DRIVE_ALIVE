@@ -10,6 +10,7 @@ from datetime import date
 from pathlib import Path
 from typing import Any
 
+from release_helpers import build_release_installer, stage_paths
 from release_templates import install_guide, release_workflow_guide, update_guide
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -433,6 +434,7 @@ def _write_release_artifacts(plan: ReleasePlan) -> list[Path]:
         "update_guide": str(UPDATE_GUIDE_FILE.relative_to(ROOT)).replace("\\", "/"),
         "release_notes": str(plan.release_notes_file.relative_to(ROOT)).replace("\\", "/"),
         "installer_definition": str(INSTALLER_FILE.relative_to(ROOT)).replace("\\", "/"),
+        "installer_asset": f"dist/DriveAlive-Setup-{plan.next_version}.exe",
     }
     _write_text(INSTALL_MANIFEST_FILE, json.dumps(install_manifest, indent=2) + "\n")
     changed.append(INSTALL_MANIFEST_FILE)
@@ -448,12 +450,7 @@ def _validate_versions(expected_version: str) -> None:
         )
 
 
-def _preflight(dry_run: bool) -> tuple[str, str | None]:
-    _require_tool("git")
-    branch = _current_branch()
-    if branch != "main":
-        raise ReleaseError(f"Releases must be cut from the main branch. Current branch: {branch}")
-
+def _validate_worktree(dry_run: bool) -> None:
     status = _working_tree_status()
     relevant_status, ignored_status = _filter_release_status_lines(status)
     if ignored_status:
@@ -466,6 +463,15 @@ def _preflight(dry_run: bool) -> tuple[str, str | None]:
         )
     if relevant_status and dry_run:
         warn("Dry-run continuing with a dirty worktree. A real release would fail until it is clean.")
+
+
+def _preflight(dry_run: bool) -> tuple[str, str | None]:
+    _require_tool("git")
+    branch = _current_branch()
+    if branch != "main":
+        raise ReleaseError(f"Releases must be cut from the main branch. Current branch: {branch}")
+
+    _validate_worktree(dry_run=dry_run)
 
     previous_tag = _latest_tag()
     if not dry_run:
@@ -515,31 +521,6 @@ def _build_plan(bump_type: str, branch: str, previous_tag: str | None) -> Releas
     )
 
 
-def _stage_paths(paths: list[Path]) -> None:
-    relative_paths = [path.relative_to(ROOT).as_posix() for path in paths]
-    normal_paths: list[str] = []
-    forced_paths: list[str] = []
-    for relative_path in relative_paths:
-        if relative_path.startswith("dist/"):
-            forced_paths.append(relative_path)
-            continue
-        check_ignore = _run(["git", "check-ignore", "-q", "--", relative_path], check=False)
-        if check_ignore.returncode == 0:
-            forced_paths.append(relative_path)
-        else:
-            normal_paths.append(relative_path)
-    try:
-        if normal_paths:
-            _run(["git", "add", "--", *normal_paths])
-        if forced_paths:
-            _run(["git", "add", "-f", "--", *forced_paths])
-    except subprocess.CalledProcessError as exc:
-        details = (exc.stderr or exc.stdout or "").strip()
-        if details:
-            raise ReleaseError(f"Failed to stage release files: {details}") from exc
-        raise ReleaseError("Failed to stage release files with git add.") from exc
-
-
 def _commit_release(plan: ReleasePlan) -> None:
     _run(["git", "commit", "-m", f"release: {plan.release_tag}"])
 
@@ -556,12 +537,13 @@ def _push_release(plan: ReleasePlan) -> None:
     _run(["git", "push", "origin", plan.release_tag])
 
 
-def _publish_release(plan: ReleasePlan) -> None:
+def _publish_release(plan: ReleasePlan, installer_asset: Path) -> None:
     _run([
         "gh",
         "release",
         "create",
         plan.release_tag,
+        str(installer_asset),
         "--title",
         plan.release_title,
         "--notes-file",
@@ -598,6 +580,10 @@ def execute_release(bump_type: str, dry_run: bool = False) -> None:
         info("Dry-run mode enabled. Planned file updates:")
         for path in tracked_changes:
             info(f"  - {path.relative_to(ROOT)}")
+        info("Dry-run mode planned build steps:")
+        for step in ("python bootstrap.py --bundle", "npm --prefix frontend run build:web", "backend\\venv\\Scripts\\python.exe -m PyInstaller drive-alive.spec --clean", "ISCC scripts\\installer.iss"):
+            info(f"  - {step}")
+        info(f"  - Output installer: dist\\DriveAlive-Setup-{plan.next_version}.exe")
         return
 
     changed_paths: list[Path] = []
@@ -605,10 +591,25 @@ def execute_release(bump_type: str, dry_run: bool = False) -> None:
     changed_paths.extend(_refresh_docs(plan))
     changed_paths.extend(_write_release_artifacts(plan))
     _validate_versions(plan.next_version)
+    try:
+        installer_asset = build_release_installer(
+            root=ROOT,
+            backend_dir=BACKEND_DIR,
+            frontend_dir=FRONTEND_DIR,
+            installer_file=INSTALLER_FILE,
+            version=plan.next_version,
+            info=info,
+            ok=ok,
+        )
+    except RuntimeError as exc:
+        raise ReleaseError(str(exc)) from exc
 
-    _stage_paths(changed_paths)
+    try:
+        stage_paths(ROOT, changed_paths)
+    except RuntimeError as exc:
+        raise ReleaseError(f"Failed to stage release files: {exc}") from exc
     _commit_release(plan)
     _tag_release(plan)
     _push_release(plan)
-    _publish_release(plan)
+    _publish_release(plan, installer_asset)
     ok(f"Release {plan.release_tag} published successfully.")

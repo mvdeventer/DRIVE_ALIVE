@@ -77,7 +77,14 @@ def install_guide(version: str) -> str:
 
         ## Installer Assets
 
-        The Windows installer definition lives in `scripts/installer.iss`. Release automation validates the installer inputs and refreshes the shipped documentation and install manifest before publishing a GitHub release.
+        The Windows installer definition lives in `scripts/installer.iss`. Each release rebuilds the full installer pipeline automatically:
+
+        - offline dependency bundle via `python bootstrap.py --bundle` (vendor packages)
+        - frontend export via `npm --prefix frontend run build:web`
+        - backend executable via `backend\\venv\\Scripts\\python.exe -m PyInstaller drive-alive.spec --clean`
+        - installer compilation via `ISCC scripts\\installer.iss`
+
+        The generated installer is saved locally to `dist/DriveAlive-Setup-<version>.exe` and uploaded to the matching GitHub release tag.
         """
     ).strip() + "\n"
 
@@ -140,10 +147,11 @@ def release_workflow_guide() -> str:
         - bumps the version and synchronizes all version consumers
         - refreshes install and update documentation
         - writes release notes to `docs/releases/`
+        - rebuilds offline dependency bundles and installer artifacts
         - stages the generated changes
         - creates a release commit and annotated git tag
         - pushes the branch and tag
-        - publishes a GitHub release with the generated notes
+        - publishes a GitHub release with generated notes and installer EXE asset
 
         ## Safe Preview
 
