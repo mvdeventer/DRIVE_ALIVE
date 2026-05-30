@@ -10,7 +10,7 @@
 
 ; Version will be passed as command line parameter or read from file
 #ifndef APP_VERSION
-  #define APP_VERSION ReadIni(SourcePath + "\..\VERSION", "", "", "1.0.0")
+  #define APP_VERSION Trim(FileRead(FileOpen(SourcePath + "\..\VERSION")))
 #endif
 
 [Setup]
@@ -70,12 +70,11 @@ Source: "..\README.md"; DestDir: "{app}"; Flags: ignoreversion isreadme
 Source: "..\LICENSE"; DestDir: "{app}"; Flags: ignoreversion
 
 ; Documentation
-Source: "..\QUICK_START.md"; DestDir: "{app}\docs"; Flags: ignoreversion
-Source: "..\POPIA_COMPLIANCE.md"; DestDir: "{app}\docs"; Flags: ignoreversion
-Source: "..\PCI_DSS_COMPLIANCE.md"; DestDir: "{app}\docs"; Flags: ignoreversion
+Source: "..\docs\*.md"; DestDir: "{app}\docs"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 ; Scripts
-Source: "..\scripts\*.bat"; DestDir: "{app}\scripts"; Flags: ignoreversion
+Source: "..\s.bat"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\scripts\*.py"; DestDir: "{app}\scripts"; Flags: ignoreversion
 
 ; Bootstrap script
 Source: "..\bootstrap.py"; DestDir: "{app}"; Flags: ignoreversion

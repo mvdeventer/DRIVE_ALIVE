@@ -9,6 +9,7 @@
 ## Table of Contents
 
 - [Quick Start](#-quick-start)
+- [Install & Update Guides](#-install--update-guides)
 - [Tech Stack](#-tech-stack)
 - [Cross-Platform Architecture](#-cross-platform-architecture)
 - [Project Structure](#-project-structure)
@@ -16,6 +17,7 @@
 - [API Routes](#-api-routes)
 - [Database Models](#-database-models)
 - [Scripts & Commands](#-scripts--commands)
+- [Release Automation](#-release-automation)
 - [Testing](#-testing)
 - [Deployment](#-deployment-rendercom)
 - [Mobile App Builds (EAS)](#-mobile-app-builds-eas)
@@ -78,6 +80,12 @@ cd ..
 | `-l` | Localhost mode (HTTPS) |
 | `-m` | Mobile/network mode (auto-switch env) |
 | `stop` | Stop all servers |
+
+## 📘 Install & Update Guides
+
+- New Windows PC install: [docs/INSTALL_WINDOWS.md](docs/INSTALL_WINDOWS.md)
+- Update an existing installation: [docs/UPDATE_WINDOWS.md](docs/UPDATE_WINDOWS.md)
+- Release workflow reference: [docs/RELEASE_WORKFLOW.md](docs/RELEASE_WORKFLOW.md)
 
 ---
 
@@ -458,6 +466,17 @@ venv\Scripts\python.exe -m alembic upgrade head
 # Create new migration
 venv\Scripts\python.exe -m alembic revision --autogenerate -m "description"
 ```
+
+## 🚢 Release Automation
+
+Use the repo-managed release workflow from the project root:
+
+```powershell
+.\s.bat release --minor
+.\s.bat release --major
+```
+
+The release workflow validates git/GitHub CLI state, synchronizes version files, refreshes install/update documentation, writes release notes under `docs/releases/`, and publishes the GitHub release.
 
 ---
 

@@ -53,6 +53,8 @@ import sys
 import time
 from pathlib import Path
 
+from release_workflow import ReleaseError, execute_release
+
 # ── Constants ──────────────────────────────────────────────────────────────────
 
 ROOT = Path(__file__).resolve().parent.parent       # repo root
@@ -1115,6 +1117,18 @@ def cmd_status() -> None:
     print()
 
 
+def cmd_release(bump_type: str, dry_run: bool = False) -> None:
+    """Release workflow entrypoint."""
+    action = "Dry-run release" if dry_run else "Release"
+    header(f"Drive Alive – {action}")
+    info(f"Requested bump: {bump_type}")
+    try:
+        execute_release(bump_type=bump_type, dry_run=dry_run)
+    except ReleaseError as exc:
+        err(str(exc))
+        sys.exit(1)
+
+
 # ── CLI ────────────────────────────────────────────────────────────────────────
 
 def main() -> None:
@@ -1168,6 +1182,13 @@ def main() -> None:
 
     # status
     sub.add_parser("status", help="Show status")
+
+    # release
+    p_release = sub.add_parser("release", help="Create a project release")
+    bump_group = p_release.add_mutually_exclusive_group(required=True)
+    bump_group.add_argument("--minor", action="store_true", help="Create a minor release")
+    bump_group.add_argument("--major", action="store_true", help="Create a major release")
+    p_release.add_argument("--dry-run", action="store_true", help="Preview release changes without writing files")
 
     # If no subcommand given, default to "start".
     # Use parse_known_args() first so that start-only flags like --debug / -d
@@ -1233,6 +1254,10 @@ def main() -> None:
 
     elif args.command == "status":
         cmd_status()
+
+    elif args.command == "release":
+        bump_type = "major" if args.major else "minor"
+        cmd_release(bump_type=bump_type, dry_run=args.dry_run)
 
     else:
         parser.print_help()

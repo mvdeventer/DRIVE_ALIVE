@@ -16,7 +16,7 @@ if os.path.exists(version_file):
     with open(version_file, 'r') as f:
         VERSION = f.read().strip()
 else:
-    VERSION = '1.0.0'
+    VERSION = '2.0.7'
 
 # Collect all app modules
 app_modules = collect_submodules('app')
