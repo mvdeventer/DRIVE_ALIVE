@@ -377,9 +377,10 @@ async def login(
         )
 
     # ── Instructor pending-verification guard ────────────────────────────────
-    # Block instructor login until their credentials have been verified by admin
-    # (or company owner). Admins are never blocked even if they hold an instructor profile.
-    if selected_role == UserRole.INSTRUCTOR.value and user.role != UserRole.ADMIN:
+    # Block instructor-role login until instructor credentials are verified.
+    # This applies to every account selecting the instructor role, including
+    # multi-role users whose base role is admin.
+    if selected_role == UserRole.INSTRUCTOR.value:
         from ..models.user import InstructorVerificationStatus as IVS
         instructor = db.query(Instructor).filter(Instructor.user_id == user.id).first()
         if instructor and instructor.verification_status not in (
