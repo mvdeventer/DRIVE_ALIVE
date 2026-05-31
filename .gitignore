@@ -98,6 +98,7 @@ firebase-service-account.json
 tmp/
 temp/
 *.tmp
+docs/~$
 backend/backups/*.json
 backend/backups/archived/*.zip
 

@@ -40,6 +40,7 @@ IGNORED_DIRTY_PREFIXES = (
     "backend/.backend.pid",
     "frontend/.frontend.pid",
     "backend/backups/",
+    "docs/~$",
     "docs/session-code-change-report.md",
     "docs/session-code-change-report.docx",
     "dist/install-manifest.json",
