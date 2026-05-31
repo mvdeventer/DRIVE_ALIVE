@@ -1,11 +1,11 @@
 {
-  "version": "6.5.0",
-  "build": "10",
+  "version": "6.6.0",
+  "build": "11",
   "release_date": "2026-05-31",
-  "codename": "Minor Release 6.5.0",
+  "codename": "Minor Release 6.6.0",
   "install_guide": "docs/INSTALL_WINDOWS.md",
   "update_guide": "docs/UPDATE_WINDOWS.md",
-  "release_notes": "docs/releases/v6.5.0.md",
+  "release_notes": "docs/releases/v6.6.0.md",
   "installer_definition": "scripts/installer.iss",
-  "installer_asset": "dist/DriveAlive-Setup-6.5.0.exe"
+  "installer_asset": "dist/DriveAlive-Setup-6.6.0.exe"
 }
