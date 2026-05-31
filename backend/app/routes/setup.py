@@ -21,6 +21,7 @@ from sqlalchemy.orm import Session
 from ..database import get_db
 from ..models.user import User, UserRole, UserStatus
 from ..schemas.admin import AdminCreateRequest
+from ..services.role_transition_policy import RoleTransitionPolicy, TransitionChannel
 from ..utils.auth import get_password_hash
 from ..utils.encryption import EncryptionService  # For SMTP password encryption
 
@@ -107,6 +108,14 @@ def create_initial_admin(admin_data: AdminCreateRequest, db: Session = Depends(g
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Email '{admin_data.email}' is already registered. Please use a different email.",
         )
+
+    RoleTransitionPolicy.assert_transition_allowed(
+        db=db,
+        target_role=UserRole.ADMIN,
+        channel=TransitionChannel.INITIAL_SETUP,
+        existing_user=None,
+    )
+
     new_admin = _build_admin_user(admin_data)
     db.add(new_admin)
     db.commit()

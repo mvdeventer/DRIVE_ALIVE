@@ -15,6 +15,7 @@ from ..config import settings
 from ..models.availability import InstructorSchedule
 from ..models.user import Instructor, InstructorVerificationStatus, Student, User, UserRole, UserStatus
 from ..schemas.user import InstructorCreate, StudentCreate, UserCreate
+from .role_transition_policy import RoleTransitionPolicy, TransitionChannel
 from ..utils.auth import create_access_token, get_password_hash, verify_password
 
 
@@ -89,6 +90,13 @@ class AuthService:
         try:
             # Check if email exists - allow multi-role users
             existing_user = db.query(User).filter(User.email == instructor_data.email).first()
+
+            RoleTransitionPolicy.assert_transition_allowed(
+                db=db,
+                target_role=UserRole.INSTRUCTOR,
+                channel=TransitionChannel.PUBLIC_REGISTRATION,
+                existing_user=existing_user,
+            )
             
             if existing_user:
                 # User exists - check if they already have an instructor profile
@@ -280,6 +288,13 @@ class AuthService:
         try:
             # Check if email exists - allow multi-role users
             existing_user = db.query(User).filter(User.email == student_data.email).first()
+
+            RoleTransitionPolicy.assert_transition_allowed(
+                db=db,
+                target_role=UserRole.STUDENT,
+                channel=TransitionChannel.PUBLIC_REGISTRATION,
+                existing_user=existing_user,
+            )
             
             if existing_user:
                 # User exists - check if they already have a student profile

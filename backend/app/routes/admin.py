@@ -33,6 +33,7 @@ from ..schemas.availability import (
     InstructorScheduleUpdate,
     TimeOffExceptionCreate,
 )
+from ..services.role_transition_policy import RoleTransitionPolicy, TransitionChannel
 from ..utils.auth import get_password_hash
 from ..utils.encryption import EncryptionService
 
@@ -61,6 +62,14 @@ async def create_admin(
     
     # Check if email already exists
     existing_user = db.query(User).filter(User.email == admin_data.email).first()
+
+    RoleTransitionPolicy.assert_transition_allowed(
+        db=db,
+        target_role=UserRole.ADMIN,
+        channel=TransitionChannel.ADMIN_GRANT,
+        existing_user=existing_user,
+        actor_user=current_admin,
+    )
 
     if existing_user:
         # Check if user already has admin role
