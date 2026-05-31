@@ -1,0 +1,9 @@
+{
+  "AUTH_INVALID_CREDENTIALS": "errors.auth.invalidCredentials",
+  "AUTH_TOKEN_EXPIRED": "errors.auth.tokenExpired",
+  "AUTH_FORBIDDEN": "errors.auth.forbidden",
+  "ACCOUNT_PENDING_VERIFICATION": "errors.auth.accountPendingVerification",
+  "SETUP_ALREADY_INITIALIZED": "errors.setup.alreadyInitialized",
+  "USER_NOT_FOUND": "errors.user.notFound",
+  "BOOKING_NOT_FOUND": "errors.booking.notFound"
+}

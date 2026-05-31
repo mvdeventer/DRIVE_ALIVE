@@ -37,6 +37,23 @@ export const af: TranslationKeys = {
     changePassword: 'Verander wagwoord',
     resetPassword: 'Herstel wagwoord',
   },
+  errors: {
+    auth: {
+      invalidCredentials: 'Ongeldige e-pos of wagwoord.',
+      tokenExpired: 'Jou sessie het verval. Teken asseblief weer in.',
+      forbidden: 'Jy het nie toestemming om hierdie aksie uit te voer nie.',
+      accountPendingVerification: 'Jou rekening wag op verifikasie. Verifieer asseblief en probeer weer.',
+    },
+    setup: {
+      alreadyInitialized: 'Stelselopstelling is reeds voltooi.',
+    },
+    user: {
+      notFound: 'Gebruiker nie gevind nie.',
+    },
+    booking: {
+      notFound: 'Bespreking nie gevind nie.',
+    },
+  },
   nav: {
     home: 'Tuis',
     instructors: 'Instrukteurs',

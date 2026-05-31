@@ -74,6 +74,23 @@ zap-cli report -o security-report.html -f html
 - [ ] **Rate limit errors**: 429 Too Many Requests
 - [ ] **Generic error messages**: Don't reveal sensitive info
 
+## Application Security Gates
+
+These repository-level checks keep the UI and backend security posture aligned:
+
+- `npm --prefix frontend run i18n:check-completeness` ensures locale parity across `en`, `af`, `zu`, and `xh`.
+- `npm --prefix frontend run i18n:detect-hardcoded` flags user-facing literals and supports a staged allowlist for legacy screens/components.
+- `python scripts/check_error_code_mapping.py` verifies backend error codes are mapped to frontend translation keys.
+
+## Current Web Security Baseline
+
+- HTTP-only access token cookies for web clients
+- `SameSite=Lax` cookie policy to reduce CSRF risk
+- `X-Frame-Options: DENY` to block clickjacking
+- `Content-Security-Policy` headers on docs, setup, and API responses
+- `Strict-Transport-Security` when served over HTTPS
+- Rate limits on login, registration, password reset, and password change flows
+
 ## Security Test Cases
 
 ### 1. Authentication Bypass

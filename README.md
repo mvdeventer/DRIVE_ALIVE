@@ -644,6 +644,18 @@ All listed paths are covered by `frontend/.gitignore` (`secrets/`, `credentials.
 | POPIA | South African data protection compliance |
 | PCI DSS | SAQ A (no cardholder data stored) |
 
+## ✅ Development Quality Gates
+
+Run these before merging frontend or backend changes:
+
+```powershell
+npm --prefix frontend run i18n:check-completeness
+npm --prefix frontend run i18n:detect-hardcoded
+python scripts/check_error_code_mapping.py
+```
+
+They ensure translation parity, block new hardcoded user-facing text, and keep backend error codes mapped to frontend copy keys. The full workflow is documented in [DEVELOPMENT_GUIDE.md](DEVELOPMENT_GUIDE.md).
+
 ---
 
 ## 🚨 Troubleshooting

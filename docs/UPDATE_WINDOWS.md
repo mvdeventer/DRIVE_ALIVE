@@ -11,6 +11,14 @@ git pull origin main
 .\s.bat start
 ```
 
+After a code or content update, re-run the quality gates to catch locale drift, new hardcoded copy, or missing backend error mappings:
+
+```powershell
+npm --prefix frontend run i18n:check-completeness
+npm --prefix frontend run i18n:detect-hardcoded
+python scripts/check_error_code_mapping.py
+```
+
 ## Database And Migration Steps
 
 If the backend schema changed, run:
@@ -30,3 +38,5 @@ cd backend
 - Stop both services before restoring an older version.
 - Restore the previous database backup before rolling back application code.
 - Reinstall dependencies if the target release used a different dependency set.
+
+See [DEVELOPMENT_GUIDE.md](../DEVELOPMENT_GUIDE.md) for the shared workflow used by agents and humans.

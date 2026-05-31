@@ -2,6 +2,8 @@
 
 > Auto-loaded into every chat. Keep this file SHORT — every token here is sent on every request.
 
+Canonical shared multi-agent execution contract: see `AGENTS.md` at repository root.
+
 ## Token / Credit Efficiency Rules (HIGHEST PRIORITY)
 
 1. **Default to Haiku-class reasoning.** Use Sonnet/Opus only when the user explicitly requests edits, multi-file refactors, or complex agent work.

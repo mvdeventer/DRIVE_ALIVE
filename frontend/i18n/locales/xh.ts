@@ -37,6 +37,23 @@ export const xh: TranslationKeys = {
     changePassword: 'Tshintsha iphasiwedi',
     resetPassword: 'Seta kwakhona iphasiwedi',
   },
+  errors: {
+    auth: {
+      invalidCredentials: 'I-imeyile okanye iphasiwedi ayichanekanga.',
+      tokenExpired: 'Iseshoni yakho iphelelwe lixesha. Nceda ungene kwakhona.',
+      forbidden: 'Awunalo igunya lokwenza esi senzo.',
+      accountPendingVerification: 'Iakhawunti yakho isalinde ukuqinisekiswa. Nceda uqinisekise uze uzame kwakhona.',
+    },
+    setup: {
+      alreadyInitialized: 'Useto lwenkqubo sele lugqityiwe.',
+    },
+    user: {
+      notFound: 'Umsebenzisi akafunyenwanga.',
+    },
+    booking: {
+      notFound: 'Ibhukhi ayifunyenwanga.',
+    },
+  },
   nav: {
     home: 'Ikhaya',
     instructors: 'Abafundisi',

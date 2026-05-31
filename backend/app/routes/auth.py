@@ -111,7 +111,6 @@ async def get_current_user(
 
     token_role = payload.get("role")
     if token_role:
-        logger.debug("JWT token role: %s, database role: %s", token_role, user.role.value)
         setattr(user, "active_role", token_role)
     else:
         # Fallback to database role if no role in JWT
@@ -408,7 +407,7 @@ async def login(
     access_token = AuthService.create_user_token(user, selected_role, db=db)
     
     # Set HTTP-only cookie for web security (prevents XSS token theft)
-    is_secure_cookie = settings.ENVIRONMENT.lower() == "production"
+    is_secure_cookie = settings.ENVIRONMENT.lower() not in {"development", "dev", "local"}
     response.set_cookie(
         key="access_token",
         value=access_token,
@@ -453,7 +452,6 @@ async def logout(
                 if user:
                     user.active_session_token = None
                     db.commit()
-                    logger.debug("Cleared active session token for user_id: %s", user.id)
 
     response.delete_cookie(key="access_token")
     return {"message": "Successfully logged out"}
@@ -634,7 +632,9 @@ async def update_user_profile(
 
 
 @router.post("/change-password")
+@limiter.limit("3/hour")  # Max 3 password changes per hour per IP
 async def change_password(
+    request: Request,  # Required for rate limiter
     password_data: ChangePasswordRequest,
     current_user: Annotated[User, Depends(get_current_user)],
     db: Session = Depends(get_db),

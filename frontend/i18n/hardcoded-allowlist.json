@@ -1,0 +1,18 @@
+{
+  "ignorePathRegexes": [
+    "^screens/.*",
+    "^navigation/.*",
+    "^components/.*"
+  ],
+  "ignoreLiteralRegexes": [
+    "^Loading\\.\\.\\.$",
+    "^Cancel$",
+    "^Save$",
+    "^Back$",
+    "^Next$",
+    "^Retry$",
+    "^Login$",
+    "^Student$",
+    "^Instructor$"
+  ]
+}

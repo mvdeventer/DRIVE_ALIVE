@@ -37,6 +37,23 @@ export const zu: TranslationKeys = {
     changePassword: 'Shintsha iphasiwedi',
     resetPassword: 'Setha kabusha iphasiwedi',
   },
+  errors: {
+    auth: {
+      invalidCredentials: 'I-imeyili noma iphasiwedi ayilungile.',
+      tokenExpired: 'Iseshini yakho iphelelwe yisikhathi. Sicela ungene futhi.',
+      forbidden: 'Awunayo imvume yokwenza lesi senzo.',
+      accountPendingVerification: 'I-akhawunti yakho isalindele ukuqinisekiswa. Sicela uqinisekise bese uzama futhi.',
+    },
+    setup: {
+      alreadyInitialized: 'Ukusetha uhlelo sekuqediwe kakade.',
+    },
+    user: {
+      notFound: 'Umsebenzisi akatholakalanga.',
+    },
+    booking: {
+      notFound: 'Ukubhukha akutholakalanga.',
+    },
+  },
   nav: {
     home: 'Ikhaya',
     instructors: 'Abafundisi',

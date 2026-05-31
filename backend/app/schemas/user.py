@@ -2,13 +2,25 @@
 Pydantic schemas for request/response validation
 """
 
+import re
 from datetime import datetime, time as time_type
 from typing import List, Optional
 
-from pydantic import BaseModel, EmailStr, Field, field_validator, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from ..models.availability import DayOfWeek
 from ..models.user import UserRole, UserStatus
+
+PASSWORD_STRENGTH_PATTERN = re.compile(r"^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,}$")
+
+
+def validate_strong_password(value: str) -> str:
+    """Require a password with upper/lowercase letters, a digit, and 8+ chars."""
+    if not PASSWORD_STRENGTH_PATTERN.match(value):
+        raise ValueError(
+            "Password must be at least 8 characters and include uppercase, lowercase, and a number."
+        )
+    return value
 
 # ==================== Auth Schemas ====================
 
@@ -151,7 +163,12 @@ class ChangePasswordRequest(BaseModel):
     """Password change request schema"""
 
     current_password: str
-    new_password: str = Field(..., min_length=6)
+    new_password: str = Field(..., min_length=8)
+
+    @field_validator("new_password")
+    @classmethod
+    def validate_new_password(cls, value: str) -> str:
+        return validate_strong_password(value)
 
 
 class ForgotPasswordRequest(BaseModel):
@@ -164,7 +181,12 @@ class ResetPasswordRequest(BaseModel):
     """Reset password request schema"""
 
     token: str
-    new_password: str = Field(..., min_length=6)
+    new_password: str = Field(..., min_length=8)
+
+    @field_validator("new_password")
+    @classmethod
+    def validate_new_password(cls, value: str) -> str:
+        return validate_strong_password(value)
 
 
 class UserResponse(BaseModel):

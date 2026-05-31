@@ -69,6 +69,18 @@ Response: {
 }
 ```
 
+## Post-Setup Quality Checks
+
+After installing or changing setup-related code, run the repo gates so the first-run experience stays consistent:
+
+```powershell
+npm --prefix frontend run i18n:check-completeness
+npm --prefix frontend run i18n:detect-hardcoded
+python scripts/check_error_code_mapping.py
+```
+
+For a broader workflow reference, see [DEVELOPMENT_GUIDE.md](DEVELOPMENT_GUIDE.md) and [AGENTS.md](AGENTS.md).
+
 ## Testing the Setup Flow
 
 ### Prerequisites

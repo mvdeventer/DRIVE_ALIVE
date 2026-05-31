@@ -32,12 +32,17 @@ INSTALLER_FILE = ROOT / "scripts" / "installer.iss"
 INSTALL_GUIDE_FILE = DOCS_DIR / "INSTALL_WINDOWS.md"
 UPDATE_GUIDE_FILE = DOCS_DIR / "UPDATE_WINDOWS.md"
 RELEASE_WORKFLOW_FILE = DOCS_DIR / "RELEASE_WORKFLOW.md"
+SESSION_REPORT_MD = DOCS_DIR / "session-code-change-report.md"
+SESSION_REPORT_DOCX = DOCS_DIR / "session-code-change-report.docx"
 INSTALL_MANIFEST_FILE = DIST_DIR / "install-manifest.json"
 
 IGNORED_DIRTY_PREFIXES = (
     "backend/.backend.pid",
     "frontend/.frontend.pid",
     "backend/backups/",
+    "docs/session-code-change-report.md",
+    "docs/session-code-change-report.docx",
+    "dist/install-manifest.json",
 )
 
 SEMVER_RE = re.compile(r"^(\d+)\.(\d+)\.(\d+)$")
@@ -538,12 +543,16 @@ def _push_release(plan: ReleasePlan) -> None:
 
 
 def _publish_release(plan: ReleasePlan, installer_asset: Path) -> None:
+    release_assets = [str(installer_asset)]
+    if SESSION_REPORT_DOCX.exists():
+        release_assets.append(str(SESSION_REPORT_DOCX))
+
     _run([
         "gh",
         "release",
         "create",
         plan.release_tag,
-        str(installer_asset),
+        *release_assets,
         "--title",
         plan.release_title,
         "--notes-file",

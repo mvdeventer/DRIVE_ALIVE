@@ -35,6 +35,23 @@ export const en = {
     changePassword: 'Change Password',
     resetPassword: 'Reset Password',
   },
+  errors: {
+    auth: {
+      invalidCredentials: 'Invalid email or password.',
+      tokenExpired: 'Your session has expired. Please sign in again.',
+      forbidden: 'You do not have permission to perform this action.',
+      accountPendingVerification: 'Your account is pending verification. Please verify and try again.',
+    },
+    setup: {
+      alreadyInitialized: 'System setup is already completed.',
+    },
+    user: {
+      notFound: 'User not found.',
+    },
+    booking: {
+      notFound: 'Booking not found.',
+    },
+  },
   nav: {
     home: 'Home',
     instructors: 'Instructors',
