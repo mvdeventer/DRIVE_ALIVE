@@ -104,3 +104,35 @@ class RoleTransitionPolicy:
                 f"to '{target_role.value}' via '{channel.value}'."
             ),
         )
+
+    @classmethod
+    def get_available_runtime_roles(
+        cls,
+        *,
+        db: Session,
+        user: User,
+    ) -> set[str]:
+        """Return role names available for login role selection."""
+        return {role.value for role in cls._get_effective_roles(db, user)}
+
+    @staticmethod
+    def select_runtime_role(
+        *,
+        requested_role: Optional[str],
+        available_roles: set[str],
+    ) -> str:
+        """Resolve and validate the requested role against available runtime roles."""
+        if not available_roles:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="No available roles found for this account.",
+            )
+
+        selected_role = requested_role or next(iter(available_roles))
+        if selected_role not in available_roles:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid role selection for this account.",
+            )
+
+        return selected_role

@@ -26,6 +26,7 @@ from ..schemas.user import (
 )
 from ..services.auth import AuthService
 from ..services.email_service import email_service
+from ..services.role_transition_policy import RoleTransitionPolicy
 from ..utils.auth import decode_access_token, get_password_hash, verify_password
 from ..utils.rate_limiter import limiter
 from ..utils.encryption import EncryptionService  # For SMTP password decryption
@@ -348,19 +349,10 @@ async def login(
         )
     # ─────────────────────────────────────────────────────────────────────────
 
-    available_roles: set[str] = set()
-
-    if user.role == UserRole.ADMIN:
-        available_roles.add(UserRole.ADMIN.value)
-    if user.role == UserRole.INSTRUCTOR:
-        available_roles.add(UserRole.INSTRUCTOR.value)
-    if user.role == UserRole.STUDENT:
-        available_roles.add(UserRole.STUDENT.value)
-
-    if db.query(Instructor).filter(Instructor.user_id == user.id).first():
-        available_roles.add(UserRole.INSTRUCTOR.value)
-    if db.query(Student).filter(Student.user_id == user.id).first():
-        available_roles.add(UserRole.STUDENT.value)
+    available_roles = RoleTransitionPolicy.get_available_runtime_roles(
+        db=db,
+        user=user,
+    )
 
 
     if role is None and len(available_roles) > 1:
@@ -369,12 +361,10 @@ async def login(
             "available_roles": sorted(list(available_roles)),
         }
 
-    selected_role = role or next(iter(available_roles))
-    if selected_role not in available_roles:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid role selection for this account.",
-        )
+    selected_role = RoleTransitionPolicy.select_runtime_role(
+        requested_role=role,
+        available_roles=available_roles,
+    )
 
     # ── Instructor pending-verification guard ────────────────────────────────
     # Block instructor-role login until instructor credentials are verified.
