@@ -8,7 +8,13 @@ from typing import Optional
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
-from ..models.user import Instructor, Student, User, UserRole
+from ..models.user import (
+    Instructor,
+    InstructorVerificationStatus,
+    Student,
+    User,
+    UserRole,
+)
 
 
 class TransitionChannel(str, Enum):
@@ -136,3 +142,42 @@ class RoleTransitionPolicy:
             )
 
         return selected_role
+
+    @staticmethod
+    def assert_runtime_role_ready(
+        *,
+        db: Session,
+        user: User,
+        selected_role: str,
+    ) -> None:
+        """Ensure the selected runtime role is in a login-ready state."""
+        if selected_role != UserRole.INSTRUCTOR.value:
+            return
+
+        instructor = db.query(Instructor).filter(Instructor.user_id == user.id).first()
+        if not instructor:
+            return
+
+        if instructor.verification_status in (
+            InstructorVerificationStatus.VERIFIED.value,
+            None,
+        ):
+            return
+
+        admin = db.query(User).filter(User.role == UserRole.ADMIN).first()
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={
+                "code": "ACCOUNT_PENDING_VERIFICATION",
+                "message": (
+                    "Your instructor account is pending verification. "
+                    "Please contact the administrator."
+                ),
+                "verification_status": instructor.verification_status,
+                "admin_email": admin.email if admin else None,
+                "admin_phone": admin.phone if admin else None,
+                "admin_name": (
+                    f"{admin.first_name} {admin.last_name}".strip() if admin else None
+                ),
+            },
+        )

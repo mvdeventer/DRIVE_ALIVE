@@ -366,34 +366,11 @@ async def login(
         available_roles=available_roles,
     )
 
-    # ── Instructor pending-verification guard ────────────────────────────────
-    # Block instructor-role login until instructor credentials are verified.
-    # This applies to every account selecting the instructor role, including
-    # multi-role users whose base role is admin.
-    if selected_role == UserRole.INSTRUCTOR.value:
-        from ..models.user import InstructorVerificationStatus as IVS
-        instructor = db.query(Instructor).filter(Instructor.user_id == user.id).first()
-        if instructor and instructor.verification_status not in (
-            IVS.VERIFIED.value, None
-        ):
-            admin = db.query(User).filter(User.role == UserRole.ADMIN).first()
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail={
-                    "code": "ACCOUNT_PENDING_VERIFICATION",
-                    "message": (
-                        "Your instructor account is pending verification. "
-                        "Please contact the administrator."
-                    ),
-                    "verification_status": instructor.verification_status,
-                    "admin_email": admin.email if admin else None,
-                    "admin_phone": admin.phone if admin else None,
-                    "admin_name": (
-                        f"{admin.first_name} {admin.last_name}".strip() if admin else None
-                    ),
-                },
-            )
-    # ─────────────────────────────────────────────────────────────────────────
+    RoleTransitionPolicy.assert_runtime_role_ready(
+        db=db,
+        user=user,
+        selected_role=selected_role,
+    )
 
     access_token = AuthService.create_user_token(user, selected_role, db=db)
     
