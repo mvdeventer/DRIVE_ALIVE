@@ -42,8 +42,8 @@ PrivilegesRequired=admin
 PrivilegesRequiredOverridesAllowed=dialog
 
 ; Architecture
-ArchitecturesAllowed=x64
-ArchitecturesInstallIn64BitMode=x64
+ArchitecturesAllowed=x64compatible
+ArchitecturesInstallIn64BitMode=x64compatible
 
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"
@@ -109,7 +109,7 @@ Filename: "{app}\backend\{#MyAppExeName}"; Description: "Start Drive Alive API S
 
 [Registry]
 ; Auto-start registry entry (optional)
-Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "DriveAliveAPI"; ValueData: """{app}\backend\{#MyAppExeName}"""; Flags: uninsdeletevalue; Tasks: autostart
+Root: HKA; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "DriveAliveAPI"; ValueData: """{app}\backend\{#MyAppExeName}"""; Flags: uninsdeletevalue; Tasks: autostart
 
 [Code]
 var
