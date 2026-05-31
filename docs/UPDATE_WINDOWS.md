@@ -1,6 +1,6 @@
 # Update Drive Alive On Windows
 
-This guide upgrades an existing installation to Drive Alive 6.3.0.
+This guide upgrades an existing installation to Drive Alive 6.4.0.
 
 ## Recommended Update Flow
 
@@ -9,14 +9,6 @@ git pull origin main
 .\s.bat stop
 .\s.bat install --force
 .\s.bat start
-```
-
-After a code or content update, re-run the quality gates to catch locale drift, new hardcoded copy, or missing backend error mappings:
-
-```powershell
-npm --prefix frontend run i18n:check-completeness
-npm --prefix frontend run i18n:detect-hardcoded
-python scripts/check_error_code_mapping.py
 ```
 
 ## Database And Migration Steps
@@ -31,12 +23,10 @@ cd backend
 ## Release Artifacts
 
 - Review the GitHub release notes for migration notes and install changes.
-- Review `docs/releases/v6.3.0.md` for the repository copy of the published release notes.
+- Review `docs/releases/v6.4.0.md` for the repository copy of the published release notes.
 
 ## Rollback Guidance
 
 - Stop both services before restoring an older version.
 - Restore the previous database backup before rolling back application code.
 - Reinstall dependencies if the target release used a different dependency set.
-
-See [DEVELOPMENT_GUIDE.md](../DEVELOPMENT_GUIDE.md) for the shared workflow used by agents and humans.

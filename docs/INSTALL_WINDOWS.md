@@ -1,6 +1,6 @@
 # Install Drive Alive On A New Windows PC
 
-This guide installs Drive Alive 6.3.0 from the repository on a fresh Windows machine.
+This guide installs Drive Alive 6.4.0 from the repository on a fresh Windows machine.
 
 ## Prerequisites
 
@@ -25,14 +25,6 @@ cd DRIVE_ALIVE
 ```
 
 The install command prepares the backend virtual environment, installs backend and frontend dependencies, provisions the PostgreSQL database when possible, and writes `backend/.env` from `backend/.env.example`.
-
-After install, run the quality gates once to verify the workspace is ready for development:
-
-```powershell
-npm --prefix frontend run i18n:check-completeness
-npm --prefix frontend run i18n:detect-hardcoded
-python scripts/check_error_code_mapping.py
-```
 
 ## Start The Full Stack
 
@@ -85,5 +77,3 @@ The Windows installer definition lives in `scripts/installer.iss`. Each release 
 - installer compilation via `ISCC scripts\installer.iss`
 
 The generated installer is saved locally to `dist/DriveAlive-Setup-<version>.exe` and uploaded to the matching GitHub release tag.
-
-For the current security and workflow baseline, see [DEVELOPMENT_GUIDE.md](../DEVELOPMENT_GUIDE.md) and [docs/RELEASE_WORKFLOW.md](RELEASE_WORKFLOW.md).
