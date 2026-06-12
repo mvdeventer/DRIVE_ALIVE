@@ -2,8 +2,8 @@
 Password Reset Token Model
 """
 
+import secrets
 from datetime import datetime, timedelta, timezone
-from uuid import uuid4
 
 from sqlalchemy import Column, DateTime, ForeignKey, Integer, String
 from sqlalchemy.orm import relationship
@@ -31,8 +31,8 @@ class PasswordResetToken(Base):
 
     @staticmethod
     def generate_token() -> str:
-        """Generate a unique reset token"""
-        return str(uuid4())
+        """Generate a cryptographically secure reset token (256-bit entropy)."""
+        return secrets.token_urlsafe(32)
 
     @staticmethod
     def get_expiration_time() -> datetime:

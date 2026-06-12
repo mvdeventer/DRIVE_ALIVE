@@ -34,6 +34,7 @@ STUDENT_DATA = {
     "city": "Cape Town",
     "suburb": "City Bowl",
     "postal_code": "8001",
+    "accept_terms": True,
 }
 
 INSTRUCTOR_DATA = {
@@ -57,6 +58,7 @@ INSTRUCTOR_DATA = {
     "max_travel_distance_km": 50.0,
     "rate_per_km_beyond_radius": 5.0,
     "bio": "Multi-role test instructor",
+    "accept_terms": True,
 }
 
 

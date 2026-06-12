@@ -41,7 +41,16 @@
     },
     "web": {
       "favicon": "./assets/icons/favicon.png",
-      "bundler": "metro"
+      "bundler": "metro",
+      "name": "RoadReady",
+      "shortName": "RoadReady",
+      "description": "Book driving lessons with verified instructors across South Africa.",
+      "themeColor": "#0D9488",
+      "backgroundColor": "#0D9488",
+      "lang": "en-ZA",
+      "startUrl": "/",
+      "display": "standalone",
+      "orientation": "portrait"
     },
     "plugins": [
       "expo-location",

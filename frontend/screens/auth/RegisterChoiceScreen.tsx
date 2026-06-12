@@ -12,41 +12,70 @@ import {
 import { Card } from '../../components/ui';
 import { useTheme } from '../../theme/ThemeContext';
 
+function RegisterOptionCard({
+  icon,
+  title,
+  description,
+  backgroundColor,
+  onPress,
+}: {
+  icon: string;
+  title: string;
+  description: string;
+  backgroundColor: string;
+  onPress: () => void;
+}) {
+  return (
+    <Card
+      variant="elevated"
+      padding="lg"
+      onPress={onPress}
+      style={[styles.optionCard, { backgroundColor }]}
+    >
+      <Text style={styles.cardIcon}>{icon}</Text>
+      <Text style={styles.optionTitle}>{title}</Text>
+      <Text style={styles.optionDescription}>{description}</Text>
+    </Card>
+  );
+}
+
 export default function RegisterChoiceScreen({ navigation }: any) {
   const { colors } = useTheme();
+  const goStudent = () => navigation.navigate('RegisterStudent');
+  const goInstructor = () => navigation.navigate('RegisterInstructor');
+  const goCompany = () => navigation.navigate('RegisterCompany');
+  const goLogin = () => navigation.navigate('Login');
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <Text style={[styles.title, { color: colors.text }]}>Join as…</Text>
 
-      <Card
-        variant="elevated"
-        padding="lg"
-        onPress={() => navigation.navigate('RegisterStudent')}
-        style={[styles.optionCard, { backgroundColor: colors.primary }]}
-      >
-        <Text style={styles.cardIcon}>🎓</Text>
-        <Text style={styles.optionTitle}>Student</Text>
-        <Text style={styles.optionDescription}>
-          Book driving lessons with certified instructors
-        </Text>
-      </Card>
+      <RegisterOptionCard
+        icon="🎓"
+        title="Student"
+        description="Book driving lessons with certified instructors"
+        backgroundColor={colors.primary}
+        onPress={goStudent}
+      />
 
-      <Card
-        variant="elevated"
-        padding="lg"
-        onPress={() => navigation.navigate('RegisterInstructor')}
-        style={[styles.optionCard, { backgroundColor: colors.accent }]}
-      >
-        <Text style={styles.cardIcon}>🚗</Text>
-        <Text style={styles.optionTitle}>Instructor</Text>
-        <Text style={styles.optionDescription}>
-          Offer driving lessons and manage your schedule
-        </Text>
-      </Card>
+      <RegisterOptionCard
+        icon="🚗"
+        title="Instructor"
+        description="Offer driving lessons and manage your schedule"
+        backgroundColor={colors.accent}
+        onPress={goInstructor}
+      />
+
+      <RegisterOptionCard
+        icon="🏢"
+        title="Company"
+        description="Register a driving school and onboard instructors"
+        backgroundColor="#0F766E"
+        onPress={goCompany}
+      />
 
       <Pressable
-        onPress={() => navigation.navigate('Login')}
+        onPress={goLogin}
         style={styles.linkButton}
       >
         <Text style={[styles.linkLabel, { color: colors.textSecondary }]}>

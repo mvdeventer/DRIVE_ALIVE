@@ -403,20 +403,35 @@ class AuthService:
         Authenticate a user by email or phone number
         Raises HTTPException with specific error messages
         """
-        # Try to find user by email or phone
+        _MAX_ATTEMPTS = 5
+        _LOCKOUT_MINUTES = 15
+
         user = db.query(User).filter((User.email == email_or_phone) | (User.phone == email_or_phone)).first()
 
-        if not user:
+        now = datetime.now(timezone.utc)
+
+        # Check account lockout before password verification to prevent timing enumeration
+        if user and user.account_locked_until and user.account_locked_until > now:
+            remaining = int((user.account_locked_until - now).total_seconds() / 60) + 1
             raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="User does not exist. Please register first.",
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail=f"Account locked due to too many failed login attempts. Try again in {remaining} minute(s).",
             )
 
-        if not verify_password(password, user.password_hash):
+        if not user or not verify_password(password, user.password_hash):
+            if user:
+                user.failed_login_attempts = (user.failed_login_attempts or 0) + 1
+                if user.failed_login_attempts >= _MAX_ATTEMPTS:
+                    user.account_locked_until = now + timedelta(minutes=_LOCKOUT_MINUTES)
+                db.commit()
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Incorrect password",
+                detail="Invalid email/phone or password",
             )
+
+        # Successful login: reset brute-force counters
+        user.failed_login_attempts = 0
+        user.account_locked_until = None
 
         # Check user status - only active users can log in
         from ..models.user import UserStatus
@@ -432,8 +447,7 @@ class AuthService:
                 detail="Your account is SUSPENDED. Please contact support for more information.",
             )
 
-        # Update last login
-        user.last_login = datetime.now(timezone.utc)
+        user.last_login = now
         db.commit()
 
         return user

@@ -715,7 +715,7 @@ export default function EarningsReportScreen({ navigation }: any) {
 
         {/* Header */}
         <View style={[styles.header, { backgroundColor: colors.primary }]}>
-          <Text style={styles.headerTitle}>📊 Earnings Report</Text>
+          <View style={{ flex: 1 }} />
           <Pressable style={styles.exportButton} onPress={exportReport}>
             <Text style={styles.exportButtonText}>📥 Export</Text>
           </Pressable>

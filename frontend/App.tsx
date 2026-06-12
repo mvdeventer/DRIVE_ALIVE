@@ -4,6 +4,43 @@
 // Import polyfills first (CRITICAL: Must be before any other imports)
 import './utils/textEncodingPolyfill';
 
+// ── PWA: register service worker for offline support (web only) ───────────────
+if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/service-worker.js').catch(() => {
+      // Service worker registration is best-effort; never block app startup.
+    });
+  });
+}
+
+// ── Sentry: web error monitoring (POPIA-scrubbed). ────────────────────────────
+// To enable: npm install @sentry/react, set EXPO_PUBLIC_SENTRY_DSN in .env
+// then uncomment the block below.
+//
+// import * as Sentry from '@sentry/react';
+// if (process.env.EXPO_PUBLIC_SENTRY_DSN) {
+//   const _SA_ID = /\b\d{13}\b/g;
+//   const _EMAIL = /\b[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}\b/g;
+//   const _PHONE = /\b(?:\+27|0)\d{9}\b/g;
+//   const scrub = (s: string) =>
+//     s.replace(_SA_ID, '[SA_ID]').replace(_EMAIL, '[EMAIL]').replace(_PHONE, '[PHONE]');
+//   Sentry.init({
+//     dsn: process.env.EXPO_PUBLIC_SENTRY_DSN,
+//     environment: process.env.EXPO_PUBLIC_ENVIRONMENT ?? 'development',
+//     tracesSampleRate: 0.05,
+//     sendDefaultPii: false,
+//     beforeSend(event) {
+//       for (const exc of event.exception?.values ?? []) {
+//         if (exc.value) exc.value = scrub(exc.value);
+//       }
+//       for (const bc of event.breadcrumbs?.values ?? []) {
+//         if (bc.message) bc.message = scrub(bc.message);
+//       }
+//       return event;
+//     },
+//   });
+// }
+
 // NativeWind global styles
 import './global.css';
 
@@ -37,6 +74,7 @@ import ForgotPasswordScreen from './screens/auth/ForgotPasswordScreen';
 import InstructorScheduleSetupScreen from './screens/auth/InstructorScheduleSetupScreen';
 import LoginScreen from './screens/auth/LoginScreen';
 import RegisterChoiceScreen from './screens/auth/RegisterChoiceScreen';
+import RegisterCompanyScreen from './screens/auth/RegisterCompanyScreen';
 import RegisterInstructorScreen from './screens/auth/RegisterInstructorScreen';
 import RegisterStudentScreen from './screens/auth/RegisterStudentScreen';
 import ResetPasswordScreen from './screens/auth/ResetPasswordScreen';
@@ -50,6 +88,7 @@ import InstructorCompanyVerifyScreen from './screens/verification/InstructorComp
 
 // Instructor Screens
 import MyInstructorsScreen from './screens/instructor/MyInstructorsScreen';
+import PublicInstructorProfileScreen from './screens/instructor/PublicInstructorProfileScreen';
 
 // Payment Screens (root stack — shared across flows, deep-linked)
 import MockPaymentScreen from './screens/payment/MockPaymentScreen';
@@ -80,6 +119,7 @@ const linking = {
       InstructorVerify: 'instructor-verify',
       InstructorCompanyVerify: 'company-instructor-verify',
       ResetPassword: 'reset-password',
+      PublicInstructorProfile: 'instructors/:instructorId',
       PaymentMock: 'payment/mock',
       PaymentSuccess: 'payment/success',
       PaymentCancel: 'payment/cancel',
@@ -210,8 +250,11 @@ function AppContent() {
       if (token && role) {
         fetchUserProfile(role);
       }
-    } catch (error) {
-      console.error('Error checking auth:', error);
+    } catch (error: any) {
+      // A 401 on startup simply means there is no active session yet.
+      if (error?.response?.status !== 401) {
+        console.error('Error checking auth:', error);
+      }
       setIsAuthenticated(false);
       setUserRole(null);
     } finally {
@@ -324,7 +367,7 @@ function AppContent() {
             headerTintColor: colors.headerText,
             headerTitleStyle: { fontWeight: 'bold' as const, fontFamily: 'Inter_700Bold' },
             headerBackTitle: 'Back',
-            headerShown: true,
+            headerShown: Platform.OS !== 'web',
           }}
         >
           {/* Setup — shown only when no admin exists */}
@@ -356,7 +399,7 @@ function AppContent() {
                 name="Payment"
                 component={PaymentScreen}
                 options={{
-                  headerShown: true,
+                  headerShown: Platform.OS !== 'web',
                   title: 'Payment',
                   headerStyle: { backgroundColor: colors.headerBackground },
                   headerTintColor: colors.headerText,
@@ -366,7 +409,7 @@ function AppContent() {
               <Stack.Screen name="PaymentMock" component={MockPaymentScreen} />
               <Stack.Screen name="PaymentSuccess" component={PaymentSuccessScreen} />
               <Stack.Screen name="PaymentCancel" component={PaymentCancelScreen} />
-              <Stack.Screen name="MyInstructors" component={MyInstructorsScreen} options={{ headerShown: true, title: 'My Company Instructors' }} />
+              <Stack.Screen name="MyInstructors" component={MyInstructorsScreen} options={{ headerShown: Platform.OS !== 'web', title: 'My Company Instructors' }} />
             </Stack.Group>
           ) : (
             <Stack.Group>
@@ -375,6 +418,7 @@ function AppContent() {
               </Stack.Screen>
               <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} options={{ title: 'Forgot Password' }} />
               <Stack.Screen name="RegisterChoice" component={RegisterChoiceScreen} options={{ title: 'Choose Account Type' }} />
+              <Stack.Screen name="RegisterCompany" component={RegisterCompanyScreen} options={{ title: 'Register Company' }} />
               <Stack.Screen name="RegisterStudent" component={RegisterStudentScreen} options={{ title: 'Register as Student' }} />
               <Stack.Screen name="RegisterInstructor" component={RegisterInstructorScreen} options={{ title: 'Register as Instructor' }} />
               <Stack.Screen name="VerificationPending" component={VerificationPendingScreen} options={{ title: 'Verify Your Account' }} />
@@ -388,6 +432,12 @@ function AppContent() {
             <Stack.Screen name="InstructorVerify" component={InstructorVerifyScreen} options={{ title: 'Verify Instructor' }} />
             <Stack.Screen name="InstructorCompanyVerify" component={InstructorCompanyVerifyScreen} options={{ title: 'Approve Instructor' }} />
             <Stack.Screen name="ResetPassword" component={ResetPasswordScreen} options={{ title: 'Reset Password' }} />
+            {/* Public instructor profile — SEO-indexed, no auth required */}
+            <Stack.Screen
+              name="PublicInstructorProfile"
+              component={PublicInstructorProfileScreen}
+              options={{ headerShown: Platform.OS !== 'web', title: 'Instructor Profile' }}
+            />
           </Stack.Group>
         </Stack.Navigator>
       </NavigationContainer>

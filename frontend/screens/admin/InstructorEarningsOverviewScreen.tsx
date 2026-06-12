@@ -719,7 +719,6 @@ export default function InstructorEarningsOverviewScreen({ navigation }: any) {
           <View style={[styles.header, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
             <View style={styles.headerTop}>
               <View style={{ flex: 1 }}>
-                <Text style={[styles.headerTitle, { color: colors.text, fontFamily: 'Inter_700Bold' }]}>Instructor Earnings Overview</Text>
                 <Text style={[styles.headerSubtitle, { color: colors.textSecondary, fontFamily: 'Inter_400Regular' }]}>
                   {instructors.length} instructor{instructors.length !== 1 ? 's' : ''} {'\u2022'} Total
                   Revenue:{' '}

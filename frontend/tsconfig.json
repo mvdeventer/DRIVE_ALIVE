@@ -2,7 +2,7 @@
   "extends": "expo/tsconfig.base",
   "compilerOptions": {
     "ignoreDeprecations": "6.0",
-    "strict": false,
+    "strict": true,
     "jsx": "react-native",
     "target": "ESNext",
     "module": "ESNext",

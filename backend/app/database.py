@@ -92,9 +92,16 @@ def _read_env_key(key: str) -> str | None:
 
 
 def _build_engine(url: str):
+    is_postgres = url.startswith("postgresql")
+    connect_args = {}
+    if is_postgres and getattr(settings, "ENVIRONMENT", "development") == "production":
+        connect_args["sslmode"] = "require"
     return create_engine(
         url,
         pool_pre_ping=True,
+        pool_size=5,
+        max_overflow=10,
+        connect_args=connect_args,
         echo=getattr(settings, "DEBUG", False),
     )
 

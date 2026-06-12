@@ -373,7 +373,13 @@ async def login(
     )
 
     access_token = AuthService.create_user_token(user, selected_role, db=db)
-    
+
+    # Clear setup_token on first instructor login (unauthenticated setup flow is now over)
+    instructor_profile = db.query(Instructor).filter(Instructor.user_id == user.id).first()
+    if instructor_profile and instructor_profile.setup_token:
+        instructor_profile.setup_token = None
+        db.commit()
+
     # Set HTTP-only cookie for web security (prevents XSS token theft)
     is_secure_cookie = settings.ENVIRONMENT.lower() not in {"development", "dev", "local"}
     response.set_cookie(
@@ -382,7 +388,7 @@ async def login(
         httponly=True,  # JavaScript cannot access (XSS protection)
         secure=is_secure_cookie,  # True in production with HTTPS
         samesite="lax",  # CSRF protection
-        max_age=3600 * 24 * 7,  # 7 days
+        max_age=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
     )
 
     return {
@@ -515,7 +521,9 @@ async def get_inactivity_timeout(db: Session = Depends(get_db)):
 
 
 @router.get("/check-unique")
+@limiter.limit("20/minute")
 async def check_unique_fields(
+    request: Request,
     current_user: Annotated[User, Depends(get_current_user)],
     db: Session = Depends(get_db),
     email: Optional[str] = Query(None),

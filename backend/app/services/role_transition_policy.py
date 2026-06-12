@@ -141,6 +141,13 @@ class RoleTransitionPolicy:
                 detail="Invalid role selection for this account.",
             )
 
+        valid_runtime_roles = {role.value for role in UserRole}
+        if selected_role not in valid_runtime_roles:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid runtime role resolved for this account.",
+            )
+
         return selected_role
 
     @staticmethod

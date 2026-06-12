@@ -81,9 +81,11 @@ interface CompanyOption {
   name: string;
 }
 
-export default function RegisterInstructorScreen({ navigation }: any) {
+export default function RegisterInstructorScreen({ navigation, route }: any) {
   const { colors } = useTheme();
   const timestamp = DEBUG_CONFIG.ENABLED ? Date.now().toString().slice(-6) : '';
+  const presetCompanyChoice = route?.params?.presetCompanyChoice;
+  const presetCompanyName = route?.params?.presetCompanyName;
 
   // ── Step state ──────────────────────────────────────────
   const [step, setStep] = useState(1);
@@ -120,9 +122,15 @@ export default function RegisterInstructorScreen({ navigation }: any) {
   // ── Company state (step 3) ──────────────────────────────
   const [companies, setCompanies] = useState<CompanyOption[]>([]);
   const [companiesLoading, setCompaniesLoading] = useState(false);
-  const [companyChoice, setCompanyChoice] = useState<'independent' | 'join' | 'create'>('independent');
+  const [companyChoice, setCompanyChoice] = useState<'independent' | 'join' | 'create'>(
+    presetCompanyChoice === 'join' || presetCompanyChoice === 'create'
+      ? presetCompanyChoice
+      : 'independent'
+  );
   const [selectedCompanyId, setSelectedCompanyId] = useState<number | null>(null);
-  const [newCompanyName, setNewCompanyName] = useState('');
+  const [newCompanyName, setNewCompanyName] = useState(
+    typeof presetCompanyName === 'string' ? presetCompanyName : ''
+  );
 
   // ── Schedule state (step 4) ─────────────────────────────
   const [schedule, setSchedule] = useState<ScheduleSlot[]>([]);

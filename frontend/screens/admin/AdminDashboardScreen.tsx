@@ -334,15 +334,6 @@ export default function AdminDashboardScreen({ navigation }: any) {
         style={styles.scrollView}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
       >
-        <View style={[styles.header, { backgroundColor: colors.primary }]}>
-          <View style={styles.headerContent}>
-            <View>
-              <Text style={styles.headerTitle}>Admin Dashboard</Text>
-              <Text style={styles.headerSubtitle}>System Overview & Management</Text>
-            </View>
-          </View>
-        </View>
-
         {error && <InlineMessage message={error} type="error" />}
 
         {stats && (
@@ -681,26 +672,6 @@ const styles = StyleSheet.create({
     marginTop: 10,
     fontSize: 16,
     fontFamily: 'Inter_400Regular',
-  },
-  header: {
-    padding: Platform.OS === 'web' ? 14 : 12,
-    paddingTop: Platform.OS === 'web' ? 16 : 14,
-  },
-  headerContent: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  headerTitle: {
-    fontSize: Platform.OS === 'web' ? 22 : 18,
-    fontFamily: 'Inter_700Bold',
-    color: '#FFF',
-  },
-  headerSubtitle: {
-    fontSize: Platform.OS === 'web' ? 13 : 11,
-    fontFamily: 'Inter_400Regular',
-    color: 'rgba(255,255,255,0.8)',
-    marginTop: 2,
   },
   section: {
     marginTop: Platform.OS === 'web' ? 10 : 8,

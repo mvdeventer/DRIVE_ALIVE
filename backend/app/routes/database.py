@@ -115,15 +115,13 @@ def backup_database_internal(db: Session) -> Dict[str, List[Dict[str, Any]]]:
             'id': u.id,
             'email': u.email,
             'phone': u.phone,
-            'password_hash': u.password_hash,
+            # password_hash, smtp_password, twilio_account_sid, twilio_auth_token
+            # intentionally excluded — POPIA/security: backups must not contain credentials
             'first_name': u.first_name,
             'last_name': u.last_name,
             'role': u.role.value,
             'status': u.status.value,
             'firebase_uid': u.firebase_uid,
-            'address': u.address,
-            'address_latitude': u.address_latitude,
-            'address_longitude': u.address_longitude,
             'created_at': u.created_at.isoformat() if u.created_at else None,
             'updated_at': u.updated_at.isoformat() if u.updated_at else None,
             'last_login': u.last_login.isoformat() if u.last_login else None,

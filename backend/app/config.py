@@ -64,6 +64,9 @@ class Settings(BaseSettings):
     # Encryption (for sensitive data like SMTP passwords)
     ENCRYPTION_KEY: str = ""
 
+    # Mock payments — must be explicitly opted into; never auto-enabled in production
+    ALLOW_MOCK_PAYMENTS: bool = False
+
     # Frontend URL (for verification links, password reset, payment redirects)
     # Development: http://localhost:8081
     # Home Network: http://<your-computer-ip>:8081 (for mobile testing)
@@ -84,9 +87,31 @@ class Settings(BaseSettings):
     REDIS_URL: str = ""
     RATE_LIMIT_ENABLED: bool = True
 
+    # Sentry error monitoring (optional — leave blank to disable)
+    SENTRY_DSN: str = ""
+    SENTRY_TRACES_SAMPLE_RATE: float = 0.05  # 5% trace sampling in production
+
     # South Africa
     DEFAULT_TIMEZONE: str = "Africa/Johannesburg"
     DEFAULT_CURRENCY: str = "ZAR"
+
+    def validate_production_secrets(self) -> None:
+        """Raise RuntimeError if critical secrets are missing in production."""
+        if self.ENVIRONMENT != "production":
+            return
+        errors = []
+        if not self.SECRET_KEY or len(self.SECRET_KEY) < 32:
+            errors.append("SECRET_KEY must be set and at least 32 characters in production")
+        if not self.ENCRYPTION_KEY:
+            errors.append("ENCRYPTION_KEY must be set in production")
+        if not self.STRIPE_SECRET_KEY and not self.ALLOW_MOCK_PAYMENTS:
+            errors.append("STRIPE_SECRET_KEY must be set in production (or set ALLOW_MOCK_PAYMENTS=true)")
+        if self.STRIPE_SECRET_KEY and not self.STRIPE_WEBHOOK_SECRET:
+            errors.append("STRIPE_WEBHOOK_SECRET must be set when STRIPE_SECRET_KEY is configured")
+        if self.DEBUG:
+            errors.append("DEBUG must be False in production")
+        if errors:
+            raise RuntimeError("Production configuration errors:\n" + "\n".join(f"  • {e}" for e in errors))
 
     @property
     def origins_list(self) -> List[str]:

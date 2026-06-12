@@ -13,7 +13,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import HTMLResponse, RedirectResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
@@ -24,6 +24,7 @@ from ..schemas.admin import AdminCreateRequest
 from ..services.role_transition_policy import RoleTransitionPolicy, TransitionChannel
 from ..utils.auth import get_password_hash
 from ..utils.encryption import EncryptionService  # For SMTP password encryption
+from ..utils.rate_limiter import limiter
 
 logger = logging.getLogger(__name__)
 
@@ -91,7 +92,8 @@ def _build_admin_user(admin_data: AdminCreateRequest) -> User:
 
 
 @router.post("/create-initial-admin", response_model=dict, status_code=status.HTTP_201_CREATED)
-def create_initial_admin(admin_data: AdminCreateRequest, db: Session = Depends(get_db)):
+@limiter.limit("3/hour")
+def create_initial_admin(request: Request, admin_data: AdminCreateRequest, db: Session = Depends(get_db)):
     """
     Create the initial admin user.
     This endpoint is ONLY available on first run before any admin exists.

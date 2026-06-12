@@ -80,7 +80,7 @@ function useHeaderOptions() {
             </Pressable>
           )
         : undefined,
-    headerShown: true,
+    headerShown: Platform.OS !== 'web',
   });
 }
 
