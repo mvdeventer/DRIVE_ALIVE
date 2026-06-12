@@ -10,6 +10,7 @@
 
 - [Quick Start](#-quick-start)
 - [Install & Update Guides](#-install--update-guides)
+- [Role Matrix](#-role-matrix)
 - [Tech Stack](#-tech-stack)
 - [Cross-Platform Architecture](#-cross-platform-architecture)
 - [Project Structure](#-project-structure)
@@ -47,6 +48,18 @@ cd DRIVE_ALIVE
 .\s.bat
 ```
 
+PowerShell wrapper equivalents:
+
+```powershell
+.\s
+```
+
+Optional persistent alias in PowerShell (so you can run `s` without `./`):
+
+```powershell
+.\scripts\install-powershell-alias.ps1
+```
+
 `s.bat` auto-creates the Python venv, installs all dependencies, and starts both servers. On first run it detects a missing venv and repairs it automatically.
 
 ### Manual Setup (if needed)
@@ -68,7 +81,7 @@ cd ..
 .\s.bat -d                    # -d = debug/development mode
 ```
 
-### s.bat Flags
+### s.bat / s.ps1 Flags
 
 | Flag | Description |
 |---|---|
@@ -79,6 +92,8 @@ cd ..
 | `-l` | Localhost mode (HTTPS) |
 | `-m` | Mobile/network mode (auto-switch env) |
 | `stop` | Stop all servers |
+| `uninstall` | Remove venv/node_modules/builds (prompts for .env + database) |
+| `uninstall --all` | Complete uninstall: stop servers, remove all generated files, delete `.env`, drop the database (one confirmation) |
 | `release --minor` | Bump minor version and publish release |
 | `release --major` | Bump major version and publish release |
 | `release --minor --dry-run` | Preview release changes only |
@@ -88,6 +103,13 @@ cd ..
 - New Windows PC install: [docs/INSTALL_WINDOWS.md](docs/INSTALL_WINDOWS.md)
 - Update an existing installation: [docs/UPDATE_WINDOWS.md](docs/UPDATE_WINDOWS.md)
 - Release workflow reference: [docs/RELEASE_WORKFLOW.md](docs/RELEASE_WORKFLOW.md)
+- Role/transition reference: [docs/ROLE_MATRIX.md](docs/ROLE_MATRIX.md)
+
+## 🎭 Role Matrix
+
+Canonical role transitions and runtime-role behavior are documented in:
+
+- [docs/ROLE_MATRIX.md](docs/ROLE_MATRIX.md)
 
 ---
 

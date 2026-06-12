@@ -135,3 +135,4 @@ secrets.txt
 SECRETS.txt
 # mkcert binary
 mkcert.exe
+.installed

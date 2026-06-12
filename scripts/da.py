@@ -12,6 +12,7 @@ COMMANDS
     start     Start backend + frontend  (default when no command given)
     stop      Stop running servers
     restart   Stop then start
+    webtest   Clean install + start servers + open Chrome visual test runner
     install   Full first-run setup (venv, deps, .env, DB)
     uninstall Remove generated files / environments
     env       Switch FRONTEND_URL environment  (loc | net | prod)
@@ -49,6 +50,11 @@ RELEASE EXAMPLES
     s.bat release --minor --dry-run
     s.bat release --minor
     s.bat release --major
+
+WEBTEST EXAMPLES
+    s.bat webtest
+    s.bat webtest --no-clean
+    s.bat webtest --spec cypress/e2e/multi-role-smoke.cy.ts
 """
 
 from __future__ import annotations
@@ -981,19 +987,29 @@ def cmd_install(force: bool = False, offline: bool = False) -> None:
 
 # ── Uninstall ──────────────────────────────────────────────────────────────────
 
-def cmd_uninstall(yes: bool = False) -> None:
-    header("Drive Alive – Uninstall")
+def cmd_uninstall(yes: bool = False, full: bool = False) -> None:
+    header("Drive Alive – Uninstall" + (" (FULL)" if full else ""))
 
     print("  This will remove:")
     print(f"    - {VENV_DIR}")
     print(f"    - {FRONTEND_DIR / 'node_modules'}")
     print(f"    - {ROOT / 'build'}, {ROOT / 'dist'}, {BACKEND_DIR / 'dist'}")
     print(f"    - {INSTALLED_MARKER}")
-    print(f"    - Optionally: {ENV_FILE}")
-    print(f"    - Optionally: DROP the {DB_APP_NAME} PostgreSQL database")
+    if full:
+        print(f"    - {ENV_FILE}")
+        print(f"    - DROP the {DB_APP_NAME} PostgreSQL database + app role")
+    else:
+        print(f"    - Optionally: {ENV_FILE}")
+        print(f"    - Optionally: DROP the {DB_APP_NAME} PostgreSQL database")
     print()
 
-    if not yes:
+    if not yes and not full:
+        ans = input("  Continue? (y/N): ").strip().lower()
+        if ans != "y":
+            print("  Aborted.")
+            return
+    elif full:
+        warn("Full uninstall: .env will be deleted and the database dropped.")
         ans = input("  Continue? (y/N): ").strip().lower()
         if ans != "y":
             print("  Aborted.")
@@ -1001,6 +1017,10 @@ def cmd_uninstall(yes: bool = False) -> None:
 
     # ── Stop servers ────────────────────────────────────────────────────────────
     cmd_stop()
+
+    # Capture DATABASE_URL now — the .env file may be deleted before the
+    # database section needs it to identify the app role to drop.
+    saved_db_url = read_env().get("DATABASE_URL", "")
 
     # ── Remove files ────────────────────────────────────────────────────────────
     header("Removing files")
@@ -1029,7 +1049,9 @@ def cmd_uninstall(yes: bool = False) -> None:
     header(".env configuration")
     if ENV_FILE.exists():
         info(f"  Path : {ENV_FILE}")
-        if yes:
+        if full:
+            del_env = "y"
+        elif yes:
             del_env = "n"
         else:
             del_env = input("  Delete backend/.env? (y/N): ").strip().lower()
@@ -1051,13 +1073,18 @@ def cmd_uninstall(yes: bool = False) -> None:
         info(f"  psql path : {psql}")
         info(f"  Host/port : {pg_host}:{pg_port}")
         info(f"  Database  : {DB_APP_NAME}")
-        db_url = read_env().get("DATABASE_URL", "")
+        db_url = saved_db_url
         app_role = ""
         if "://" in db_url:
             app_role = db_url.split("://")[1].split(":")[0]
         if app_role and app_role not in ("postgres", "user", ""):
             info(f"  DB role   : {app_role}")
-        drop = "n" if yes else input(f"  Drop PostgreSQL database '{DB_APP_NAME}'? (y/N): ").strip().lower()
+        if full:
+            drop = "y"
+        elif yes:
+            drop = "n"
+        else:
+            drop = input(f"  Drop PostgreSQL database '{DB_APP_NAME}'? (y/N): ").strip().lower()
         if drop == "y":
             info(f"Authenticating to PostgreSQL on port {pg_port} …")
             su_pass = _pg_authenticate(psql, pg_host, pg_port)
@@ -1140,6 +1167,76 @@ def cmd_release(bump_type: str, dry_run: bool = False) -> None:
         sys.exit(1)
 
 
+def cmd_webtest(
+    clean_install: bool = True,
+    debug_mode: bool = True,
+    spec: str | None = None,
+) -> None:
+    """Run full visual web test workflow in real Chrome with DevTools."""
+    header("Drive Alive – Full Visual Web Tests")
+    selected_spec = spec or "cypress/e2e/multi-role-smoke.cy.ts"
+
+    if clean_install:
+        info("Performing clean install (backend venv + frontend node_modules) …")
+        cmd_stop(silent=True)
+        time.sleep(1)
+
+        if VENV_DIR.exists():
+            shutil.rmtree(VENV_DIR, ignore_errors=True)
+            ok("Removed backend/venv")
+        if (FRONTEND_DIR / "node_modules").exists():
+            shutil.rmtree(FRONTEND_DIR / "node_modules", ignore_errors=True)
+            ok("Removed frontend/node_modules")
+
+        info("Creating backend virtual environment …")
+        run([sys.executable, "-m", "venv", "venv"], cwd=BACKEND_DIR)
+        ok("Backend venv created")
+
+        info("Installing backend dependencies …")
+        run([str(VENV_PYTHON), "-m", "pip", "install", "-r", "requirements.txt"], cwd=BACKEND_DIR)
+        ok("Backend dependencies installed")
+
+        info("Installing frontend dependencies …")
+        run(["npm", "install"], cwd=FRONTEND_DIR)
+        ok("Frontend dependencies installed")
+    else:
+        info("Skipping clean install (--no-clean)")
+
+    # Start both services; dev_mode opens real Chrome with DevTools.
+    cmd_start(dev_mode=True, debug_mode=debug_mode)
+
+    # Run smoke checks immediately in headed real Chrome.
+    smoke_cmd = f"npx cypress run --e2e --browser chrome --headed --spec {selected_spec}"
+    smoke_pid = open_new_window(
+        "Drive Alive - Web Tests (Smoke Run)",
+        smoke_cmd,
+        FRONTEND_DIR,
+    )
+    if smoke_pid:
+        ok(f"Cypress smoke run started (PID {smoke_pid})")
+    else:
+        warn("Could not determine Cypress smoke PID, but launch was attempted.")
+
+    # Keep an interactive Chrome runner open for visual monitoring and re-runs.
+    monitor_cmd = f"npx cypress open --e2e --browser chrome --spec {selected_spec}"
+    monitor_pid = open_new_window(
+        "Drive Alive - Web Tests (Interactive)",
+        monitor_cmd,
+        FRONTEND_DIR,
+    )
+    if monitor_pid:
+        ok(f"Cypress interactive runner started (PID {monitor_pid})")
+    else:
+        warn("Could not determine Cypress interactive PID, but launch was attempted.")
+
+    print()
+    info("Visual test workflow is ready.")
+    info(f"Auto-run spec: {selected_spec}")
+    info("Smoke run starts immediately in headed Chrome.")
+    info("Interactive Cypress Chrome runner stays open for ongoing monitoring and re-runs.")
+    print()
+
+
 # ── CLI ────────────────────────────────────────────────────────────────────────
 
 def main() -> None:
@@ -1150,7 +1247,7 @@ def main() -> None:
     # Compatibility: allow top-level release flags without explicitly typing
     # the "release" subcommand (e.g. `s.bat --major`).
     raw_argv = sys.argv[1:]
-    command_names = {"start", "stop", "restart", "install", "uninstall", "env", "status", "release"}
+    command_names = {"start", "stop", "restart", "webtest", "install", "uninstall", "env", "status", "release"}
     has_release_flag = any(flag in raw_argv for flag in ("--major", "--minor"))
     parsed_argv = raw_argv
     if raw_argv and raw_argv[0] not in command_names and has_release_flag:
@@ -1187,6 +1284,12 @@ def main() -> None:
     p_restart.add_argument("-l", "--local", action="store_true", help="Switch to localhost env first")
     p_restart.add_argument("-m", "--mobile", action="store_true", help="Switch to network/mobile env first")
 
+    # webtest
+    p_webtest = sub.add_parser("webtest", help="Clean install + start + open visual Chrome tests")
+    p_webtest.add_argument("--no-clean", action="store_true", help="Skip clean install step")
+    p_webtest.add_argument("--no-debug", action="store_true", help="Disable debug mode while running")
+    p_webtest.add_argument("--spec", help="Optional Cypress spec path, e.g. cypress/e2e/foo.cy.ts")
+
     # install
     p_install = sub.add_parser("install", help="Full setup")
     p_install.add_argument("--force", action="store_true")
@@ -1194,7 +1297,12 @@ def main() -> None:
 
     # uninstall
     p_uninstall = sub.add_parser("uninstall", help="Remove generated files")
-    p_uninstall.add_argument("--yes", action="store_true", help="Skip prompts")
+    p_uninstall.add_argument("--yes", action="store_true", help="Skip prompts (keeps .env and database)")
+    p_uninstall.add_argument(
+        "--all", action="store_true", dest="all_",
+        help="Complete uninstall: stop servers, remove generated files, "
+             "delete backend/.env and drop the database (one confirmation)",
+    )
 
     # env
     p_env = sub.add_parser("env", help="Switch environment")
@@ -1250,11 +1358,18 @@ def main() -> None:
             switch_env=switch,
         )
 
+    elif args.command == "webtest":
+        cmd_webtest(
+            clean_install=not args.no_clean,
+            debug_mode=not args.no_debug,
+            spec=args.spec,
+        )
+
     elif args.command == "install":
         cmd_install(force=args.force, offline=args.offline)
 
     elif args.command == "uninstall":
-        cmd_uninstall(yes=args.yes)
+        cmd_uninstall(yes=args.yes, full=args.all_)
 
     elif args.command == "env":
         if not args.target:
