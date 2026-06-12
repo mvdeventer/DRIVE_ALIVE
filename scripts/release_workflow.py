@@ -4,7 +4,6 @@ import json
 import re
 import shutil
 import subprocess
-import textwrap
 from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
@@ -22,6 +21,7 @@ DIST_DIR = ROOT / "dist"
 
 VERSION_FILE = ROOT / "VERSION"
 VERSION_JSON_FILE = ROOT / "version.json"
+CHANGES_FILE = ROOT / "CHANGES.md"
 README_FILE = ROOT / "README.md"
 FRONTEND_APP_FILE = FRONTEND_DIR / "app.json"
 FRONTEND_PACKAGE_FILE = FRONTEND_DIR / "package.json"
@@ -67,6 +67,8 @@ class ReleasePlan:
     release_title: str
     release_notes: str
     release_notes_file: Path
+    summary: str = ""          # short "power note" shown on the tag + release page
+    changelog_entry: str = ""  # full categorized section prepended to CHANGES.md
 
 
 def info(message: str) -> None:
@@ -374,6 +376,7 @@ def _refresh_docs(plan: ReleasePlan) -> list[Path]:
 
 
 def _release_commit_lines(previous_tag: str | None) -> list[str]:
+    """All commit subjects since the previous release tag (no cap)."""
     if previous_tag:
         revision_range = f"{previous_tag}..HEAD"
     else:
@@ -383,45 +386,210 @@ def _release_commit_lines(previous_tag: str | None) -> list[str]:
         "log",
         revision_range,
         "--pretty=format:%s",
-        "--max-count",
-        "25",
     ], check=False)
     lines = [line.strip() for line in result.stdout.splitlines() if line.strip()]
     return lines
 
 
-def _release_notes(plan: ReleasePlan, commits: list[str]) -> str:
-    commit_section = "\n".join(f"- {line}" for line in commits) if commits else "- No commit subjects were found in the selected release range."
+# Conventional-commit prefix → changelog section (order = display order)
+_COMMIT_CATEGORIES: list[tuple[tuple[str, ...], str]] = [
+    (("feat", "feature"), "New Features"),
+    (("fix", "bugfix", "hotfix"), "Bug Fixes"),
+    (("perf",), "Performance"),
+    (("refactor",), "Refactoring"),
+    (("docs", "doc"), "Documentation"),
+    (("test", "tests"), "Tests"),
+    (("chore", "build", "ci", "style"), "Maintenance & Tooling"),
+]
+_PREFIX_RE = re.compile(r"^(\w+)(\([^)]*\))?!?:\s*")
+
+
+def _categorize_commits(commits: list[str]) -> dict[str, list[str]]:
+    """Group commit subjects by conventional-commit prefix; skip release commits."""
+    sections: dict[str, list[str]] = {}
+    for subject in commits:
+        match = _PREFIX_RE.match(subject)
+        prefix = match.group(1).lower() if match else ""
+        if prefix == "release":
+            continue  # previous release bookkeeping, not an improvement
+        category = "Other Improvements"
+        for prefixes, name in _COMMIT_CATEGORIES:
+            if prefix in prefixes:
+                category = name
+                break
+        sections.setdefault(category, []).append(subject)
+    return sections
+
+
+def _change_stats(previous_tag: str | None) -> dict[str, Any]:
+    """Scan the code changes since the previous tag: totals + per-area breakdown."""
+    if previous_tag:
+        diff_base = previous_tag
+        revision_range = f"{previous_tag}..HEAD"
+    else:
+        roots = _run(["git", "rev-list", "--max-parents=0", "HEAD"], check=False).stdout.split()
+        diff_base = roots[0] if roots else "HEAD"
+        revision_range = "HEAD"
+
+    shortstat = _run(
+        ["git", "diff", "--shortstat", diff_base, "HEAD"], check=False
+    ).stdout.strip()
+
+    files_out = _run(
+        ["git", "diff", "--name-only", diff_base, "HEAD"], check=False
+    ).stdout.splitlines()
+    files = sorted({f.strip() for f in files_out if f.strip()})
+
+    areas: dict[str, int] = {}
+    for path in files:
+        top = path.split("/")[0] if "/" in path else "(root)"
+        areas[top] = areas.get(top, 0) + 1
+
+    count_out = _run(["git", "rev-list", "--count", revision_range], check=False).stdout.strip()
+    commit_count = int(count_out) if count_out.isdigit() else 0
+
+    return {
+        "shortstat": shortstat or "no file changes detected",
+        "files_changed": len(files),
+        "areas": areas,
+        "commit_count": commit_count,
+    }
+
+
+def _build_summary(plan_tag: str, sections: dict[str, list[str]], stats: dict[str, Any]) -> str:
+    """One-paragraph 'power note' for the tag message and release page."""
+    counts = []
+    short_labels = {
+        "New Features": "new feature",
+        "Bug Fixes": "fix",
+        "Performance": "performance improvement",
+        "Refactoring": "refactor",
+        "Documentation": "documentation update",
+        "Tests": "test improvement",
+        "Maintenance & Tooling": "maintenance update",
+        "Other Improvements": "other improvement",
+    }
+    for name, items in sections.items():
+        label = short_labels.get(name, name.lower())
+        counts.append(f"{len(items)} {label}{'s' if len(items) != 1 else ''}")
+    counts_text = ", ".join(counts) if counts else "version maintenance only"
+
+    highlight = ""
+    for source in ("New Features", "Performance", "Bug Fixes", "Other Improvements"):
+        if sections.get(source):
+            first = _PREFIX_RE.sub("", sections[source][0])
+            highlight = f" Top highlight: {first}."
+            break
+
+    ins = re.search(r"(\d+) insertion", stats["shortstat"])
+    dels = re.search(r"(\d+) deletion", stats["shortstat"])
+    delta = ""
+    if ins or dels:
+        delta = f" (+{ins.group(1) if ins else 0}/-{dels.group(1) if dels else 0} lines)"
+
+    return (
+        f"Drive Alive {plan_tag} — {counts_text} across "
+        f"{stats['files_changed']} files{delta}.{highlight} "
+        f"Full details in CHANGES.md."
+    )
+
+
+def _changelog_entry(plan: ReleasePlan, sections: dict[str, list[str]], stats: dict[str, Any]) -> str:
+    """Full categorized changelog section for this release (goes into CHANGES.md)."""
+    lines = [
+        f"## {plan.release_tag} — {plan.release_date} ({plan.codename})",
+        "",
+        f"> {plan.summary}" if plan.summary else "",
+        "",
+    ]
+    ordered_names = [name for _, name in _COMMIT_CATEGORIES] + ["Other Improvements"]
+    for name in ordered_names:
+        items = sections.get(name)
+        if not items:
+            continue
+        lines.append(f"### {name}")
+        lines.extend(f"- {subject}" for subject in items)
+        lines.append("")
+
+    area_text = ", ".join(f"{area}: {count}" for area, count in sorted(stats["areas"].items(), key=lambda kv: -kv[1]))
+    lines.append(
+        f"**Scope:** {stats['commit_count']} commits, {stats['shortstat']}"
+        + (f" — touched: {area_text}" if area_text else "")
+    )
+    lines.append("")
+    return "\n".join(line for line in lines if line is not None)
+
+
+def _update_changelog(entry: str) -> Path:
+    """Prepend this release's entry to CHANGES.md (created on first release)."""
+    header = (
+        "# Drive Alive — Changelog\n\n"
+        "All code improvements per release, newest first. Generated automatically\n"
+        "by the release workflow (`s.bat minor` / `s.bat major` / `s.bat release`).\n\n"
+    )
+    if CHANGES_FILE.exists():
+        existing = _read_text(CHANGES_FILE)
+        body = existing.split("\n## ", 1)
+        previous_entries = ("## " + body[1]) if len(body) == 2 else ""
+        content = header + entry + "\n" + previous_entries
+    else:
+        content = header + entry + "\n"
+    _write_text(CHANGES_FILE, content)
+    return CHANGES_FILE
+
+
+def _release_notes(
+    plan: ReleasePlan,
+    sections: dict[str, list[str]],
+    stats: dict[str, Any],
+    summary: str,
+) -> str:
     previous_tag_line = plan.previous_tag or "No previous tag"
-    return textwrap.dedent(
-        f"""
-        # {plan.release_title}
 
-        ## Release Summary
+    change_lines: list[str] = []
+    ordered_names = [name for _, name in _COMMIT_CATEGORIES] + ["Other Improvements"]
+    for name in ordered_names:
+        items = sections.get(name)
+        if not items:
+            continue
+        change_lines.append(f"### {name}")
+        change_lines.extend(f"- {subject}" for subject in items)
+        change_lines.append("")
+    change_section = "\n".join(change_lines).strip() or "- Version maintenance only."
 
-        - Previous tag: {previous_tag_line}
-        - Current baseline: {plan.current_version}
-        - Published version: {plan.next_version}
-        - Release date: {plan.release_date}
-        - Codename: {plan.codename}
-
-        ## Installation And Upgrade
-
-        - New PC installation guide: `docs/INSTALL_WINDOWS.md`
-        - Upgrade guide: `docs/UPDATE_WINDOWS.md`
-        - Release workflow reference: `docs/RELEASE_WORKFLOW.md`
-
-        ## Database And Setup Notes
-
-        - Review `backend/.env.example` before first run.
-        - Run `alembic upgrade head` if your environment requires an explicit migration step.
-        - Verify PostgreSQL is installed and available before running `s.bat install`.
-
-        ## Included Changes
-
-        {commit_section}
-        """
-    ).strip() + "\n"
+    parts = [
+        f"# {plan.release_title}",
+        "",
+        f"> {summary}",
+        "",
+        "## Release Summary",
+        "",
+        f"- Previous tag: {previous_tag_line}",
+        f"- Current baseline: {plan.current_version}",
+        f"- Published version: {plan.next_version}",
+        f"- Release date: {plan.release_date}",
+        f"- Codename: {plan.codename}",
+        f"- Scope: {stats['commit_count']} commits, {stats['shortstat']}",
+        "",
+        "## Included Changes",
+        "",
+        change_section,
+        "",
+        "Full historical changelog: `CHANGES.md`",
+        "",
+        "## Installation And Upgrade",
+        "",
+        "- New PC installation guide: `docs/INSTALL_WINDOWS.md`",
+        "- Upgrade guide: `docs/UPDATE_WINDOWS.md`",
+        "- Release workflow reference: `docs/RELEASE_WORKFLOW.md`",
+        "",
+        "## Database And Setup Notes",
+        "",
+        "- Review `backend/.env.example` before first run.",
+        "- Run `alembic upgrade head` if your environment requires an explicit migration step.",
+        "- Verify PostgreSQL is installed and available before running `s.bat install`.",
+    ]
+    return "\n".join(parts) + "\n"
 
 
 def _write_release_artifacts(plan: ReleasePlan) -> list[Path]:
@@ -429,6 +597,9 @@ def _write_release_artifacts(plan: ReleasePlan) -> list[Path]:
     RELEASES_DIR.mkdir(parents=True, exist_ok=True)
     _write_text(plan.release_notes_file, plan.release_notes)
     changed.append(plan.release_notes_file)
+
+    if plan.changelog_entry:
+        changed.append(_update_changelog(plan.changelog_entry))
 
     DIST_DIR.mkdir(parents=True, exist_ok=True)
     install_manifest = {
@@ -495,6 +666,9 @@ def _build_plan(bump_type: str, branch: str, previous_tag: str | None) -> Releas
     release_title = f"Drive Alive {release_tag}"
     codename = _release_codename(bump_type, next_version)
     commits = _release_commit_lines(previous_tag)
+    sections = _categorize_commits(commits)
+    stats = _change_stats(previous_tag)
+    summary = _build_summary(release_tag, sections, stats)
     notes_file = RELEASES_DIR / f"{release_tag}.md"
     temp_plan = ReleasePlan(
         current_version=current_version,
@@ -509,8 +683,10 @@ def _build_plan(bump_type: str, branch: str, previous_tag: str | None) -> Releas
         release_title=release_title,
         release_notes="",
         release_notes_file=notes_file,
+        summary=summary,
     )
-    notes = _release_notes(temp_plan, commits)
+    notes = _release_notes(temp_plan, sections, stats, summary)
+    changelog_entry = _changelog_entry(temp_plan, sections, stats)
     return ReleasePlan(
         current_version=current_version,
         next_version=next_version,
@@ -524,6 +700,8 @@ def _build_plan(bump_type: str, branch: str, previous_tag: str | None) -> Releas
         release_title=release_title,
         release_notes=notes,
         release_notes_file=notes_file,
+        summary=summary,
+        changelog_entry=changelog_entry,
     )
 
 
@@ -535,7 +713,9 @@ def _tag_release(plan: ReleasePlan) -> None:
     existing_tag = _run(["git", "tag", "--list", plan.release_tag], check=False)
     if existing_tag.stdout.strip():
         raise ReleaseError(f"Tag {plan.release_tag} already exists.")
-    _run(["git", "tag", "-a", plan.release_tag, "-m", f"Release {plan.release_tag}"])
+    # Annotated tag carries the power note so the tag page summarizes the release
+    tag_message = f"{plan.release_title}\n\n{plan.summary}" if plan.summary else f"Release {plan.release_tag}"
+    _run(["git", "tag", "-a", plan.release_tag, "-m", tag_message])
 
 
 def _push_release(plan: ReleasePlan) -> None:
@@ -583,13 +763,20 @@ def execute_release(bump_type: str, dry_run: bool = False) -> None:
         UPDATE_GUIDE_FILE,
         RELEASE_WORKFLOW_FILE,
         plan.release_notes_file,
+        CHANGES_FILE,
         INSTALL_MANIFEST_FILE,
     ]
+
+    info(f"Summary (tag + release page): {plan.summary}")
 
     if dry_run:
         info("Dry-run mode enabled. Planned file updates:")
         for path in tracked_changes:
             info(f"  - {path.relative_to(ROOT)}")
+        if plan.changelog_entry:
+            info("Planned CHANGES.md entry:")
+            for line in plan.changelog_entry.splitlines():
+                print(f"      {line}")
         info("Dry-run mode planned build steps:")
         for step in ("python bootstrap.py --bundle", "npm --prefix frontend run build:web", "backend\\venv\\Scripts\\python.exe -m PyInstaller drive-alive.spec --clean", "ISCC scripts\\installer.iss"):
             info(f"  - {step}")
