@@ -30,6 +30,7 @@ from ..schemas.booking import (
     ReviewCreate,
     ReviewResponse,
 )
+from ..services.fees import calculate_booking_fee, get_platform_commission_percent
 from ..services.whatsapp_service import whatsapp_service
 
 router = APIRouter(prefix="/bookings", tags=["Bookings"])
@@ -212,35 +213,33 @@ async def create_booking(
             detail="The selected time is outside of the instructor's available hours",
         )
 
-    # Check for conflicting bookings
-    conflicting_booking = (
+    # Check for conflicting bookings in Python to avoid DB-specific datetime arithmetic issues.
+    candidate_bookings = (
         db.query(Booking)
         .filter(
             Booking.instructor_id == instructor.id,
             Booking.status.in_([BookingStatus.PENDING, BookingStatus.CONFIRMED]),
-            or_(
-                # New booking starts during existing booking
-                and_(
-                    Booking.lesson_date <= lesson_datetime,
-                    Booking.lesson_date + timedelta(minutes=Booking.duration_minutes)
-                    > lesson_datetime,
-                ),
-                # New booking ends during existing booking
-                and_(
-                    Booking.lesson_date < lesson_end,
-                    Booking.lesson_date + timedelta(minutes=Booking.duration_minutes)
-                    >= lesson_end,
-                ),
-                # New booking completely overlaps existing booking
-                and_(
-                    Booking.lesson_date >= lesson_datetime,
-                    Booking.lesson_date + timedelta(minutes=Booking.duration_minutes)
-                    <= lesson_end,
-                ),
-            ),
         )
-        .first()
+        .all()
     )
+
+    conflicting_booking = None
+    for existing in candidate_bookings:
+        existing_start = existing.lesson_date
+        if existing_start.tzinfo is None:
+            existing_start = existing_start.replace(tzinfo=timezone.utc)
+        existing_end = existing_start + timedelta(minutes=existing.duration_minutes)
+
+        request_start = lesson_datetime
+        if request_start.tzinfo is None:
+            request_start = request_start.replace(tzinfo=timezone.utc)
+        request_end = lesson_end
+        if request_end.tzinfo is None:
+            request_end = request_end.replace(tzinfo=timezone.utc)
+
+        if request_start < existing_end and request_end > existing_start:
+            conflicting_booking = existing
+            break
 
     if conflicting_booking:
         raise HTTPException(
@@ -249,8 +248,12 @@ async def create_booking(
         )
 
     # Calculate amount (lesson fee only, booking fee stored separately)
+    # Hybrid commission: fee = max(instructor flat fee, lesson * commission%)
     lesson_amount = instructor.hourly_rate * (booking_data.duration_minutes / 60)
-    instructor_booking_fee = instructor.booking_fee or 20.0  # Default to R20 if not set
+    commission_percent = get_platform_commission_percent(db)
+    instructor_booking_fee = calculate_booking_fee(
+        instructor, lesson_amount, commission_percent
+    )
 
     # Create booking
     booking = Booking(
@@ -420,6 +423,7 @@ async def create_bulk_bookings(
 
     # Collect all bookings to create
     new_bookings = []
+    commission_percent = get_platform_commission_percent(db)
 
     # Validate each booking and prepare for creation
     for booking_data in bookings_data:
@@ -603,10 +607,11 @@ async def create_bulk_bookings(
                     )
 
         # Calculate amount (lesson fee only, booking fee stored separately)
+        # Hybrid commission: fee = max(instructor flat fee, lesson * commission%)
         lesson_amount = instructor.hourly_rate * (booking_data.duration_minutes / 60)
-        instructor_booking_fee = (
-            instructor.booking_fee or 10.0
-        )  # Default to R10 if not set
+        instructor_booking_fee = calculate_booking_fee(
+            instructor, lesson_amount, commission_percent
+        )
 
         # Prepare booking data
         new_bookings.append(
@@ -771,22 +776,28 @@ async def get_my_bookings(
             .all()
         )
 
+        # Bulk-load instructors, instructor users, and reviews to avoid N+1 queries
+        from ..models.booking import Review
+        _instructor_ids = [b.instructor_id for b in bookings if b.instructor_id]
+        _instructors_by_id = (
+            {i.id: i for i in db.query(Instructor).filter(Instructor.id.in_(_instructor_ids)).all()}
+            if _instructor_ids else {}
+        )
+        _instr_user_ids = [i.user_id for i in _instructors_by_id.values()]
+        _instr_users_by_id = (
+            {u.id: u for u in db.query(User).filter(User.id.in_(_instr_user_ids)).all()}
+            if _instr_user_ids else {}
+        )
+        _booking_ids_for_reviews = [b.id for b in bookings]
+        _reviews_by_booking = (
+            {r.booking_id: r for r in db.query(Review).filter(Review.booking_id.in_(_booking_ids_for_reviews)).all()}
+            if _booking_ids_for_reviews else {}
+        )
+
         for booking in bookings:
-            instructor = (
-                db.query(Instructor)
-                .filter(Instructor.id == booking.instructor_id)
-                .first()
-            )
-            instructor_user = (
-                db.query(User).filter(User.id == instructor.user_id).first()
-                if instructor
-                else None
-            )
-
-            # Check if student has reviewed this booking
-            from ..models.booking import Review
-
-            review = db.query(Review).filter(Review.booking_id == booking.id).first()
+            instructor = _instructors_by_id.get(booking.instructor_id)
+            instructor_user = _instr_users_by_id.get(instructor.user_id) if instructor else None
+            review = _reviews_by_booking.get(booking.id)
 
             booking_dict = {
                 "id": booking.id,
@@ -831,21 +842,21 @@ async def get_my_bookings(
             .all()
         )
 
-        for booking in bookings:
-            student = db.query(Student).filter(Student.id == booking.student_id).first()
-            student_user = (
-                db.query(User).filter(User.id == student.user_id).first()
-                if student
-                else None
-            )
+        # Bulk-load students and their users to avoid N+1 queries
+        _student_ids = [b.student_id for b in bookings if b.student_id]
+        _students_by_id = (
+            {s.id: s for s in db.query(Student).filter(Student.id.in_(_student_ids)).all()}
+            if _student_ids else {}
+        )
+        _stud_user_ids = [s.user_id for s in _students_by_id.values()]
+        _stud_users_by_id = (
+            {u.id: u for u in db.query(User).filter(User.id.in_(_stud_user_ids)).all()}
+            if _stud_user_ids else {}
+        )
 
-            # DEBUG: Log student information
-            print(f"🔍 DEBUG - Booking ID: {booking.id}")
-            print(f"🔍 DEBUG - Student: {student}")
-            print(
-                f"🔍 DEBUG - Student ID Number: {student.id_number if student else 'NO STUDENT'}"
-            )
-            print(f"🔍 DEBUG - Student User: {student_user}")
+        for booking in bookings:
+            student = _students_by_id.get(booking.student_id)
+            student_user = _stud_users_by_id.get(student.user_id) if student else None
 
             booking_dict = {
                 "id": booking.id,
@@ -869,10 +880,6 @@ async def get_my_bookings(
                 "pickup_location": booking.pickup_address,
                 "student_notes": booking.student_notes,
             }
-            print(f"🔍 DEBUG - booking_dict keys: {booking_dict.keys()}")
-            print(
-                f"🔍 DEBUG - student_id_number value: {booking_dict.get('student_id_number')}"
-            )
             bookings_list.append(booking_dict)
 
     return bookings_list
@@ -895,6 +902,7 @@ async def get_booking(
         )
 
     # Verify user has access to this booking
+    active_role = get_active_role(current_user)
     student = db.query(Student).filter(Student.user_id == current_user.id).first()
     instructor = (
         db.query(Instructor).filter(Instructor.user_id == current_user.id).first()

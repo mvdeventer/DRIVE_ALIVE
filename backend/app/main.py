@@ -123,6 +123,9 @@ def _apply_incremental_migrations():
             ("ix_bookings_instructor_id", "bookings(instructor_id)"),
             ("ix_bookings_lesson_date", "bookings(lesson_date)"),
             ("ix_bookings_status", "bookings(status)"),
+            # Compound indexes for hot query patterns (Jun 2026)
+            ("ix_bookings_lesson_date_status", "bookings(lesson_date, status)"),
+            ("ix_bookings_instructor_status", "bookings(instructor_id, status)"),
         ]
         with engine.connect() as conn:
             for idx_name, idx_target in booking_indexes:
@@ -134,6 +137,42 @@ def _apply_incremental_migrations():
                     print(f"⚠️  [MIGRATION] Could not create {idx_name}: {idx_exc}")
     except Exception as exc:
         print(f"⚠️  [MIGRATION] Booking indexes: {exc}")
+
+    # ── Account lockout columns (Jun 2026) ────────────────────────────────────
+    try:
+        existing_user_cols = [col["name"] for col in inspector.get_columns("users")]
+        lockout_cols = [
+            ("failed_login_attempts", "INTEGER NOT NULL DEFAULT 0"),
+            ("account_locked_until", "TIMESTAMP WITH TIME ZONE"),
+        ]
+        with engine.connect() as conn:
+            for col_name, col_def in lockout_cols:
+                if col_name not in existing_user_cols:
+                    try:
+                        conn.execute(text(f"ALTER TABLE users ADD COLUMN {col_name} {col_def}"))
+                        conn.commit()
+                        print(f"✅ [MIGRATION] Added {col_name} to users")
+                    except Exception as col_exc:
+                        conn.rollback()
+                        print(f"⚠️  [MIGRATION] Could not add {col_name}: {col_exc}")
+    except Exception as exc:
+        print(f"⚠️  [MIGRATION] Account lockout columns: {exc}")
+
+    # ── Platform commission percent (Jun 2026) ────────────────────────────────
+    # Global admin setting: effective booking fee = max(flat fee, lesson * pct%)
+    try:
+        existing_user_cols = [col["name"] for col in inspector.get_columns("users")]
+        if "commission_percent" not in existing_user_cols:
+            with engine.connect() as conn:
+                try:
+                    conn.execute(text("ALTER TABLE users ADD COLUMN commission_percent FLOAT DEFAULT 8.0"))
+                    conn.commit()
+                    print("✅ [MIGRATION] Added commission_percent to users")
+                except Exception as col_exc:
+                    conn.rollback()
+                    print(f"⚠️  [MIGRATION] Could not add commission_percent: {col_exc}")
+    except Exception as exc:
+        print(f"⚠️  [MIGRATION] Commission percent column: {exc}")
 
 
 _apply_incremental_migrations()
@@ -172,6 +211,9 @@ async def lifespan(app: FastAPI):
     if env_frontend_url:
         print(f"Frontend URL (env var): {env_frontend_url}")
     print("=" * 80)
+
+    # Fail fast on missing production secrets before accepting traffic
+    settings.validate_production_secrets()
 
     if settings.PAYFAST_MODE == "sandbox" and settings.ENVIRONMENT == "production":
         print("WARNING: PAYFAST_MODE=sandbox in a production environment. Set PAYFAST_MODE=live.")
@@ -227,13 +269,8 @@ async def lifespan(app: FastAPI):
                 print("⚠️  No admin user found - setup required")
                 print("📋 Navigate to the app to create an admin via the setup screen")
         except Exception as query_error:
-            # If query fails due to schema issues, recreate tables
             print(f"⚠️  Database schema issue detected: {query_error}")
-            print("🔨 Recreating database schema...")
-            from .database import Base, engine
-            Base.metadata.drop_all(bind=engine)
-            Base.metadata.create_all(bind=engine)
-            print("✅ Database schema recreated successfully")
+            print("   Run 'alembic upgrade head' or visit /db-setup to reconfigure.")
     finally:
         db.close()
 
@@ -292,6 +329,39 @@ _is_production = settings.ENVIRONMENT == "production"
 # startup events are captured under the same config.
 setup_logging()
 
+# ── Sentry error monitoring (optional, POPIA-compliant) ───────────────────────
+if settings.SENTRY_DSN:
+    import re as _re
+    import sentry_sdk
+    from sentry_sdk.integrations.fastapi import FastApiIntegration
+    from sentry_sdk.integrations.sqlalchemy import SqlalchemyIntegration
+
+    _SA_ID = _re.compile(r'\b\d{13}\b')
+    _EMAIL = _re.compile(r'\b[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}\b')
+    _PHONE = _re.compile(r'\b(?:\+27|0)\d{9}\b')
+
+    def _sentry_scrub(text: str) -> str:
+        return _PHONE.sub('[PHONE]', _EMAIL.sub('[EMAIL]', _SA_ID.sub('[SA_ID]', text)))
+
+    def _sentry_before_send(event, hint):
+        for exc in event.get('exception', {}).get('values', []):
+            if exc.get('value'):
+                exc['value'] = _sentry_scrub(exc['value'])
+        for bc in event.get('breadcrumbs', {}).get('values', []):
+            if bc.get('message'):
+                bc['message'] = _sentry_scrub(bc['message'])
+        return event
+
+    sentry_sdk.init(
+        dsn=settings.SENTRY_DSN,
+        integrations=[FastApiIntegration(), SqlalchemyIntegration()],
+        traces_sample_rate=settings.SENTRY_TRACES_SAMPLE_RATE,
+        environment=settings.ENVIRONMENT,
+        before_send=_sentry_before_send,
+        send_default_pii=False,
+    )
+    print(f"🔭 Sentry initialized (environment={settings.ENVIRONMENT})")
+
 app = FastAPI(
     title="Driving School Booking API",
     description="API for South African driving school booking system",
@@ -311,7 +381,11 @@ app.add_exception_handler(RateLimitExceeded, rate_limit_exceeded_handler)
 # Configure CORS - Allow specific origins with credentials
 # Static localhost/127.0.0.1 dev origins; network/production origins come from
 # ALLOWED_ORIGINS env var (injected via settings.origins_list).
-_static_origins = [
+_production_origins = [
+    "https://roadready.onrender.com",
+    "https://drive-alive-web.onrender.com",
+]
+_dev_origins = [
     "http://localhost:8081",
     "http://localhost:8082",
     "http://localhost:8080",
@@ -331,10 +405,10 @@ _static_origins = [
     "https://127.0.0.1:8082",
     "https://127.0.0.1:8080",
     "https://127.0.0.1:3000",
-    # Production
-    "https://roadready.onrender.com",
-    "https://drive-alive-web.onrender.com",
 ]
+_static_origins = _production_origins + (
+    _dev_origins if settings.ENVIRONMENT != "production" else []
+)
 # Merge with env-var origins (for mobile/network testing and production domain)
 origins = list(dict.fromkeys(_static_origins + settings.origins_list))
 
@@ -383,8 +457,13 @@ async def redirect_to_db_setup(request: Request, call_next):
 @app.middleware("http")
 async def add_security_headers(request: Request, call_next):
     """
-    Add security headers to all responses
+    Add security headers to all responses; redirect HTTP→HTTPS in production.
     """
+    if settings.ENVIRONMENT == "production" and request.url.scheme == "http":
+        from fastapi.responses import RedirectResponse
+        https_url = str(request.url).replace("http://", "https://", 1)
+        return RedirectResponse(url=https_url, status_code=301)
+
     response = await call_next(request)
     is_docs = request.url.path in {"/docs", "/redoc", "/openapi.json"}
     is_html_wizard = (

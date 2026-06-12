@@ -332,6 +332,9 @@ class InstructorResponse(UserResponse):
     is_available: bool
     hourly_rate: float
     booking_fee: Optional[float] = 20.0  # Per-instructor booking fee in ZAR
+    platform_commission_percent: Optional[float] = (
+        None  # Global commission %; effective fee = max(booking_fee, lesson * %)
+    )
     service_radius_km: Optional[float] = 20.0
     max_travel_distance_km: Optional[float] = 50.0
     rate_per_km_beyond_radius: Optional[float] = 5.0

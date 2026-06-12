@@ -16,6 +16,7 @@ from ..models.booking import Booking, BookingStatus
 from ..models.user import Instructor as InstructorModel
 from ..models.user import User, UserRole
 from ..routes.auth import get_current_user, get_active_role
+from ..services.fees import get_platform_commission_percent
 from ..schemas.user import InstructorLocation, InstructorResponse, InstructorUpdate
 
 router = APIRouter(prefix="/instructors", tags=["Instructors"])
@@ -85,6 +86,7 @@ async def get_instructors(
 
         # Build responses (user is already loaded via joinedload — no extra queries)
         responses = []
+        commission_percent = get_platform_commission_percent(db)
         for instructor in instructors:
             user = instructor.user
             if user:
@@ -112,6 +114,7 @@ async def get_instructors(
                     hourly_rate=instructor.hourly_rate,
                     booking_fee=instructor.booking_fee
                     or 20.0,  # Include per-instructor booking fee (default R20)
+                    platform_commission_percent=commission_percent,
                     service_radius_km=instructor.service_radius_km,
                     max_travel_distance_km=instructor.max_travel_distance_km,
                     rate_per_km_beyond_radius=instructor.rate_per_km_beyond_radius,
@@ -184,6 +187,7 @@ async def get_instructor_profile(
         hourly_rate=instructor.hourly_rate,
         booking_fee=instructor.booking_fee
         or 20.0,  # Include booking fee for instructor dashboard
+        platform_commission_percent=get_platform_commission_percent(db),
         service_radius_km=instructor.service_radius_km,
         max_travel_distance_km=instructor.max_travel_distance_km,
         rate_per_km_beyond_radius=instructor.rate_per_km_beyond_radius,
@@ -206,9 +210,6 @@ async def get_earnings_report(
     """
     
     active_role = get_active_role(current_user)
-    print(
-        f"🔍 EARNINGS ENDPOINT CALLED for user: {current_user.email}, active_role: {active_role}"
-    )
 
     if active_role != UserRole.INSTRUCTOR.value:
         raise HTTPException(
@@ -270,14 +271,22 @@ async def get_earnings_report(
         [b for b in completed_bookings], key=lambda x: x.lesson_date, reverse=True
     )[:20]
 
+    # Bulk-load students and their users to avoid N+1 queries
+    _student_ids = [b.student_id for b in recent_completed if b.student_id]
+    _students_by_id = (
+        {s.id: s for s in db.query(Student).filter(Student.id.in_(_student_ids)).all()}
+        if _student_ids else {}
+    )
+    _student_user_ids = [s.user_id for s in _students_by_id.values()]
+    _student_users_by_id = (
+        {u.id: u for u in db.query(User).filter(User.id.in_(_student_user_ids)).all()}
+        if _student_user_ids else {}
+    )
+
     recent_earnings = []
     for booking in recent_completed:
-        student = db.query(Student).filter(Student.id == booking.student_id).first()
-        student_user = (
-            db.query(User).filter(User.id == student.user_id).first()
-            if student
-            else None
-        )
+        student = _students_by_id.get(booking.student_id)
+        student_user = _student_users_by_id.get(student.user_id) if student else None
 
         recent_earnings.append(
             {
@@ -321,7 +330,6 @@ async def get_earnings_report(
         "recent_earnings": recent_earnings,
     }
 
-    print(f"✅ RETURNING EARNINGS DATA: {response_data}")
     return response_data
 
 

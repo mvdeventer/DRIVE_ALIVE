@@ -55,6 +55,7 @@ export default function AdminSettingsScreen({ navigation }: any) {
     twilioAuthToken:       DEBUG_CONFIG.ENABLED ? DEBUG_CONFIG.TWILIO_AUTH_TOKEN    : '',  // blank = no change; enter new to update
     testRecipient:         DEBUG_CONFIG.ENABLED ? DEBUG_CONFIG.DEFAULT_EMAIL        : '',
     inactivityTimeout:     '15',
+    commissionPercent:     '8',
   });
 
   // Track whether SID/token are configured in DB (to show ✅ hint)
@@ -71,6 +72,7 @@ export default function AdminSettingsScreen({ navigation }: any) {
     twilioPhoneNumber: '',
     adminPhoneNumber: '',
     inactivityTimeout: '15',
+    commissionPercent: '8',
   });
 
   // Track whether SID/token are configured in DB for originalData comparison
@@ -95,6 +97,7 @@ export default function AdminSettingsScreen({ navigation }: any) {
         twilioAuthToken: '',   // never pre-fill; show configured hint instead
         testRecipient: '',
         inactivityTimeout: data.inactivity_timeout_minutes?.toString() || '15',
+        commissionPercent: data.commission_percent?.toString() || '8',
       };
 
       // In debug mode, inject credentials that the server never sends back
@@ -129,6 +132,7 @@ export default function AdminSettingsScreen({ navigation }: any) {
         twilioPhoneNumber: settingsData.twilioPhoneNumber,
         adminPhoneNumber: settingsData.adminPhoneNumber,
         inactivityTimeout: settingsData.inactivityTimeout,
+        commissionPercent: settingsData.commissionPercent,
       });
       setOriginalTwilioSid(settingsData.twilioAccountSid);
       setOriginalTwilioToken(settingsData.twilioAuthToken);
@@ -170,6 +174,7 @@ export default function AdminSettingsScreen({ navigation }: any) {
       passwordChanged ||
       formData.linkValidity !== originalData.linkValidity ||
       formData.inactivityTimeout !== originalData.inactivityTimeout ||
+      formData.commissionPercent !== originalData.commissionPercent ||
       formData.backupIntervalMinutes !== originalData.backupIntervalMinutes ||
       formData.retentionDays !== originalData.retentionDays ||
       formData.autoArchiveAfterDays !== originalData.autoArchiveAfterDays ||
@@ -212,6 +217,9 @@ export default function AdminSettingsScreen({ navigation }: any) {
         twilio_account_sid: formData.twilioAccountSid.trim() || null,
         twilio_auth_token: formData.twilioAuthToken.trim() || null,
         inactivity_timeout_minutes: parseInt(formData.inactivityTimeout) || 15,
+        commission_percent: parseFloat(formData.commissionPercent) >= 0
+          ? parseFloat(formData.commissionPercent)
+          : 8,
       } as any);
 
       scrollViewRef.current?.scrollTo({ y: 0, animated: true });
@@ -228,6 +236,7 @@ export default function AdminSettingsScreen({ navigation }: any) {
         twilioPhoneNumber: formData.twilioPhoneNumber,
         adminPhoneNumber: formData.adminPhoneNumber,
         inactivityTimeout: formData.inactivityTimeout,
+        commissionPercent: formData.commissionPercent,
       });
       // If we just saved new SID/token, mark them as configured & clear fields
       if (formData.twilioAccountSid.trim()) setTwilioSidConfigured(true);
@@ -460,6 +469,23 @@ export default function AdminSettingsScreen({ navigation }: any) {
               </Text>
               <Text style={[styles.hint, { marginTop: 5, fontFamily: 'Inter_600SemiBold', color: colors.primary }]}>
                 On web browsers, closing the tab/window will also log out users immediately.
+              </Text>
+            </View>
+
+            <View style={styles.formGroup}>
+              <Text style={[styles.label, { color: colors.textSecondary }]}>Platform Commission (%)</Text>
+              <TextInput
+                style={[styles.input, { borderColor: colors.border, backgroundColor: colors.card, color: colors.text }]}
+                placeholder="8"
+                placeholderTextColor={colors.textMuted}
+                value={formData.commissionPercent}
+                onChangeText={(value) => handleChange('commissionPercent', value)}
+                keyboardType="decimal-pad"
+                editable={!saving}
+              />
+              <Text style={[styles.hint, { color: colors.textMuted }]}>
+                Each booking earns the platform the greater of the instructor's flat booking fee
+                or this percentage of the lesson price (0-50%). Default: 8%.
               </Text>
             </View>
 
@@ -721,6 +747,13 @@ export default function AdminSettingsScreen({ navigation }: any) {
             <>
               <Text style={[styles.confirmLabel, { color: colors.textMuted }]}>Auto-Logout Timeout:</Text>
               <Text style={[styles.confirmValue, { color: colors.text }]}>{formData.inactivityTimeout} minutes</Text>
+            </>
+          )}
+
+          {formData.commissionPercent !== originalData.commissionPercent && (
+            <>
+              <Text style={[styles.confirmLabel, { color: colors.textMuted }]}>Platform Commission:</Text>
+              <Text style={[styles.confirmValue, { color: colors.text }]}>{formData.commissionPercent}%</Text>
             </>
           )}
 

@@ -21,6 +21,7 @@ import { Badge, Button, Card, Input, ThemedModal } from '../../components/ui';
 import { useTheme } from '../../theme/ThemeContext';
 import ApiService from '../../services/api';
 import { getAllCitiesAndSuburbs } from '../../utils/cities';
+import { lessonTotalWithFee } from '../../utils/bookingFees';
 
 interface Instructor {
   id: number;
@@ -40,6 +41,7 @@ interface Instructor {
   is_available: boolean;
   hourly_rate: number;
   booking_fee?: number;
+  platform_commission_percent?: number; // Global commission %; fee = max(flat, lesson * %)
   rating: number;
   total_reviews: number;
   is_verified: boolean;
@@ -347,8 +349,9 @@ ${studentName}`;
       instructor.is_verified ? '✅ Verified Instructor' : '⚠️ Not Verified'
     }\n\n📍 Location\n${location}\n\n🪪 License Types\n${licenseTypes}\n\n🚗 Vehicle\n${
       instructor.vehicle_make
-    } ${instructor.vehicle_model} (${instructor.vehicle_year})\n\n💰 Pricing\nR${(
-      (instructor.hourly_rate || 0) + (instructor.booking_fee || 20.0)
+    } ${instructor.vehicle_model} (${instructor.vehicle_year})\n\n💰 Pricing\nR${lessonTotalWithFee(
+      instructor,
+      60
     ).toFixed(2)}/hr\n\n⭐ Rating\n${instructor.rating.toFixed(1)} stars (${
       instructor.total_reviews
     } reviews)\n\n${
@@ -416,7 +419,7 @@ ${studentName}`;
           </View>
           <View style={styles.infoRow}>
             <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>
-              💰 R{((item.hourly_rate || 0) + (item.booking_fee || 20.0)).toFixed(2)}/hr
+              💰 R{lessonTotalWithFee(item, 60).toFixed(2)}/hr
             </Text>
             <Text style={[styles.detailLabel, { color: colors.accent }]}>
               ⭐ {item.rating.toFixed(1)} ({item.total_reviews})

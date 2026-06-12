@@ -24,6 +24,7 @@ import WebNavigationHeader from '../../components/WebNavigationHeader';
 import { Button, Card, ThemedModal } from '../../components/ui';
 import { useTheme } from '../../theme/ThemeContext';
 import ApiService from '../../services/api';
+import { calculateBookingFee, lessonTotalWithFee } from '../../utils/bookingFees';
 
 interface Instructor {
   id: number;
@@ -43,6 +44,7 @@ interface Instructor {
   is_available: boolean;
   hourly_rate: number;
   booking_fee?: number; // Per-instructor booking fee in ZAR
+  platform_commission_percent?: number; // Global commission %; fee = max(flat, lesson * %)
   rating: number;
   total_reviews: number;
   is_verified: boolean;
@@ -671,9 +673,9 @@ export default function BookingScreen({ navigation: navProp }: any) {
   const calculatePrice = () => {
     const hours = parseInt(formData.duration_minutes) / 60;
     const pricePerBooking = (instructor?.hourly_rate || 0) * hours;
-    const instructorBookingFee = instructor?.booking_fee || 20.0; // Default to R20 if not set
+    const feePerBooking = calculateBookingFee(instructor || {}, pricePerBooking);
     const lessonTotal = pricePerBooking * selectedBookings.length;
-    const totalBookingFees = instructorBookingFee * selectedBookings.length;
+    const totalBookingFees = feePerBooking * selectedBookings.length;
     return lessonTotal + totalBookingFees;
   };
 
@@ -697,11 +699,11 @@ export default function BookingScreen({ navigation: navProp }: any) {
 
     console.log('✅ Validation passed, proceeding to payment...');
 
-    // Calculate pricing
+    // Calculate pricing (fee per booking mirrors backend hybrid commission)
     const hours = parseInt(formData.duration_minutes) / 60;
-    const lessonAmount = instructor.hourly_rate * hours * selectedBookings.length;
-    const instructorBookingFee = instructor.booking_fee || 20.0; // Use instructor's configured fee or default to R20
-    const bookingFee = instructorBookingFee * selectedBookings.length;
+    const lessonPerBooking = instructor.hourly_rate * hours;
+    const lessonAmount = lessonPerBooking * selectedBookings.length;
+    const bookingFee = calculateBookingFee(instructor, lessonPerBooking) * selectedBookings.length;
     const totalAmount = lessonAmount + bookingFee;
 
     // Instructor reschedule: call backend directly (no payment needed)
@@ -877,7 +879,7 @@ export default function BookingScreen({ navigation: navProp }: any) {
               ⭐ {instructor.rating.toFixed(1)} ({instructor.total_reviews} reviews)
             </Text>
             <Text style={[styles.instructorDetail, { color: colors.textSecondary }]}>
-              💰 R{((instructor.hourly_rate || 0) + (instructor.booking_fee || 20.0)).toFixed(2)}/hr
+              💰 R{lessonTotalWithFee(instructor, 60).toFixed(2)}/hr
             </Text>
           </View>
         </Card>
@@ -1174,10 +1176,7 @@ export default function BookingScreen({ navigation: navProp }: any) {
                       </Text>
                       <Text style={[styles.selectedBookingDetails, { color: colors.success }]}>
                         💰 R
-                        {(
-                          (instructor.hourly_rate * booking.slot.duration_minutes) / 60 +
-                          (instructor.booking_fee || 20.0)
-                        ).toFixed(2)}
+                        {lessonTotalWithFee(instructor, booking.slot.duration_minutes).toFixed(2)}
                       </Text>
                       {booking.pickup_address && (
                         <Text style={[styles.selectedBookingAddress, { color: colors.textSecondary }]}>
@@ -1234,10 +1233,7 @@ export default function BookingScreen({ navigation: navProp }: any) {
               <Text style={[styles.priceLabel, { color: colors.textSecondary }]}>Price per Lesson:</Text>
               <Text style={[styles.priceValue, { color: colors.text }]}>
                 R
-                {(
-                  (instructor.hourly_rate * parseInt(formData.duration_minutes)) / 60 +
-                  (instructor.booking_fee || 20.0)
-                ).toFixed(2)}
+                {lessonTotalWithFee(instructor, parseInt(formData.duration_minutes)).toFixed(2)}
               </Text>
             </View>
           )}

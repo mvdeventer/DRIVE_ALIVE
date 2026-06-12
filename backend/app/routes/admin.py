@@ -2240,6 +2240,11 @@ async def get_admin_settings(
             "twilio_account_sid": masked_sid,
             "twilio_auth_token": masked_token,
             "inactivity_timeout_minutes": first_admin.inactivity_timeout_minutes or 15,
+            "commission_percent": (
+                first_admin.commission_percent
+                if first_admin.commission_percent is not None
+                else 8.0
+            ),
         }
     except HTTPException:
         raise
@@ -2307,6 +2312,8 @@ async def update_admin_settings(
             )
         if settings_update.inactivity_timeout_minutes is not None:
             first_admin.inactivity_timeout_minutes = settings_update.inactivity_timeout_minutes
+        if settings_update.commission_percent is not None:
+            first_admin.commission_percent = settings_update.commission_percent
 
         db.commit()
         db.refresh(first_admin)
@@ -2322,6 +2329,7 @@ async def update_admin_settings(
             "twilio_sender_phone_number": first_admin.twilio_sender_phone_number,
             "twilio_phone_number": first_admin.twilio_phone_number,
             "inactivity_timeout_minutes": first_admin.inactivity_timeout_minutes,
+            "commission_percent": first_admin.commission_percent,
         }
     except HTTPException:
         raise

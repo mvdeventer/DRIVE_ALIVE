@@ -21,16 +21,24 @@ from ..models.payment_session import PaymentSession, PaymentSessionStatus
 from ..models.user import Instructor, Student, User, UserRole
 from ..routes.auth import get_current_user, get_active_role
 from ..schemas.payment import PaymentInitiateRequest, PaymentInitiateResponse
+from ..services.fees import calculate_booking_fee, get_platform_commission_percent
 from ..services.gateways import get_payment_gateway
 from ..services.whatsapp_service import whatsapp_service
 
 router = APIRouter(prefix="/payments", tags=["Payments"])
 logger = logging.getLogger(__name__)
 
-# Configure Stripe (use mock mode if no key provided)
-MOCK_PAYMENT_MODE = not settings.STRIPE_SECRET_KEY
+# Mock mode requires explicit opt-in via ALLOW_MOCK_PAYMENTS=true.
+# In production without Stripe keys this raises at startup (via validate_production_secrets).
+MOCK_PAYMENT_MODE = settings.ALLOW_MOCK_PAYMENTS and not settings.STRIPE_SECRET_KEY
 if not MOCK_PAYMENT_MODE:
-    stripe.api_key = settings.STRIPE_SECRET_KEY
+    if settings.STRIPE_SECRET_KEY:
+        stripe.api_key = settings.STRIPE_SECRET_KEY
+    elif settings.ENVIRONMENT == "production":
+        raise RuntimeError(
+            "STRIPE_SECRET_KEY not set and ALLOW_MOCK_PAYMENTS is false. "
+            "Configure Stripe or set ALLOW_MOCK_PAYMENTS=true explicitly."
+        )
 
 
 @router.post("/initiate", response_model=PaymentInitiateResponse)
@@ -70,17 +78,34 @@ async def initiate_payment(
             detail="Instructor is not available",
         )
 
-    # Calculate amounts
+    # Only fully verified instructors may receive bookings
+    from ..models.user import InstructorVerificationStatus
+    if instructor.verification_status != InstructorVerificationStatus.VERIFIED.value:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Instructor is not yet verified and cannot accept bookings",
+        )
+
+    # Calculate amounts — validate duration server-side
+    _MIN_DURATION = 30
+    _MAX_DURATION = 180
     bookings_count = len(request.bookings)
     total_lesson_amount = 0.0
+    booking_fee = 0.0
+    commission_percent = get_platform_commission_percent(db)
 
     for booking_data in request.bookings:
         duration_minutes = booking_data.get("duration_minutes", 60)
+        if not isinstance(duration_minutes, (int, float)) or not (_MIN_DURATION <= duration_minutes <= _MAX_DURATION):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Lesson duration must be between {_MIN_DURATION} and {_MAX_DURATION} minutes",
+            )
         lesson_amount = instructor.hourly_rate * (duration_minutes / 60)
         total_lesson_amount += lesson_amount
+        # Hybrid commission: per-booking fee = max(flat fee, lesson * commission%)
+        booking_fee += calculate_booking_fee(instructor, lesson_amount, commission_percent)
 
-    instructor_booking_fee = instructor.booking_fee or 20.0
-    booking_fee = instructor_booking_fee * bookings_count
     total_amount = total_lesson_amount + booking_fee
 
     # Check for available credits from previous cancellations/reschedules
@@ -341,6 +366,7 @@ async def stripe_webhook(request: Request, db: Session = Depends(get_db)):
             total_credit = 0.0
 
         created_bookings = []
+        commission_percent = get_platform_commission_percent(db)
 
         for booking_data in bookings_list:
             lesson_date_str = booking_data.get("lesson_date")
@@ -356,7 +382,10 @@ async def stripe_webhook(request: Request, db: Session = Depends(get_db)):
                 lesson_date_str.replace("Z", "+00:00")
             )
             lesson_amount = instructor.hourly_rate * (duration_minutes / 60)
-            instructor_booking_fee = instructor.booking_fee or 20.0
+            # Hybrid commission: fee = max(instructor flat fee, lesson * commission%)
+            instructor_booking_fee = calculate_booking_fee(
+                instructor, lesson_amount, commission_percent
+            )
             total_booking_amount = lesson_amount + instructor_booking_fee
 
             booking = Booking(

@@ -22,6 +22,7 @@ import { Badge, Button, Card, Input, ThemedModal } from '../../components/ui';
 import { useTheme } from '../../theme/ThemeContext';
 import ApiService from '../../services/api';
 import { showMessage } from '../../utils/messageConfig';
+import { calculateBookingFee } from '../../utils/bookingFees';
 
 interface Booking {
   id: number;
@@ -55,6 +56,7 @@ interface InstructorProfile {
   license_type: string;
   hourly_rate: number;
   booking_fee?: number; // Per-instructor booking fee
+  platform_commission_percent?: number; // Global commission %; fee = max(flat, lesson * %)
   is_available: boolean;
   total_earnings: number;
   // Company fields (added in verification overhaul)
@@ -521,7 +523,7 @@ export default function InstructorHomeScreen() {
         {/* Header */}
         <View style={[styles.header, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
           <View style={{ flex: 1 }}>
-            <Text style={[styles.greeting, { color: colors.textSecondary }]}>Instructor Dashboard</Text>
+            <Text style={[styles.greeting, { color: colors.textSecondary }]}>Welcome back</Text>
             <Text style={[styles.name, { color: colors.text }]}>
               {profile?.first_name} {profile?.last_name}
             </Text>
@@ -811,8 +813,8 @@ export default function InstructorHomeScreen() {
                 </Text>
                 <Text style={[styles.bookingFeeExample, { color: colors.text, borderTopColor: colors.accent }]}>
                   Students pay: R{profile.hourly_rate.toFixed(2)} + R
-                  {profile.booking_fee.toFixed(2)} = R
-                  {(profile.hourly_rate + profile.booking_fee).toFixed(2)}/hr
+                  {calculateBookingFee(profile, profile.hourly_rate).toFixed(2)} = R
+                  {(profile.hourly_rate + calculateBookingFee(profile, profile.hourly_rate)).toFixed(2)}/hr
                 </Text>
               </Card>
             )}

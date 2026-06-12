@@ -130,6 +130,9 @@ class AdminSettingsUpdate(BaseModel):
     inactivity_timeout_minutes: Optional[int] = Field(
         default=15, ge=1, le=120
     )  # Auto-logout timeout (1-120 minutes)
+    commission_percent: Optional[float] = Field(
+        default=None, ge=0, le=50
+    )  # Platform commission % — effective fee = max(flat fee, lesson * %)
 
     @field_validator('twilio_sender_phone_number', 'twilio_phone_number')
     @classmethod

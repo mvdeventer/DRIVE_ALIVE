@@ -70,6 +70,10 @@ class User(Base):
 
     # Session configuration (for admin only - global setting)
     inactivity_timeout_minutes = Column(Integer, default=15)  # Auto-logout after 15 minutes idle
+
+    # Platform commission (for admin only - global setting)
+    # Effective booking fee = max(instructor flat fee, lesson_amount * commission%)
+    commission_percent = Column(Float, default=8.0)
     retention_days = Column(Integer, default=30)  # Keep uncompressed backups for 30 days
     auto_archive_after_days = Column(Integer, default=14)  # Archive to ZIP after 14 days
 
@@ -82,6 +86,10 @@ class User(Base):
     # Single-session enforcement: stores the active JWT session token ID (jti)
     # If set, only the JWT with this jti is valid. Cleared on logout.
     active_session_token = Column(String, nullable=True)
+
+    # Brute-force lockout: reset on successful login; locked after 5 failures for 15 min.
+    failed_login_attempts = Column(Integer, default=0, nullable=False)
+    account_locked_until = Column(DateTime(timezone=True), nullable=True)
 
     # ── Communications consent (POPIA / GDPR Art.7, TCPA) ──────────────────
     # Each opt-in is recorded with a timestamp (proof of consent + when given).
