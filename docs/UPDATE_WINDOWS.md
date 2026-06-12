@@ -1,6 +1,6 @@
 # Update Drive Alive On Windows
 
-This guide upgrades an existing installation to Drive Alive 7.0.0.
+This guide upgrades an existing installation to Drive Alive 7.1.0.
 
 ## Recommended Update Flow
 

@@ -1,8 +1,8 @@
-﻿# Drive Alive (RoadReady) — Driving School Booking Platform
+# Drive Alive (RoadReady) — Driving School Booking Platform
 
 > Cross-platform booking app for South African driving schools. Instructors register, students book lessons, payments handled in-app, GPS pickup/drop-off, WhatsApp reminders, compliant with POPIA/PCI DSS.
 
-**Version:** `7.0.0` | **Platform:** iOS · Android · Web | **Region:** South Africa (ZAR)
+**Version:** `7.1.0` | **Platform:** iOS · Android · Web | **Region:** South Africa (ZAR)
 
 ---
 
