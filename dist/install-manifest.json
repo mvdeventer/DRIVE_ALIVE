@@ -1,0 +1,11 @@
+{
+  "version": "7.2.0",
+  "build": "14",
+  "release_date": "2026-06-12",
+  "codename": "Minor Release 7.2.0",
+  "install_guide": "docs/INSTALL_WINDOWS.md",
+  "update_guide": "docs/UPDATE_WINDOWS.md",
+  "release_notes": "docs/releases/v7.2.0.md",
+  "installer_definition": "scripts/installer.iss",
+  "installer_asset": "dist/DriveAlive-Setup-7.2.0.exe"
+}
