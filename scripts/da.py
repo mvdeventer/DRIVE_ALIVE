@@ -4,57 +4,12 @@ da.py  –  Drive Alive project manager
 ======================================
 Single entry-point that replaces all bat/ps1 scripts.
 
-USAGE
     python scripts/da.py <command> [options]
     s.bat                 <command> [options]   (thin wrapper)
 
-COMMANDS
-    start     Start backend + frontend  (default when no command given)
-    stop      Stop running servers
-    restart   Stop then start
-    webtest   Clean install + start servers + open Chrome visual test runner
-    install   Full first-run setup (venv, deps, .env, DB)
-    uninstall Remove generated files / environments
-    env       Switch FRONTEND_URL environment  (loc | net | prod)
-    status    Show server + environment status
-    release   Create and publish a GitHub release  (--minor | --major)
-
-START OPTIONS
-    -b / --backend-only     Only start backend
-    -f / --frontend-only    Only start frontend
-    -d / --dev              Open browser with DevTools
-    --debug                 Verbose debug mode: DEBUG=True backend, log-level debug,
-                            EXPO_PUBLIC_DEBUG_MODE=true (pre-fills forms on all screens)
-    -e / --env <target>     Switch env before starting  (loc | net | prod)
-    -l / --local            Switch to localhost env then start  (alias for -e loc)
-    -m / --mobile           Switch to network/mobile env then start  (alias for -e net)
-
-INSTALL OPTIONS
-    --force                 Re-run even if already installed
-    --offline               Use vendor/ packages
-
-UNINSTALL OPTIONS
-    --yes                   Skip confirmation prompts
-
-ENV OPTIONS
-    loc | local             http://localhost:8081
-    net | network           http://<YOUR-IP>:8081  (auto-detected)
-    prod | production       Show production instructions
-
-RELEASE OPTIONS
-    --minor                 Bump minor version and publish release
-    --major                 Bump major version and publish release
-    --dry-run               Preview changes without writing/publishing
-
-RELEASE EXAMPLES
-    s.bat release --minor --dry-run
-    s.bat release --minor
-    s.bat release --major
-
-WEBTEST EXAMPLES
-    s.bat webtest
-    s.bat webtest --no-clean
-    s.bat webtest --spec cypress/e2e/multi-role-smoke.cy.ts
+Run `s.bat help` for the complete, always-up-to-date command reference:
+it is generated from the argument parser itself, so any newly implemented
+command or flag appears there automatically.
 """
 
 from __future__ import annotations
@@ -1167,6 +1122,98 @@ def cmd_release(bump_type: str, dry_run: bool = False) -> None:
         sys.exit(1)
 
 
+def cmd_ship(bump_type: str, message: str | None = None, dry_run: bool = False) -> None:
+    """
+    One-command release: commit ALL pending work, then bump the version,
+    tag and publish a GitHub release (s.bat minor / s.bat major).
+    """
+    header(f"Drive Alive – {bump_type.capitalize()} release (commit + bump + tag + publish)")
+
+    status = subprocess.run(
+        ["git", "status", "--porcelain"],
+        capture_output=True, text=True, cwd=ROOT,
+    )
+    dirty = bool(status.stdout.strip())
+
+    if dirty:
+        if dry_run:
+            warn("Working tree has uncommitted changes; dry-run will NOT commit them.")
+            info("The real run would first execute: git add -A && git commit")
+        else:
+            info("Committing all pending changes …")
+            subprocess.run(["git", "add", "-A"], cwd=ROOT, check=True)
+            msg = message or f"chore: pre-release commit ({bump_type} bump)"
+            r = subprocess.run(["git", "commit", "-m", msg], cwd=ROOT)
+            if r.returncode != 0:
+                err("git commit failed – release aborted.")
+                sys.exit(1)
+            ok(f"Pending changes committed: {msg}")
+    else:
+        info("Working tree clean – nothing to commit.")
+
+    cmd_release(bump_type=bump_type, dry_run=dry_run)
+
+
+EXAMPLES = """
+EXAMPLES
+    s.bat                                Start backend + frontend (default)
+    s.bat -d                             Start in debug mode (pre-filled forms)
+    s.bat start -b                       Start backend only
+    s.bat start -f --debug               Frontend only, verbose debug
+    s.bat start -m                       Switch to LAN/mobile env, then start
+    s.bat stop                           Stop all running servers
+    s.bat restart -e loc                 Restart on localhost env
+    s.bat status                         Show servers, env and versions
+    s.bat env net                        Point the app at your LAN IP
+    s.bat install                        First-run setup (venv, deps, .env, DB)
+    s.bat install --force                Drop + recreate DB, rewrite DATABASE_URL
+    s.bat uninstall                      Remove venv/node_modules (prompts each step)
+    s.bat uninstall --all                Complete teardown incl. .env + database
+    s.bat webtest                        Clean install + Chrome visual test runner
+    s.bat webtest --spec cypress/e2e/multi-role-smoke.cy.ts
+    s.bat minor                          Commit everything, bump 7.1.0 -> 7.2.0,
+                                         tag and publish a GitHub release
+    s.bat major                          Same, but 7.x.x -> 8.0.0
+    s.bat minor --dry-run                Preview the minor release, change nothing
+    s.bat minor -m "feat: new screens"   Use a custom message for the pre-release commit
+    s.bat release --minor                Release WITHOUT auto-committing first
+    s.bat help                           This reference (always up to date)
+"""
+
+
+def cmd_help(parser: argparse.ArgumentParser) -> None:
+    """
+    Print the full command reference, generated live from the argument
+    parser — newly implemented commands/flags always show up here.
+    """
+    header("Drive Alive – Command Reference")
+    print("  USAGE: s.bat <command> [options]    (or: python scripts/da.py …)")
+    print("  Running with no command is the same as: s.bat start\n")
+
+    sub_action = next(
+        a for a in parser._actions if isinstance(a, argparse._SubParsersAction)
+    )
+    # help= text for each subcommand lives on the pseudo-actions
+    summaries = {ca.dest: (ca.help or "") for ca in sub_action._choices_actions}
+
+    for name, sp in sub_action.choices.items():
+        print(_c("cyan", f"  {name}") + (f"  –  {summaries.get(name, '')}" if summaries.get(name) else ""))
+        for action in sp._actions:
+            if isinstance(action, argparse._HelpAction):
+                continue
+            if action.option_strings:
+                flags = ", ".join(action.option_strings)
+                if action.metavar:
+                    flags += f" {action.metavar}"
+            else:
+                flags = action.metavar or action.dest
+            help_text = action.help or ""
+            print(f"      {flags:<28} {help_text}")
+        print()
+
+    print(EXAMPLES)
+
+
 def cmd_webtest(
     clean_install: bool = True,
     debug_mode: bool = True,
@@ -1247,7 +1294,10 @@ def main() -> None:
     # Compatibility: allow top-level release flags without explicitly typing
     # the "release" subcommand (e.g. `s.bat --major`).
     raw_argv = sys.argv[1:]
-    command_names = {"start", "stop", "restart", "webtest", "install", "uninstall", "env", "status", "release"}
+    command_names = {
+        "start", "stop", "restart", "webtest", "install", "uninstall",
+        "env", "status", "release", "minor", "major", "help",
+    }
     has_release_flag = any(flag in raw_argv for flag in ("--major", "--minor"))
     parsed_argv = raw_argv
     if raw_argv and raw_argv[0] not in command_names and has_release_flag:
@@ -1255,16 +1305,16 @@ def main() -> None:
 
     parser = argparse.ArgumentParser(
         prog="da.py",
-        description="Drive Alive project manager",
+        description="Drive Alive project manager — run 'help' for the full reference with examples",
         formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog=__doc__,
+        epilog=EXAMPLES,
     )
     sub = parser.add_subparsers(dest="command")
 
     # start
-    p_start = sub.add_parser("start", help="Start servers")
-    p_start.add_argument("-b", "--backend-only", action="store_true")
-    p_start.add_argument("-f", "--frontend-only", action="store_true")
+    p_start = sub.add_parser("start", help="Start servers (default when no command given)")
+    p_start.add_argument("-b", "--backend-only", action="store_true", help="Start the FastAPI backend only (port 8000)")
+    p_start.add_argument("-f", "--frontend-only", action="store_true", help="Start the Expo frontend only (port 8081)")
     p_start.add_argument("-d", "--dev", action="store_true", help="Open browser with DevTools")
     p_start.add_argument("--debug", action="store_true", help="Enable verbose debug mode (DEBUG=True, log-level debug, pre-fill forms)")
     p_start.add_argument("-e", "--env", metavar="TARGET", help="Switch env before starting (loc|net|prod)")
@@ -1276,9 +1326,9 @@ def main() -> None:
 
     # restart
     p_restart = sub.add_parser("restart", help="Restart servers")
-    p_restart.add_argument("-b", "--backend-only", action="store_true")
-    p_restart.add_argument("-f", "--frontend-only", action="store_true")
-    p_restart.add_argument("-d", "--dev", action="store_true")
+    p_restart.add_argument("-b", "--backend-only", action="store_true", help="Restart the backend only")
+    p_restart.add_argument("-f", "--frontend-only", action="store_true", help="Restart the frontend only")
+    p_restart.add_argument("-d", "--dev", action="store_true", help="Open browser with DevTools")
     p_restart.add_argument("--debug", action="store_true", help="Enable verbose debug mode")
     p_restart.add_argument("-e", "--env", metavar="TARGET", help="Switch env before restarting (loc|net|prod)")
     p_restart.add_argument("-l", "--local", action="store_true", help="Switch to localhost env first")
@@ -1288,12 +1338,12 @@ def main() -> None:
     p_webtest = sub.add_parser("webtest", help="Clean install + start + open visual Chrome tests")
     p_webtest.add_argument("--no-clean", action="store_true", help="Skip clean install step")
     p_webtest.add_argument("--no-debug", action="store_true", help="Disable debug mode while running")
-    p_webtest.add_argument("--spec", help="Optional Cypress spec path, e.g. cypress/e2e/foo.cy.ts")
+    p_webtest.add_argument("--spec", metavar="PATH", help="Optional Cypress spec path, e.g. cypress/e2e/foo.cy.ts")
 
     # install
-    p_install = sub.add_parser("install", help="Full setup")
-    p_install.add_argument("--force", action="store_true")
-    p_install.add_argument("--offline", action="store_true")
+    p_install = sub.add_parser("install", help="Full first-run setup (venv, deps, .env, database)")
+    p_install.add_argument("--force", action="store_true", help="Re-run even if installed; drop + recreate the database and rewrite DATABASE_URL")
+    p_install.add_argument("--offline", action="store_true", help="Install from the bundled vendor/ packages (no internet)")
 
     # uninstall
     p_uninstall = sub.add_parser("uninstall", help="Remove generated files")
@@ -1312,11 +1362,23 @@ def main() -> None:
     sub.add_parser("status", help="Show status")
 
     # release
-    p_release = sub.add_parser("release", help="Create and publish a GitHub release")
+    p_release = sub.add_parser("release", help="Create and publish a GitHub release (requires clean tree)")
     bump_group = p_release.add_mutually_exclusive_group(required=True)
     bump_group.add_argument("--minor", action="store_true", help="Bump minor version and publish a release")
     bump_group.add_argument("--major", action="store_true", help="Bump major version and publish a release")
     p_release.add_argument("--dry-run", action="store_true", help="Preview release changes without writing, tagging, or publishing")
+
+    # minor / major — one-command ship: commit + bump + tag + publish
+    for bump_name, bump_help in (
+        ("minor", "Commit ALL pending changes, bump minor version (x.Y.0), tag and publish a GitHub release"),
+        ("major", "Commit ALL pending changes, bump major version (X.0.0), tag and publish a GitHub release"),
+    ):
+        p_bump = sub.add_parser(bump_name, help=bump_help)
+        p_bump.add_argument("-m", "--message", help="Commit message for the pending changes (default: auto-generated)")
+        p_bump.add_argument("--dry-run", action="store_true", help="Preview only — commits nothing, publishes nothing")
+
+    # help
+    sub.add_parser("help", help="Full command reference with examples (auto-generated, always current)")
 
     # If no subcommand given, default to "start".
     # Use parse_known_args() first so that start-only flags like --debug / -d
@@ -1393,6 +1455,12 @@ def main() -> None:
     elif args.command == "release":
         bump_type = "major" if args.major else "minor"
         cmd_release(bump_type=bump_type, dry_run=args.dry_run)
+
+    elif args.command in ("minor", "major"):
+        cmd_ship(bump_type=args.command, message=args.message, dry_run=args.dry_run)
+
+    elif args.command == "help":
+        cmd_help(parser)
 
     else:
         parser.print_help()

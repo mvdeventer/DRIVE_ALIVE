@@ -94,9 +94,13 @@ cd ..
 | `stop` | Stop all servers |
 | `uninstall` | Remove venv/node_modules/builds (prompts for .env + database) |
 | `uninstall --all` | Complete uninstall: stop servers, remove all generated files, delete `.env`, drop the database (one confirmation) |
-| `release --minor` | Bump minor version and publish release |
-| `release --major` | Bump major version and publish release |
+| `minor` | Commit all pending changes, bump minor version, tag and publish GitHub release |
+| `major` | Commit all pending changes, bump major version, tag and publish GitHub release |
+| `minor --dry-run` | Preview the release without committing or publishing |
+| `release --minor` | Bump minor version and publish release (requires clean tree) |
+| `release --major` | Bump major version and publish release (requires clean tree) |
 | `release --minor --dry-run` | Preview release changes only |
+| `help` | Full command reference with examples (auto-generated from the CLI) |
 
 ## 📘 Install & Update Guides
 

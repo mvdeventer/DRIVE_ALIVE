@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm --prefix frontend run i18n:check-completeness)",
+      "Bash(npm --prefix frontend run i18n:detect-hardcoded)",
+      "Bash(python scripts/check_error_code_mapping.py)",
+      "Bash(python scripts/da.py status)",
+      "Bash(s.bat status)"
+    ]
+  }
+}
