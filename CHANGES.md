@@ -3,6 +3,12 @@
 All code improvements per release, newest first. Generated automatically
 by the release workflow (`s.bat minor` / `s.bat major` / `s.bat release`).
 
+## v8.0.0 — 2026-06-12 (Major Release 8.0.0)
+
+> Drive Alive v8.0.0 — version maintenance only across 0 files. Full details in CHANGES.md.
+
+**Scope:** 0 commits, no file changes detected
+
 ## v7.2.0 — 2026-06-12 (Minor Release 7.2.0)
 
 > Drive Alive v7.2.0 — 1 fix, 4 maintenance updates, 3 new features, 4 other improvements across 140 files (+4082/-2299 lines). Top highlight: auto-generated CHANGES.md + summary on tags and releases. Full details in CHANGES.md.
