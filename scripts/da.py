@@ -1110,8 +1110,28 @@ def cmd_status() -> None:
     print()
 
 
-def cmd_release(bump_type: str, dry_run: bool = False) -> None:
+RELEASE_LOCK_FILE = ROOT / ".release.lock"
+
+
+def _acquire_release_lock() -> bool:
+    """Prevent two releases from racing each other (corrupts version files)."""
+    if RELEASE_LOCK_FILE.exists():
+        stale_pid = RELEASE_LOCK_FILE.read_text(encoding="utf-8", errors="replace").strip()
+        err(f"Another release appears to be running (PID {stale_pid or 'unknown'}).")
+        err(f"Wait for it to finish. If it crashed, delete {RELEASE_LOCK_FILE} and retry.")
+        return False
+    RELEASE_LOCK_FILE.write_text(str(os.getpid()), encoding="utf-8")
+    return True
+
+
+def _drop_release_lock() -> None:
+    RELEASE_LOCK_FILE.unlink(missing_ok=True)
+
+
+def cmd_release(bump_type: str, dry_run: bool = False, _lock_held: bool = False) -> None:
     """Release workflow entrypoint."""
+    if not dry_run and not _lock_held and not _acquire_release_lock():
+        sys.exit(1)
     action = "Dry-run release" if dry_run else "Release"
     header(f"Drive Alive – {action}")
     info(f"Requested bump: {bump_type}")
@@ -1120,6 +1140,9 @@ def cmd_release(bump_type: str, dry_run: bool = False) -> None:
     except ReleaseError as exc:
         err(str(exc))
         sys.exit(1)
+    finally:
+        if not dry_run and not _lock_held:
+            _drop_release_lock()
 
 
 def cmd_ship(bump_type: str, message: str | None = None, dry_run: bool = False) -> None:
@@ -1127,31 +1150,37 @@ def cmd_ship(bump_type: str, message: str | None = None, dry_run: bool = False) 
     One-command release: commit ALL pending work, then bump the version,
     tag and publish a GitHub release (s.bat minor / s.bat major).
     """
-    header(f"Drive Alive – {bump_type.capitalize()} release (commit + bump + tag + publish)")
+    if not dry_run and not _acquire_release_lock():
+        sys.exit(1)
+    try:
+        header(f"Drive Alive – {bump_type.capitalize()} release (commit + bump + tag + publish)")
 
-    status = subprocess.run(
-        ["git", "status", "--porcelain"],
-        capture_output=True, text=True, cwd=ROOT,
-    )
-    dirty = bool(status.stdout.strip())
+        status = subprocess.run(
+            ["git", "status", "--porcelain"],
+            capture_output=True, text=True, cwd=ROOT,
+        )
+        dirty = bool(status.stdout.strip())
 
-    if dirty:
-        if dry_run:
-            warn("Working tree has uncommitted changes; dry-run will NOT commit them.")
-            info("The real run would first execute: git add -A && git commit")
+        if dirty:
+            if dry_run:
+                warn("Working tree has uncommitted changes; dry-run will NOT commit them.")
+                info("The real run would first execute: git add -A && git commit")
+            else:
+                info("Committing all pending changes …")
+                subprocess.run(["git", "add", "-A"], cwd=ROOT, check=True)
+                msg = message or f"chore: pre-release commit ({bump_type} bump)"
+                r = subprocess.run(["git", "commit", "-m", msg], cwd=ROOT)
+                if r.returncode != 0:
+                    err("git commit failed – release aborted.")
+                    sys.exit(1)
+                ok(f"Pending changes committed: {msg}")
         else:
-            info("Committing all pending changes …")
-            subprocess.run(["git", "add", "-A"], cwd=ROOT, check=True)
-            msg = message or f"chore: pre-release commit ({bump_type} bump)"
-            r = subprocess.run(["git", "commit", "-m", msg], cwd=ROOT)
-            if r.returncode != 0:
-                err("git commit failed – release aborted.")
-                sys.exit(1)
-            ok(f"Pending changes committed: {msg}")
-    else:
-        info("Working tree clean – nothing to commit.")
+            info("Working tree clean – nothing to commit.")
 
-    cmd_release(bump_type=bump_type, dry_run=dry_run)
+        cmd_release(bump_type=bump_type, dry_run=dry_run, _lock_held=True)
+    finally:
+        if not dry_run:
+            _drop_release_lock()
 
 
 EXAMPLES = """
@@ -1386,6 +1415,10 @@ def main() -> None:
     args, _unknown = parser.parse_known_args(parsed_argv)
     if not args.command:
         args = parser.parse_args(["start"] + parsed_argv)
+    else:
+        # Strict re-parse: reject unknown arguments instead of silently
+        # ignoring them (e.g. "uninstall all" must not run a plain uninstall)
+        args = parser.parse_args(parsed_argv)
 
     if args.command == "start":
         switch = getattr(args, "env", None)

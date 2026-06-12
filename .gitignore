@@ -136,3 +136,4 @@ SECRETS.txt
 # mkcert binary
 mkcert.exe
 .installed
+.release.lock
