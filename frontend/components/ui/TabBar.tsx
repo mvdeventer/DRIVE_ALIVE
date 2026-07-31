@@ -31,6 +31,8 @@ interface TabBarProps {
   onTabPress: (index: number) => void;
   /** Stretch tabs to fill width (use for ≤4 tabs) */
   fullWidth?: boolean;
+  /** Accessible name for the tab list, e.g. "Earnings sections". */
+  accessibilityLabel?: string;
   style?: any;
 }
 
@@ -39,9 +41,10 @@ export default function TabBar({
   activeTab,
   onTabPress,
   fullWidth = false,
+  accessibilityLabel,
   style,
 }: TabBarProps) {
-  const { colors, isDark } = useTheme();
+  const { colors, isDark, fontFamilies } = useTheme();
   const activeIndex = useSharedValue(activeTab);
 
   useEffect(() => {
@@ -66,6 +69,8 @@ export default function TabBar({
         horizontal
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={fullWidth ? styles.fullWidthContainer : styles.scrollContainer}
+        accessibilityRole={Platform.OS === 'web' ? ('tablist' as any) : undefined}
+        accessibilityLabel={accessibilityLabel}
       >
         {tabs.map((tab, index) => {
           const isActive = index === activeTab;
@@ -73,6 +78,10 @@ export default function TabBar({
             <Pressable
               key={tab}
               onPress={() => onTabPress(index)}
+              accessibilityRole="tab"
+              accessibilityLabel={tab}
+              accessibilityState={{ selected: isActive }}
+              {...({ 'aria-selected': isActive } as any)}
               style={({ pressed }) => [
                 styles.tab,
                 fullWidth && styles.tabFullWidth,
@@ -84,7 +93,7 @@ export default function TabBar({
                   styles.tabText,
                   {
                     color: isActive ? colors.primary : colors.textSecondary,
-                    fontFamily: isActive ? 'Inter_600SemiBold' : 'Inter_500Medium',
+                    fontFamily: isActive ? fontFamilies.semibold : fontFamilies.medium,
                   },
                 ]}
                 numberOfLines={1}
@@ -99,6 +108,8 @@ export default function TabBar({
                     backgroundColor: isActive ? colors.primary : 'transparent',
                   },
                 ]}
+                accessibilityElementsHidden
+                importantForAccessibility="no"
               />
             </Pressable>
           );

@@ -5,7 +5,7 @@
 import React, { useEffect } from 'react';
 import { Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useTheme } from '../theme/ThemeContext';
+import { useTheme, withAlpha } from '../theme/ThemeContext';
 
 interface InlineMessageProps {
   type: 'success' | 'error' | 'warning' | 'info';
@@ -57,7 +57,7 @@ export default function InlineMessage({
         marginBottom: 16,
         borderWidth: 1,
         backgroundColor: c.bg,
-        borderColor: c.border + '40',
+        borderColor: withAlpha(c.border, 0.25),
       }}
     >
       <Ionicons name={iconMap[type]} size={20} color={c.text} style={{ marginRight: 10 }} />

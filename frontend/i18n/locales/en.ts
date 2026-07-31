@@ -25,6 +25,7 @@ export const en = {
     settings: 'Settings',
     profile: 'Profile',
     language: 'Language',
+    selectRow: 'Select row {{id}}',
   },
   auth: {
     signIn: 'Sign In',
@@ -34,6 +35,8 @@ export const en = {
     forgotPassword: 'Forgot Password?',
     changePassword: 'Change Password',
     resetPassword: 'Reset Password',
+    showPassword: 'Show password',
+    hidePassword: 'Hide password',
   },
   errors: {
     auth: {
@@ -99,6 +102,22 @@ export const en = {
     newUsers: 'New Users',
     newBookings: 'New Bookings',
     avgLessons: 'Avg Completed Lessons / Student',
+  },
+  availability: {
+    toggleDay: 'Toggle availability for {{day}}',
+    enableAllDays: 'Enable all days',
+  },
+  licences: {
+    heading: 'Licence codes we teach',
+    showcaseLabel: 'Rotating showcase of licence codes offered',
+    A1: 'Scooter up to 125cc',
+    A: 'Motorcycle',
+    B: 'Light motor vehicle',
+    C1: 'Light commercial or minibus',
+    C: 'Heavy vehicle or bus',
+    EB: 'Light vehicle with trailer',
+    EC1: 'Light commercial with trailer',
+    EC: 'Heavy vehicle with trailer',
   },
 };
 

@@ -6,12 +6,12 @@
 import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react-native';
 import { NavigationContainer } from '@react-navigation/native';
-import DatabaseInterfaceScreen from '../../../screens/admin/DatabaseInterfaceScreen';
-import * as databaseInterface from '../../../services/database-interface';
+import DatabaseInterfaceScreen from '../admin/DatabaseInterfaceScreen';
+import * as databaseInterface from '../../services/database-interface';
 
 // Mock the service
-jest.mock('../../../services/database-interface');
-jest.mock('../../../hooks/useWindowsDetection', () => ({
+jest.mock('../../services/database-interface');
+jest.mock('../../hooks/useWindowsDetection', () => ({
   __esModule: true,
   default: () => ({
     isWindowsPC: true,
@@ -40,7 +40,7 @@ describe('DatabaseInterfaceScreen', () => {
 
   describe('Platform Detection', () => {
     it('should show access denied when not on Windows PC', () => {
-      jest.mock('../../../hooks/useWindowsDetection', () => ({
+      jest.mock('../../hooks/useWindowsDetection', () => ({
         __esModule: true,
         default: () => ({
           isWindowsPC: false,

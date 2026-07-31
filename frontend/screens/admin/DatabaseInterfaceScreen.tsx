@@ -17,6 +17,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { useTheme } from '../../theme/ThemeContext';
+import { useT } from '../../i18n';
 import ThemedModal from '../../components/ui/Modal';
 import { Button } from '../../components/ui';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -58,7 +59,8 @@ interface TableState {
 }
 
 const DatabaseInterfaceScreen = ({ navigation }: any) => {
-  const { colors } = useTheme();
+  const { colors, withAlpha } = useTheme();
+  const t = useT();
   const scrollViewRef = useRef<ScrollView>(null);
   const platformDetection = useWindowsDetection();
   const isDeletableTab = (tab: TabType): tab is DeletableTab => tab !== 'reviews' && tab !== 'schedules';
@@ -1219,7 +1221,7 @@ const DatabaseInterfaceScreen = ({ navigation }: any) => {
                 {(['ALL', 'ADMIN', 'INSTRUCTOR', 'STUDENT'] as const).map((role) => (
                   <Pressable
                     key={role}
-                    style={[styles.filterChip, { borderColor: colors.border, backgroundColor: colors.card }, userRoleFilter === role && { borderColor: colors.primary, backgroundColor: colors.primaryLight }]}
+                    style={[styles.filterChip, { borderColor: colors.border, backgroundColor: colors.card }, userRoleFilter === role && { borderColor: colors.primary, backgroundColor: withAlpha(colors.primary, 0.12) }]}
                     onPress={() => setUserRoleFilter(role)}
                   >
                     <Text style={[styles.filterChipText, { color: colors.textSecondary }, userRoleFilter === role && { color: colors.primary }]}>
@@ -1234,7 +1236,7 @@ const DatabaseInterfaceScreen = ({ navigation }: any) => {
                 {(['ALL', 'ACTIVE', 'INACTIVE', 'SUSPENDED'] as const).map((status) => (
                   <Pressable
                     key={status}
-                    style={[styles.filterChip, { borderColor: colors.border, backgroundColor: colors.card }, userStatusFilter === status && { borderColor: colors.primary, backgroundColor: colors.primaryLight }]}
+                    style={[styles.filterChip, { borderColor: colors.border, backgroundColor: colors.card }, userStatusFilter === status && { borderColor: colors.primary, backgroundColor: withAlpha(colors.primary, 0.12) }]}
                     onPress={() => setUserStatusFilter(status)}
                   >
                     <Text style={[styles.filterChipText, { color: colors.textSecondary }, userStatusFilter === status && { color: colors.primary }]}>
@@ -1253,7 +1255,7 @@ const DatabaseInterfaceScreen = ({ navigation }: any) => {
                 {(['ALL', 'VERIFIED', 'UNVERIFIED'] as const).map((status) => (
                   <Pressable
                     key={status}
-                    style={[styles.filterChip, { borderColor: colors.border, backgroundColor: colors.card }, instructorVerifiedFilter === status && { borderColor: colors.primary, backgroundColor: colors.primaryLight }]}
+                    style={[styles.filterChip, { borderColor: colors.border, backgroundColor: colors.card }, instructorVerifiedFilter === status && { borderColor: colors.primary, backgroundColor: withAlpha(colors.primary, 0.12) }]}
                     onPress={() => setInstructorVerifiedFilter(status)}
                   >
                     <Text style={[styles.filterChipText, { color: colors.textSecondary }, instructorVerifiedFilter === status && { color: colors.primary }]}>
@@ -1272,7 +1274,7 @@ const DatabaseInterfaceScreen = ({ navigation }: any) => {
                 {(['ALL', 'PENDING', 'CONFIRMED', 'COMPLETED', 'CANCELLED'] as const).map((status) => (
                   <Pressable
                     key={status}
-                    style={[styles.filterChip, { borderColor: colors.border, backgroundColor: colors.card }, bookingStatusFilter === status && { borderColor: colors.primary, backgroundColor: colors.primaryLight }]}
+                    style={[styles.filterChip, { borderColor: colors.border, backgroundColor: colors.card }, bookingStatusFilter === status && { borderColor: colors.primary, backgroundColor: withAlpha(colors.primary, 0.12) }]}
                     onPress={() => setBookingStatusFilter(status)}
                   >
                     <Text style={[styles.filterChipText, { color: colors.textSecondary }, bookingStatusFilter === status && { color: colors.primary }]}>
@@ -1287,7 +1289,7 @@ const DatabaseInterfaceScreen = ({ navigation }: any) => {
                 {(['ALL', 'PENDING', 'PAID', 'FAILED', 'REFUNDED'] as const).map((status) => (
                   <Pressable
                     key={status}
-                    style={[styles.filterChip, { borderColor: colors.border, backgroundColor: colors.card }, bookingPaymentFilter === status && { borderColor: colors.primary, backgroundColor: colors.primaryLight }]}
+                    style={[styles.filterChip, { borderColor: colors.border, backgroundColor: colors.card }, bookingPaymentFilter === status && { borderColor: colors.primary, backgroundColor: withAlpha(colors.primary, 0.12) }]}
                     onPress={() => setBookingPaymentFilter(status)}
                   >
                     <Text style={[styles.filterChipText, { color: colors.textSecondary }, bookingPaymentFilter === status && { color: colors.primary }]}>
@@ -1396,7 +1398,7 @@ const DatabaseInterfaceScreen = ({ navigation }: any) => {
               )}
             </Pressable>
             <Pressable
-              style={[styles.exportButton, { backgroundColor: colors.danger }]}
+              style={[styles.exportButton, { backgroundColor: colors.buttonDanger }]}
               onPress={handleResetDatabase}
               disabled={!!dbAction}
               accessibilityRole="button"
@@ -1435,7 +1437,7 @@ const DatabaseInterfaceScreen = ({ navigation }: any) => {
                 <Text style={styles.bulkActionButtonText}>Bulk Actions</Text>
               </Pressable>
               <Pressable
-                style={[styles.clearSelectionButton, { backgroundColor: colors.danger }]}
+                style={[styles.clearSelectionButton, { backgroundColor: colors.buttonDanger }]}
                 onPress={clearAllSelections}
               >
                 <Text style={styles.clearSelectionText}>Clear</Text>
@@ -1496,6 +1498,9 @@ const DatabaseInterfaceScreen = ({ navigation }: any) => {
                   style={styles.headerCheckbox}
                   accessibilityRole="checkbox"
                   accessibilityLabel="Select all rows"
+                accessibilityState={{ checked: getSelectedIds().length > 0 }}
+                // RNW 0.21 does not emit aria-checked from accessibilityState here.
+                {...({ 'aria-checked': getSelectedIds().length > 0 } as any)}
                 >
                   <View style={[
                     styles.checkbox,
@@ -1526,6 +1531,8 @@ const DatabaseInterfaceScreen = ({ navigation }: any) => {
                     style={styles.rowCheckbox}
                     accessibilityRole="checkbox"
                     accessibilityState={{ checked: !!selectedRows[user.id] }}
+                  accessibilityLabel={t('common.selectRow', { id: user.id })}
+                  {...({ 'aria-checked': !!selectedRows[user.id] } as any)}
                   >
                     <View style={[
                       styles.checkbox,
@@ -1583,7 +1590,7 @@ const DatabaseInterfaceScreen = ({ navigation }: any) => {
                     <Pressable
                       style={[
                         styles.deleteButton,
-                        { backgroundColor: colors.danger },
+                        { backgroundColor: colors.buttonDanger },
                         userStatus === 'ACTIVE' && { backgroundColor: colors.success },
                         userStatus === 'SUSPENDED' && { backgroundColor: colors.warning }
                       ]}
@@ -1613,6 +1620,9 @@ const DatabaseInterfaceScreen = ({ navigation }: any) => {
                   style={styles.headerCheckbox}
                   accessibilityRole="checkbox"
                   accessibilityLabel="Select all rows"
+                accessibilityState={{ checked: getSelectedIds().length > 0 }}
+                // RNW 0.21 does not emit aria-checked from accessibilityState here.
+                {...({ 'aria-checked': getSelectedIds().length > 0 } as any)}
                 >
                   <View style={[
                     styles.checkbox,
@@ -1641,6 +1651,8 @@ const DatabaseInterfaceScreen = ({ navigation }: any) => {
                     style={styles.rowCheckbox}
                     accessibilityRole="checkbox"
                     accessibilityState={{ checked: !!selectedRows[instructor.id] }}
+                  accessibilityLabel={t('common.selectRow', { id: instructor.id })}
+                  {...({ 'aria-checked': !!selectedRows[instructor.id] } as any)}
                   >
                     <View style={[
                       styles.checkbox,
@@ -1682,7 +1694,7 @@ const DatabaseInterfaceScreen = ({ navigation }: any) => {
                     <Text style={styles.editButtonText}>Edit</Text>
                   </Pressable>
                   <Pressable
-                    style={[styles.deleteButton, { backgroundColor: colors.danger }]}
+                    style={[styles.deleteButton, { backgroundColor: colors.buttonDanger }]}
                     onPress={() => openDeleteModal(instructor.id)}
                   >
                     <Text style={styles.deleteButtonText}>Delete</Text>
@@ -1703,6 +1715,9 @@ const DatabaseInterfaceScreen = ({ navigation }: any) => {
                   style={styles.headerCheckbox}
                   accessibilityRole="checkbox"
                   accessibilityLabel="Select all rows"
+                accessibilityState={{ checked: getSelectedIds().length > 0 }}
+                // RNW 0.21 does not emit aria-checked from accessibilityState here.
+                {...({ 'aria-checked': getSelectedIds().length > 0 } as any)}
                 >
                   <View style={[
                     styles.checkbox,
@@ -1729,6 +1744,8 @@ const DatabaseInterfaceScreen = ({ navigation }: any) => {
                     style={styles.rowCheckbox}
                     accessibilityRole="checkbox"
                     accessibilityState={{ checked: !!selectedRows[student.id] }}
+                  accessibilityLabel={t('common.selectRow', { id: student.id })}
+                  {...({ 'aria-checked': !!selectedRows[student.id] } as any)}
                   >
                     <View style={[
                       styles.checkbox,
@@ -1753,7 +1770,7 @@ const DatabaseInterfaceScreen = ({ navigation }: any) => {
                     <Text style={styles.editButtonText}>Edit</Text>
                   </Pressable>
                   <Pressable
-                    style={[styles.deleteButton, { backgroundColor: colors.danger }]}
+                    style={[styles.deleteButton, { backgroundColor: colors.buttonDanger }]}
                     onPress={() => openDeleteModal(student.id)}
                   >
                     <Text style={styles.deleteButtonText}>Delete</Text>
@@ -1774,6 +1791,9 @@ const DatabaseInterfaceScreen = ({ navigation }: any) => {
                   style={styles.headerCheckbox}
                   accessibilityRole="checkbox"
                   accessibilityLabel="Select all rows"
+                accessibilityState={{ checked: getSelectedIds().length > 0 }}
+                // RNW 0.21 does not emit aria-checked from accessibilityState here.
+                {...({ 'aria-checked': getSelectedIds().length > 0 } as any)}
                 >
                   <View style={[
                     styles.checkbox,
@@ -1807,6 +1827,8 @@ const DatabaseInterfaceScreen = ({ navigation }: any) => {
                       style={styles.rowCheckbox}
                       accessibilityRole="checkbox"
                       accessibilityState={{ checked: !!selectedRows[booking.id] }}
+                    accessibilityLabel={t('common.selectRow', { id: booking.id })}
+                    {...({ 'aria-checked': !!selectedRows[booking.id] } as any)}
                     >
                       <View style={[
                         styles.checkbox,
@@ -1875,7 +1897,7 @@ const DatabaseInterfaceScreen = ({ navigation }: any) => {
                       <Text style={styles.editButtonText}>Edit</Text>
                     </Pressable>
                     <Pressable
-                      style={[styles.deleteButton, { backgroundColor: colors.danger }]}
+                      style={[styles.deleteButton, { backgroundColor: colors.buttonDanger }]}
                       onPress={() => openDeleteModal(booking.id)}
                     >
                       <Text style={styles.deleteButtonText}>Delete</Text>
@@ -2482,7 +2504,8 @@ const styles = StyleSheet.create({
 });
 
 // Memoized table row component for performance
-const TableRow = React.memo(({ 
+// eslint-disable-next-line react/display-name -- displayName assigned below
+const TableRow = React.memo(({
   user, 
   onEdit, 
   onDelete 
@@ -2508,7 +2531,7 @@ const TableRow = React.memo(({
         <Text style={styles.editButtonText}>Edit</Text>
       </Pressable>
       <Pressable
-        style={[styles.deleteButton, { backgroundColor: colors.danger }]}
+        style={[styles.deleteButton, { backgroundColor: colors.buttonDanger }]}
         onPress={() => onDelete(user.id)}
         accessibilityRole="button"
         accessibilityLabel={`Delete ${user.first_name} ${user.last_name}`}

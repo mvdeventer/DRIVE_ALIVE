@@ -404,9 +404,9 @@ export default function UserManagementScreen({ navigation }: any) {
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'active': return colors.success;
-      case 'inactive': return colors.textMuted;
+      case 'inactive': return colors.textTertiary;
       case 'suspended': return colors.warning;
-      default: return colors.textMuted;
+      default: return colors.textTertiary;
     }
   };
 
@@ -415,7 +415,7 @@ export default function UserManagementScreen({ navigation }: any) {
       case 'admin': return colors.danger;
       case 'instructor': return colors.primary;
       case 'student': return colors.success;
-      default: return colors.textMuted;
+      default: return colors.textTertiary;
     }
   };
 
@@ -667,7 +667,7 @@ export default function UserManagementScreen({ navigation }: any) {
             <Text style={[styles.userName, { color: colors.text, fontFamily: 'Inter_700Bold' }]}>{item.full_name}</Text>
             <Text style={[styles.userEmail, { color: colors.textSecondary, fontFamily: 'Inter_400Regular' }]}>{item.email}</Text>
             <Text style={[styles.userPhone, { color: colors.textSecondary, fontFamily: 'Inter_400Regular' }]}>{item.phone}</Text>
-            {item.id_number && <Text style={[styles.userIdNumber, { color: colors.primary, fontFamily: 'Inter_600SemiBold' }]}>SA ID: {item.id_number}</Text>}
+            {item.id_number ? <Text style={[styles.userIdNumber, { color: colors.primary, fontFamily: 'Inter_600SemiBold' }]}>SA ID: {item.id_number}</Text> : null}
           </View>
           <View style={styles.badges}>
             <View style={[styles.badge, { backgroundColor: getRoleColor(item.role) }]}>
@@ -683,11 +683,11 @@ export default function UserManagementScreen({ navigation }: any) {
         <Text style={[styles.userDetailText, { color: colors.textSecondary, fontFamily: 'Inter_400Regular' }]}>
           Joined: {new Date(item.created_at).toLocaleDateString()}
         </Text>
-        {item.last_login && (
+        {item.last_login ? (
           <Text style={[styles.userDetailText, { color: colors.textSecondary, fontFamily: 'Inter_400Regular' }]}>
             Last Login: {new Date(item.last_login).toLocaleDateString()}
           </Text>
-        )}
+        ) : null}
         {(isInstructorItem) && item.booking_fee !== undefined && item.booking_fee !== null && (
           <Text style={[styles.userDetailText, { color: colors.textSecondary, fontFamily: 'Inter_400Regular' }]}>Booking Fee: R{item.booking_fee.toFixed(2)}</Text>
         )}
@@ -802,8 +802,8 @@ export default function UserManagementScreen({ navigation }: any) {
         showBackButton={navigation.canGoBack()}
       />
 
-      {error && <InlineMessage message={error} type="error" />}
-      {success && <InlineMessage message={success} type="success" />}
+      {error ? <InlineMessage message={error} type="error" /> : null}
+      {success ? <InlineMessage message={success} type="success" /> : null}
 
       {/* Tab Navigation */}
       <View style={[styles.tabContainer, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
@@ -827,10 +827,10 @@ export default function UserManagementScreen({ navigation }: any) {
           placeholder={`Search ${activeTab === 'all' ? 'user' : activeTab}s by name, ID, phone, or email...`}
           value={searchQuery}
           onChangeText={setSearchQuery}
-          placeholderTextColor={colors.textMuted}
+          placeholderTextColor={colors.textTertiary}
         />
         {searchQuery.length > 0 && (
-          <Pressable style={[styles.clearSearchButton, { backgroundColor: colors.danger }]} onPress={() => setSearchQuery('')}>
+          <Pressable style={[styles.clearSearchButton, { backgroundColor: colors.buttonDanger }]} onPress={() => setSearchQuery('')}>
             <Text style={[styles.clearSearchText, { fontFamily: 'Inter_700Bold' }]}>X</Text>
           </Pressable>
         )}
@@ -887,7 +887,7 @@ export default function UserManagementScreen({ navigation }: any) {
             value={newPassword}
             onChangeText={setNewPassword}
             placeholder="Enter new password"
-            placeholderTextColor={colors.textMuted}
+            placeholderTextColor={colors.textTertiary}
             secureTextEntry={!showPassword}
           />
         </View>
@@ -899,7 +899,7 @@ export default function UserManagementScreen({ navigation }: any) {
             value={confirmPassword}
             onChangeText={setConfirmPassword}
             placeholder="Confirm new password"
-            placeholderTextColor={colors.textMuted}
+            placeholderTextColor={colors.textTertiary}
             secureTextEntry={!showPassword}
           />
         </View>
@@ -1110,13 +1110,13 @@ export default function UserManagementScreen({ navigation }: any) {
                       <Text style={[styles.scheduleDay, { color: colors.text, fontFamily: 'Inter_600SemiBold' }]}>
                         {day.day_of_week.charAt(0).toUpperCase() + day.day_of_week.slice(1)}
                       </Text>
-                      <Text style={[styles.scheduleTime, { color: day.is_active ? colors.success : colors.textMuted, fontFamily: 'Inter_400Regular' }]}>
+                      <Text style={[styles.scheduleTime, { color: day.is_active ? colors.success : colors.textTertiary, fontFamily: 'Inter_400Regular' }]}>
                         {day.is_active ? `${day.start_time} - ${day.end_time}` : 'Unavailable'}
                       </Text>
                     </View>
                   ))
                 ) : (
-                  <Text style={[styles.emptyText, { color: colors.textMuted }]}>No weekly schedule set</Text>
+                  <Text style={[styles.emptyText, { color: colors.textTertiary }]}>No weekly schedule set</Text>
                 )}
               </View>
 
@@ -1135,7 +1135,7 @@ export default function UserManagementScreen({ navigation }: any) {
                     </View>
                   ))
                 ) : (
-                  <Text style={[styles.emptyText, { color: colors.textMuted }]}>No time off scheduled</Text>
+                  <Text style={[styles.emptyText, { color: colors.textTertiary }]}>No time off scheduled</Text>
                 )}
               </View>
 
@@ -1158,7 +1158,7 @@ export default function UserManagementScreen({ navigation }: any) {
                         ? lessonDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Invalid Time';
 
                       const status = booking.status ? booking.status.toUpperCase() : 'UNKNOWN';
-                      let statusColor = colors.textMuted;
+                      let statusColor = colors.textTertiary;
                       if (status === 'COMPLETED') statusColor = colors.success;
                       else if (status === 'PENDING' || status === 'CONFIRMED') statusColor = colors.warning;
                       else if (status === 'CANCELLED' || status === 'NO_SHOW') statusColor = colors.danger;
@@ -1187,12 +1187,12 @@ export default function UserManagementScreen({ navigation }: any) {
                       );
                     })
                 ) : (
-                  <Text style={[styles.emptyText, { color: colors.textMuted }]}>No bookings found</Text>
+                  <Text style={[styles.emptyText, { color: colors.textTertiary }]}>No bookings found</Text>
                 )}
               </View>
             </>
           ) : (
-            <Text style={[styles.emptyText, { color: colors.textMuted }]}>Failed to load schedule</Text>
+            <Text style={[styles.emptyText, { color: colors.textTertiary }]}>Failed to load schedule</Text>
           )}
         </ScrollView>
       </ThemedModal>
@@ -1221,10 +1221,10 @@ export default function UserManagementScreen({ navigation }: any) {
             value={bookingFeeValue}
             onChangeText={setBookingFeeValue}
             placeholder="20.00"
-            placeholderTextColor={colors.textMuted}
+            placeholderTextColor={colors.textTertiary}
             keyboardType="decimal-pad"
           />
-          <Text style={[styles.helperText, { color: colors.textMuted }]}>
+          <Text style={[styles.helperText, { color: colors.textTertiary }]}>
             Students will pay: Instructor Rate + R{bookingFeeValue || '0.00'}
           </Text>
         </View>

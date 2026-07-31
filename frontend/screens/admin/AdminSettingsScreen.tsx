@@ -393,7 +393,7 @@ export default function AdminSettingsScreen({ navigation }: any) {
               <TextInput
                 style={[styles.input, { borderColor: colors.border, backgroundColor: colors.card, color: colors.text }]}
                 placeholder="admin@gmail.com"
-                placeholderTextColor={colors.textMuted}
+                placeholderTextColor={colors.textTertiary}
                 value={formData.smtpEmail}
                 onChangeText={(value) => handleChange('smtpEmail', value)}
                 keyboardType="email-address"
@@ -408,7 +408,7 @@ export default function AdminSettingsScreen({ navigation }: any) {
                 <TextInput
                   style={[styles.passwordInput, { color: colors.text }]}
                   placeholder="xxxx xxxx xxxx xxxx"
-                  placeholderTextColor={colors.textMuted}
+                  placeholderTextColor={colors.textTertiary}
                   value={showPassword ? formData.smtpPassword : formData.smtpPassword.replace(/./g, '\u2022')}
                   onChangeText={(value) => {
                     if (showPassword) {
@@ -428,7 +428,7 @@ export default function AdminSettingsScreen({ navigation }: any) {
                   <Text style={styles.eyeIcon}>{showPassword ? 'Hide' : 'Show'}</Text>
                 </Pressable>
               </View>
-              <Text style={[styles.hint, { color: colors.textMuted }]}>
+              <Text style={[styles.hint, { color: colors.textTertiary }]}>
                 {showPassword 
                   ? 'Generate at: myaccount.google.com/apppasswords'
                   : 'Click Show to view or edit the password'
@@ -441,13 +441,13 @@ export default function AdminSettingsScreen({ navigation }: any) {
               <TextInput
                 style={[styles.input, { borderColor: colors.border, backgroundColor: colors.card, color: colors.text }]}
                 placeholder="30"
-                placeholderTextColor={colors.textMuted}
+                placeholderTextColor={colors.textTertiary}
                 value={formData.linkValidity}
                 onChangeText={(value) => handleChange('linkValidity', value)}
                 keyboardType="number-pad"
                 editable={!saving}
               />
-              <Text style={[styles.hint, { color: colors.textMuted }]}>
+              <Text style={[styles.hint, { color: colors.textTertiary }]}>
                 How long verification links remain valid (15-120 minutes recommended)
               </Text>
             </View>
@@ -457,13 +457,13 @@ export default function AdminSettingsScreen({ navigation }: any) {
               <TextInput
                 style={[styles.input, { borderColor: colors.border, backgroundColor: colors.card, color: colors.text }]}
                 placeholder="15"
-                placeholderTextColor={colors.textMuted}
+                placeholderTextColor={colors.textTertiary}
                 value={formData.inactivityTimeout}
                 onChangeText={(value) => handleChange('inactivityTimeout', value)}
                 keyboardType="number-pad"
                 editable={!saving}
               />
-              <Text style={[styles.hint, { color: colors.textMuted }]}>
+              <Text style={[styles.hint, { color: colors.textTertiary }]}>
                 Automatically log out inactive users after this many minutes (1-120 minutes). 
                 Applies to all users (students, instructors, admins). Default: 15 minutes.
               </Text>
@@ -477,13 +477,13 @@ export default function AdminSettingsScreen({ navigation }: any) {
               <TextInput
                 style={[styles.input, { borderColor: colors.border, backgroundColor: colors.card, color: colors.text }]}
                 placeholder="8"
-                placeholderTextColor={colors.textMuted}
+                placeholderTextColor={colors.textTertiary}
                 value={formData.commissionPercent}
                 onChangeText={(value) => handleChange('commissionPercent', value)}
                 keyboardType="decimal-pad"
                 editable={!saving}
               />
-              <Text style={[styles.hint, { color: colors.textMuted }]}>
+              <Text style={[styles.hint, { color: colors.textTertiary }]}>
                 Each booking earns the platform the greater of the instructor's flat booking fee
                 or this percentage of the lesson price (0-50%). Default: 8%.
               </Text>
@@ -501,7 +501,7 @@ export default function AdminSettingsScreen({ navigation }: any) {
                 <TextInput
                   style={[styles.input, { borderColor: colors.border, backgroundColor: colors.card, color: colors.text }]}
                   placeholder="test@example.com"
-                  placeholderTextColor={colors.textMuted}
+                  placeholderTextColor={colors.textTertiary}
                   value={formData.testRecipient}
                   onChangeText={(value) => handleChange('testRecipient', value)}
                   keyboardType="email-address"
@@ -520,7 +520,7 @@ export default function AdminSettingsScreen({ navigation }: any) {
                 Send Test Email & Save Settings
               </Button>
               
-              <Text style={[styles.hint, { marginTop: 10, fontStyle: 'italic', color: colors.textMuted }]}>
+              <Text style={[styles.hint, { marginTop: 10, fontStyle: 'italic', color: colors.textTertiary }]}>
                 Email credentials will be saved to database when test succeeds
               </Text>
             </View>
@@ -538,13 +538,13 @@ export default function AdminSettingsScreen({ navigation }: any) {
               <TextInput
                 style={[styles.input, { borderColor: colors.border, backgroundColor: colors.card, color: colors.text }]}
                 placeholder="10"
-                placeholderTextColor={colors.textMuted}
+                placeholderTextColor={colors.textTertiary}
                 value={formData.backupIntervalMinutes}
                 onChangeText={(value) => handleChange('backupIntervalMinutes', value)}
                 keyboardType="number-pad"
                 editable={!saving}
               />
-              <Text style={[styles.hint, { color: colors.textMuted }]}>
+              <Text style={[styles.hint, { color: colors.textTertiary }]}>
                 How often to create automatic backups (5-60 minutes recommended)
               </Text>
             </View>
@@ -554,13 +554,13 @@ export default function AdminSettingsScreen({ navigation }: any) {
               <TextInput
                 style={[styles.input, { borderColor: colors.border, backgroundColor: colors.card, color: colors.text }]}
                 placeholder="30"
-                placeholderTextColor={colors.textMuted}
+                placeholderTextColor={colors.textTertiary}
                 value={formData.retentionDays}
                 onChangeText={(value) => handleChange('retentionDays', value)}
                 keyboardType="number-pad"
                 editable={!saving}
               />
-              <Text style={[styles.hint, { color: colors.textMuted }]}>
+              <Text style={[styles.hint, { color: colors.textTertiary }]}>
                 Keep uncompressed backups for this many days (default: 30 days)
               </Text>
             </View>
@@ -570,13 +570,13 @@ export default function AdminSettingsScreen({ navigation }: any) {
               <TextInput
                 style={[styles.input, { borderColor: colors.border, backgroundColor: colors.card, color: colors.text }]}
                 placeholder="14"
-                placeholderTextColor={colors.textMuted}
+                placeholderTextColor={colors.textTertiary}
                 value={formData.autoArchiveAfterDays}
                 onChangeText={(value) => handleChange('autoArchiveAfterDays', value)}
                 keyboardType="number-pad"
                 editable={!saving}
               />
-              <Text style={[styles.hint, { color: colors.textMuted }]}>
+              <Text style={[styles.hint, { color: colors.textTertiary }]}>
                 Compress old backups to ZIP after this many days (default: 14 days)
               </Text>
             </View>
@@ -594,7 +594,7 @@ export default function AdminSettingsScreen({ navigation }: any) {
               <TextInput
                 style={[styles.input, { borderColor: colors.border, backgroundColor: colors.card, color: colors.text }]}
                 placeholder={twilioSidConfigured ? '✅ Configured — enter new SID to replace' : 'ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx'}
-                placeholderTextColor={colors.textMuted}
+                placeholderTextColor={colors.textTertiary}
                 value={formData.twilioAccountSid}
                 onChangeText={(value) => handleChange('twilioAccountSid', value)}
                 autoCapitalize="none"
@@ -608,7 +608,7 @@ export default function AdminSettingsScreen({ navigation }: any) {
                 <TextInput
                   style={[styles.passwordInput, { color: colors.text }]}
                   placeholder={twilioTokenConfigured ? '✅ Configured — enter new token to replace' : 'Your Twilio Auth Token'}
-                  placeholderTextColor={colors.textMuted}
+                  placeholderTextColor={colors.textTertiary}
                   value={formData.twilioAuthToken}
                   onChangeText={(value) => handleChange('twilioAuthToken', value)}
                   secureTextEntry={!showTwilioAuthToken}
@@ -619,7 +619,7 @@ export default function AdminSettingsScreen({ navigation }: any) {
                   <Text style={styles.eyeIcon}>{showTwilioAuthToken ? 'Hide' : 'Show'}</Text>
                 </Pressable>
               </View>
-              <Text style={[styles.hint, { color: colors.textMuted }]}>Found at console.twilio.com — never share this token</Text>
+              <Text style={[styles.hint, { color: colors.textTertiary }]}>Found at console.twilio.com — never share this token</Text>
             </View>
 
             <View style={styles.formGroup}>
@@ -627,14 +627,14 @@ export default function AdminSettingsScreen({ navigation }: any) {
               <TextInput
                 style={[styles.input, { borderColor: colors.border, backgroundColor: colors.card, color: colors.text }]}
                 placeholder="+14155238886 (Twilio sandbox)"
-                placeholderTextColor={colors.textMuted}
+                placeholderTextColor={colors.textTertiary}
                 value={formData.twilioPhoneNumber}
                 onChangeText={(value) => handleChange('twilioPhoneNumber', value)}
                 keyboardType="phone-pad"
                 autoCapitalize="none"
                 editable={!saving}
               />
-              <Text style={[styles.hint, { color: colors.textMuted }]}>
+              <Text style={[styles.hint, { color: colors.textTertiary }]}>
                 This number sends all WhatsApp messages (sandbox: +14155238886 or your Twilio number)
               </Text>
             </View>
@@ -644,14 +644,14 @@ export default function AdminSettingsScreen({ navigation }: any) {
               <TextInput
                 style={[styles.input, { borderColor: colors.border, backgroundColor: colors.card, color: colors.text }]}
                 placeholder="+27611154598"
-                placeholderTextColor={colors.textMuted}
+                placeholderTextColor={colors.textTertiary}
                 value={formData.adminPhoneNumber}
                 onChangeText={(value) => handleChange('adminPhoneNumber', value)}
                 keyboardType="phone-pad"
                 autoCapitalize="none"
                 editable={!saving}
               />
-              <Text style={[styles.hint, { color: colors.textMuted }]}>
+              <Text style={[styles.hint, { color: colors.textTertiary }]}>
                 Your personal phone number to receive test WhatsApp messages
               </Text>
             </View>
@@ -667,7 +667,7 @@ export default function AdminSettingsScreen({ navigation }: any) {
               Send Test WhatsApp & Save Settings
             </Button>
             
-            <Text style={[styles.hint, { marginTop: 10, fontStyle: 'italic', color: colors.textMuted }]}>
+            <Text style={[styles.hint, { marginTop: 10, fontStyle: 'italic', color: colors.textTertiary }]}>
               Twilio credentials will be saved to database when test succeeds
             </Text>
           </Card>
@@ -690,7 +690,7 @@ export default function AdminSettingsScreen({ navigation }: any) {
           {/* Save Button */}
           <Button
             variant="primary"
-            style={{ backgroundColor: hasUnsavedChanges() ? colors.success : colors.textMuted }}
+            style={{ backgroundColor: hasUnsavedChanges() ? colors.success : colors.textTertiary }}
             onPress={handleSave}
             disabled={!hasUnsavedChanges() || saving}
             loading={saving}
@@ -722,14 +722,14 @@ export default function AdminSettingsScreen({ navigation }: any) {
         <View style={[styles.confirmDetails, { backgroundColor: colors.backgroundSecondary }]}>
           {formData.smtpEmail !== originalData.smtpEmail && (
             <>
-              <Text style={[styles.confirmLabel, { color: colors.textMuted }]}>Gmail Address:</Text>
+              <Text style={[styles.confirmLabel, { color: colors.textTertiary }]}>Gmail Address:</Text>
               <Text style={[styles.confirmValue, { color: colors.text }]}>{formData.smtpEmail || '(Not set)'}</Text>
             </>
           )}
 
           {formData.smtpPassword !== originalData.smtpPassword && (
             <>
-              <Text style={[styles.confirmLabel, { color: colors.textMuted }]}>App Password:</Text>
+              <Text style={[styles.confirmLabel, { color: colors.textTertiary }]}>App Password:</Text>
               <Text style={[styles.confirmValue, { color: colors.text }]}>
                 {formData.smtpPassword ? '\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022' : '(Not set)'}
               </Text>
@@ -738,56 +738,56 @@ export default function AdminSettingsScreen({ navigation }: any) {
 
           {formData.linkValidity !== originalData.linkValidity && (
             <>
-              <Text style={[styles.confirmLabel, { color: colors.textMuted }]}>Link Validity:</Text>
+              <Text style={[styles.confirmLabel, { color: colors.textTertiary }]}>Link Validity:</Text>
               <Text style={[styles.confirmValue, { color: colors.text }]}>{formData.linkValidity} minutes</Text>
             </>
           )}
 
           {formData.inactivityTimeout !== originalData.inactivityTimeout && (
             <>
-              <Text style={[styles.confirmLabel, { color: colors.textMuted }]}>Auto-Logout Timeout:</Text>
+              <Text style={[styles.confirmLabel, { color: colors.textTertiary }]}>Auto-Logout Timeout:</Text>
               <Text style={[styles.confirmValue, { color: colors.text }]}>{formData.inactivityTimeout} minutes</Text>
             </>
           )}
 
           {formData.commissionPercent !== originalData.commissionPercent && (
             <>
-              <Text style={[styles.confirmLabel, { color: colors.textMuted }]}>Platform Commission:</Text>
+              <Text style={[styles.confirmLabel, { color: colors.textTertiary }]}>Platform Commission:</Text>
               <Text style={[styles.confirmValue, { color: colors.text }]}>{formData.commissionPercent}%</Text>
             </>
           )}
 
           {formData.backupIntervalMinutes !== originalData.backupIntervalMinutes && (
             <>
-              <Text style={[styles.confirmLabel, { color: colors.textMuted }]}>Backup Interval:</Text>
+              <Text style={[styles.confirmLabel, { color: colors.textTertiary }]}>Backup Interval:</Text>
               <Text style={[styles.confirmValue, { color: colors.text }]}>{formData.backupIntervalMinutes} minutes</Text>
             </>
           )}
 
           {formData.retentionDays !== originalData.retentionDays && (
             <>
-              <Text style={[styles.confirmLabel, { color: colors.textMuted }]}>Retention Days:</Text>
+              <Text style={[styles.confirmLabel, { color: colors.textTertiary }]}>Retention Days:</Text>
               <Text style={[styles.confirmValue, { color: colors.text }]}>{formData.retentionDays} days</Text>
             </>
           )}
 
           {formData.autoArchiveAfterDays !== originalData.autoArchiveAfterDays && (
             <>
-              <Text style={[styles.confirmLabel, { color: colors.textMuted }]}>Auto-Archive After:</Text>
+              <Text style={[styles.confirmLabel, { color: colors.textTertiary }]}>Auto-Archive After:</Text>
               <Text style={[styles.confirmValue, { color: colors.text }]}>{formData.autoArchiveAfterDays} days</Text>
             </>
           )}
 
           {formData.twilioPhoneNumber !== originalData.twilioPhoneNumber && (
             <>
-              <Text style={[styles.confirmLabel, { color: colors.textMuted }]}>Twilio Sender Phone:</Text>
+              <Text style={[styles.confirmLabel, { color: colors.textTertiary }]}>Twilio Sender Phone:</Text>
               <Text style={[styles.confirmValue, { color: colors.text }]}>{formData.twilioPhoneNumber || '(Not set)'}</Text>
             </>
           )}
 
           {formData.adminPhoneNumber !== originalData.adminPhoneNumber && (
             <>
-              <Text style={[styles.confirmLabel, { color: colors.textMuted }]}>Your Phone Number:</Text>
+              <Text style={[styles.confirmLabel, { color: colors.textTertiary }]}>Your Phone Number:</Text>
               <Text style={[styles.confirmValue, { color: colors.text }]}>{formData.adminPhoneNumber || '(Not set)'}</Text>
             </>
           )}

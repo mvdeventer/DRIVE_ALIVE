@@ -5,6 +5,7 @@ import type { TranslationKeys } from './en';
 
 export const zu: TranslationKeys = {
   common: {
+    selectRow: 'Khetha umugqa {{id}}',
     appName: 'Drive Alive',
     loading: 'Iyalayisha…',
     save: 'Londoloza',
@@ -36,6 +37,8 @@ export const zu: TranslationKeys = {
     forgotPassword: 'Ukhohlwe iphasiwedi?',
     changePassword: 'Shintsha iphasiwedi',
     resetPassword: 'Setha kabusha iphasiwedi',
+    showPassword: 'Bonisa iphasiwedi',
+    hidePassword: 'Fihla iphasiwedi',
   },
   errors: {
     auth: {
@@ -101,5 +104,21 @@ export const zu: TranslationKeys = {
     newUsers: 'Abasebenzisi abasha',
     newBookings: 'Ukubhukha okusha',
     avgLessons: 'Avg izifundo eziqediwe / Umfundi',
+  },
+  availability: {
+    toggleDay: 'Shintsha ukutholakala kwe-{{day}}',
+    enableAllDays: 'Vula zonke izinsuku',
+  },
+  licences: {
+    heading: 'Amakhodi elayisensi esiwafundisayo',
+    showcaseLabel: 'Ukubonisa okuphendukayo kwamakhodi elayisensi atholakalayo',
+    A1: 'Isikuta kufika ku-125cc',
+    A: 'Isithuthuthu',
+    B: 'Imoto elula',
+    C1: 'Imoto yezohwebo elula noma iminibhasi',
+    C: 'Imoto esindayo noma ibhasi',
+    EB: 'Imoto elula enetreyila',
+    EC1: 'Imoto yezohwebo elula enetreyila',
+    EC: 'Imoto esindayo enetreyila',
   },
 };

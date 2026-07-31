@@ -22,6 +22,7 @@ import TimePickerWheel from '../../components/TimePickerWheel';
 import CalendarPicker from '../../components/CalendarPicker';
 import { Button, Card, Input, ThemedModal } from '../../components/ui';
 import { useTheme } from '../../theme/ThemeContext';
+import { useT } from '../../i18n';
 
 // Lazy load DateTimePicker for native platforms
 const getDateTimePicker = () => {
@@ -60,8 +61,12 @@ const DAY_LABELS: { [key: string]: string } = {
 };
 
 export default function ManageAvailabilityScreen({ navigation: navProp }: any) {
-  const navInstance = navProp || useNavigation();
+  // useNavigation must run on every render — calling it inside `||` made the
+  // hook conditional on navProp, so hook order changed if navProp appeared.
+  const fallbackNavigation = useNavigation();
+  const navInstance = navProp || fallbackNavigation;
   const { colors } = useTheme();
+  const t = useT();
   const scrollViewRef = useRef<ScrollView>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -497,6 +502,9 @@ export default function ManageAvailabilityScreen({ navigation: navProp }: any) {
           <View style={styles.enableAllHeader}>
             <Text style={[styles.enableAllLabel, { color: colors.success }]}>Enable All Days</Text>
             <Switch
+              // The adjacent <Text> is not programmatically associated with the
+              // switch, so screen readers announced it with no name at all.
+              accessibilityLabel={t('availability.enableAllDays')}
               value={schedules.every(s => s.is_active)}
               onValueChange={value => {
                 const updatedSchedules = DAYS_OF_WEEK.map(day => {
@@ -534,6 +542,7 @@ export default function ManageAvailabilityScreen({ navigation: navProp }: any) {
               <View style={styles.dayHeader}>
                 <Text style={[styles.dayLabel, { color: colors.text }]}>{DAY_LABELS[day]}</Text>
                 <Switch
+                  accessibilityLabel={t('availability.toggleDay', { day: DAY_LABELS[day] })}
                   value={schedule.is_active}
                   onValueChange={value => updateSchedule(day, 'is_active', value)}
                   trackColor={{ false: colors.border, true: colors.success }}
@@ -599,7 +608,7 @@ export default function ManageAvailabilityScreen({ navigation: navProp }: any) {
                 setShowDatePicker({ field: 'start_date' });
               }}
             >
-              <Text style={[styles.datePickerText, { color: newTimeOff.start_date ? colors.text : colors.textMuted }]}>
+              <Text style={[styles.datePickerText, { color: newTimeOff.start_date ? colors.text : colors.textTertiary }]}>
                 {newTimeOff.start_date || 'Select Start Date'}
               </Text>
               <Text style={styles.datePickerIcon}>📅</Text>
@@ -620,7 +629,7 @@ export default function ManageAvailabilityScreen({ navigation: navProp }: any) {
                 setShowDatePicker({ field: 'end_date' });
               }}
             >
-              <Text style={[styles.datePickerText, { color: newTimeOff.end_date ? colors.text : colors.textMuted }]}>
+              <Text style={[styles.datePickerText, { color: newTimeOff.end_date ? colors.text : colors.textTertiary }]}>
                 {newTimeOff.end_date || 'Select End Date'}
               </Text>
               <Text style={styles.datePickerIcon}>📅</Text>
@@ -634,7 +643,7 @@ export default function ManageAvailabilityScreen({ navigation: navProp }: any) {
               value={newTimeOff.reason}
               onChangeText={value => setNewTimeOff({ ...newTimeOff, reason: value })}
               placeholder="e.g., Holiday, Sick leave"
-              placeholderTextColor={colors.textMuted}
+              placeholderTextColor={colors.textTertiary}
             />
           </View>
 
@@ -652,7 +661,7 @@ export default function ManageAvailabilityScreen({ navigation: navProp }: any) {
                   <Text style={[styles.timeOffDates, { color: colors.text }]}>
                     {entry.start_date} to {entry.end_date}
                   </Text>
-                  {entry.reason && <Text style={[styles.timeOffReason, { color: colors.textSecondary }]}>{entry.reason}</Text>}
+                  {entry.reason ? <Text style={[styles.timeOffReason, { color: colors.textSecondary }]}>{entry.reason}</Text> : null}
                 </View>
                 <Pressable
                   onPress={() => entry.id && confirmDeleteTimeOff(entry.id)}
@@ -786,7 +795,7 @@ export default function ManageAvailabilityScreen({ navigation: navProp }: any) {
         <Text style={[styles.confirmModalText, { color: colors.textSecondary }]}>
           Are you sure you want to delete this time off period?
         </Text>
-        <Text style={[styles.confirmModalSubtext, { color: colors.textMuted }]}>This action cannot be undone.</Text>
+        <Text style={[styles.confirmModalSubtext, { color: colors.textTertiary }]}>This action cannot be undone.</Text>
       </ThemedModal>
 
       {/* Unsaved Changes Confirmation Modal */}

@@ -1,0 +1,11 @@
+# Gitignored files copied into every worktree Claude Code creates.
+#
+# A worktree is a fresh checkout, so untracked config is absent by default —
+# without this, a subagent's worktree has no environment and the backend won't
+# boot. Uses .gitignore syntax; only files that are BOTH matched here and
+# gitignored are copied, so tracked files are never duplicated.
+.env
+.env.local
+backend/.env
+frontend/.env
+frontend/.env.local

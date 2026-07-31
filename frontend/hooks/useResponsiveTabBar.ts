@@ -7,9 +7,16 @@
  *   <Tab.Navigator screenOptions={{ tabBarPosition, tabBarStyle, ... }}>
  */
 import { useMemo } from 'react';
-import { Platform, useWindowDimensions } from 'react-native';
+import { Platform } from 'react-native';
+import { breakpoints } from '../theme/ThemeContext';
+import { useBreakpoint } from './useBreakpoint';
 
-export const SIDEBAR_BREAKPOINT = 768;
+/**
+ * Width at which the bottom tab bar becomes a left nav rail.
+ * Aliased to the shared `md` token so the rail and the content layout
+ * (ScreenContainer, grid columns) always switch at the same width.
+ */
+export const SIDEBAR_BREAKPOINT = breakpoints.md;
 
 export interface ResponsiveTabBar {
   isSidebar: boolean;
@@ -23,8 +30,9 @@ interface ThemeColors {
 }
 
 export function useResponsiveTabBar(colors: ThemeColors): ResponsiveTabBar {
-  const { width } = useWindowDimensions();
-  const isSidebar = Platform.OS === 'web' && width >= SIDEBAR_BREAKPOINT;
+  const { up } = useBreakpoint();
+  // Native keeps the bottom tab bar at every size; the rail is web-only.
+  const isSidebar = Platform.OS === 'web' && up('md');
 
   return useMemo<ResponsiveTabBar>(() => {
     if (isSidebar) {

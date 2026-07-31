@@ -21,7 +21,10 @@ import ApiService from '../../services/api';
 
 export default function EditAdminProfileScreen({ navigation: navProp }: any) {
   const { colors } = useTheme();
-  const navigation = navProp || useNavigation();
+  // useNavigation must run on every render — calling it inside `||` made the
+  // hook conditional on navProp, so hook order changed if navProp appeared.
+  const fallbackNavigation = useNavigation();
+  const navigation = navProp || fallbackNavigation;
   const route = useRoute();
   const params = route.params as { userId?: number } | undefined;
   const [currentUserId, setCurrentUserId] = useState<number | null>(null);
@@ -284,8 +287,8 @@ export default function EditAdminProfileScreen({ navigation: navProp }: any) {
         showBackButton={true}
       />
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
-        {successMessage && <InlineMessage message={successMessage} type="success" />}
-        {errorMessage && <InlineMessage message={errorMessage} type="error" />}
+        {successMessage ? <InlineMessage message={successMessage} type="success" /> : null}
+        {errorMessage ? <InlineMessage message={errorMessage} type="error" /> : null}
 
         {/* User ID Display */}
         {userId !== null && (

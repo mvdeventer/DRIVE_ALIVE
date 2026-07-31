@@ -1,18 +1,25 @@
 /**
  * RoadReady ScreenContainer Component
  *
- * Standard screen wrapper with safe area, scroll, pull-to-refresh,
- * and themed background. Use this as the root of every screen.
+ * Standard screen wrapper with safe area, scroll, pull-to-refresh, themed
+ * background, and — via the `width` prop — a breakpoint-aware content cap so
+ * layouts don't stretch edge-to-edge on a wide monitor. Use this as the root
+ * of every screen instead of hand-rolling a `maxWidth` per screen.
  *
  * Usage:
  *   <ScreenContainer title="Dashboard" onRefresh={loadData} refreshing={loading}>
  *     {content}
  *   </ScreenContainer>
+ *
+ *   <ScreenContainer width="form">   // login, verify, payment result
+ *   <ScreenContainer width="wide">   // dense tables, multi-column dashboards
+ *   <ScreenContainer width="full">   // opt out of the cap entirely
  */
 
 import React, { useRef } from 'react';
-import { Platform, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
-import { useTheme } from '../../theme/ThemeContext';
+import { RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
+import { useTheme, type ContentWidth } from '../../theme/ThemeContext';
+import { useBreakpoint } from '../../hooks/useBreakpoint';
 
 interface ScreenContainerProps {
   children: React.ReactNode;
@@ -23,6 +30,11 @@ interface ScreenContainerProps {
   scrollViewRef?: React.RefObject<ScrollView>;
   /** Extra padding at bottom for tab bars */
   bottomPadding?: number;
+  /**
+   * Max content width. Defaults to 'content' (960dp).
+   * 'form' 480 · 'content' 960 · 'wide' 1280 · 'full' uncapped.
+   */
+  width?: ContentWidth;
   style?: any;
   contentContainerStyle?: any;
 }
@@ -33,12 +45,19 @@ export default function ScreenContainer({
   refreshing = false,
   scrollViewRef,
   bottomPadding = 0,
+  width = 'content',
   style,
   contentContainerStyle,
 }: ScreenContainerProps) {
-  const { colors } = useTheme();
+  const { colors, contentWidths } = useTheme();
+  const { select } = useBreakpoint();
   const internalRef = useRef<ScrollView>(null);
   const ref = scrollViewRef || internalRef;
+
+  const maxWidth = contentWidths[width];
+
+  // Gutters grow with the viewport rather than only branching on platform.
+  const paddingHorizontal = select({ xs: 16, md: 24, lg: 32 }) ?? 16;
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }, style]}>
@@ -47,7 +66,7 @@ export default function ScreenContainer({
         style={styles.scroll}
         contentContainerStyle={[
           styles.content,
-          { paddingBottom: bottomPadding + 20 },
+          { paddingHorizontal, paddingBottom: bottomPadding + 20 },
           contentContainerStyle,
         ]}
         showsVerticalScrollIndicator={false}
@@ -64,7 +83,7 @@ export default function ScreenContainer({
           ) : undefined
         }
       >
-        {children}
+        <View style={[styles.inner, maxWidth !== undefined && { maxWidth }]}>{children}</View>
       </ScrollView>
     </View>
   );
@@ -78,7 +97,10 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   content: {
-    paddingHorizontal: Platform.OS === 'web' ? 24 : 16,
     paddingTop: 16,
+  },
+  inner: {
+    width: '100%',
+    alignSelf: 'center',
   },
 });

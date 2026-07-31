@@ -328,9 +328,9 @@ export default function CreateAdminScreen({ navigation }: any) {
         <View style={[styles.formSection, { borderBottomColor: colors.border }]}>
           <Text style={[styles.sectionTitle, { color: colors.text }]}>Email Configuration (Optional)</Text>
           {loadingSettings ? (
-            <Text style={[styles.hintText, { color: colors.textMuted }]}>Loading settings from database...</Text>
+            <Text style={[styles.hintText, { color: colors.textTertiary }]}>Loading settings from database...</Text>
           ) : (
-            <Text style={[styles.hintText, { color: colors.textMuted }]}>Pre-populated from current admin settings (Global setting - shared by all admins)</Text>
+            <Text style={[styles.hintText, { color: colors.textTertiary }]}>Pre-populated from current admin settings (Global setting - shared by all admins)</Text>
           )}
 
           <Text style={[styles.label, { color: colors.textSecondary }]}>Gmail Address</Text>
@@ -376,7 +376,7 @@ export default function CreateAdminScreen({ navigation }: any) {
 
         <View style={[styles.formSection, { borderBottomColor: colors.border }]}>
           <Text style={[styles.sectionTitle, { color: colors.text }]}>WhatsApp Configuration (Optional)</Text>
-          <Text style={[styles.hintText, { color: colors.textMuted }]}>Pre-populated from current admin settings (Global setting - shared by all admins)</Text>
+          <Text style={[styles.hintText, { color: colors.textTertiary }]}>Pre-populated from current admin settings (Global setting - shared by all admins)</Text>
 
           <Text style={[styles.label, { color: colors.textSecondary }]}>Twilio Sender Phone Number</Text>
           <TextInput

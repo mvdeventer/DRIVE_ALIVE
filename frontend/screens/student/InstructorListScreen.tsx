@@ -4,7 +4,6 @@
 import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
-  Dimensions,
   FlatList,
   Platform,
   Pressable,
@@ -19,6 +18,7 @@ import CreditBanner from '../../components/CreditBanner';
 import InlineMessage from '../../components/InlineMessage';
 import { Badge, Button, Card, Input, ThemedModal } from '../../components/ui';
 import { useTheme } from '../../theme/ThemeContext';
+import { useBreakpoint } from '../../hooks/useBreakpoint';
 import ApiService from '../../services/api';
 import { getAllCitiesAndSuburbs } from '../../utils/cities';
 import { lessonTotalWithFee } from '../../utils/bookingFees';
@@ -54,7 +54,10 @@ export default function InstructorListScreen({ navigation }: any) {
   const { colors } = useTheme();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [numColumns, setNumColumns] = useState(getNumColumns());
+  // Viewport-driven; useBreakpoint re-renders on resize and rotation on every
+  // platform, which the old window.addEventListener('resize') did not do on native.
+  const { select } = useBreakpoint();
+  const numColumns = select({ xs: 1, md: 2, xl: 3 }) ?? 1;
   const [instructors, setInstructors] = useState<Instructor[]>([]);
   const [filteredInstructors, setFilteredInstructors] = useState<Instructor[]>([]);
   const [errorMessage, setErrorMessage] = useState('');
@@ -66,15 +69,6 @@ export default function InstructorListScreen({ navigation }: any) {
 
   useEffect(() => {
     loadInstructors();
-
-    // Handle window resize for responsive grid
-    if (Platform.OS === 'web') {
-      const handleResize = () => {
-        setNumColumns(getNumColumns());
-      };
-      window.addEventListener('resize', handleResize);
-      return () => window.removeEventListener('resize', handleResize);
-    }
   }, []);
 
   useEffect(() => {
@@ -421,7 +415,9 @@ ${studentName}`;
             <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>
               💰 R{lessonTotalWithFee(item, 60).toFixed(2)}/hr
             </Text>
-            <Text style={[styles.detailLabel, { color: colors.accent }]}>
+            {/* `accent` (amber500) as text on a light card measures 2.14:1.
+                `warning` is the amber slot tuned for text (5.02:1). */}
+            <Text style={[styles.detailLabel, { color: colors.warning }]}>
               ⭐ {item.rating.toFixed(1)} ({item.total_reviews})
             </Text>
           </View>
@@ -482,7 +478,7 @@ ${studentName}`;
             ]}
             onPress={() => setAvailableOnly(!availableOnly)}
           >
-            <Text style={[styles.filterButtonText, { color: colors.primary }, availableOnly && { color: '#fff' }]}>
+            <Text style={[styles.filterButtonText, { color: colors.primary }, availableOnly && { color: colors.buttonPrimaryText }]}>
               {availableOnly ? '✓ Available Only' : 'Show All'}
             </Text>
           </Pressable>
@@ -494,18 +490,23 @@ ${studentName}`;
             ]}
             onPress={() => setShowCityPicker(true)}
           >
-            <Text style={[styles.filterButtonText, { color: colors.primary }, selectedCity ? { color: '#fff' } : undefined]}>
+            <Text style={[styles.filterButtonText, { color: colors.primary }, selectedCity ? { color: colors.buttonPrimaryText } : undefined]}>
               {selectedCity ? `📍 ${selectedCity}` : '📍 All Cities'}
             </Text>
           </Pressable>
-          {selectedCity && (
+          {/* Ternary, not `&&`: selectedCity is a string, so `'' && …` renders
+              the empty string as a text node, which react-native-web rejects
+              as a child of a <View>. */}
+          {selectedCity ? (
             <Pressable
-              style={[styles.clearCityButton, { backgroundColor: colors.danger }]}
-              onPress={() => setSelectedCity(null)}
+              style={[styles.clearCityButton, { backgroundColor: colors.buttonDanger }]}
+              onPress={() => setSelectedCity('')}
+              accessibilityRole="button"
+              accessibilityLabel={`Clear city filter ${selectedCity}`}
             >
               <Text style={styles.clearCityText}>✕</Text>
             </Pressable>
-          )}
+          ) : null}
         </View>
       </View>
 
@@ -597,19 +598,6 @@ ${studentName}`;
       />
     </View>
   );
-}
-
-// Calculate number of columns based on screen width
-function getNumColumns(): number {
-  if (Platform.OS === 'web') {
-    const width = typeof window !== 'undefined' ? window.innerWidth : 1024;
-    if (width >= 1200) return 3;
-    if (width >= 768) return 2;
-    return 1;
-  }
-  const width = Dimensions.get('window').width;
-  if (width >= 768) return 2;
-  return 1;
 }
 
 const styles = StyleSheet.create({

@@ -671,7 +671,7 @@ export default function EarningsReportScreen({ navigation }: any) {
       case 'cancelled':
         return colors.danger;
       default:
-        return colors.textMuted;
+        return colors.textTertiary;
     }
   };
 
@@ -717,7 +717,7 @@ export default function EarningsReportScreen({ navigation }: any) {
         <View style={[styles.header, { backgroundColor: colors.primary }]}>
           <View style={{ flex: 1 }} />
           <Pressable style={styles.exportButton} onPress={exportReport}>
-            <Text style={styles.exportButtonText}>📥 Export</Text>
+            <Text style={[styles.exportButtonText, { color: colors.buttonPrimaryText }]}>📥 Export</Text>
           </Pressable>
         </View>
 
@@ -726,23 +726,25 @@ export default function EarningsReportScreen({ navigation }: any) {
           <Text style={[styles.sectionTitle, { color: colors.text }]}>Overview</Text>
           <View style={styles.summaryGrid}>
             <Card variant="elevated" style={[styles.summaryCard, { backgroundColor: colors.primary }]}>
-              <Text style={[styles.summaryLabel, { color: 'rgba(255,255,255,0.8)' }]}>Total Earnings</Text>
-              <Text style={[styles.summaryValue, { color: '#fff' }]}>
+              {/* Solid, not translucent: white at 0.8/0.6 alpha composited to
+                  #cfeae7 / #9ed4cf over teal and measured 2.95 / 2.27:1. */}
+              <Text style={[styles.summaryLabel, { color: colors.buttonPrimaryText }]}>Total Earnings</Text>
+              <Text style={[styles.summaryValue, { color: colors.buttonPrimaryText }]}>
                 {formatCurrency(earningsData?.total_earnings || 0)}
               </Text>
-              <Text style={[styles.summarySubtext, { color: 'rgba(255,255,255,0.6)' }]}>All time</Text>
+              <Text style={[styles.summarySubtext, { color: colors.buttonPrimaryText }]}>All time</Text>
             </Card>
 
             <Card variant="elevated" style={styles.summaryCard}>
               <Text style={[styles.summaryLabel, { color: colors.textSecondary }]}>Hourly Rate</Text>
               <Text style={[styles.summaryValue, { color: colors.text }]}>{formatCurrency(profile?.hourly_rate || 0)}</Text>
-              <Text style={[styles.summarySubtext, { color: colors.textMuted }]}>per hour</Text>
+              <Text style={[styles.summarySubtext, { color: colors.textTertiary }]}>per hour</Text>
             </Card>
 
             <Card variant="elevated" style={styles.summaryCard}>
               <Text style={[styles.summaryLabel, { color: colors.textSecondary }]}>Completed Lessons</Text>
               <Text style={[styles.summaryValue, { color: colors.text }]}>{earningsData?.completed_lessons || 0}</Text>
-              <Text style={[styles.summarySubtext, { color: colors.textMuted }]}>paid lessons</Text>
+              <Text style={[styles.summarySubtext, { color: colors.textTertiary }]}>paid lessons</Text>
             </Card>
 
             <Card variant="elevated" style={styles.summaryCard}>
@@ -754,7 +756,7 @@ export default function EarningsReportScreen({ navigation }: any) {
                     )
                   : formatCurrency(0)}
               </Text>
-              <Text style={[styles.summarySubtext, { color: colors.textMuted }]}>average</Text>
+              <Text style={[styles.summarySubtext, { color: colors.textTertiary }]}>average</Text>
             </Card>
           </View>
         </View>
@@ -774,7 +776,7 @@ export default function EarningsReportScreen({ navigation }: any) {
               <Text style={[styles.statValue, { color: colors.text }]}>{earningsData?.pending_lessons || 0}</Text>
             </View>
             <View style={[styles.statCard, { backgroundColor: colors.backgroundSecondary }]}>
-              <View style={[styles.statDot, { backgroundColor: colors.danger }]} />
+              <View style={[styles.statDot, { backgroundColor: colors.buttonDanger }]} />
               <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Cancelled</Text>
               <Text style={[styles.statValue, { color: colors.text }]}>{earningsData?.cancelled_lessons || 0}</Text>
             </View>
@@ -798,7 +800,7 @@ export default function EarningsReportScreen({ navigation }: any) {
                 </View>
                 <View style={[styles.monthDetails, { borderTopColor: colors.border }]}>
                   <Text style={[styles.monthLessons, { color: colors.textSecondary }]}>{month.lessons} lessons completed</Text>
-                  <Text style={[styles.monthAverage, { color: colors.textMuted }]}>
+                  <Text style={[styles.monthAverage, { color: colors.textTertiary }]}>
                     Avg:{' '}
                     {month.lessons > 0
                       ? formatCurrency(month.earnings / month.lessons)
@@ -842,7 +844,7 @@ export default function EarningsReportScreen({ navigation }: any) {
                     {earning.status.toUpperCase()}
                   </Badge>
                 </View>
-                <Text style={[styles.tapHint, { color: colors.textMuted }]}>Tap for details →</Text>
+                <Text style={[styles.tapHint, { color: colors.textTertiary }]}>Tap for details →</Text>
               </Card>
             ))}
           </View>
@@ -864,7 +866,7 @@ export default function EarningsReportScreen({ navigation }: any) {
           <Text style={[styles.footerText, { color: colors.textSecondary }]}>
             💡 Tip: Pull down to refresh your latest earnings data
           </Text>
-          <Text style={[styles.footerSubtext, { color: colors.textMuted }]}>
+          <Text style={[styles.footerSubtext, { color: colors.textTertiary }]}>
             Last updated: {new Date().toLocaleString('en-ZA')}
           </Text>
         </View>
@@ -896,36 +898,36 @@ export default function EarningsReportScreen({ navigation }: any) {
                     {selectedBooking.student_name || 'N/A'}
                   </Text>
                 </View>
-                {selectedBooking.student_email && (
+                {selectedBooking.student_email ? (
                   <View style={styles.detailRow}>
                     <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>Email:</Text>
                     <Text style={[styles.detailValue, { color: colors.text }]}>{selectedBooking.student_email}</Text>
                   </View>
-                )}
-                {selectedBooking.student_phone && (
+                ) : null}
+                {selectedBooking.student_phone ? (
                   <View style={styles.detailRow}>
                     <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>Phone:</Text>
                     <Text style={[styles.detailValue, { color: colors.text }]}>{selectedBooking.student_phone}</Text>
                   </View>
-                )}
-                {selectedBooking.student_id_number && (
+                ) : null}
+                {selectedBooking.student_id_number ? (
                   <View style={styles.detailRow}>
                     <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>ID Number:</Text>
                     <Text style={[styles.detailValue, { color: colors.text }]}>{selectedBooking.student_id_number}</Text>
                   </View>
-                )}
-                {selectedBooking.student_city && (
+                ) : null}
+                {selectedBooking.student_city ? (
                   <View style={styles.detailRow}>
                     <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>City:</Text>
                     <Text style={[styles.detailValue, { color: colors.text }]}>{selectedBooking.student_city}</Text>
                   </View>
-                )}
-                {selectedBooking.student_suburb && (
+                ) : null}
+                {selectedBooking.student_suburb ? (
                   <View style={styles.detailRow}>
                     <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>Suburb:</Text>
                     <Text style={[styles.detailValue, { color: colors.text }]}>{selectedBooking.student_suburb}</Text>
                   </View>
-                )}
+                ) : null}
               </View>
 
               {/* Lesson Info */}
@@ -949,12 +951,12 @@ export default function EarningsReportScreen({ navigation }: any) {
                     {selectedBooking.duration_minutes} minutes
                   </Text>
                 </View>
-                {selectedBooking.pickup_location && (
+                {selectedBooking.pickup_location ? (
                   <View style={styles.detailRow}>
                     <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>Pickup Location:</Text>
                     <Text style={[styles.detailValue, { color: colors.text }]}>{selectedBooking.pickup_location}</Text>
                   </View>
-                )}
+                ) : null}
               </View>
 
               {/* Payment Info */}
@@ -976,12 +978,12 @@ export default function EarningsReportScreen({ navigation }: any) {
                     {selectedBooking.status.toUpperCase()}
                   </Badge>
                 </View>
-                {selectedBooking.payment_status && (
+                {selectedBooking.payment_status ? (
                   <View style={styles.detailRow}>
                     <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>Payment Status:</Text>
                     <Text style={[styles.detailValue, { color: colors.text }]}>{selectedBooking.payment_status}</Text>
                   </View>
-                )}
+                ) : null}
               </View>
             </>
           )}
@@ -1021,7 +1023,9 @@ const styles = StyleSheet.create({
     color: '#fff',
   },
   exportButton: {
-    backgroundColor: 'rgba(255,255,255,0.2)',
+    // Darkening tint: a white overlay lifted the teal header to #3f918b and
+    // dropped white-on-it to 3.72:1.
+    backgroundColor: 'rgba(0,0,0,0.2)',
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 8,

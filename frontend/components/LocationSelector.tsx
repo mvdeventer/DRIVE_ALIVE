@@ -132,7 +132,7 @@ export default function LocationSelector({
 
   return (
     <View style={{ marginBottom: 15 }}>
-      {label && (
+      {label ? (
         <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
           <Text
             style={{
@@ -145,7 +145,7 @@ export default function LocationSelector({
             {label}
             {required && <Text style={{ color: colors.danger }}> *</Text>}
           </Text>
-          {tooltip && (
+          {tooltip ? (
             <Pressable
               style={{
                 marginLeft: 8,
@@ -161,9 +161,9 @@ export default function LocationSelector({
             >
               <Ionicons name="information" size={14} color={colors.textInverse} />
             </Pressable>
-          )}
+          ) : null}
         </View>
-      )}
+      ) : null}
 
       <Pressable
         style={({ pressed }) => ({
@@ -422,7 +422,7 @@ export default function LocationSelector({
         </View>
       </Modal>
 
-      {tooltip && (
+      {tooltip ? (
         <Modal visible={showTooltip} transparent animationType="fade" onRequestClose={() => setShowTooltip(false)}>
           <Pressable style={{ flex: 1, backgroundColor: 'rgba(0, 0, 0, 0.5)', justifyContent: 'center', alignItems: 'center', padding: 20 }} onPress={() => setShowTooltip(false)}>
             <View style={{ backgroundColor: colors.card, borderRadius: 16, padding: 24, maxWidth: 350, width: '100%' }}>
@@ -434,7 +434,7 @@ export default function LocationSelector({
             </View>
           </Pressable>
         </Modal>
-      )}
+      ) : null}
     </View>
   );
 }

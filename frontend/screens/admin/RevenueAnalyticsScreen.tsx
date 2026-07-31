@@ -157,7 +157,7 @@ export default function RevenueAnalyticsScreen({ navigation }: any) {
           placeholder="Search by name, ID, email, or phone..."
           value={searchQuery}
           onChangeText={setSearchQuery}
-          placeholderTextColor={colors.textMuted}
+          placeholderTextColor={colors.textTertiary}
         />
 
         <View style={[styles.pickerContainer, { borderColor: colors.border, backgroundColor: colors.card }]}>
@@ -178,7 +178,7 @@ export default function RevenueAnalyticsScreen({ navigation }: any) {
         </View>
       </Card>
 
-      {error && <InlineMessage message={error} type="error" />}
+      {error ? <InlineMessage message={error} type="error" /> : null}
 
       {stats && (
         <>
@@ -221,7 +221,7 @@ export default function RevenueAnalyticsScreen({ navigation }: any) {
               />
             ) : (
               <View style={styles.emptyContainer}>
-                <Text style={[styles.emptyText, { color: colors.textMuted }]}>No instructor data available</Text>
+                <Text style={[styles.emptyText, { color: colors.textTertiary }]}>No instructor data available</Text>
               </View>
             )}
           </Card>

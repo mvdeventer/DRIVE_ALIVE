@@ -25,7 +25,7 @@ export default function FormFieldWithTip({
 
   return (
     <View style={{ marginBottom: 15 }}>
-      {label && (
+      {label ? (
         <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
           <Text
             style={{
@@ -57,7 +57,7 @@ export default function FormFieldWithTip({
             <Ionicons name="information" size={14} color={colors.textInverse} />
           </Pressable>
         </View>
-      )}
+      ) : null}
 
       <TextInput
         {...textInputProps}
@@ -80,7 +80,7 @@ export default function FormFieldWithTip({
         ]}
       />
 
-      {error && (
+      {error ? (
         <Text
           style={{
             fontSize: 12,
@@ -91,7 +91,7 @@ export default function FormFieldWithTip({
         >
           {error}
         </Text>
-      )}
+      ) : null}
 
       <Modal
         visible={showTooltip}

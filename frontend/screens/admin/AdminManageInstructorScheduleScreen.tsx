@@ -53,7 +53,10 @@ const DAY_LABELS: { [key: string]: string } = {
 
 export default function AdminManageInstructorScheduleScreen({ route, navigation: navProp }: any) {
   const { instructorId, instructorName, setupToken } = route.params;
-  const navInstance = navProp || useNavigation();
+  // useNavigation must run on every render — calling it inside `||` made the
+  // hook conditional on navProp, so hook order changed if navProp appeared.
+  const fallbackNavigation = useNavigation();
+  const navInstance = navProp || fallbackNavigation;
   const { colors } = useTheme();
 
   // URL builder: uses unauthenticated setup endpoints when a one-time setup_token
@@ -363,7 +366,7 @@ export default function AdminManageInstructorScheduleScreen({ route, navigation:
         {/* Weekly Schedule */}
         <Card variant="elevated" style={{ marginVertical: 10, marginHorizontal: Platform.OS === 'web' ? 20 : 10 }}>
           <Text style={[styles.sectionTitle, { color: colors.text }]}>Weekly Schedule</Text>
-          <Text style={[styles.sectionHint, { color: colors.textMuted }]}>Set the instructor's default weekly availability</Text>
+          <Text style={[styles.sectionHint, { color: colors.textTertiary }]}>Set the instructor's default weekly availability</Text>
 
           <View style={[styles.enableAllCard, { backgroundColor: colors.backgroundSecondary }]}>
             <View style={styles.enableAllHeader}>
@@ -375,7 +378,7 @@ export default function AdminManageInstructorScheduleScreen({ route, navigation:
                 thumbColor={Platform.OS === 'android' ? '#fff' : undefined}
               />
             </View>
-            <Text style={[styles.enableAllDescription, { color: colors.textMuted }]}>
+            <Text style={[styles.enableAllDescription, { color: colors.textTertiary }]}>
               Quickly enable or disable all days
             </Text>
           </View>
@@ -400,7 +403,7 @@ export default function AdminManageInstructorScheduleScreen({ route, navigation:
                   >
                     <Text style={styles.timeButtonText}>{schedule.start_time}</Text>
                   </Pressable>
-                  <Text style={[styles.timeSeparator, { color: colors.textMuted }]}>to</Text>
+                  <Text style={[styles.timeSeparator, { color: colors.textTertiary }]}>to</Text>
                   <Pressable
                     style={[styles.timeButton, { backgroundColor: colors.primary }]}
                     onPress={() => setShowTimePicker({ day: schedule.day_of_week, field: 'end_time' })}
@@ -409,7 +412,7 @@ export default function AdminManageInstructorScheduleScreen({ route, navigation:
                   </Pressable>
                   {schedule.id && (
                     <Pressable
-                      style={[styles.deleteButton, { backgroundColor: colors.danger }]}
+                      style={[styles.deleteButton, { backgroundColor: colors.buttonDanger }]}
                       onPress={() => setConfirmDelete(schedule.id!)}
                     >
                       <Text style={styles.deleteButtonText}>Delete</Text>
@@ -435,7 +438,7 @@ export default function AdminManageInstructorScheduleScreen({ route, navigation:
         {/* Time Off */}
         <Card variant="elevated" style={{ marginVertical: 10, marginHorizontal: Platform.OS === 'web' ? 20 : 10 }}>
           <Text style={[styles.sectionTitle, { color: colors.text }]}>Time Off</Text>
-          <Text style={[styles.sectionHint, { color: colors.textMuted }]}>Block out dates when instructor is unavailable</Text>
+          <Text style={[styles.sectionHint, { color: colors.textTertiary }]}>Block out dates when instructor is unavailable</Text>
 
           {/* Existing Time Off */}
           {timeOff.map((item) => (
@@ -443,7 +446,7 @@ export default function AdminManageInstructorScheduleScreen({ route, navigation:
               <Text style={[styles.timeOffDates, { color: colors.text }]}>
                 {item.start_date} to {item.end_date}
               </Text>
-              {item.reason && <Text style={[styles.timeOffReason, { color: colors.textSecondary }]}>{item.reason}</Text>}
+              {item.reason ? <Text style={[styles.timeOffReason, { color: colors.textSecondary }]}>{item.reason}</Text> : null}
               <Button
                 variant="danger"
                 size="sm"
@@ -463,7 +466,7 @@ export default function AdminManageInstructorScheduleScreen({ route, navigation:
                 style={[styles.dateButton, { backgroundColor: colors.card, borderColor: colors.border }]}
                 onPress={() => setShowDatePicker({ field: 'start_date' })}
               >
-                <Text style={[styles.dateButtonLabel, { color: colors.textMuted }]}>Start Date</Text>
+                <Text style={[styles.dateButtonLabel, { color: colors.textTertiary }]}>Start Date</Text>
                 <Text style={[styles.dateButtonValue, { color: colors.text }]}>
                   {newTimeOff.start_date || 'Select...'}
                 </Text>
@@ -473,7 +476,7 @@ export default function AdminManageInstructorScheduleScreen({ route, navigation:
                 style={[styles.dateButton, { backgroundColor: colors.card, borderColor: colors.border }]}
                 onPress={() => setShowDatePicker({ field: 'end_date' })}
               >
-                <Text style={[styles.dateButtonLabel, { color: colors.textMuted }]}>End Date</Text>
+                <Text style={[styles.dateButtonLabel, { color: colors.textTertiary }]}>End Date</Text>
                 <Text style={[styles.dateButtonValue, { color: colors.text }]}>
                   {newTimeOff.end_date || 'Select...'}
                 </Text>
@@ -483,7 +486,7 @@ export default function AdminManageInstructorScheduleScreen({ route, navigation:
             <TextInput
               style={[styles.reasonInput, { backgroundColor: colors.card, borderColor: colors.border, color: colors.text }]}
               placeholder="Reason (optional)"
-              placeholderTextColor={colors.textMuted}
+              placeholderTextColor={colors.textTertiary}
               value={newTimeOff.reason}
               onChangeText={(text) => setNewTimeOff({ ...newTimeOff, reason: text })}
             />

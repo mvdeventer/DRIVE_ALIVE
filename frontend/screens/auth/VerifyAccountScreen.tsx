@@ -104,7 +104,7 @@ export default function VerifyAccountScreen({ route, navigation }: Props) {
           </View>
         ) : (
           <View style={styles.centerContent}>
-            <View style={[styles.bigIconCircle, { backgroundColor: colors.danger + '15' }]}>
+            <View style={[styles.bigIconCircle, { backgroundColor: colors.buttonDanger + '15' }]}>
               <Text style={styles.bigIcon}>❌</Text>
             </View>
             <Text style={[styles.statusTitle, { color: colors.danger }]}>

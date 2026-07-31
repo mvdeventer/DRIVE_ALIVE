@@ -12,6 +12,7 @@
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { useTheme } from '../../theme/ThemeContext';
+import { useBreakpoint } from '../../hooks/useBreakpoint';
 
 type BadgeVariant =
   | 'primary'
@@ -31,6 +32,13 @@ interface BadgeProps {
   children: React.ReactNode;
   variant?: BadgeVariant;
   size?: BadgeSize;
+  /**
+   * Accessible name. Badge text is rendered uppercase via CSS, so screen
+   * readers may spell it out letter by letter — pass the sentence-case
+   * wording here when the badge text is an acronym or all-caps status.
+   */
+  accessibilityLabel?: string;
+  testID?: string;
   style?: any;
 }
 
@@ -38,21 +46,24 @@ export default function Badge({
   children,
   variant = 'primary',
   size = 'md',
+  accessibilityLabel,
+  testID,
   style,
 }: BadgeProps) {
-  const { colors, responsive } = useTheme();
+  const { colors, radii, withAlpha, fontFamilies } = useTheme();
+  const { select } = useBreakpoint();
 
   const bgMap: Record<BadgeVariant, string> = {
-    primary: colors.primary + '20',
-    accent: colors.accent + '20',
+    primary: withAlpha(colors.primary, 0.125),
+    accent: withAlpha(colors.accent, 0.125),
     success: colors.successBg,
     danger: colors.dangerBg,
     warning: colors.warningBg,
     info: colors.infoBg,
     neutral: colors.backgroundSecondary,
-    'role-admin': colors.roleAdmin + '20',
-    'role-instructor': colors.roleInstructor + '20',
-    'role-student': colors.roleStudent + '20',
+    'role-admin': withAlpha(colors.roleAdmin, 0.125),
+    'role-instructor': withAlpha(colors.roleInstructor, 0.125),
+    'role-student': withAlpha(colors.roleStudent, 0.125),
   };
 
   const fgMap: Record<BadgeVariant, string> = {
@@ -69,17 +80,23 @@ export default function Badge({
   };
 
   const sizeConfig = {
-    sm: { py: 2, px: 8, fontSize: responsive(10, 9) },
-    md: { py: 4, px: 10, fontSize: responsive(12, 11) },
+    sm: { py: 2, px: 8, fontSize: select({ xs: 9, md: 10 })! },
+    md: { py: 4, px: 10, fontSize: select({ xs: 11, md: 12 })! },
   };
 
   const sc = sizeConfig[size];
+  const resolvedLabel =
+    accessibilityLabel ?? (typeof children === 'string' ? children : undefined);
 
   return (
     <View
+      accessible
+      accessibilityLabel={resolvedLabel}
+      testID={testID}
       style={[
         styles.base,
         {
+          borderRadius: radii.full,
           backgroundColor: bgMap[variant],
           paddingVertical: sc.py,
           paddingHorizontal: sc.px,
@@ -91,6 +108,7 @@ export default function Badge({
         style={[
           styles.text,
           {
+            fontFamily: fontFamilies.semibold,
             color: fgMap[variant],
             fontSize: sc.fontSize,
           },
@@ -104,11 +122,9 @@ export default function Badge({
 
 const styles = StyleSheet.create({
   base: {
-    borderRadius: 9999,
     alignSelf: 'flex-start',
   },
   text: {
-    fontFamily: 'Inter_600SemiBold',
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },

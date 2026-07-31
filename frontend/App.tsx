@@ -41,14 +41,16 @@ if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
 //   });
 // }
 
-// NativeWind global styles
-import './global.css';
-
-import { CommonActions, NavigationContainer } from '@react-navigation/native';
+import {
+  CommonActions,
+  NavigationContainer,
+  DefaultTheme as NavDefaultTheme,
+  DarkTheme as NavDarkTheme,
+} from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import * as SecureStore from 'expo-secure-store';
 import { StatusBar } from 'expo-status-bar';
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Platform, StyleSheet, View } from 'react-native';
 import {
   useFonts,
@@ -304,7 +306,28 @@ function AppContent() {
   };
 
   // useTheme must be called before any conditional return (Rules of Hooks)
-  const { colors } = useTheme();
+  const { colors, isDark } = useTheme();
+
+  // React Navigation paints the screen background from its OWN theme, not ours.
+  // Without this, NavigationContainer falls back to DefaultTheme
+  // (background rgb(242,242,242) — always light), so dark mode rendered light
+  // text on a light-grey backdrop. Bridge our tokens into its theme.
+  const navigationTheme = useMemo(() => {
+    const base = isDark ? NavDarkTheme : NavDefaultTheme;
+    return {
+      ...base,
+      dark: isDark,
+      colors: {
+        ...base.colors,
+        background: colors.background,
+        card: colors.card,
+        text: colors.text,
+        border: colors.border,
+        primary: colors.primary,
+        notification: colors.danger,
+      },
+    };
+  }, [isDark, colors]);
 
   if (isLoading) {
     return null; // Or a loading screen
@@ -359,6 +382,7 @@ function AppContent() {
       <NavigationContainer
         ref={navigationRef}
         linking={linking}
+        theme={navigationTheme}
       >
         <Stack.Navigator
           initialRouteName={requiresSetup ? 'Setup' : isAuthenticated ? 'Main' : 'Login'}

@@ -677,7 +677,7 @@ export default function StudentHomeScreen() {
               <Text
                 style={[
                   styles.unhideButtonText,
-                  { color: hiddenBookingIds.size > 0 ? '#fff' : colors.textMuted },
+                  { color: hiddenBookingIds.size > 0 ? '#fff' : colors.textTertiary },
                 ]}
               >
                 👁️ Unhide ({hiddenBookingIds.size})
@@ -716,7 +716,7 @@ export default function StudentHomeScreen() {
                     <View style={[styles.bookingFooter, { borderTopColor: colors.border }]}>
                       <Text style={[styles.bookingPrice, { color: colors.success }]}>R{booking.total_price.toFixed(2)}</Text>
                       <Pressable
-                        style={[styles.hideButton, { backgroundColor: colors.textMuted }]}
+                        style={[styles.hideButton, { backgroundColor: colors.textTertiary }]}
                         onPress={() => handleHideCompletedLesson(booking)}
                       >
                         <Text style={styles.hideButtonText}>👁️ Hide</Text>

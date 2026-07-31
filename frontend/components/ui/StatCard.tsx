@@ -16,11 +16,14 @@ import { useTheme } from '../../theme/ThemeContext';
 type StatVariant = 'default' | 'primary' | 'accent' | 'success' | 'danger' | 'warning' | 'info';
 
 interface StatCardProps {
+  /** Decorative emoji — hidden from screen readers; `label` carries the meaning. */
   icon?: string;
   value: string | number;
   label: string;
   variant?: StatVariant;
   onPress?: () => void;
+  accessibilityHint?: string;
+  testID?: string;
   style?: any;
 }
 
@@ -30,59 +33,72 @@ export default function StatCard({
   label,
   variant = 'default',
   onPress,
+  accessibilityHint,
+  testID,
   style,
 }: StatCardProps) {
-  const { colors, isDark } = useTheme();
+  const { colors, isDark, radii, elevation, withAlpha, fontFamilies } = useTheme();
 
   const variantColors: Record<StatVariant, { bg: string; accent: string }> = {
     default: { bg: colors.card, accent: colors.primary },
-    primary: { bg: colors.primary + '12', accent: colors.primary },
-    accent: { bg: colors.accent + '15', accent: colors.accent },
-    success: { bg: colors.success + '12', accent: colors.success },
-    danger: { bg: colors.danger + '12', accent: colors.danger },
-    warning: { bg: colors.warning + '15', accent: colors.warning },
-    info: { bg: colors.info + '12', accent: colors.info },
+    primary: { bg: withAlpha(colors.primary, 0.07), accent: colors.primary },
+    accent: { bg: withAlpha(colors.accent, 0.08), accent: colors.accent },
+    success: { bg: withAlpha(colors.success, 0.07), accent: colors.success },
+    danger: { bg: withAlpha(colors.danger, 0.07), accent: colors.danger },
+    warning: { bg: withAlpha(colors.warning, 0.08), accent: colors.warning },
+    info: { bg: withAlpha(colors.info, 0.07), accent: colors.info },
   };
 
   const v = variantColors[variant];
 
   const Wrapper = onPress ? Pressable : View;
 
+  // Announce the tile as one unit: "142, Total Bookings" rather than the
+  // emoji, the number and the label as three separate nodes.
+  const a11yProps = {
+    accessible: true,
+    accessibilityLabel: `${value}, ${label}`,
+    accessibilityHint,
+    ...(onPress ? { accessibilityRole: 'button' as const } : {}),
+  };
+
   return (
     <Wrapper
       onPress={onPress}
+      testID={testID}
+      {...a11yProps}
       style={({ pressed }: any) => [
         styles.card,
+        !isDark ? elevation('sm') : null,
         {
+          borderRadius: radii.lg,
           backgroundColor: v.bg,
           borderColor: isDark ? colors.border : 'transparent',
           borderWidth: isDark ? 1 : 0,
-          ...(Platform.OS === 'web'
-            ? { boxShadow: isDark ? 'none' : '0 1px 4px rgba(0,0,0,0.06)' }
-            : !isDark
-              ? { shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 4, shadowOffset: { width: 0, height: 1 }, elevation: 1 }
-              : {}),
         },
         pressed && onPress ? { opacity: 0.85, transform: [{ scale: 0.98 }] } : {},
         style,
       ]}
     >
-      {icon ? <Text style={styles.icon}>{icon}</Text> : null}
+      {icon ? (
+        <Text
+          style={styles.icon}
+          accessibilityElementsHidden
+          importantForAccessibility="no"
+          {...({ 'aria-hidden': true } as any)}
+        >
+          {icon}
+        </Text>
+      ) : null}
       <Text
-        style={[
-          styles.value,
-          { color: v.accent },
-        ]}
+        style={[styles.value, { fontFamily: fontFamilies.bold, color: v.accent }]}
         numberOfLines={1}
         adjustsFontSizeToFit
       >
         {value}
       </Text>
       <Text
-        style={[
-          styles.label,
-          { color: colors.textSecondary },
-        ]}
+        style={[styles.label, { fontFamily: fontFamilies.medium, color: colors.textSecondary }]}
         numberOfLines={2}
       >
         {label}
@@ -93,7 +109,6 @@ export default function StatCard({
 
 const styles = StyleSheet.create({
   card: {
-    borderRadius: 12,
     padding: Platform.OS === 'web' ? 18 : 14,
     alignItems: 'center',
     justifyContent: 'center',
@@ -108,12 +123,10 @@ const styles = StyleSheet.create({
   },
   value: {
     fontSize: Platform.OS === 'web' ? 26 : 22,
-    fontFamily: 'Inter_700Bold',
     marginBottom: 4,
   },
   label: {
     fontSize: Platform.OS === 'web' ? 13 : 12,
-    fontFamily: 'Inter_500Medium',
     textAlign: 'center',
     lineHeight: Platform.OS === 'web' ? 17 : 15,
   },

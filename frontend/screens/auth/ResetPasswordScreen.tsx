@@ -117,8 +117,8 @@ export default function ResetPasswordScreen() {
           Enter your new password below.
         </Text>
 
-        {successMessage && <InlineMessage type="success" message={successMessage} />}
-        {errorMessage && <InlineMessage type="error" message={errorMessage} />}
+        {successMessage ? <InlineMessage type="success" message={successMessage} /> : null}
+        {errorMessage ? <InlineMessage type="error" message={errorMessage} /> : null}
 
         <View style={styles.passwordRow}>
           <Input

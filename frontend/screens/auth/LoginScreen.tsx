@@ -14,7 +14,6 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  useWindowDimensions,
   View,
 } from 'react-native';
 import InlineMessage from '../../components/InlineMessage';
@@ -23,6 +22,9 @@ import ThemedModal from '../../components/ui/Modal';
 import { API_CONFIG } from '../../config';
 import ApiService from '../../services/api';
 import { useTheme } from '../../theme/ThemeContext';
+import { useT } from '../../i18n';
+import LicenceShowcase from '../../components/LicenceShowcase';
+import { useBreakpoint } from '../../hooks/useBreakpoint';
 
 // ─── Rotating tagline content ─────────────────────────────────────────────
 const TAGLINES = [
@@ -561,9 +563,15 @@ function RoadHero({ heroHeight }: { heroHeight: number }) {
         </>
       )}
 
-      {/* Brand title at bottom */}
-      <View style={styles.heroTextWrap}>
+      {/* Brand pinned to the top of the hero; showcase stays at the bottom.
+          heroRoot is justifyContent:'flex-end', so the brand needs to be
+          absolutely positioned rather than just reordered. */}
+      <View style={styles.heroBrandTop} pointerEvents="none">
         <Text style={styles.heroBrand}>RoadReady</Text>
+      </View>
+
+      <View style={styles.heroTextWrap}>
+        <LicenceShowcase />
       </View>
     </View>
   );
@@ -640,8 +648,12 @@ const storage = {
 
 export default function LoginScreen({ navigation, onAuthChange }: any) {
   const { colors, isDark } = useTheme();
-  const { width } = useWindowDimensions();
-  const heroHeight = Platform.OS === 'web' ? (width > 900 ? 360 : 300) : 280;
+  const t = useT();
+  const { select } = useBreakpoint();
+  // Viewport-driven, not platform-driven. A third taller than the half-height
+  // pass; the licence showcase stays in its compact variant so the login form
+  // remains above the fold.
+  const heroHeight = select({ xs: 253, md: 280, lg: 313 })!;
   const [emailOrPhone, setEmailOrPhone] = useState('');
   const [password, setPassword] = useState('');
   const [fieldErrors, setFieldErrors] = useState<{ emailOrPhone?: string; password?: string }>({});
@@ -942,6 +954,9 @@ export default function LoginScreen({ navigation, onAuthChange }: any) {
                 onPress={() => setShowPassword(!showPassword)}
                 style={styles.togglePassword}
                 hitSlop={8}
+                accessibilityRole="button"
+                accessibilityLabel={showPassword ? t('auth.hidePassword') : t('auth.showPassword')}
+                accessibilityState={{ expanded: showPassword }}
               >
                 <Ionicons
                   name={showPassword ? 'eye-off-outline' : 'eye-outline'}
@@ -1280,6 +1295,14 @@ const styles = StyleSheet.create({
     height: 6,
     borderRadius: 3,
     backgroundColor: 'rgba(0,0,0,0.35)',
+  },
+  heroBrandTop: {
+    position: 'absolute',
+    top: 12,
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+    zIndex: 5,
   },
   heroTextWrap: {
     alignItems: 'center',

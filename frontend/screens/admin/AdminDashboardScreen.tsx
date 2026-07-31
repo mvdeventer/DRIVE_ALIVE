@@ -45,7 +45,7 @@ interface AdminStats {
 }
 
 export default function AdminDashboardScreen({ navigation }: any) {
-  const { colors } = useTheme();
+  const { colors, isDark, withAlpha } = useTheme();
   const [stats, setStats] = useState<AdminStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -334,7 +334,7 @@ export default function AdminDashboardScreen({ navigation }: any) {
         style={styles.scrollView}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
       >
-        {error && <InlineMessage message={error} type="error" />}
+        {error ? <InlineMessage message={error} type="error" /> : null}
 
         {stats && (
           <>
@@ -345,12 +345,25 @@ export default function AdminDashboardScreen({ navigation }: any) {
                 {actionItems.map((item) => (
                   <Pressable
                     key={item.key}
-                    style={[styles.actionCard, { backgroundColor: colors.primary }]}
+                    // Tinted surface + brand-coloured label. White on solid
+                    // `primary` measured 2.48:1 (dark) / 3.9:1 (light) — both
+                    // below the WCAG AA 4.5:1 floor for normal text.
+                    style={[
+                      styles.actionCard,
+                      { backgroundColor: withAlpha(colors.primary, isDark ? 0.18 : 0.1) },
+                    ]}
                     onPress={() => navigation.navigate(item.screen)}
                   >
-                    <Text style={styles.actionTitle}>{item.label}</Text>
+                    <Text
+                      style={[
+                        styles.actionTitle,
+                        { color: isDark ? colors.primaryLight : colors.primaryDark },
+                      ]}
+                    >
+                      {item.label}
+                    </Text>
                     {item.badge && item.badge > 0 ? (
-                      <View style={[styles.badge, { backgroundColor: colors.danger }]}>
+                      <View style={[styles.badge, { backgroundColor: colors.buttonDanger }]}>
                         <Text style={styles.badgeText}>{item.badge}</Text>
                       </View>
                     ) : null}
@@ -555,7 +568,7 @@ export default function AdminDashboardScreen({ navigation }: any) {
                         <Text style={[styles.backupFilename, { color: colors.primary }]}>
                           {backup.filename}
                         </Text>
-                        <Text style={[styles.backupMeta, { color: colors.textMuted }]}>
+                        <Text style={[styles.backupMeta, { color: colors.textTertiary }]}>
                           Size: {backup.size_mb}MB {'\u2022'} Created: {new Date(backup.created_at).toLocaleDateString()}
                           {backup.type === 'archived' && ` \u2022 Files: ${backup.file_count}`}
                         </Text>
@@ -618,7 +631,7 @@ export default function AdminDashboardScreen({ navigation }: any) {
             <View style={[styles.configItem, { backgroundColor: colors.backgroundSecondary, borderLeftColor: colors.primary }]}>
               <Text style={[styles.configLabel, { color: colors.text }]}>Retention Period (Days):</Text>
               <Text style={[styles.configValue, { color: colors.primary }]}>{backupConfig.retention_days} days</Text>
-              <Text style={[styles.configDescription, { color: colors.textMuted }]}>
+              <Text style={[styles.configDescription, { color: colors.textTertiary }]}>
                 Backups older than this will be automatically deleted
               </Text>
             </View>
@@ -626,7 +639,7 @@ export default function AdminDashboardScreen({ navigation }: any) {
             <View style={[styles.configItem, { backgroundColor: colors.backgroundSecondary, borderLeftColor: colors.primary }]}>
               <Text style={[styles.configLabel, { color: colors.text }]}>Auto-Archive After (Days):</Text>
               <Text style={[styles.configValue, { color: colors.primary }]}>{backupConfig.auto_archive_after_days} days</Text>
-              <Text style={[styles.configDescription, { color: colors.textMuted }]}>
+              <Text style={[styles.configDescription, { color: colors.textTertiary }]}>
                 Backups older than this will be compressed into ZIP files
               </Text>
             </View>
@@ -634,7 +647,7 @@ export default function AdminDashboardScreen({ navigation }: any) {
             <View style={[styles.configItem, { backgroundColor: colors.backgroundSecondary, borderLeftColor: colors.primary }]}>
               <Text style={[styles.configLabel, { color: colors.text }]}>Backup Interval (Minutes):</Text>
               <Text style={[styles.configValue, { color: colors.primary }]}>{backupConfig.backup_interval_minutes} minutes</Text>
-              <Text style={[styles.configDescription, { color: colors.textMuted }]}>
+              <Text style={[styles.configDescription, { color: colors.textTertiary }]}>
                 Automatic backups are created at this interval
               </Text>
             </View>
@@ -702,7 +715,7 @@ const styles = StyleSheet.create({
   actionTitle: {
     fontSize: Platform.OS === 'web' ? 13 : 12,
     fontFamily: 'Inter_600SemiBold',
-    color: '#FFF',
+    // colour supplied at render time from theme tokens (contrast-safe)
     textAlign: 'center',
     lineHeight: 18,
   },

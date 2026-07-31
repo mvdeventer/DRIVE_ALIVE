@@ -18,6 +18,7 @@ import {
   View,
 } from 'react-native';
 import { useTheme } from '../../theme/ThemeContext';
+import { useBreakpoint } from '../../hooks/useBreakpoint';
 import AnimatedPressable from './AnimatedPressable';
 
 type ButtonVariant = 'primary' | 'secondary' | 'outline' | 'ghost' | 'danger' | 'accent';
@@ -32,9 +33,30 @@ interface ButtonProps {
   disabled?: boolean;
   loading?: boolean;
   fullWidth?: boolean;
-  icon?: string; // Emoji or icon character
+  /**
+   * Decorative emoji or icon character. Hidden from assistive tech — screen
+   * readers would otherwise announce it literally ("bar chart", "rocket").
+   * If the icon carries the button's only meaning, pass `accessibilityLabel`.
+   */
+  icon?: string;
+  /** Overrides the label announced to screen readers. */
+  accessibilityLabel?: string;
+  accessibilityHint?: string;
+  testID?: string;
   style?: any;
   textStyle?: any;
+}
+
+/** Best-effort readable label from children when none is given explicitly. */
+function deriveLabel(children: React.ReactNode, label?: string): string | undefined {
+  if (label) return label;
+  if (typeof children === 'string') return children;
+  if (typeof children === 'number') return String(children);
+  if (Array.isArray(children)) {
+    const text = children.filter((c) => typeof c === 'string' || typeof c === 'number').join(' ');
+    return text.trim() || undefined;
+  }
+  return undefined;
 }
 
 export default function Button({
@@ -47,10 +69,14 @@ export default function Button({
   loading = false,
   fullWidth = false,
   icon,
+  accessibilityLabel,
+  accessibilityHint,
+  testID,
   style,
   textStyle,
 }: ButtonProps) {
-  const { colors, responsive } = useTheme();
+  const { colors, radii, fontFamilies } = useTheme();
+  const { select } = useBreakpoint();
 
   const isDisabled = disabled || loading;
 
@@ -75,23 +101,42 @@ export default function Button({
   };
 
   // ── Size Config ──
+  // Sized by viewport, not platform: a phone-width browser window gets the
+  // compact treatment, a tablet gets the roomy one.
   const sizeConfig: Record<ButtonSize, { py: number; px: number; fontSize: number }> = {
-    sm: { py: responsive(8, 6), px: responsive(14, 12), fontSize: responsive(13, 12) },
-    md: { py: responsive(14, 12), px: responsive(24, 18), fontSize: responsive(16, 15) },
-    lg: { py: responsive(18, 16), px: responsive(32, 24), fontSize: responsive(18, 16) },
+    sm: {
+      py: select({ xs: 6, md: 8 })!,
+      px: select({ xs: 12, md: 14 })!,
+      fontSize: select({ xs: 12, md: 13 })!,
+    },
+    md: {
+      py: select({ xs: 12, md: 14 })!,
+      px: select({ xs: 18, md: 24 })!,
+      fontSize: select({ xs: 15, md: 16 })!,
+    },
+    lg: {
+      py: select({ xs: 16, md: 18 })!,
+      px: select({ xs: 24, md: 32 })!,
+      fontSize: select({ xs: 16, md: 18 })!,
+    },
   };
 
   const sc = sizeConfig[size];
   const bg = bgColors[variant];
   const fg = textColors[variant];
+  const resolvedLabel = accessibilityLabel ?? deriveLabel(children, label);
 
   return (
     <AnimatedPressable
       onPress={isDisabled ? undefined : onPress}
       scaleValue={0.96}
+      // Expands the touch target to the 44dp minimum without changing the
+      // visual size — `sm` buttons are only ~30dp tall.
+      hitSlop={MIN_TARGET_SLOP}
       style={[
         styles.base,
         {
+          borderRadius: radii.md,
           backgroundColor: isDisabled ? colors.border : bg,
           paddingVertical: sc.py,
           paddingHorizontal: sc.px,
@@ -102,8 +147,11 @@ export default function Button({
         fullWidth && styles.fullWidth,
         style,
       ]}
+      testID={testID}
       accessibilityRole="button"
-      accessibilityState={{ disabled: isDisabled }}
+      accessibilityLabel={resolvedLabel}
+      accessibilityHint={accessibilityHint}
+      accessibilityState={{ disabled: isDisabled, busy: loading }}
     >
       <View style={styles.content}>
         {loading ? (
@@ -113,12 +161,21 @@ export default function Button({
             style={styles.loader}
           />
         ) : icon ? (
-          <Text style={[styles.icon, { fontSize: sc.fontSize }]}>{icon}</Text>
+          <Text
+            style={[styles.icon, { fontSize: sc.fontSize }]}
+            accessibilityElementsHidden
+            importantForAccessibility="no"
+            // react-native-web maps this to aria-hidden
+            {...({ 'aria-hidden': true } as any)}
+          >
+            {icon}
+          </Text>
         ) : null}
         <Text
           style={[
             styles.text,
             {
+              fontFamily: fontFamilies.semibold,
               color: isDisabled ? colors.textTertiary : fg,
               fontSize: sc.fontSize,
             },
@@ -132,9 +189,11 @@ export default function Button({
   );
 }
 
+/** Extra touch area applied to every button so small variants stay reachable. */
+const MIN_TARGET_SLOP = { top: 8, bottom: 8, left: 8, right: 8 } as const;
+
 const styles = StyleSheet.create({
   base: {
-    borderRadius: 8,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -147,9 +206,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 8,
   },
-  text: {
-    fontFamily: 'Inter_600SemiBold',
-  },
+  // fontFamily comes from the theme's `fontFamilies` token at render time.
+  text: {},
   icon: {
     marginRight: 2,
   },

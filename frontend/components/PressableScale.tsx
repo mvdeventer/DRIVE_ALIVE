@@ -2,8 +2,8 @@
  * PressableScale — Pressable with spring scale + haptic feedback.
  *
  * Drop-in replacement for TouchableOpacity / Pressable:
- *   <PressableScale onPress={book} className="bg-brand p-4 rounded-xl">
- *     <Text className="text-white">Book lesson</Text>
+ *   <PressableScale onPress={book} style={styles.cta} accessibilityRole="button">
+ *     <Text style={styles.ctaText}>Book lesson</Text>
  *   </PressableScale>
  *
  * - Mobile: spring scale + haptic tap

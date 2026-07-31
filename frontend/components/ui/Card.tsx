@@ -13,8 +13,9 @@
  */
 
 import React from 'react';
-import { Platform, Pressable, StyleSheet, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 import { useTheme } from '../../theme/ThemeContext';
+import { useBreakpoint } from '../../hooks/useBreakpoint';
 import FadeInView from './FadeInView';
 
 type CardVariant = 'default' | 'elevated' | 'outlined' | 'filled';
@@ -29,6 +30,10 @@ interface CardProps {
   animate?: boolean;
   /** Animation delay in ms (for staggered lists) */
   delay?: number;
+  /** Accessible name — required when the card is pressable. */
+  accessibilityLabel?: string;
+  accessibilityHint?: string;
+  testID?: string;
   style?: any;
 }
 
@@ -39,49 +44,34 @@ export default function Card({
   onPress,
   animate = false,
   delay = 0,
+  accessibilityLabel,
+  accessibilityHint,
+  testID,
   style,
 }: CardProps) {
-  const { colors, responsive, isDark } = useTheme();
+  const { colors, radii, elevation } = useTheme();
+  const { select } = useBreakpoint();
 
   const paddingValues: Record<CardPadding, number> = {
     none: 0,
-    sm: responsive(12, 10),
-    md: responsive(16, 14),
-    lg: responsive(24, 18),
+    sm: select({ xs: 10, md: 12 })!,
+    md: select({ xs: 14, md: 16 })!,
+    lg: select({ xs: 18, md: 24 })!,
   };
+
+  const shadow =
+    variant === 'elevated' ? elevation('md') : variant === 'default' ? elevation('sm') : null;
 
   const cardStyle = [
     styles.base,
     {
+      borderRadius: radii.lg,
       backgroundColor:
         variant === 'filled' ? colors.backgroundSecondary : colors.card,
       padding: paddingValues[padding],
       borderWidth: variant === 'outlined' ? 1 : 0,
       borderColor: colors.border,
-      ...(variant === 'elevated' && Platform.OS === 'web'
-        ? { boxShadow: isDark ? '0 2px 8px rgba(0,0,0,0.4)' : '0 2px 8px rgba(0,0,0,0.08)' }
-        : {}),
-      ...(variant === 'elevated' && Platform.OS !== 'web'
-        ? {
-            shadowColor: '#000',
-            shadowOffset: { width: 0, height: 2 },
-            shadowOpacity: isDark ? 0.3 : 0.08,
-            shadowRadius: 6,
-            elevation: 3,
-          }
-        : {}),
-      ...(variant === 'default' && Platform.OS === 'web'
-        ? { boxShadow: isDark ? '0 1px 3px rgba(0,0,0,0.3)' : '0 1px 3px rgba(0,0,0,0.06)' }
-        : {}),
-      ...(variant === 'default' && Platform.OS !== 'web'
-        ? {
-            shadowColor: '#000',
-            shadowOffset: { width: 0, height: 1 },
-            shadowOpacity: isDark ? 0.2 : 0.05,
-            shadowRadius: 3,
-            elevation: 1,
-          }
-        : {}),
+      ...(shadow ?? {}),
     },
     style,
   ];
@@ -92,6 +82,15 @@ export default function Card({
     content = (
       <Pressable
         onPress={onPress}
+        testID={testID}
+        // Only claim the button role when the caller names the card as a single
+        // actionable unit. react-native-web renders accessibilityRole="button"
+        // as a real <button>, so an unconditional role nests <button> inside
+        // <button> for any card that contains its own action buttons — invalid
+        // HTML and a broken tab order.
+        accessibilityRole={accessibilityLabel ? 'button' : undefined}
+        accessibilityLabel={accessibilityLabel}
+        accessibilityHint={accessibilityHint}
         style={({ pressed }) => [
           ...cardStyle,
           { opacity: pressed ? 0.92 : 1 },
@@ -101,7 +100,11 @@ export default function Card({
       </Pressable>
     );
   } else {
-    content = <View style={cardStyle}>{children}</View>;
+    content = (
+      <View style={cardStyle} testID={testID} accessibilityLabel={accessibilityLabel}>
+        {children}
+      </View>
+    );
   }
 
   if (animate) {
@@ -112,8 +115,8 @@ export default function Card({
 }
 
 const styles = StyleSheet.create({
+  // borderRadius and the shadow come from theme tokens at render time.
   base: {
-    borderRadius: 12,
     overflow: 'hidden',
   },
 });

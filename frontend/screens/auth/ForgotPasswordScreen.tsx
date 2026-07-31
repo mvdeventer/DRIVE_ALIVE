@@ -76,8 +76,8 @@ export default function ForgotPasswordScreen() {
           Enter your email address and we'll send you a link to reset your password.
         </Text>
 
-        {successMessage && <InlineMessage type="success" message={successMessage} />}
-        {errorMessage && <InlineMessage type="error" message={errorMessage} />}
+        {successMessage ? <InlineMessage type="success" message={successMessage} /> : null}
+        {errorMessage ? <InlineMessage type="error" message={errorMessage} /> : null}
 
         <Input
           label="Email Address"

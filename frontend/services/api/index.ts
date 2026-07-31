@@ -521,11 +521,6 @@ class ApiService {
     return response.data;
   }
 
-  async createAdmin(data: any) {
-    const response = await this.api.post('/admin/create', data);
-    return response.data;
-  }
-
   async deleteAdmin(adminId: number) {
     const response = await this.api.delete(`/admin/admins/${adminId}`);
     return response.data;

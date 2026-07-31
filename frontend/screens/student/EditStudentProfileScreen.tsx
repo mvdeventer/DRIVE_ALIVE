@@ -24,7 +24,10 @@ import ApiService from '../../services/api';
 
 export default function EditStudentProfileScreen({ navigation: navProp }: any) {
   const { colors } = useTheme();
-  const navigation = navProp || useNavigation();
+  // useNavigation must run on every render — calling it inside `||` made the
+  // hook conditional on navProp, so hook order changed if navProp appeared.
+  const fallbackNavigation = useNavigation();
+  const navigation = navProp || fallbackNavigation;
   const route = useRoute();
   const params = route.params as { userId?: number } | undefined;
   const isAdminEditing = params?.userId !== undefined;
@@ -372,7 +375,9 @@ export default function EditStudentProfileScreen({ navigation: navProp }: any) {
       />
 
       {/* Inline Messages */}
-      {successMessage && (
+      {/* Ternary, not `&&`: these are string states, so `'' && …` renders the
+          empty string as a text node, which <View> rejects on web. */}
+      {successMessage ? (
         <View style={{ marginHorizontal: 16, marginTop: 16 }}>
           <InlineMessage
             type="success"
@@ -381,8 +386,8 @@ export default function EditStudentProfileScreen({ navigation: navProp }: any) {
             autoDismissMs={0}
           />
         </View>
-      )}
-      {errorMessage && (
+      ) : null}
+      {errorMessage ? (
         <View style={{ marginHorizontal: 16, marginTop: 16 }}>
           <InlineMessage
             type="error"
@@ -391,7 +396,7 @@ export default function EditStudentProfileScreen({ navigation: navProp }: any) {
             autoDismissMs={0}
           />
         </View>
-      )}
+      ) : null}
 
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
         <CreditBanner compact />

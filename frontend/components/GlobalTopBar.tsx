@@ -117,7 +117,9 @@ const styles = StyleSheet.create({
   userRole: {
     fontSize: 11,
     fontFamily: 'Inter_400Regular',
-    color: 'rgba(255, 255, 255, 0.75)',
+    // Solid white: at 0.75 alpha this composited to #f6c9c9 over the role
+    // colour and measured 3.24:1, below the AA 4.5:1 floor.
+    color: '#fff',
     marginTop: 1,
     textTransform: 'uppercase' as const,
     letterSpacing: 0.8,
@@ -131,23 +133,27 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: 'rgba(255, 255, 255, 0.18)',
+    // Darkening tint, not lightening: a white overlay raised the button
+    // background to #e24d4d, dropping white-on-it to 3.88:1.
+    backgroundColor: 'rgba(0, 0, 0, 0.18)',
     justifyContent: 'center' as const,
     alignItems: 'center' as const,
   },
   iconButtonPressed: {
-    backgroundColor: 'rgba(255, 255, 255, 0.30)',
+    backgroundColor: 'rgba(0, 0, 0, 0.30)',
   },
   logoutButton: {
     flexDirection: 'row' as const,
     alignItems: 'center' as const,
-    backgroundColor: 'rgba(255, 255, 255, 0.18)',
+    // Darkening tint, not lightening: a white overlay raised the button
+    // background to #e24d4d, dropping white-on-it to 3.88:1.
+    backgroundColor: 'rgba(0, 0, 0, 0.18)',
     paddingHorizontal: 14,
     paddingVertical: 7,
     borderRadius: 8,
   },
   logoutButtonPressed: {
-    backgroundColor: 'rgba(255, 255, 255, 0.30)',
+    backgroundColor: 'rgba(0, 0, 0, 0.30)',
   },
   logoutButtonText: {
     color: '#fff',

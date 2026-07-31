@@ -349,11 +349,13 @@ export default function DatabaseEditForm({
           </View>
 
           {/* Conflict Message */}
-          {conflictMessage && (
+          {/* Ternary, not `&&`: conflictMessage is a string, so `'' && …`
+              renders the empty string as a text node, which <View> rejects. */}
+          {conflictMessage ? (
             <View style={styles.conflictContainer}>
               <Text style={styles.conflictText}>{conflictMessage}</Text>
             </View>
-          )}
+          ) : null}
 
           {/* Form */}
           <ScrollView

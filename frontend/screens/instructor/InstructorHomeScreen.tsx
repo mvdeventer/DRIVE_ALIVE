@@ -67,7 +67,7 @@ interface InstructorProfile {
 
 export default function InstructorHomeScreen() {
   const navigation = useNavigation();
-  const { colors } = useTheme();
+  const { colors, isDark, withAlpha } = useTheme();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [profile, setProfile] = useState<InstructorProfile | null>(null);
@@ -528,7 +528,9 @@ export default function InstructorHomeScreen() {
               {profile?.first_name} {profile?.last_name}
             </Text>
           </View>
-          <View style={[styles.headerRate, { backgroundColor: colors.primaryLight }]}>
+          {/* Tinted surface, not a saturated one: `primary` text on a solid
+              `primaryLight` background measured 1.33–1.50:1 (teal on teal). */}
+          <View style={[styles.headerRate, { backgroundColor: withAlpha(colors.primary, isDark ? 0.18 : 0.1) }]}>
             <Text style={[styles.headerRateLabel, { color: colors.primary }]}>Hourly Rate</Text>
             <Text style={[styles.headerRateAmount, { color: colors.primary }]}>R{profile?.hourly_rate || 0}/hour</Text>
           </View>
@@ -545,7 +547,7 @@ export default function InstructorHomeScreen() {
                 style={[styles.tab, activeTab === tab && { backgroundColor: colors.primary }]}
                 onPress={() => setActiveTab(tab)}
               >
-                <Text style={[styles.tabText, { color: colors.textSecondary }, activeTab === tab && { color: '#fff' }]}>
+                <Text style={[styles.tabText, { color: colors.textSecondary }, activeTab === tab && { color: colors.buttonPrimaryText }]}>
                   {icons[tab]} {labels[tab]}
                 </Text>
               </Pressable>
@@ -561,7 +563,7 @@ export default function InstructorHomeScreen() {
               <TextInput
                 style={[styles.searchInput, { color: colors.text }]}
                 placeholder="🔍 Search by student name..."
-                placeholderTextColor={colors.textMuted}
+                placeholderTextColor={colors.textTertiary}
                 value={searchQuery}
                 onChangeText={text => {
                   setSearchQuery(text);
@@ -583,7 +585,7 @@ export default function InstructorHomeScreen() {
                   }}
                   style={styles.clearButton}
                 >
-                  <Text style={[styles.clearButtonText, { color: colors.textMuted }]}>✕</Text>
+                  <Text style={[styles.clearButtonText, { color: colors.textTertiary }]}>✕</Text>
                 </Pressable>
               )}
 
@@ -593,7 +595,7 @@ export default function InstructorHomeScreen() {
                   <View style={[styles.dropdownHeader, { borderBottomColor: colors.border }]}>
                     <Text style={[styles.dropdownTitle, { color: colors.text }]}>Students ({uniqueStudents.length})</Text>
                     <Pressable onPress={() => setShowSearchDropdown(false)} style={{ padding: 8 }}>
-                      <Text style={[styles.dropdownClose, { color: colors.textMuted }]}>✕</Text>
+                      <Text style={[styles.dropdownClose, { color: colors.textTertiary }]}>✕</Text>
                     </Pressable>
                   </View>
                   <ScrollView style={styles.dropdownList} nestedScrollEnabled={true}>
@@ -623,16 +625,16 @@ export default function InstructorHomeScreen() {
                             <View style={styles.dropdownItemLeft}>
                               <Text style={[styles.dropdownItemText, { color: colors.text }]}>👤 {student.student_name}</Text>
                               <View style={styles.dropdownItemDetails}>
-                                {student.student_id_number && (
+                                {student.student_id_number ? (
                                   <Text style={[styles.dropdownItemSubtext, { color: colors.textSecondary }]}>
                                     🆔 ID: {student.student_id_number}
                                   </Text>
-                                )}
-                                {student.student_phone && (
+                                ) : null}
+                                {student.student_phone ? (
                                   <Text style={[styles.dropdownItemSubtext, { color: colors.textSecondary }]}>
                                     📞 {student.student_phone}
                                   </Text>
-                                )}
+                                ) : null}
                               </View>
                             </View>
                             <Text style={[styles.dropdownItemCount, { color: colors.textSecondary, backgroundColor: colors.backgroundSecondary }]}>
@@ -645,7 +647,7 @@ export default function InstructorHomeScreen() {
                       student =>
                         !searchQuery ||
                         student.student_name.toLowerCase().includes(searchQuery.toLowerCase())
-                    ).length === 0 && <Text style={[styles.noResultsText, { color: colors.textMuted }]}>No students found</Text>}
+                    ).length === 0 && <Text style={[styles.noResultsText, { color: colors.textTertiary }]}>No students found</Text>}
                   </ScrollView>
                 </View>
               )}
@@ -703,16 +705,16 @@ export default function InstructorHomeScreen() {
                       <View style={styles.lessonHeader}>
                         <View style={{ flex: 1 }}>
                           <Text style={[styles.studentName, { color: colors.text }]}>👤 {lesson.student_name}</Text>
-                          {lesson.booking_reference && (
+                          {lesson.booking_reference ? (
                             <Text style={[styles.bookingReference, { color: colors.primary }]}>
                               🎫 {lesson.booking_reference}
                             </Text>
-                          )}
-                          {lesson.student_id_number && (
+                          ) : null}
+                          {lesson.student_id_number ? (
                             <Text style={[styles.studentId, { color: colors.primary }]}>
                               🆔 ID Number: {lesson.student_id_number}
                             </Text>
-                          )}
+                          ) : null}
                           <Text style={[styles.lessonDate, { color: colors.textSecondary }]}>
                             📅 {formatDate(lesson.scheduled_time)}
                           </Text>
@@ -744,12 +746,12 @@ export default function InstructorHomeScreen() {
                       </View>
 
                       {/* Student Contact Info */}
-                      {lesson.student_phone && (
+                      {lesson.student_phone ? (
                         <Text style={[styles.lessonDetail, { color: colors.textSecondary }]}>📞 {lesson.student_phone}</Text>
-                      )}
-                      {lesson.student_email && (
+                      ) : null}
+                      {lesson.student_email ? (
                         <Text style={[styles.lessonDetail, { color: colors.textSecondary }]}>✉️ {lesson.student_email}</Text>
-                      )}
+                      ) : null}
 
                       {/* Student Location */}
                       {(lesson.student_city || lesson.student_suburb) && (
@@ -760,9 +762,9 @@ export default function InstructorHomeScreen() {
                       )}
 
                       {/* Pickup Location */}
-                      {lesson.pickup_location && (
+                      {lesson.pickup_location ? (
                         <Text style={[styles.lessonDetail, { color: colors.textSecondary }]}>📌 Pickup: {lesson.pickup_location}</Text>
-                      )}
+                      ) : null}
 
                       {/* Student Comments */}
                       <View style={[styles.notesContainer, { backgroundColor: colors.backgroundSecondary, borderLeftColor: colors.primary }]}>

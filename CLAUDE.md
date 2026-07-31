@@ -22,26 +22,6 @@ s.bat env loc               # switch to localhost (default)
 s.bat env net               # switch to LAN/mobile IP
 ```
 
-### Tests
-
-```bash
-# Backend — all tests
-cd backend && venv\Scripts\activate && pytest -v --cov=app
-
-# Backend — single test or file
-cd backend && venv\Scripts\activate && pytest -v -k "test_name_or_keyword"
-cd backend && venv\Scripts\activate && pytest -v tests/test_role_transition_policy.py
-
-# Frontend — Jest
-cd frontend && npm test
-cd frontend && npm test -- --testPathPattern="MainTabs"   # single file
-cd frontend && npm test -- -t "renders admin tabs"        # single test by name
-
-# E2E (Cypress, requires servers running)
-cd frontend && npm run webtest:smoke                      # multi-role smoke
-cd frontend && npm run test:e2e                           # database interface
-```
-
 ### AGENTS.md quality gates (must exit 0 before any merge)
 
 ```bash
@@ -50,12 +30,16 @@ npm --prefix frontend run i18n:detect-hardcoded
 python scripts/check_error_code_mapping.py
 ```
 
-### Lint / format
+### Supporting checks (not merge-blocking yet)
 
 ```bash
-make lint     # flake8 + mypy (backend) + npm lint (frontend)
-make format   # black + isort (backend) + npm format (frontend)
+npm --prefix frontend run lint        # eslint 9 flat config + react-native-a11y
+npm --prefix frontend run typecheck   # ~297 pre-existing errors — do not add more
+npm --prefix frontend run format      # prettier
+npm --prefix frontend run build:web   # must produce dist/_redirects
 ```
+
+Or `/gates` to run everything with the known baselines already accounted for.
 
 ### Release
 
@@ -69,14 +53,11 @@ s.bat release --major
 
 ### Backend (`backend/`)
 
-FastAPI + SQLAlchemy ORM + Alembic + PostgreSQL. Uvicorn server on port 8000.
+Uvicorn server on port 8000.
 
 - `app/main.py` — app factory; mounts all routers; starts background schedulers (reminders, DB backup, token cleanup); runs inline idempotent migrations for schema changes that `create_all()` can't handle (add columns to existing tables — add new ones here, not via Alembic)
-- `app/routes/` — one file per domain (auth, bookings, instructors, students, admin, payments, availability, companies, certifications, verification, database, webhooks, setup)
-- `app/models/` — SQLAlchemy models; `__init__.py` is the canonical import point
+- `app/models/` — `__init__.py` is the canonical import point
 - `app/services/` — business logic; key services: `AuthService`, `RoleTransitionPolicy`, `EmailService`, `WhatsAppService`, `InstructorVerificationService`, `PaymentGateway` (factory → Stripe or Mock)
-- `app/schemas/` — Pydantic request/response schemas
-- `app/utils/` — encryption, rate limiting (SlowAPI + Redis), logging
 
 **Background tasks:** `reminder_scheduler`, `backup_scheduler`, `verification_cleanup_scheduler` — all async, started in `lifespan`.
 
@@ -86,17 +67,19 @@ FastAPI + SQLAlchemy ORM + Alembic + PostgreSQL. Uvicorn server on port 8000.
 
 ### Frontend (`frontend/`)
 
-Expo React Native 54 + TypeScript + react-native-web. Runs on port 8081 (web) or via Expo tunnel.
+Runs on port 8081 (web) or via Expo tunnel.
 
-- `App.tsx` — root; wraps providers (QueryClient, AuthContext, ThemeContext, I18nProvider)
 - `navigation/MainTabs.tsx` — role dispatcher: reads `userRole` from `AuthContext`, renders `AdminTabs`, `InstructorTabs`, or `StudentTabs`
-- `navigation/{Admin,Instructor,Student}Tabs.tsx` — bottom tab navigators with nested stacks per role
-- `screens/{auth,admin,instructor,student}/` — screens grouped by role
-- `components/ui/` — shared UI primitives (Button, Card, Input, Badge, StatCard, Skeleton, etc.)
 - `services/api/` — Axios client; interceptors add `Authorization: Bearer` header and handle 401/403 logout
 - `i18n/` — custom lightweight i18n provider; `locales/en.ts` is the base (source of truth); af, zu, xh must match all keys
 
 **State:** TanStack Query v5 for server state (staleTime 30s, gcTime 5m). React Context for auth/theme/i18n.
+
+**Design system:** `theme/ThemeContext.tsx` is the single token source — `colors` (40 semantic slots, full light + dark), `spacing`, `radii`, `fontSizes`, `typography`, `fontFamilies`, `breakpoints`, `contentWidths`, plus `elevation(level)` and `withAlpha(color, a)` helpers. Theme mode persists to AsyncStorage. No Tailwind, no CSS variables — NativeWind was removed. Never write a raw hex, a hand-rolled shadow, or `fontFamily: 'Inter_*'` in a screen.
+
+**Responsive:** `hooks/useBreakpoint.ts` is the only sanctioned source of viewport-derived values — `select({ xs, sm, md, lg, xl })`, `up`, `down`, `isPhone`/`isTablet`/`isDesktop`. Breakpoints: `xs 0 · sm 480 · md 768 · lg 1024 · xl 1440`; `md` is also `SIDEBAR_BREAKPOINT`, where the bottom tab bar becomes a left nav rail on web. Content width comes from `<ScreenContainer width="form|content|wide|full">`. **Never put a viewport-derived value inside `StyleSheet.create`** — it runs once at module import and freezes the layout at load width. `responsive(web, mobile)` is deprecated (branches on platform, not viewport).
+
+**Accessibility:** `components/ui/` is the reference implementation — roles, accessible names, `accessibilityState`, 44dp targets via `hitSlop`, emoji hidden from assistive tech, and a full web focus trap + Escape handling in `ThemedModal`. Enforced at `warn` by `eslint-plugin-react-native-a11y`.
 
 **Auth token storage:** HTTP-only cookie (web) · `expo-secure-store` (native).
 

@@ -79,7 +79,7 @@ export default function LicenseTypeSelector({
 
   return (
     <View style={{ marginBottom: 15 }}>
-      {label && (
+      {label ? (
         <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
           <Text
             style={{
@@ -119,7 +119,7 @@ export default function LicenseTypeSelector({
             </View>
           </Pressable>
         </View>
-      )}
+      ) : null}
 
       <Pressable
         onPress={() => setShowSelector(true)}

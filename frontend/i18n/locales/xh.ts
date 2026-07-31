@@ -5,6 +5,7 @@ import type { TranslationKeys } from './en';
 
 export const xh: TranslationKeys = {
   common: {
+    selectRow: 'Khetha umgca {{id}}',
     appName: 'Drive Alive',
     loading: 'Iyalayisha…',
     save: 'Gcina',
@@ -36,6 +37,8 @@ export const xh: TranslationKeys = {
     forgotPassword: 'Ulibele iphasiwedi?',
     changePassword: 'Tshintsha iphasiwedi',
     resetPassword: 'Seta kwakhona iphasiwedi',
+    showPassword: 'Bonisa iphasiwedi',
+    hidePassword: 'Fihla iphasiwedi',
   },
   errors: {
     auth: {
@@ -101,5 +104,21 @@ export const xh: TranslationKeys = {
     newUsers: 'Abasebenzisi abatsha',
     newBookings: 'Iibhukhi ezintsha',
     avgLessons: 'Umyinge wezifundo ezigqityiweyo / Umfundi',
+  },
+  availability: {
+    toggleDay: 'Tshintsha ukufumaneka kwe-{{day}}',
+    enableAllDays: 'Vula yonke imihla',
+  },
+  licences: {
+    heading: 'Iikhowudi zelayisensi esizifundisayo',
+    showcaseLabel: 'Umboniso ojikelezayo weekhowudi zelayisensi ezinikezelwayo',
+    A1: 'Isikuta ukuya kwi-125cc',
+    A: 'Isithuthuthu',
+    B: 'Isithuthi esikhaphukhaphu',
+    C1: 'Isithuthi sorhwebo esikhaphukhaphu okanye iminibhasi',
+    C: 'Isithuthi esinzima okanye ibhasi',
+    EB: 'Isithuthi esikhaphukhaphu esinetreyila',
+    EC1: 'Isithuthi sorhwebo esikhaphukhaphu esinetreyila',
+    EC: 'Isithuthi esinzima esinetreyila',
   },
 };

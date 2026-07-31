@@ -137,3 +137,22 @@ SECRETS.txt
 mkcert.exe
 .installed
 .release.lock
+
+# Claude Code worktrees (parallel agent sessions)
+.claude/worktrees/
+
+# Ruflo local secrets and runtime data
+.env.*.local
+.claude-flow/data/
+.claude-flow/logs/
+.claude-flow/sessions/
+
+# Ruflo swarm memory database (runtime state, not source)
+.swarm/
+
+# Playwright MCP run artifacts (screenshots, console logs, snapshots)
+.playwright-mcp/
+
+# Ruflo runtime metrics (churn on every run)
+.claude-flow/metrics/
+.claude-flow/security/

@@ -740,7 +740,7 @@ export default function InstructorEarningsOverviewScreen({ navigation }: any) {
         }
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
-            <Text style={[styles.emptyText, { color: colors.textMuted, fontFamily: 'Inter_400Regular' }]}>No instructors found</Text>
+            <Text style={[styles.emptyText, { color: colors.textTertiary, fontFamily: 'Inter_400Regular' }]}>No instructors found</Text>
           </View>
         }
       />

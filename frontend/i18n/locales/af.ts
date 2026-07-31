@@ -5,6 +5,7 @@ import type { TranslationKeys } from './en';
 
 export const af: TranslationKeys = {
   common: {
+    selectRow: 'Kies ry {{id}}',
     appName: 'Drive Alive',
     loading: 'Laai…',
     save: 'Stoor',
@@ -36,6 +37,8 @@ export const af: TranslationKeys = {
     forgotPassword: 'Wagwoord vergeet?',
     changePassword: 'Verander wagwoord',
     resetPassword: 'Herstel wagwoord',
+    showPassword: 'Wys wagwoord',
+    hidePassword: 'Versteek wagwoord',
   },
   errors: {
     auth: {
@@ -101,5 +104,21 @@ export const af: TranslationKeys = {
     newUsers: 'Nuwe gebruikers',
     newBookings: 'Nuwe besprekings',
     avgLessons: 'Gem. voltooide lesse / Student',
+  },
+  availability: {
+    toggleDay: 'Wissel beskikbaarheid vir {{day}}',
+    enableAllDays: 'Aktiveer alle dae',
+  },
+  licences: {
+    heading: 'Lisensiekodes wat ons aanbied',
+    showcaseLabel: 'Roterende vertoning van lisensiekodes wat aangebied word',
+    A1: 'Bromponie tot 125cc',
+    A: 'Motorfiets',
+    B: 'Ligte motorvoertuig',
+    C1: 'Ligte kommersiële voertuig of minibus',
+    C: 'Swaar voertuig of bus',
+    EB: 'Ligte voertuig met sleepwa',
+    EC1: 'Ligte kommersiële voertuig met sleepwa',
+    EC: 'Swaar voertuig met sleepwa',
   },
 };

@@ -75,7 +75,10 @@ interface ExistingBooking {
 }
 
 export default function BookingScreen({ navigation: navProp }: any) {
-  const navigation = navProp || useNavigation();
+  // useNavigation must run on every render — calling it inside `||` made the
+  // hook conditional on navProp, so hook order changed if navProp appeared.
+  const fallbackNavigation = useNavigation();
+  const navigation = navProp || fallbackNavigation;
   const route = useRoute();
   const { colors } = useTheme();
   const instructor = (route.params as any)?.instructor as Instructor;
@@ -954,7 +957,7 @@ export default function BookingScreen({ navigation: navProp }: any) {
                   style={[
                     styles.datePickerText,
                     { color: colors.text },
-                    !formData.pickup_address.trim() && { color: colors.textMuted },
+                    !formData.pickup_address.trim() && { color: colors.textTertiary },
                   ]}
                 >
                   {selectedDate
@@ -1029,7 +1032,7 @@ export default function BookingScreen({ navigation: navProp }: any) {
                 ) : (
                   <View>
                     <Text style={[styles.instructionText, { color: colors.textSecondary }]}>Select a time slot</Text>
-                    <Text style={[styles.slotCountText, { color: colors.textMuted }]}>
+                    <Text style={[styles.slotCountText, { color: colors.textTertiary }]}>
                       {availableSlotsForDate.filter(s => !s.is_booked).length} available,{' '}
                       {availableSlotsForDate.filter(s => s.is_booked).length} booked (Total:{' '}
                       {availableSlotsForDate.length} slots)
@@ -1178,14 +1181,14 @@ export default function BookingScreen({ navigation: navProp }: any) {
                         💰 R
                         {lessonTotalWithFee(instructor, booking.slot.duration_minutes).toFixed(2)}
                       </Text>
-                      {booking.pickup_address && (
+                      {booking.pickup_address ? (
                         <Text style={[styles.selectedBookingAddress, { color: colors.textSecondary }]}>
                           📍 {booking.pickup_address}
                         </Text>
-                      )}
+                      ) : null}
                     </View>
                     <Pressable
-                      style={[styles.removeBookingButton, { backgroundColor: colors.danger }]}
+                      style={[styles.removeBookingButton, { backgroundColor: colors.buttonDanger }]}
                       onPress={() => handleRemoveBooking(index)}
                     >
                       <Text style={styles.removeBookingButtonText}>✕</Text>
@@ -1209,7 +1212,7 @@ export default function BookingScreen({ navigation: navProp }: any) {
             <TextInput
               style={[styles.input, styles.textArea, { backgroundColor: colors.backgroundSecondary, borderColor: colors.border, color: colors.text }]}
               placeholder="Any special requests or information for the instructor"
-              placeholderTextColor={colors.textMuted}
+              placeholderTextColor={colors.textTertiary}
               value={formData.notes}
               onChangeText={value => updateField('notes', value)}
               multiline

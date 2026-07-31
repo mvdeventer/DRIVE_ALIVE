@@ -524,6 +524,7 @@ async def get_inactivity_timeout(db: Session = Depends(get_db)):
 @limiter.limit("20/minute")
 async def check_unique_fields(
     request: Request,
+    response: Response,  # Required by @limiter.limit to inject X-RateLimit-* headers
     current_user: Annotated[User, Depends(get_current_user)],
     db: Session = Depends(get_db),
     email: Optional[str] = Query(None),
@@ -611,6 +612,7 @@ async def update_user_profile(
 @limiter.limit("3/hour")  # Max 3 password changes per hour per IP
 async def change_password(
     request: Request,  # Required for rate limiter
+    response: Response,  # Required by @limiter.limit to inject X-RateLimit-* headers
     password_data: ChangePasswordRequest,
     current_user: Annotated[User, Depends(get_current_user)],
     db: Session = Depends(get_db),

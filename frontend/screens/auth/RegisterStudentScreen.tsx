@@ -63,9 +63,9 @@ function ConsentRow({
           {required && <Text style={{ color: colors.danger }}> *</Text>}
         </Text>
       </Pressable>
-      {error && (
+      {error ? (
         <Text style={{ color: colors.danger, fontSize: 12, marginLeft: 32 }}>{error}</Text>
-      )}
+      ) : null}
     </View>
   );
 }

@@ -7,7 +7,6 @@ import React, { useCallback, useState } from 'react';
 import {
   ActivityIndicator,
   Clipboard,
-  Dimensions,
   FlatList,
   Platform,
   Pressable,
@@ -22,6 +21,7 @@ import { Button, Card, ThemedModal } from '../../components';
 import InlineMessage from '../../components/InlineMessage';
 import WebNavigationHeader from '../../components/WebNavigationHeader';
 import { useTheme } from '../../theme/ThemeContext';
+import { useBreakpoint } from '../../hooks/useBreakpoint';
 import apiService from '../../services/api';
 import { showMessage } from '../../utils/messageConfig';
 
@@ -48,6 +48,15 @@ interface Booking {
 
 export default function BookingOversightScreen({ navigation }: any) {
   const { colors } = useTheme();
+  // Grid density is viewport-driven and must be read during render — putting
+  // it in StyleSheet.create froze the layout at whatever width the module
+  // happened to be imported at.
+  const { select } = useBreakpoint();
+  const columns = select({ xs: 1, md: 2, lg: 3 }) ?? 1;
+  const cardWidthStyle = {
+    flexBasis: select({ xs: '100%', md: '48%', lg: '30%' }),
+    minWidth: columns === 1 ? '100%' : Platform.OS === 'web' ? 280 : 200,
+  } as const;
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -225,14 +234,14 @@ Lesson Type:    ${booking.lesson_type.toUpperCase()}
       case 'confirmed': return colors.primary;
       case 'completed': return colors.success;
       case 'cancelled': return colors.danger;
-      default: return colors.textMuted;
+      default: return colors.textTertiary;
     }
   };
 
   const renderBooking = ({ item }: { item: Booking }) => (
     <Card
       variant="elevated"
-      style={[styles.bookingCard]}
+      style={[styles.bookingCard, cardWidthStyle]}
       onPress={() => showBookingDetails(item)}
     >
       <View style={[styles.bookingHeader, { borderBottomColor: colors.border }]}>
@@ -241,9 +250,9 @@ Lesson Type:    ${booking.lesson_type.toUpperCase()}
             ID: #{item.id} {item.booking_reference}
           </Text>
           <Text style={[styles.studentName, { color: colors.text }]}>{item.student_name}</Text>
-          <Text style={[styles.idNumber, { color: colors.textMuted }]}>ID: {item.student_id_number}</Text>
+          <Text style={[styles.idNumber, { color: colors.textTertiary }]}>ID: {item.student_id_number}</Text>
           <Text style={[styles.instructorName, { color: colors.textSecondary }]}>{item.instructor_name}</Text>
-          <Text style={[styles.idNumber, { color: colors.textMuted }]}>ID: {item.instructor_id_number}</Text>
+          <Text style={[styles.idNumber, { color: colors.textTertiary }]}>ID: {item.instructor_id_number}</Text>
         </View>
         <View style={[styles.statusBadge, { backgroundColor: getStatusColor(item.status) }]}>
           <Text style={styles.statusText}>{item.status.toUpperCase()}</Text>
@@ -278,14 +287,14 @@ Lesson Type:    ${booking.lesson_type.toUpperCase()}
             {item.pickup_address}
           </Text>
         </View>
-        {item.dropoff_address && (
+        {item.dropoff_address ? (
           <View style={styles.detailRow}>
             <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>Dropoff:</Text>
             <Text style={[styles.detailValue, { color: colors.text }]} numberOfLines={2}>
               {item.dropoff_address}
             </Text>
           </View>
-        )}
+        ) : null}
         <View style={styles.detailRow}>
           <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>Amount:</Text>
           <Text style={[styles.amountText, { color: colors.success }]}>R{item.amount.toFixed(2)}</Text>
@@ -326,8 +335,10 @@ Lesson Type:    ${booking.lesson_type.toUpperCase()}
         showBackButton={navigation.canGoBack()}
       />
 
-      {error && <InlineMessage message={error} type="error" />}
-      {success && <InlineMessage message={success} type="success" />}
+      {/* Ternaries, not `&&`: these are string states, so `'' && …` renders the
+          empty string as a text node, which <View> rejects on web. */}
+      {error ? <InlineMessage message={error} type="error" /> : null}
+      {success ? <InlineMessage message={success} type="success" /> : null}
 
       {/* Tab Navigation */}
       <View style={[styles.tabContainer, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
@@ -354,7 +365,7 @@ Lesson Type:    ${booking.lesson_type.toUpperCase()}
           placeholder="Search by name, booking reference, student/instructor ID, or date..."
           value={searchQuery}
           onChangeText={setSearchQuery}
-          placeholderTextColor={colors.textMuted}
+          placeholderTextColor={colors.textTertiary}
         />
       </View>
 
@@ -362,9 +373,11 @@ Lesson Type:    ${booking.lesson_type.toUpperCase()}
         data={filteredBookings}
         renderItem={renderBooking}
         keyExtractor={item => item.id.toString()}
-        numColumns={Dimensions.get('window').width < 768 ? 1 : 3}
-        key={Dimensions.get('window').width < 768 ? 'list' : 'grid'}
-        columnWrapperStyle={Dimensions.get('window').width < 768 ? undefined : styles.row}
+        numColumns={columns}
+        // FlatList cannot change numColumns in place — remounting via key is
+        // the documented workaround.
+        key={`grid-${columns}`}
+        columnWrapperStyle={columns > 1 ? styles.row : undefined}
         contentContainerStyle={styles.listContainer}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       />
@@ -416,13 +429,13 @@ Lesson Type:    ${booking.lesson_type.toUpperCase()}
                 <View style={styles.modalSection}>
                   <Text style={[styles.modalSectionTitle, { color: colors.text }]}>Student</Text>
                   <Text style={[styles.modalValue, { color: colors.text }]}>{selectedBooking.student_name}</Text>
-                  <Text style={[styles.modalSubvalue, { color: colors.textMuted }]}>ID: {selectedBooking.student_id_number}</Text>
+                  <Text style={[styles.modalSubvalue, { color: colors.textTertiary }]}>ID: {selectedBooking.student_id_number}</Text>
                 </View>
 
                 <View style={styles.modalSection}>
                   <Text style={[styles.modalSectionTitle, { color: colors.text }]}>Instructor</Text>
                   <Text style={[styles.modalValue, { color: colors.text }]}>{selectedBooking.instructor_name}</Text>
-                  <Text style={[styles.modalSubvalue, { color: colors.textMuted }]}>
+                  <Text style={[styles.modalSubvalue, { color: colors.textTertiary }]}>
                     ID: {selectedBooking.instructor_id_number}
                   </Text>
                 </View>
@@ -458,12 +471,12 @@ Lesson Type:    ${booking.lesson_type.toUpperCase()}
                   <Text style={[styles.modalValue, { color: colors.text }]}>{selectedBooking.pickup_address}</Text>
                 </View>
 
-                {selectedBooking.dropoff_address && (
+                {selectedBooking.dropoff_address ? (
                   <View style={styles.modalSection}>
                     <Text style={[styles.modalLabel, { color: colors.textSecondary }]}>Dropoff:</Text>
                     <Text style={[styles.modalValue, { color: colors.text }]}>{selectedBooking.dropoff_address}</Text>
                   </View>
-                )}
+                ) : null}
 
                 <View style={[styles.modalDivider, { backgroundColor: colors.border }]} />
 
@@ -578,8 +591,8 @@ const styles = StyleSheet.create({
   },
   bookingCard: {
     margin: Platform.OS === 'web' ? 6 : 4,
-    flexBasis: Dimensions.get('window').width < 768 ? '100%' : '30%',
-    minWidth: Dimensions.get('window').width < 768 ? '100%' : (Platform.OS === 'web' ? 280 : 200),
+    // flexBasis / minWidth are viewport-derived and supplied at render time
+    // by `cardWidthStyle` — they must not live here.
     maxWidth: '100%',
     flexGrow: 1,
   },
