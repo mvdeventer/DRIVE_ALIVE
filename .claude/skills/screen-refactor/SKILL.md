@@ -75,7 +75,7 @@ without reloading. Typechecking proves nothing about layout.
 
 - Reword user-facing copy while restyling. If a string is hardcoded English,
   leave it and note it — moving it into locales is a separate change with its
-  own translation obligation across `af`, `zu`, `xh`.
+  own translation obligation across `af`.
 - Change data flow, API calls, or navigation while doing visual work.
 - Delete a `BACKUP` or `_OLD` file as a side effect. Propose it separately.
 - Split one screen across multiple parallel agents. Screens are the unit of

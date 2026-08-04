@@ -22,6 +22,9 @@ import { Button, Card, ThemedModal } from '../../components';
 import InlineMessage from '../../components/InlineMessage';
 import WebNavigationHeader from '../../components/WebNavigationHeader';
 import { useTheme } from '../../theme/ThemeContext';
+import { useT } from '../../i18n';
+import { passwordErrorMessage } from '../../utils/passwordPolicy';
+import PasswordStrengthMeter from '../../components/PasswordStrengthMeter';
 import apiService from '../../services/api';
 import { showMessage } from '../../utils/messageConfig';
 
@@ -52,6 +55,7 @@ interface BookingSummary {
 
 export default function UserManagementScreen({ navigation }: any) {
   const { colors } = useTheme();
+  const t = useT();
   const [users, setUsers] = useState<User[]>([]);
   const [currentUserId, setCurrentUserId] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
@@ -457,10 +461,10 @@ export default function UserManagementScreen({ navigation }: any) {
       return;
     }
 
-    if (newPassword.length < 6) {
+    if (passwordErrorMessage(newPassword, t)) {
       showMessage(
         setError,
-        'Password must be at least 6 characters long',
+        passwordErrorMessage(newPassword, t),
         SCREEN_NAME,
         'passwordReset',
         'error'
@@ -805,6 +809,22 @@ export default function UserManagementScreen({ navigation }: any) {
       {error ? <InlineMessage message={error} type="error" /> : null}
       {success ? <InlineMessage message={success} type="success" /> : null}
 
+      {/* Admin-only account creation — students and instructors can still
+          register themselves; this is the in-person equivalent. */}
+      <View style={[styles.createUserBar, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
+        <Pressable
+          onPress={() => navigation.navigate('CreateUser')}
+          accessibilityRole="button"
+          accessibilityLabel={t('createUser.ctaA11y')}
+          hitSlop={8}
+          style={[styles.createUserBtn, { backgroundColor: colors.primary, borderRadius: 8 }]}
+        >
+          <Text style={[styles.createUserBtnText, { fontFamily: 'Inter_600SemiBold' }]}>
+            {t('createUser.cta')}
+          </Text>
+        </Pressable>
+      </View>
+
       {/* Tab Navigation */}
       <View style={[styles.tabContainer, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
         {(['all', 'admin', 'instructor', 'student'] as const).map(tab => (
@@ -890,6 +910,7 @@ export default function UserManagementScreen({ navigation }: any) {
             placeholderTextColor={colors.textTertiary}
             secureTextEntry={!showPassword}
           />
+          <PasswordStrengthMeter password={newPassword} />
         </View>
 
         <View style={styles.formGroup}>
@@ -913,7 +934,7 @@ export default function UserManagementScreen({ navigation }: any) {
           </Text>
         </Pressable>
 
-        <Text style={[styles.infoText, { color: colors.textSecondary }]}>Password must be at least 6 characters long</Text>
+        <Text style={[styles.infoText, { color: colors.textSecondary }]}>{t('password.requirements')}</Text>
       </ThemedModal>
 
       {/* Confirmation Modal */}
@@ -1251,6 +1272,18 @@ const styles = StyleSheet.create({
     padding: 10,
     borderBottomWidth: 1,
   },
+  createUserBar: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    alignItems: 'flex-end',
+  },
+  createUserBtn: {
+    minHeight: 44,
+    justifyContent: 'center',
+    paddingHorizontal: 18,
+  },
+  createUserBtnText: { color: '#fff', fontSize: 14 },
   tabContainer: {
     flexDirection: 'row',
     borderBottomWidth: 1,

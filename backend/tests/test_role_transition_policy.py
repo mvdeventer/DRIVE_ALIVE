@@ -59,6 +59,86 @@ def test_admin_grant_requires_admin_actor():
     assert exc.value.detail == 'Only admins may grant admin role.'
 
 
+def test_admin_can_create_student_and_instructor_accounts():
+    """An admin creating a brand-new student or instructor must be permitted.
+
+    This was previously blocked: ADMIN_GRANT only listed ADMIN as a target, so
+    the admin "create user" path could produce admins and nothing else.
+    """
+    db = MagicMock()
+    admin_actor = SimpleNamespace(role=UserRole.ADMIN)
+
+    for target in (UserRole.STUDENT, UserRole.INSTRUCTOR, UserRole.ADMIN):
+        RoleTransitionPolicy.assert_transition_allowed(
+            db=db,
+            target_role=target,
+            channel=TransitionChannel.ADMIN_GRANT,
+            existing_user=None,
+            actor_user=admin_actor,
+        )
+
+
+def test_admin_can_upgrade_existing_student_to_instructor():
+    db = MagicMock()
+    db.query.return_value.filter.return_value.first.return_value = None
+    admin_actor = SimpleNamespace(role=UserRole.ADMIN)
+    student = SimpleNamespace(id=7, role=UserRole.STUDENT)
+
+    RoleTransitionPolicy.assert_transition_allowed(
+        db=db,
+        target_role=UserRole.INSTRUCTOR,
+        channel=TransitionChannel.ADMIN_GRANT,
+        existing_user=student,
+        actor_user=admin_actor,
+    )
+
+
+def test_non_admin_cannot_create_student_or_instructor_via_admin_grant():
+    """Widening ADMIN_GRANT must not let a non-admin use the channel at all."""
+    db = MagicMock()
+    student_actor = SimpleNamespace(role=UserRole.STUDENT)
+
+    for target in (UserRole.STUDENT, UserRole.INSTRUCTOR, UserRole.ADMIN):
+        with pytest.raises(HTTPException) as exc:
+            RoleTransitionPolicy.assert_transition_allowed(
+                db=db,
+                target_role=target,
+                channel=TransitionChannel.ADMIN_GRANT,
+                existing_user=None,
+                actor_user=student_actor,
+            )
+        assert exc.value.status_code == 403
+
+
+def test_public_registration_still_blocks_admin_after_widening():
+    """The ADMIN_GRANT widening must not leak ADMIN into public registration."""
+    db = MagicMock()
+    db.query.return_value.filter.return_value.first.return_value = None
+
+    with pytest.raises(HTTPException) as exc:
+        RoleTransitionPolicy.assert_transition_allowed(
+            db=db,
+            target_role=UserRole.ADMIN,
+            channel=TransitionChannel.PUBLIC_REGISTRATION,
+            existing_user=SimpleNamespace(id=3, role=UserRole.STUDENT),
+        )
+
+    assert exc.value.status_code == 403
+
+
+def test_student_can_become_instructor_via_public_registration():
+    """The self-upgrade path you asked about — already permitted, now pinned."""
+    db = MagicMock()
+    db.query.return_value.filter.return_value.first.return_value = None
+
+    RoleTransitionPolicy.assert_transition_allowed(
+        db=db,
+        target_role=UserRole.INSTRUCTOR,
+        channel=TransitionChannel.PUBLIC_REGISTRATION,
+        existing_user=SimpleNamespace(id=5, role=UserRole.STUDENT),
+    )
+
+
 def test_select_runtime_role_rejects_invalid_selection():
     with pytest.raises(HTTPException) as exc:
         RoleTransitionPolicy.select_runtime_role(

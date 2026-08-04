@@ -174,6 +174,28 @@ def _apply_incremental_migrations():
     except Exception as exc:
         print(f"⚠️  [MIGRATION] Commission percent column: {exc}")
 
+    # ── Per-user UI language (Aug 2026) ───────────────────────────────────────
+    # Each account carries its own locale so the choice follows the user across
+    # devices. Existing rows default to English, which is what they saw before.
+    try:
+        existing_user_cols = [col["name"] for col in inspector.get_columns("users")]
+        if "preferred_language" not in existing_user_cols:
+            with engine.connect() as conn:
+                try:
+                    conn.execute(
+                        text(
+                            "ALTER TABLE users ADD COLUMN preferred_language "
+                            "VARCHAR(5) NOT NULL DEFAULT 'en'"
+                        )
+                    )
+                    conn.commit()
+                    print("✅ [MIGRATION] Added preferred_language to users")
+                except Exception as col_exc:
+                    conn.rollback()
+                    print(f"⚠️  [MIGRATION] Could not add preferred_language: {col_exc}")
+    except Exception as exc:
+        print(f"⚠️  [MIGRATION] Preferred language column: {exc}")
+
 
 _apply_incremental_migrations()
 

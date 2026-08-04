@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../theme/ThemeContext';
+import { GOOGLE_MAPS_API_KEY } from '../config';
 import MapPreview from './MapPreview';
 
 interface AddressAutocompleteProps {
@@ -174,10 +175,14 @@ export default function AddressAutocomplete({
   const reverseGeocodeGoogle = async (
     coords: { latitude: number; longitude: number }
   ): Promise<boolean> => {
+    if (!GOOGLE_MAPS_API_KEY) {
+      console.log('📍 Skipping Google Geocoding — no API key configured');
+      return false;
+    }
     try {
       console.log('📍 Trying Google Geocoding API...');
       const resp = await fetch(
-        `https://maps.googleapis.com/maps/api/geocode/json?latlng=${coords.latitude},${coords.longitude}&key=AIzaSyBFw0Qbyq9zTFTd-tUY6dZWTgaQzuU17R8`
+        `https://maps.googleapis.com/maps/api/geocode/json?latlng=${coords.latitude},${coords.longitude}&key=${GOOGLE_MAPS_API_KEY}`
       );
       console.log('📍 Google response status:', resp.status);
       if (resp.ok) {

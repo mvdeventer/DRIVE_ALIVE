@@ -10,6 +10,7 @@ from pydantic import BaseModel, EmailStr, Field, field_validator
 
 from ..models.booking import BookingStatus
 from ..models.user import UserRole, UserStatus
+from .user import PASSWORD_MIN_LENGTH, validate_strong_password
 
 
 def validate_phone_number(phone: Optional[str]) -> Optional[str]:
@@ -50,7 +51,7 @@ class AdminCreateRequest(BaseModel):
 
     email: str
     phone: str
-    password: str = Field(..., min_length=12)
+    password: str = Field(..., min_length=PASSWORD_MIN_LENGTH)
     first_name: str
     last_name: str
     id_number: str = Field(..., min_length=13, max_length=13)
@@ -62,20 +63,10 @@ class AdminCreateRequest(BaseModel):
     @field_validator("password")
     @classmethod
     def password_complexity(cls, v: str) -> str:
-        errors = []
-        if len(v) < 12:
-            errors.append("at least 12 characters")
-        if not re.search(r"[A-Z]", v):
-            errors.append("an uppercase letter")
-        if not re.search(r"[a-z]", v):
-            errors.append("a lowercase letter")
-        if not re.search(r"\d", v):
-            errors.append("a digit")
-        if not re.search(r"[!@#$%^&*()_+\-=\[\]{};':\"\\|,.<>\/?`~]", v):
-            errors.append("a special character (!@#$%^&* …)")
-        if errors:
-            raise ValueError("Password must contain: " + ", ".join(errors) + ".")
-        return v
+        # Delegates to the one shared rule set rather than re-stating it here —
+        # this copy had drifted to 12 chars while every other surface used 8.
+        return validate_strong_password(v)
+
     smtp_password: Optional[str] = None  # Gmail app password
     verification_link_validity_minutes: Optional[int] = 30  # Default 30 minutes
     twilio_sender_phone_number: Optional[str] = None  # Twilio sender number (FROM in messages) - e.g., +14155238886

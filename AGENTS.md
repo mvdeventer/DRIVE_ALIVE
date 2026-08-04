@@ -10,7 +10,7 @@ Implement and maintain production-grade internationalization and error-code cons
 
 - Backend: FastAPI + SQLAlchemy + Alembic (Python)
 - Frontend: Expo React Native + TypeScript + react-native-web
-- Locales currently in use: en, af, zu, xh
+- Locales currently in use: en, af
 - i18n provider: frontend/i18n/index.tsx
 
 ## Mandatory Deliverables
@@ -22,7 +22,7 @@ Implement and maintain production-grade internationalization and error-code cons
 ## Required Task Order
 
 1. Keep `en` as base source-of-truth locale.
-2. Ensure locale key parity for af, zu, xh against en.
+2. Ensure locale key parity for af against en.
 3. Prevent new hardcoded user-facing literals in app code.
 4. Standardize backend user-facing errors to include stable `code` values.
 5. Ensure every backend error code has a frontend translation mapping.

@@ -15,11 +15,15 @@ import InlineMessage from '../../components/InlineMessage';
 import { Button, Card, Input } from '../../components/ui';
 import ApiService from '../../services/api';
 import { useTheme } from '../../theme/ThemeContext';
+import { useT } from '../../i18n';
+import { passwordErrorMessage } from '../../utils/passwordPolicy';
+import PasswordStrengthMeter from '../../components/PasswordStrengthMeter';
 
 export default function ResetPasswordScreen() {
   const navigation = useNavigation();
   const route = useRoute();
   const { colors } = useTheme();
+  const t = useT();
   const [token, setToken] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -56,9 +60,10 @@ export default function ResetPasswordScreen() {
 
     if (!newPassword.trim()) {
       errors.newPassword = 'Password is required';
-    } else if (newPassword.length < 6) {
-      errors.newPassword = 'Password must be at least 6 characters';
-    }
+    } else {
+        const pwdError = passwordErrorMessage(newPassword, t);
+        if (pwdError) errors.newPassword = pwdError;
+      }
 
     if (!confirmPassword.trim()) {
       errors.confirmPassword = 'Please confirm your password';
@@ -123,7 +128,7 @@ export default function ResetPasswordScreen() {
         <View style={styles.passwordRow}>
           <Input
             label="New Password"
-            placeholder="Enter new password (min. 6 characters)"
+            placeholder="Enter new password (min. 8 characters)"
             value={newPassword}
             onChangeText={(text) => { setNewPassword(text); setFieldErrors(prev => ({ ...prev, newPassword: undefined })); }}
             secureTextEntry={!showPassword}
@@ -132,6 +137,7 @@ export default function ResetPasswordScreen() {
             editable={!loading}
             error={fieldErrors.newPassword}
           />
+          <PasswordStrengthMeter password={newPassword} />
           <Pressable
             onPress={() => setShowPassword(!showPassword)}
             style={styles.togglePassword}

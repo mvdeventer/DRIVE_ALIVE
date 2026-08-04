@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-Drive Alive (RoadReady) v7.0.0 — a South African driving-school booking platform. Instructors register and manage availability; students book lessons with GPS-based pickup/drop-off; payments in ZAR via Stripe/PayFast; WhatsApp reminders via Twilio.
+Drive Alive (RoadReady) — a South African driving-school booking platform. Instructors register and manage availability; students book lessons with GPS-based pickup/drop-off; payments in ZAR via Stripe/PayFast; WhatsApp reminders via Twilio.
 
 ## Commands
 
@@ -34,7 +34,7 @@ python scripts/check_error_code_mapping.py
 
 ```bash
 npm --prefix frontend run lint        # eslint 9 flat config + react-native-a11y
-npm --prefix frontend run typecheck   # ~297 pre-existing errors — do not add more
+npm --prefix frontend run typecheck   # ~203 pre-existing errors — do not add more
 npm --prefix frontend run format      # prettier
 npm --prefix frontend run build:web   # must produce dist/_redirects
 ```
@@ -71,7 +71,7 @@ Runs on port 8081 (web) or via Expo tunnel.
 
 - `navigation/MainTabs.tsx` — role dispatcher: reads `userRole` from `AuthContext`, renders `AdminTabs`, `InstructorTabs`, or `StudentTabs`
 - `services/api/` — Axios client; interceptors add `Authorization: Bearer` header and handle 401/403 logout
-- `i18n/` — custom lightweight i18n provider; `locales/en.ts` is the base (source of truth); af, zu, xh must match all keys
+- `i18n/` — custom lightweight i18n provider; `locales/en.ts` is the base (source of truth); af must match all keys
 
 **State:** TanStack Query v5 for server state (staleTime 30s, gcTime 5m). React Context for auth/theme/i18n.
 
@@ -107,6 +107,8 @@ Firebase UID is stored on `User` but is not the primary auth mechanism — the s
 
 ### i18n
 
-Four locales: `en` (base), `af`, `zu`, `xh`. All keys in `af`/`zu`/`xh` must match `en` exactly — enforced by the `i18n:check-completeness` gate. New user-facing strings must go into all four locale files and must not be hardcoded inline (enforced by `i18n:detect-hardcoded`). Allowlist for permitted hardcoded strings: `frontend/i18n/hardcoded-allowlist.json`.
+Two locales: `en` (base) and `af`. All keys in `af` must match `en` exactly — enforced by the `i18n:check-completeness` gate. New user-facing strings must go into both locale files and must not be hardcoded inline (enforced by `i18n:detect-hardcoded`). Allowlist for permitted hardcoded strings: `frontend/i18n/hardcoded-allowlist.json`.
+
+isiZulu and isiXhosa were removed (Aug 2026) rather than shipped as unreviewed machine translation. To reinstate them: restore `locales/zu.ts` / `xh.ts` from commit `f92d033`, add the codes back to `SUPPORTED_LOCALES` (`i18n/index.tsx`), `LOCALES` (`scripts/i18n-check-completeness.mjs`) and `SUPPORTED_LANGUAGES` (`backend/app/schemas/user.py`).
 
 Backend error codes raised as `HTTPException` must have a stable `code` field and a matching entry in `frontend/i18n/error-code-map.json` — enforced by `check_error_code_mapping.py`.

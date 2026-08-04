@@ -62,7 +62,7 @@ import {
 
 // Theme
 import { ThemeProvider, useTheme } from './theme/ThemeContext';
-import { I18nProvider } from './i18n';
+import { I18nProvider, LocaleOverride, useI18n } from './i18n';
 
 // React Query
 import { QueryClientProvider } from '@tanstack/react-query';
@@ -121,6 +121,9 @@ const linking = {
       InstructorVerify: 'instructor-verify',
       InstructorCompanyVerify: 'company-instructor-verify',
       ResetPassword: 'reset-password',
+      // Without this the pending screen has no resolvable path, so refreshing
+      // it (or reopening the tab) dropped the user back to Login mid-signup.
+      VerificationPending: 'verification-pending',
       PublicInstructorProfile: 'instructors/:instructorId',
       PaymentMock: 'payment/mock',
       PaymentSuccess: 'payment/success',
@@ -174,6 +177,9 @@ export default function App() {
 }
 
 function AppContent() {
+  // Per-account UI language: applied on sign-in, dropped on sign-out so a
+  // shared browser never carries one user's language into the next session.
+  const { setAccountLocale, clearAccountLocale } = useI18n();
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [userRole, setUserRole] = useState<string | null>(null);
@@ -239,6 +245,7 @@ function AppContent() {
         setIsAuthenticated(true);
         setUserRole(role);
         setUserName(`${firstName} ${lastName} (${roleName})`);
+        setAccountLocale(response.data.preferred_language);
         return;
       }
 
@@ -281,6 +288,7 @@ function AppContent() {
         const lastName = response.data.last_name || '';
         const roleName = role.charAt(0).toUpperCase() + role.slice(1);
         setUserName(`${firstName} ${lastName} (${roleName})`);
+        setAccountLocale(response.data.preferred_language);
       }
     } catch (error) {
       console.error('Error fetching user profile:', error);
@@ -352,6 +360,7 @@ function AppContent() {
       setIsAuthenticated(false);
       setUserRole(null);
       setUserName('');
+      clearAccountLocale();
 
       // Web: Redirect to root (login page) to clear all state
       if (Platform.OS === 'web') {
@@ -398,7 +407,6 @@ function AppContent() {
           {requiresSetup && (
             <Stack.Screen
               name="Setup"
-              component={SetupScreen}
               options={{ title: 'Initial Setup' }}
               listeners={{
                 focus: () => {
@@ -410,7 +418,15 @@ function AppContent() {
                   });
                 },
               }}
-            />
+            >
+              {/* First-run wizard is always English: no account exists yet, so
+                  there is no per-user language to honour. */}
+              {props => (
+                <LocaleOverride locale="en">
+                  <SetupScreen {...props} />
+                </LocaleOverride>
+              )}
+            </Stack.Screen>
           )}
 
           {isAuthenticated ? (
@@ -438,7 +454,14 @@ function AppContent() {
           ) : (
             <Stack.Group>
               <Stack.Screen name="Login" options={{ title: 'Login' }}>
-                {props => <LoginScreen {...props} onAuthChange={handleAuthChange} />}
+                {/* Sign-in is always English: nobody is identified yet, so the
+                    account language is unknown. Registration screens are NOT
+                    overridden — they carry their own language picker. */}
+                {props => (
+                  <LocaleOverride locale="en">
+                    <LoginScreen {...props} onAuthChange={handleAuthChange} />
+                  </LocaleOverride>
+                )}
               </Stack.Screen>
               <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} options={{ title: 'Forgot Password' }} />
               <Stack.Screen name="RegisterChoice" component={RegisterChoiceScreen} options={{ title: 'Choose Account Type' }} />

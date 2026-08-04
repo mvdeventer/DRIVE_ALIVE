@@ -450,6 +450,9 @@ async def get_current_user_info(
         "status": current_user.status.value,
         "id_number": current_user.id_number,
         "address": current_user.address,
+        # Per-account UI language, applied by the client after login so the
+        # choice follows the user rather than the browser.
+        "preferred_language": getattr(current_user, "preferred_language", None) or "en",
     }
 
     # Add role-specific details
@@ -601,6 +604,8 @@ async def update_user_profile(
         current_user.phone = user_update.phone
     if user_update.address is not None:
         current_user.address = user_update.address
+    if user_update.preferred_language is not None:
+        current_user.preferred_language = user_update.preferred_language
 
     db.commit()
     db.refresh(current_user)

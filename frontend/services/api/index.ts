@@ -422,6 +422,23 @@ class ApiService {
     return response.data;
   }
 
+  /**
+   * Admin-created accounts.
+   *
+   * Deliberately does NOT store the response token the way registerStudent /
+   * registerInstructor do — the admin stays logged in as themselves. These
+   * endpoints return no token for exactly that reason.
+   */
+  async adminCreateStudent(data: Record<string, unknown>) {
+    const response = await this.api.post('/admin/users/student', data);
+    return response.data;
+  }
+
+  async adminCreateInstructor(data: Record<string, unknown>) {
+    const response = await this.api.post('/admin/users/instructor', data);
+    return response.data;
+  }
+
   async getUserDetails(userId: number) {
     const response = await this.api.get(`/admin/users/${userId}`);
     return response.data;

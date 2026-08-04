@@ -13,6 +13,7 @@ import React from 'react';
 import { Platform, Pressable, Text } from 'react-native';
 
 import { useResponsiveTabBar } from '../hooks/useResponsiveTabBar';
+import { useT } from '../i18n';
 import { useTheme } from '../theme/ThemeContext';
 import { useAuthActions } from './AuthContext';
 
@@ -22,6 +23,7 @@ import AdminManageInstructorScheduleScreen from '../screens/admin/AdminManageIns
 import AdminSettingsScreen from '../screens/admin/AdminSettingsScreen';
 import BookingOversightScreen from '../screens/admin/BookingOversightScreen';
 import CreateAdminScreen from '../screens/admin/CreateAdminScreen';
+import CreateUserScreen from '../screens/admin/CreateUserScreen';
 import EditAdminProfileScreen from '../screens/admin/EditAdminProfileScreen';
 import InstructorEarningsOverviewScreen from '../screens/admin/InstructorEarningsOverviewScreen';
 import InstructorVerificationScreen from '../screens/admin/InstructorVerificationScreen';
@@ -214,6 +216,11 @@ function UsersStackScreen() {
         component={EditAdminProfileScreen}
         options={{ title: 'Edit Admin' }}
       />
+      <UsersStack.Screen
+        name="CreateUser"
+        component={CreateUserScreen}
+        options={{ title: 'Create User' }}
+      />
     </UsersStack.Navigator>
   );
 }
@@ -266,6 +273,7 @@ function SettingsStackScreen() {
 
 export default function AdminTabs() {
   const { colors } = useTheme();
+  const t = useT();
   const { tabBarPosition, tabBarStyle } = useResponsiveTabBar(colors);
 
   return (
@@ -287,7 +295,7 @@ export default function AdminTabs() {
         name="DashboardTab"
         component={DashboardStackScreen}
         options={{
-          tabBarLabel: 'Dashboard',
+          tabBarLabel: t('nav.dashboard'),
           tabBarIcon: ({ focused, color, size }) => (
             <Ionicons name={focused ? 'grid' : 'grid-outline'} size={size} color={color} />
           ),
@@ -297,7 +305,7 @@ export default function AdminTabs() {
         name="UsersTab"
         component={UsersStackScreen}
         options={{
-          tabBarLabel: 'Users',
+          tabBarLabel: t('nav.users'),
           tabBarIcon: ({ focused, color, size }) => (
             <Ionicons name={focused ? 'people' : 'people-outline'} size={size} color={color} />
           ),
@@ -307,7 +315,7 @@ export default function AdminTabs() {
         name="BookingsTab"
         component={BookingsStackScreen}
         options={{
-          tabBarLabel: 'Bookings',
+          tabBarLabel: t('nav.bookings'),
           tabBarIcon: ({ focused, color, size }) => (
             <Ionicons name={focused ? 'book' : 'book-outline'} size={size} color={color} />
           ),
@@ -317,7 +325,7 @@ export default function AdminTabs() {
         name="SettingsTab"
         component={SettingsStackScreen}
         options={{
-          tabBarLabel: 'Settings',
+          tabBarLabel: t('nav.settings'),
           tabBarIcon: ({ focused, color, size }) => (
             <Ionicons
               name={focused ? 'settings' : 'settings-outline'}

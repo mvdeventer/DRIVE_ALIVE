@@ -52,6 +52,11 @@ export const DEBUG_CONFIG = {
   TWILIO_TEST_PHONE:   process.env.EXPO_PUBLIC_DEBUG_TWILIO_TEST_PHONE    || '',
 };
 
+// Google Maps — read from env like every other credential. Empty means the
+// HTTP geocoding fallback is skipped; the native reverse-geocode path still
+// works, so an unset key degrades rather than breaks.
+export const GOOGLE_MAPS_API_KEY = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY || '';
+
 export const API_CONFIG = {
   BASE_URL: API_BASE_URL,
   TIMEOUT: 30000,

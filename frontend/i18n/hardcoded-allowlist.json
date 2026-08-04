@@ -33,7 +33,6 @@
     "^navigation/InstructorTabs\\.tsx$",
     "^navigation/MainTabs\\.tsx$",
     "^navigation/StudentTabs\\.tsx$",
-    "^screens/admin/AdminDashboardScreen\\.tsx$",
     "^screens/admin/AdminManageInstructorScheduleScreen\\.tsx$",
     "^screens/admin/AdminSettingsScreen\\.tsx$",
     "^screens/admin/AdvancedAnalyticsScreen\\.tsx$",

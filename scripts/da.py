@@ -453,6 +453,36 @@ def ensure_node_modules() -> None:
     ok("Frontend dependencies installed.")
 
 
+# ── Git hooks ──────────────────────────────────────────────────────────────────
+
+def ensure_git_hooks() -> None:
+    """
+    Point git at the tracked .githooks/ directory.
+
+    The pre-commit secret scan used to live in .git/hooks, which is not
+    tracked — so it existed only on the machine that created it and was lost
+    on every fresh clone. Setting core.hooksPath makes the hook travel with
+    the repo.
+    """
+    header("Git Hooks")
+    hooks_dir = ROOT / ".githooks"
+    if not hooks_dir.is_dir():
+        warn(".githooks/ not found – skipping hook setup.")
+        return
+    if not (ROOT / ".git").exists():
+        info("Not a git checkout – skipping hook setup.")
+        return
+
+    r = subprocess.run(
+        ["git", "config", "core.hooksPath", ".githooks"],
+        cwd=ROOT, capture_output=True, text=True,
+    )
+    if r.returncode != 0:
+        warn(f"Could not set core.hooksPath: {r.stderr.strip()}")
+        return
+    ok("Pre-commit secret scan enabled (core.hooksPath -> .githooks).")
+
+
 # ── .env helpers ───────────────────────────────────────────────────────────────
 
 def ensure_env_file() -> None:
@@ -912,6 +942,9 @@ def cmd_install(force: bool = False, offline: bool = False) -> None:
         shutil.rmtree(FRONTEND_DIR / "node_modules", ignore_errors=True)
     ensure_node_modules()
 
+    # ── Git hooks ───────────────────────────────────────────────────────────────
+    ensure_git_hooks()
+
     # ── Mark installed ──────────────────────────────────────────────────────────
     INSTALLED_MARKER.write_text("installed", encoding="utf-8")
 
@@ -1186,7 +1219,8 @@ def cmd_ship(bump_type: str, message: str | None = None, dry_run: bool = False) 
 EXAMPLES = """
 EXAMPLES
     s.bat                                Start backend + frontend (default)
-    s.bat -d                             Start in debug mode (pre-filled forms)
+    s.bat --debug                        Start in debug mode (pre-filled forms)
+    s.bat -d                             Start and open the browser with DevTools
     s.bat start -b                       Start backend only
     s.bat start -f --debug               Frontend only, verbose debug
     s.bat start -m                       Switch to LAN/mobile env, then start
@@ -1315,6 +1349,84 @@ def cmd_webtest(
 
 # ── CLI ────────────────────────────────────────────────────────────────────────
 
+class _FriendlyParser(argparse.ArgumentParser):
+    """argparse that suggests the right invocation instead of just rejecting.
+
+    Unknown arguments are still hard errors — silently ignoring them is how
+    `uninstall all` used to run a plain uninstall. This only adds a hint, so
+    the two mistakes people actually make are self-correcting:
+
+        s.bat --uninstall     ->  subcommands take no leading dashes
+        s.bat uninstall all   ->  flags do:  uninstall --all
+    """
+
+    _subparser_action = None
+
+    def _known_subcommands(self) -> list[str]:
+        act = self._subparser_action
+        return sorted(act.choices) if act else []
+
+    def _flags_for(self, command: str) -> list[str]:
+        act = self._subparser_action
+        if not act or command not in act.choices:
+            return []
+        flags: list[str] = []
+        for a in act.choices[command]._actions:
+            flags.extend(a.option_strings)
+        return flags
+
+    def _hint(self, message: str, argv: list[str]) -> str | None:
+        import difflib
+
+        # argparse reports a mistyped subcommand as "invalid choice" and a
+        # stray token as "unrecognized arguments" — handle both.
+        bad_choice = re.search(r"invalid choice:\s*'([^']+)'", message)
+        if bad_choice:
+            tok = bad_choice.group(1)
+            close = difflib.get_close_matches(tok, self._known_subcommands(), n=1, cutoff=0.5)
+            if close:
+                return (f"  did you mean '{close[0]}'?  ->  s.bat {close[0]}\n"
+                        "  Run 's.bat help' for the full reference with examples.")
+            return None
+
+        m = re.search(r"unrecognized arguments:\s*(.+)$", message)
+        if not m:
+            return None
+        offenders = m.group(1).split()
+        command = argv[0] if argv and not argv[0].startswith("-") else None
+        subs = self._known_subcommands()
+        tips: list[str] = []
+
+        for tok in offenders:
+            bare = tok.lstrip("-")
+            # "--uninstall" when "uninstall" is a subcommand
+            if tok.startswith("-") and bare in subs:
+                tips.append(f"'{tok}' is a subcommand, not a flag — try:  s.bat {bare}")
+                continue
+            # "uninstall all" when "--all" is a flag of that subcommand
+            if not tok.startswith("-") and command and f"--{tok}" in self._flags_for(command):
+                tips.append(f"'{tok}' is a flag — try:  s.bat {command} --{tok}")
+                continue
+            # otherwise offer the closest thing we do know about
+            pool = self._flags_for(command) if command else subs
+            close = difflib.get_close_matches(tok, pool, n=1, cutoff=0.6)
+            if close:
+                tips.append(f"'{tok}' is not valid here — did you mean '{close[0]}'?")
+
+        if not tips:
+            return None
+        tips.append("Run 's.bat help' for the full reference with examples.")
+        return "\n".join("  " + t for t in tips)
+
+    def error(self, message: str):  # noqa: A003 - argparse API
+        hint = self._hint(message, sys.argv[1:])
+        if hint:
+            self.print_usage(sys.stderr)
+            sys.stderr.write(f"\n{self.prog}: error: {message}\n\n{hint}\n")
+            sys.exit(2)
+        super().error(message)
+
+
 def main() -> None:
     # Enable ANSI on Windows
     if sys.platform == "win32":
@@ -1332,13 +1444,14 @@ def main() -> None:
     if raw_argv and raw_argv[0] not in command_names and has_release_flag:
         parsed_argv = ["release"] + raw_argv
 
-    parser = argparse.ArgumentParser(
+    parser = _FriendlyParser(
         prog="da.py",
         description="Drive Alive project manager — run 'help' for the full reference with examples",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=EXAMPLES,
     )
     sub = parser.add_subparsers(dest="command")
+    parser._subparser_action = sub  # used by _FriendlyParser for did-you-mean hints
 
     # start
     p_start = sub.add_parser("start", help="Start servers (default when no command given)")

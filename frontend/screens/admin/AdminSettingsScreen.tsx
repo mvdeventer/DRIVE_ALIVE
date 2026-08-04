@@ -19,6 +19,7 @@ import InlineMessage from '../../components/InlineMessage';
 import WebNavigationHeader from '../../components/WebNavigationHeader';
 import LanguageSwitcher from '../../components/LanguageSwitcher';
 import { Button, Card, ThemedModal } from '../../components';
+import { useT } from '../../i18n';
 import { useTheme } from '../../theme/ThemeContext';
 import apiService from '../../services/api';
 import { DEBUG_CONFIG } from '../../config';
@@ -27,6 +28,7 @@ const SCREEN_NAME = 'AdminSettingsScreen';
 
 export default function AdminSettingsScreen({ navigation }: any) {
   const { colors } = useTheme();
+  const t = useT();
   const scrollViewRef = useRef<ScrollView>(null);
   const pendingNavActionRef = useRef<any>(null);
   const [loading, setLoading] = useState(true);
@@ -374,22 +376,22 @@ export default function AdminSettingsScreen({ navigation }: any) {
         <View style={styles.content}>
           {/* Language Section */}
           <Card variant="elevated" style={{ marginBottom: 16 }}>
-            <Text style={[styles.sectionTitle, { color: colors.text }]}>Language / Taal / Ulimi / Ulwimi</Text>
+            <Text style={[styles.sectionTitle, { color: colors.text }]}>{t('adminSettings.languageTitle')}</Text>
             <Text style={[styles.sectionSubtitle, { color: colors.textSecondary }]}>
-              Choose your preferred language for the app interface.
+              {t('adminSettings.languageSubtitle')}
             </Text>
             <LanguageSwitcher />
           </Card>
 
           {/* Verification Settings Section */}
           <Card variant="elevated" style={{ marginBottom: 16 }}>
-            <Text style={[styles.sectionTitle, { color: colors.text }]}>Email Configuration</Text>
+            <Text style={[styles.sectionTitle, { color: colors.text }]}>{t('adminSettings.email.title')}</Text>
             <Text style={[styles.sectionSubtitle, { color: colors.textSecondary }]}>
-              Configure Gmail SMTP to send verification emails (global setting - shared by all admins)
+              {t('adminSettings.email.subtitle')}
             </Text>
 
             <View style={styles.formGroup}>
-              <Text style={[styles.label, { color: colors.textSecondary }]}>Gmail Address</Text>
+              <Text style={[styles.label, { color: colors.textSecondary }]}>{t('adminSettings.email.gmailAddress')}</Text>
               <TextInput
                 style={[styles.input, { borderColor: colors.border, backgroundColor: colors.card, color: colors.text }]}
                 placeholder="admin@gmail.com"
@@ -403,7 +405,7 @@ export default function AdminSettingsScreen({ navigation }: any) {
             </View>
 
             <View style={styles.formGroup}>
-              <Text style={[styles.label, { color: colors.textSecondary }]}>Gmail App Password</Text>
+              <Text style={[styles.label, { color: colors.textSecondary }]}>{t('adminSettings.email.appPassword')}</Text>
               <View style={[styles.passwordContainer, { borderColor: colors.border, backgroundColor: colors.card }]}>
                 <TextInput
                   style={[styles.passwordInput, { color: colors.text }]}
@@ -425,19 +427,19 @@ export default function AdminSettingsScreen({ navigation }: any) {
                   style={styles.eyeButton}
                   onPress={() => setShowPassword(!showPassword)}
                 >
-                  <Text style={styles.eyeIcon}>{showPassword ? 'Hide' : 'Show'}</Text>
+                  <Text style={styles.eyeIcon}>{showPassword ? t('adminSettings.hide') : t('adminSettings.show')}</Text>
                 </Pressable>
               </View>
               <Text style={[styles.hint, { color: colors.textTertiary }]}>
                 {showPassword 
-                  ? 'Generate at: myaccount.google.com/apppasswords'
-                  : 'Click Show to view or edit the password'
+                  ? t('adminSettings.email.hintGenerate')
+                  : t('adminSettings.email.hintShow')
                 }
               </Text>
             </View>
 
             <View style={styles.formGroup}>
-              <Text style={[styles.label, { color: colors.textSecondary }]}>Verification Link Validity (Minutes)</Text>
+              <Text style={[styles.label, { color: colors.textSecondary }]}>{t('adminSettings.email.linkValidity')}</Text>
               <TextInput
                 style={[styles.input, { borderColor: colors.border, backgroundColor: colors.card, color: colors.text }]}
                 placeholder="30"
@@ -448,12 +450,12 @@ export default function AdminSettingsScreen({ navigation }: any) {
                 editable={!saving}
               />
               <Text style={[styles.hint, { color: colors.textTertiary }]}>
-                How long verification links remain valid (15-120 minutes recommended)
+                {t('adminSettings.email.linkValidityHint')}
               </Text>
             </View>
 
             <View style={styles.formGroup}>
-              <Text style={[styles.label, { color: colors.textSecondary }]}>Auto-Logout Timeout (Minutes)</Text>
+              <Text style={[styles.label, { color: colors.textSecondary }]}>{t('adminSettings.email.autoLogout')}</Text>
               <TextInput
                 style={[styles.input, { borderColor: colors.border, backgroundColor: colors.card, color: colors.text }]}
                 placeholder="15"
@@ -464,16 +466,15 @@ export default function AdminSettingsScreen({ navigation }: any) {
                 editable={!saving}
               />
               <Text style={[styles.hint, { color: colors.textTertiary }]}>
-                Automatically log out inactive users after this many minutes (1-120 minutes). 
-                Applies to all users (students, instructors, admins). Default: 15 minutes.
+                {t('adminSettings.email.autoLogoutHint')}
               </Text>
               <Text style={[styles.hint, { marginTop: 5, fontFamily: 'Inter_600SemiBold', color: colors.primary }]}>
-                On web browsers, closing the tab/window will also log out users immediately.
+                {t('adminSettings.email.autoLogoutWeb')}
               </Text>
             </View>
 
             <View style={styles.formGroup}>
-              <Text style={[styles.label, { color: colors.textSecondary }]}>Platform Commission (%)</Text>
+              <Text style={[styles.label, { color: colors.textSecondary }]}>{t('adminSettings.email.commission')}</Text>
               <TextInput
                 style={[styles.input, { borderColor: colors.border, backgroundColor: colors.card, color: colors.text }]}
                 placeholder="8"
@@ -484,20 +485,19 @@ export default function AdminSettingsScreen({ navigation }: any) {
                 editable={!saving}
               />
               <Text style={[styles.hint, { color: colors.textTertiary }]}>
-                Each booking earns the platform the greater of the instructor's flat booking fee
-                or this percentage of the lesson price (0-50%). Default: 8%.
+                {t('adminSettings.email.commissionHint')}
               </Text>
             </View>
 
             {/* Test Email Section */}
             <View style={[styles.testEmailSection, { borderTopColor: colors.border }]}>
-              <Text style={[styles.testEmailTitle, { color: colors.text }]}>Test Email Configuration</Text>
+              <Text style={[styles.testEmailTitle, { color: colors.text }]}>{t('adminSettings.test.title')}</Text>
               <Text style={[styles.testEmailSubtitle, { color: colors.textSecondary }]}>
-                Send a test email to verify your SMTP settings. Settings will be saved to database for all admin roles.
+                {t('adminSettings.test.subtitle')}
               </Text>
 
               <View style={styles.formGroup}>
-                <Text style={[styles.label, { color: colors.textSecondary }]}>Test Recipient Email</Text>
+                <Text style={[styles.label, { color: colors.textSecondary }]}>{t('adminSettings.test.recipient')}</Text>
                 <TextInput
                   style={[styles.input, { borderColor: colors.border, backgroundColor: colors.card, color: colors.text }]}
                   placeholder="test@example.com"
@@ -517,24 +517,24 @@ export default function AdminSettingsScreen({ navigation }: any) {
                 loading={testingEmail}
                 fullWidth
               >
-                Send Test Email & Save Settings
+                {t('adminSettings.test.send')}
               </Button>
               
               <Text style={[styles.hint, { marginTop: 10, fontStyle: 'italic', color: colors.textTertiary }]}>
-                Email credentials will be saved to database when test succeeds
+                {t('adminSettings.test.hint')}
               </Text>
             </View>
           </Card>
 
           {/* Backup Configuration Section */}
           <Card variant="elevated" style={{ marginBottom: 16 }}>
-            <Text style={[styles.sectionTitle, { color: colors.text }]}>Backup Configuration</Text>
+            <Text style={[styles.sectionTitle, { color: colors.text }]}>{t('adminSettings.backup.title')}</Text>
             <Text style={[styles.sectionSubtitle, { color: colors.textSecondary }]}>
-              Configure automatic database backup settings and retention policies
+              {t('adminSettings.backup.subtitle')}
             </Text>
 
             <View style={styles.formGroup}>
-              <Text style={[styles.label, { color: colors.textSecondary }]}>Backup Interval (Minutes)</Text>
+              <Text style={[styles.label, { color: colors.textSecondary }]}>{t('adminSettings.backup.interval')}</Text>
               <TextInput
                 style={[styles.input, { borderColor: colors.border, backgroundColor: colors.card, color: colors.text }]}
                 placeholder="10"
@@ -545,12 +545,12 @@ export default function AdminSettingsScreen({ navigation }: any) {
                 editable={!saving}
               />
               <Text style={[styles.hint, { color: colors.textTertiary }]}>
-                How often to create automatic backups (5-60 minutes recommended)
+                {t('adminSettings.backup.intervalHint')}
               </Text>
             </View>
 
             <View style={styles.formGroup}>
-              <Text style={[styles.label, { color: colors.textSecondary }]}>Retention Days</Text>
+              <Text style={[styles.label, { color: colors.textSecondary }]}>{t('adminSettings.backup.retention')}</Text>
               <TextInput
                 style={[styles.input, { borderColor: colors.border, backgroundColor: colors.card, color: colors.text }]}
                 placeholder="30"
@@ -561,12 +561,12 @@ export default function AdminSettingsScreen({ navigation }: any) {
                 editable={!saving}
               />
               <Text style={[styles.hint, { color: colors.textTertiary }]}>
-                Keep uncompressed backups for this many days (default: 30 days)
+                {t('adminSettings.backup.retentionHint')}
               </Text>
             </View>
 
             <View style={styles.formGroup}>
-              <Text style={[styles.label, { color: colors.textSecondary }]}>Auto-Archive After Days</Text>
+              <Text style={[styles.label, { color: colors.textSecondary }]}>{t('adminSettings.backup.autoArchive')}</Text>
               <TextInput
                 style={[styles.input, { borderColor: colors.border, backgroundColor: colors.card, color: colors.text }]}
                 placeholder="14"
@@ -577,23 +577,23 @@ export default function AdminSettingsScreen({ navigation }: any) {
                 editable={!saving}
               />
               <Text style={[styles.hint, { color: colors.textTertiary }]}>
-                Compress old backups to ZIP after this many days (default: 14 days)
+                {t('adminSettings.backup.autoArchiveHint')}
               </Text>
             </View>
           </Card>
 
           {/* Twilio WhatsApp Configuration Section */}
           <Card variant="elevated" style={{ marginBottom: 16 }}>
-            <Text style={[styles.sectionTitle, { color: colors.text }]}>WhatsApp Configuration</Text>
+            <Text style={[styles.sectionTitle, { color: colors.text }]}>{t('adminSettings.whatsapp.title')}</Text>
             <Text style={[styles.sectionSubtitle, { color: colors.textSecondary }]}>
-              Configure Twilio credentials and sender number (global for all admins)
+              {t('adminSettings.whatsapp.subtitle')}
             </Text>
 
             <View style={styles.formGroup}>
-              <Text style={[styles.label, { color: colors.textSecondary }]}>Twilio Account SID</Text>
+              <Text style={[styles.label, { color: colors.textSecondary }]}>{t('adminSettings.whatsapp.sid')}</Text>
               <TextInput
                 style={[styles.input, { borderColor: colors.border, backgroundColor: colors.card, color: colors.text }]}
-                placeholder={twilioSidConfigured ? '✅ Configured — enter new SID to replace' : 'ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx'}
+                placeholder={twilioSidConfigured ? `✅ ${t('adminSettings.whatsapp.sidConfigured')}` : 'ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx'}
                 placeholderTextColor={colors.textTertiary}
                 value={formData.twilioAccountSid}
                 onChangeText={(value) => handleChange('twilioAccountSid', value)}
@@ -603,11 +603,11 @@ export default function AdminSettingsScreen({ navigation }: any) {
             </View>
 
             <View style={styles.formGroup}>
-              <Text style={[styles.label, { color: colors.textSecondary }]}>Twilio Auth Token</Text>
+              <Text style={[styles.label, { color: colors.textSecondary }]}>{t('adminSettings.whatsapp.token')}</Text>
               <View style={[styles.passwordContainer, { borderColor: colors.border, backgroundColor: colors.card }]}>
                 <TextInput
                   style={[styles.passwordInput, { color: colors.text }]}
-                  placeholder={twilioTokenConfigured ? '✅ Configured — enter new token to replace' : 'Your Twilio Auth Token'}
+                  placeholder={twilioTokenConfigured ? `✅ ${t('adminSettings.whatsapp.tokenConfigured')}` : t('adminSettings.whatsapp.tokenPlaceholder')}
                   placeholderTextColor={colors.textTertiary}
                   value={formData.twilioAuthToken}
                   onChangeText={(value) => handleChange('twilioAuthToken', value)}
@@ -616,14 +616,14 @@ export default function AdminSettingsScreen({ navigation }: any) {
                   editable={!saving}
                 />
                 <Pressable style={styles.eyeButton} onPress={() => setShowTwilioAuthToken(!showTwilioAuthToken)}>
-                  <Text style={styles.eyeIcon}>{showTwilioAuthToken ? 'Hide' : 'Show'}</Text>
+                  <Text style={styles.eyeIcon}>{showTwilioAuthToken ? t('adminSettings.hide') : t('adminSettings.show')}</Text>
                 </Pressable>
               </View>
-              <Text style={[styles.hint, { color: colors.textTertiary }]}>Found at console.twilio.com — never share this token</Text>
+              <Text style={[styles.hint, { color: colors.textTertiary }]}>{t('adminSettings.whatsapp.tokenHint')}</Text>
             </View>
 
             <View style={styles.formGroup}>
-              <Text style={[styles.label, { color: colors.textSecondary }]}>Twilio Sender Phone Number (FROM)</Text>
+              <Text style={[styles.label, { color: colors.textSecondary }]}>{t('adminSettings.whatsapp.sender')}</Text>
               <TextInput
                 style={[styles.input, { borderColor: colors.border, backgroundColor: colors.card, color: colors.text }]}
                 placeholder="+14155238886 (Twilio sandbox)"
@@ -635,12 +635,12 @@ export default function AdminSettingsScreen({ navigation }: any) {
                 editable={!saving}
               />
               <Text style={[styles.hint, { color: colors.textTertiary }]}>
-                This number sends all WhatsApp messages (sandbox: +14155238886 or your Twilio number)
+                {t('adminSettings.whatsapp.senderHint')}
               </Text>
             </View>
 
             <View style={styles.formGroup}>
-              <Text style={[styles.label, { color: colors.textSecondary }]}>Your Phone Number (TO - for testing)</Text>
+              <Text style={[styles.label, { color: colors.textSecondary }]}>{t('adminSettings.whatsapp.yourPhone')}</Text>
               <TextInput
                 style={[styles.input, { borderColor: colors.border, backgroundColor: colors.card, color: colors.text }]}
                 placeholder="+27611154598"
@@ -652,7 +652,7 @@ export default function AdminSettingsScreen({ navigation }: any) {
                 editable={!saving}
               />
               <Text style={[styles.hint, { color: colors.textTertiary }]}>
-                Your personal phone number to receive test WhatsApp messages
+                {t('adminSettings.whatsapp.yourPhoneHint')}
               </Text>
             </View>
 
@@ -664,26 +664,26 @@ export default function AdminSettingsScreen({ navigation }: any) {
               loading={testingWhatsApp}
               fullWidth
             >
-              Send Test WhatsApp & Save Settings
+              {t('adminSettings.whatsapp.send')}
             </Button>
             
             <Text style={[styles.hint, { marginTop: 10, fontStyle: 'italic', color: colors.textTertiary }]}>
-              Twilio credentials will be saved to database when test succeeds
+              {t('adminSettings.whatsapp.hint')}
             </Text>
           </Card>
 
           {/* Info Box */}
           <View style={[styles.infoBox, { backgroundColor: colors.primaryLight }]}>
-            <Text style={[styles.infoTitle, { color: colors.primary }]}>About These Settings</Text>
+            <Text style={[styles.infoTitle, { color: colors.primary }]}>{t('adminSettings.info.title')}</Text>
             <Text style={[styles.infoText, { color: colors.text }]}>
-              <Text style={{ fontFamily: 'Inter_700Bold' }}>Verification:</Text>{'\n'}
-              {'\u2022'} New users receive verification emails/WhatsApp{'\n'}
-              {'\u2022'} Verification links expire after the configured time{'\n'}
-              {'\u2022'} Users cannot log in until they verify{'\n\n'}
-              <Text style={{ fontFamily: 'Inter_700Bold' }}>Backups:</Text>{'\n'}
-              {'\u2022'} Automatic database backups on your schedule{'\n'}
-              {'\u2022'} Old backups are compressed to save storage{'\n'}
-              {'\u2022'} You can restore from any backup anytime
+              <Text style={{ fontFamily: 'Inter_700Bold' }}>{t('adminSettings.info.verification')}</Text>{'\n'}
+              {'\u2022'} {t('adminSettings.info.v1')}{'\n'}
+              {'\u2022'} {t('adminSettings.info.v2')}{'\n'}
+              {'\u2022'} {t('adminSettings.info.v3')}{'\n\n'}
+              <Text style={{ fontFamily: 'Inter_700Bold' }}>{t('adminSettings.info.backups')}</Text>{'\n'}
+              {'\u2022'} {t('adminSettings.info.b1')}{'\n'}
+              {'\u2022'} {t('adminSettings.info.b2')}{'\n'}
+              {'\u2022'} {t('adminSettings.info.b3')}
             </Text>
           </View>
 

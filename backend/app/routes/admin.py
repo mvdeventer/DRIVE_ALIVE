@@ -33,6 +33,8 @@ from ..schemas.availability import (
     InstructorScheduleUpdate,
     TimeOffExceptionCreate,
 )
+from ..schemas.user import InstructorCreate, StudentCreate
+from ..services.auth import AuthService
 from ..services.role_transition_policy import RoleTransitionPolicy, TransitionChannel
 from ..utils.auth import get_password_hash
 from ..utils.encryption import EncryptionService
@@ -160,6 +162,80 @@ async def create_admin(
             "expires_in_minutes": 0,
         },
         "note": "Admin account activated immediately. No verification required.",
+    }
+
+
+# ==================== Admin-created student / instructor accounts ====================
+#
+# Public self-registration still exists and is unchanged; these are the
+# admin-only equivalents for walk-in signups. Both delegate to AuthService so the
+# profile rows, company logic and backups are created exactly as they are for a
+# public registration — the only difference is the transition channel, which
+# RoleTransitionPolicy restricts to admin actors.
+
+
+@router.post("/users/student", status_code=status.HTTP_201_CREATED)
+async def admin_create_student(
+    student_data: StudentCreate,
+    current_admin: Annotated[User, Depends(require_admin)],
+    db: Session = Depends(get_db),
+):
+    """Create a student account as an admin."""
+    user, student = AuthService.create_student(
+        db=db,
+        student_data=student_data,
+        channel=TransitionChannel.ADMIN_GRANT,
+        actor_user=current_admin,
+    )
+    logger.info(
+        "Admin %s created student account %s (user %s)",
+        current_admin.id,
+        student.id,
+        user.id,
+    )
+    return {
+        "message": (
+            f"Student account created for {user.first_name} {user.last_name}."
+        ),
+        "user_id": user.id,
+        "student_id": student.id,
+        "role": UserRole.STUDENT.value,
+    }
+
+
+@router.post("/users/instructor", status_code=status.HTTP_201_CREATED)
+async def admin_create_instructor(
+    instructor_data: InstructorCreate,
+    current_admin: Annotated[User, Depends(require_admin)],
+    db: Session = Depends(get_db),
+):
+    """Create an instructor account as an admin.
+
+    Auto-verified: the admin creating the account is the approval, so it does not
+    re-enter the pending_admin verification queue.
+    """
+    user, instructor = AuthService.create_instructor(
+        db=db,
+        instructor_data=instructor_data,
+        channel=TransitionChannel.ADMIN_GRANT,
+        actor_user=current_admin,
+    )
+    logger.info(
+        "Admin %s created instructor account %s (user %s), status=%s",
+        current_admin.id,
+        instructor.id,
+        user.id,
+        instructor.verification_status,
+    )
+    return {
+        "message": (
+            f"Instructor account created for {user.first_name} {user.last_name}. "
+            "Verified immediately."
+        ),
+        "user_id": user.id,
+        "instructor_id": instructor.id,
+        "role": UserRole.INSTRUCTOR.value,
+        "verification_status": instructor.verification_status,
     }
 
 

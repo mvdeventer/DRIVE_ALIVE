@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   View,
   Text,
@@ -9,15 +9,23 @@ import {
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Button, Card } from '../../components/ui';
 import { useTheme } from '../../theme/ThemeContext';
+import { useT } from '../../i18n';
 import { API_BASE_URL } from '../../config';
+
+/** How often to ask the server whether the account has been verified. */
+const POLL_INTERVAL_MS = 5000;
+/** Pause before moving to Login, so the user sees why the screen changed. */
+const REDIRECT_DELAY_MS = 1800;
 
 type Props = NativeStackScreenProps<any, 'VerificationPending'>;
 
 export default function VerificationPendingScreen({ route, navigation }: Props) {
   const { colors } = useTheme();
+  const t = useT();
   const scrollViewRef = useRef<ScrollView>(null);
   const [resendingEmail, setResendingEmail] = useState(false);
   const [resendMessage, setResendMessage] = useState('');
+  const [verified, setVerified] = useState(false);
 
   const {
     email,
@@ -27,6 +35,58 @@ export default function VerificationPendingScreen({ route, navigation }: Props) 
     whatsappSent = false,
     expiryMinutes = 30,
   } = route.params || {};
+
+  /**
+   * Watch for the account being verified elsewhere.
+   *
+   * The link is usually opened on another device — the WhatsApp message lands
+   * on the user's phone while this browser sits here — so there is no local
+   * event to listen for. Polling the server is the only way this screen can
+   * know, and without it the user is left staring at "check your email" after
+   * they have already verified.
+   *
+   * Polling stops on success, on unmount, and once the link would have expired,
+   * so a tab left open overnight does not keep hitting the API forever.
+   */
+  useEffect(() => {
+    if (!email) return;
+
+    let cancelled = false;
+    const deadline = Date.now() + expiryMinutes * 60_000;
+
+    const check = async () => {
+      if (cancelled || Date.now() > deadline) return;
+      try {
+        const res = await fetch(
+          `${API_BASE_URL}/verify/status?email=${encodeURIComponent(email)}`,
+        );
+        if (!res.ok) return;               // transient failure — try again next tick
+        const data = await res.json();
+        if (data?.verified && !cancelled) {
+          setVerified(true);
+          setTimeout(() => {
+            if (!cancelled) navigation.replace('Login');
+          }, REDIRECT_DELAY_MS);
+        }
+      } catch {
+        // Offline or server restarting; the next tick retries.
+      }
+    };
+
+    check();
+    const id = setInterval(() => {
+      if (Date.now() > deadline) {
+        clearInterval(id);
+        return;
+      }
+      check();
+    }, POLL_INTERVAL_MS);
+
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
+  }, [email, expiryMinutes, navigation]);
 
   const handleResendVerification = async () => {
     if (!email) {
@@ -79,15 +139,30 @@ export default function VerificationPendingScreen({ route, navigation }: Props) 
         </Text>
       </View>
 
-      {/* Main Status */}
-      <View style={[styles.statusBanner, { backgroundColor: colors.infoBg, borderLeftColor: colors.primary }]}>
-        <Text style={[styles.statusText, { color: colors.primary }]}>
-          Registration successful! We've sent verification links to confirm it's really you.
-        </Text>
-        <Text style={[styles.statusEmphasis, { color: colors.text }]}>
-          Please check your email and WhatsApp then click the verification link.
-        </Text>
-      </View>
+      {/* Main Status — swaps to a success state the moment the link is used,
+          which may happen on a different device. */}
+      {verified ? (
+        <View
+          accessibilityRole="alert"
+          style={[styles.statusBanner, { backgroundColor: colors.successBg, borderLeftColor: colors.success }]}
+        >
+          <Text style={[styles.statusText, { color: colors.success }]}>
+            {t('verification.verifiedTitle')}
+          </Text>
+          <Text style={[styles.statusEmphasis, { color: colors.text }]}>
+            {t('verification.redirecting')}
+          </Text>
+        </View>
+      ) : (
+        <View style={[styles.statusBanner, { backgroundColor: colors.infoBg, borderLeftColor: colors.primary }]}>
+          <Text style={[styles.statusText, { color: colors.primary }]}>
+            Registration successful! We've sent verification links to confirm it's really you.
+          </Text>
+          <Text style={[styles.statusEmphasis, { color: colors.text }]}>
+            Please check your email and WhatsApp then click the verification link.
+          </Text>
+        </View>
+      )}
 
       {/* Channels Card */}
       <Card variant="elevated" padding="md" style={styles.channelsCard}>

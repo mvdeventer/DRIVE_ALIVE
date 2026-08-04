@@ -21,7 +21,11 @@ import InlineMessage from '../../components/InlineMessage';
 import LicenseTypeSelector from '../../components/LicenseTypeSelector';
 import ScheduleEditor, { ScheduleSlot } from '../../components/ScheduleEditor';
 import { Button, Card } from '../../components/ui';
+import LanguageSwitcher from '../../components/LanguageSwitcher';
 import { useTheme } from '../../theme/ThemeContext';
+import { useT } from '../../i18n';
+import { passwordErrorMessage } from '../../utils/passwordPolicy';
+import PasswordStrengthMeter from '../../components/PasswordStrengthMeter';
 import { DEBUG_CONFIG } from '../../config';
 import ApiService from '../../services/api';
 import { formatPhoneNumber } from '../../utils/phoneFormatter';
@@ -83,6 +87,7 @@ interface CompanyOption {
 
 export default function RegisterInstructorScreen({ navigation, route }: any) {
   const { colors } = useTheme();
+  const t = useT();
   const timestamp = DEBUG_CONFIG.ENABLED ? Date.now().toString().slice(-6) : '';
   const presetCompanyChoice = route?.params?.presetCompanyChoice;
   const presetCompanyName = route?.params?.presetCompanyName;
@@ -114,6 +119,9 @@ export default function RegisterInstructorScreen({ navigation, route }: any) {
       ? 'Experienced driving instructor with 15 years teaching Code B, EB, and C1.'
       : '',
     accept_terms: DEBUG_CONFIG.ENABLED,
+    // Language chosen on this form; saved to the new account so it follows
+    // the instructor to any device and is editable in profile settings.
+    preferred_language: 'en',
     opt_in_email_marketing: false,
     opt_in_sms: false,
     opt_in_whatsapp: false,
@@ -176,7 +184,10 @@ export default function RegisterInstructorScreen({ navigation, route }: any) {
       if (!formData.phone) errors.phone = 'Phone number is required';
       if (!formData.id_number) errors.id_number = 'ID number is required';
       if (!formData.password) errors.password = 'Password is required';
-      else if (formData.password.length < 6) errors.password = 'Password must be at least 6 characters';
+      else {
+        const pwdError = passwordErrorMessage(formData.password, t);
+        if (pwdError) errors.password = pwdError;
+      }
       if (formData.password !== formData.confirmPassword) errors.confirmPassword = 'Passwords do not match';
     } else if (step === 2) {
       if (!formData.license_number) errors.license_number = 'License number is required';
@@ -244,6 +255,7 @@ export default function RegisterInstructorScreen({ navigation, route }: any) {
         rate_per_km_beyond_radius: parseFloat(formData.rate_per_km_beyond_radius),
         bio: formData.bio || null,
         accept_terms: formData.accept_terms,
+        preferred_language: formData.preferred_language,
         opt_in_email_marketing: formData.opt_in_email_marketing,
         opt_in_sms: formData.opt_in_sms,
         opt_in_whatsapp: formData.opt_in_whatsapp,
@@ -331,6 +343,21 @@ export default function RegisterInstructorScreen({ navigation, route }: any) {
 
   // ── Render steps ─────────────────────────────────────────
   const renderStep1 = () => (
+    <>
+    {/* Language first, so the rest of the form appears in the chosen language.
+        Saved with the account on submit. */}
+    <Card variant="outlined" padding="md" style={styles.section}>
+      <Text style={[styles.sectionTitle, { color: colors.primary }]}>{t('language.title')}</Text>
+      <LanguageSwitcher
+        compact
+        scope="device"
+        onChange={code => setFormData(prev => ({ ...prev, preferred_language: code }))}
+      />
+      <Text style={[styles.languageHint, { color: colors.textSecondary }]}>
+        {t('language.registerHint')}
+      </Text>
+    </Card>
+
     <Card variant="outlined" padding="md" style={styles.section}>
       <Text style={[styles.sectionTitle, { color: colors.primary }]}>Personal Information</Text>
       <FormFieldWithTip
@@ -397,6 +424,7 @@ export default function RegisterInstructorScreen({ navigation, route }: any) {
         secureTextEntry={!showPassword}
         error={fieldErrors.password}
       />
+      <PasswordStrengthMeter password={formData.password} />
       <FormFieldWithTip
         key={`cpw-${showPassword}`}
         label="Confirm Password"
@@ -414,6 +442,7 @@ export default function RegisterInstructorScreen({ navigation, route }: any) {
         </Text>
       </Pressable>
     </Card>
+    </>
   );
 
   const renderStep2 = () => (
@@ -834,6 +863,7 @@ export default function RegisterInstructorScreen({ navigation, route }: any) {
 }
 
 const styles = StyleSheet.create({
+  languageHint: { fontSize: 12, marginTop: 8, lineHeight: 17 },
   container: { flex: 1 },
   scrollContent: {
     padding: Platform.OS === 'web' ? 40 : 20,

@@ -35,11 +35,16 @@ class RoleTransitionPolicy:
             UserRole.INSTRUCTOR: {UserRole.STUDENT},
             UserRole.ADMIN: {UserRole.STUDENT, UserRole.INSTRUCTOR},
         },
+        # An admin may create or upgrade any role. `_validate_actor` rejects a
+        # non-admin actor on this channel, so every target here is admin-only by
+        # construction — that is what keeps ADMIN itself ungrantable by anyone
+        # else. A role the user already holds is omitted; the routes raise their
+        # own 400 for "already has this role".
         TransitionChannel.ADMIN_GRANT: {
-            None: {UserRole.ADMIN},
-            UserRole.STUDENT: {UserRole.ADMIN},
-            UserRole.INSTRUCTOR: {UserRole.ADMIN},
-            UserRole.ADMIN: {UserRole.ADMIN},
+            None: {UserRole.ADMIN, UserRole.STUDENT, UserRole.INSTRUCTOR},
+            UserRole.STUDENT: {UserRole.ADMIN, UserRole.INSTRUCTOR},
+            UserRole.INSTRUCTOR: {UserRole.ADMIN, UserRole.STUDENT},
+            UserRole.ADMIN: {UserRole.ADMIN, UserRole.STUDENT, UserRole.INSTRUCTOR},
         },
         TransitionChannel.INITIAL_SETUP: {
             None: {UserRole.ADMIN},

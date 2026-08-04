@@ -1,0 +1,38 @@
+#!/bin/sh
+# Drive Alive pre-commit hook.
+#
+# Tracked in the repo (not .git/hooks) and activated by:
+#     git config core.hooksPath .githooks
+# which `s.bat install` does for you. The previous version lived only in
+# .git/hooks, so it vanished on every fresh clone.
+#
+# All detection logic lives in scripts/secret_scan.py so this hook and the
+# release gate cannot drift apart. Keep this file thin.
+
+set -e
+
+# Prefer the project venv, fall back to whatever python is on PATH.
+if [ -x "backend/venv/Scripts/python.exe" ]; then
+  PY="backend/venv/Scripts/python.exe"
+elif [ -x "backend/venv/bin/python" ]; then
+  PY="backend/venv/bin/python"
+elif command -v python >/dev/null 2>&1; then
+  PY="python"
+elif command -v python3 >/dev/null 2>&1; then
+  PY="python3"
+else
+  echo "  [WARN] No python found - secret scan skipped."
+  echo "         Install python or run: git config core.hooksPath .githooks"
+  exit 0
+fi
+
+echo "Scanning staged changes for credentials and personal data..."
+
+if ! "$PY" scripts/secret_scan.py --staged --quiet; then
+  echo ""
+  echo "  Commit blocked by the secret scan (see findings above)."
+  echo "  To bypass in a genuine emergency:  git commit --no-verify"
+  exit 1
+fi
+
+exit 0

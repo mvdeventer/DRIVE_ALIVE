@@ -71,6 +71,12 @@ class User(Base):
     # Session configuration (for admin only - global setting)
     inactivity_timeout_minutes = Column(Integer, default=15)  # Auto-logout after 15 minutes idle
 
+    # UI language for THIS user (per-account, not global). Chosen at registration
+    # and changeable in profile settings; follows the account across devices.
+    # Pre-auth screens (login, first-run setup) always render in English because
+    # no user is known yet. One of: en / af.
+    preferred_language = Column(String(5), default="en", nullable=False, server_default="en")
+
     # Platform commission (for admin only - global setting)
     # Effective booking fee = max(instructor flat fee, lesson_amount * commission%)
     commission_percent = Column(Float, default=8.0)

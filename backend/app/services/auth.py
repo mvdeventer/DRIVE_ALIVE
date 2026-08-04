@@ -70,6 +70,9 @@ class AuthService:
             last_name=user_data.last_name,
             password_hash=get_password_hash(user_data.password),
             role=user_data.role,
+            # Language chosen on the registration form; the schema validator has
+            # already normalised it to a supported code or "en".
+            preferred_language=getattr(user_data, "preferred_language", None) or "en",
         )
 
         db.add(user)
@@ -83,9 +86,15 @@ class AuthService:
         db: Session,
         instructor_data: InstructorCreate,
         client_ip: Optional[str] = None,
+        channel: TransitionChannel = TransitionChannel.PUBLIC_REGISTRATION,
+        actor_user: Optional[User] = None,
     ) -> tuple[User, Instructor]:
         """
-        Create a new instructor with profile
+        Create a new instructor with profile.
+
+        ``channel`` selects the transition rules. Admin-created instructors come
+        through ADMIN_GRANT, which the policy restricts to admin actors; they are
+        auto-verified below because the creating admin *is* the approval.
         """
         try:
             # Check if email exists - allow multi-role users
@@ -94,8 +103,9 @@ class AuthService:
             RoleTransitionPolicy.assert_transition_allowed(
                 db=db,
                 target_role=UserRole.INSTRUCTOR,
-                channel=TransitionChannel.PUBLIC_REGISTRATION,
+                channel=channel,
                 existing_user=existing_user,
+                actor_user=actor_user,
             )
             
             if existing_user:
@@ -178,8 +188,15 @@ class AuthService:
                 bio=instructor_data.bio,
             )
 
+            # An admin creating the account is itself the approval — sending it
+            # back to the same admin for verification would be busywork.
+            if channel == TransitionChannel.ADMIN_GRANT:
+                instructor.is_verified = True
+                instructor.verified_at = datetime.now(timezone.utc)
+                instructor.verification_status = InstructorVerificationStatus.VERIFIED.value
+                print(f"[INFO] Instructor {instructor.id} auto-verified (created by admin)")
             # Auto-verify only in debug mode
-            if settings.should_auto_verify_instructors:
+            elif settings.should_auto_verify_instructors:
                 instructor.is_verified = True
                 instructor.verified_at = datetime.now(timezone.utc)
                 instructor.verification_status = InstructorVerificationStatus.VERIFIED.value
@@ -281,9 +298,14 @@ class AuthService:
         db: Session,
         student_data: StudentCreate,
         client_ip: Optional[str] = None,
+        channel: TransitionChannel = TransitionChannel.PUBLIC_REGISTRATION,
+        actor_user: Optional[User] = None,
     ) -> tuple[User, Student]:
         """
-        Create a new student with profile
+        Create a new student with profile.
+
+        ``channel`` selects the transition rules; admin-created students come
+        through ADMIN_GRANT, which the policy restricts to admin actors.
         """
         try:
             # Check if email exists - allow multi-role users
@@ -292,8 +314,9 @@ class AuthService:
             RoleTransitionPolicy.assert_transition_allowed(
                 db=db,
                 target_role=UserRole.STUDENT,
-                channel=TransitionChannel.PUBLIC_REGISTRATION,
+                channel=channel,
                 existing_user=existing_user,
+                actor_user=actor_user,
             )
             
             if existing_user:

@@ -11,14 +11,51 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 from ..models.availability import DayOfWeek
 from ..models.user import UserRole, UserStatus
 
-PASSWORD_STRENGTH_PATTERN = re.compile(r"^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,}$")
+# Mirrors frontend/utils/passwordPolicy.ts — keep the two in step.
+PASSWORD_MIN_LENGTH = 8
+PASSWORD_STRENGTH_PATTERN = re.compile(
+    r"^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)"
+    r"(?=.*[!@#$%^&*()_+\-=\[\]{};':\"\\|,.<>/?`~])"
+    r".{" + str(PASSWORD_MIN_LENGTH) + r",}$"
+)
+
+
+# UI languages. Mirrors frontend/i18n/index.tsx SUPPORTED_LOCALES — keep in step.
+# isiZulu and isiXhosa were removed rather than shipped as unreviewed machine
+# translation; any stored 'zu'/'xh' now falls back to English via
+# validate_language, so existing rows need no migration.
+SUPPORTED_LANGUAGES = ("en", "af")
+DEFAULT_LANGUAGE = "en"
+
+
+def validate_language(value: Optional[str]) -> str:
+    """
+    Normalise a UI language code, falling back to English.
+
+    Deliberately lenient: an unknown or absent code yields English rather than
+    a 422. A stale client sending a language this build does not ship must not
+    be able to block a registration over a cosmetic preference.
+    """
+    if not value:
+        return DEFAULT_LANGUAGE
+    code = value.strip().lower()[:2]
+    return code if code in SUPPORTED_LANGUAGES else DEFAULT_LANGUAGE
 
 
 def validate_strong_password(value: str) -> str:
-    """Require a password with upper/lowercase letters, a digit, and 8+ chars."""
+    """Require upper/lowercase letters, a digit, a symbol, and 8+ characters.
+
+    This is the server-side gate. The frontend shows the same rules as a live
+    checklist, but complexity enforced only in the client is bypassable by
+    calling the API directly — so every schema that accepts a NEW password
+    (registration, admin creation, change, reset) must run this. Login is
+    deliberately excluded: it must not reject accounts created under an older,
+    weaker policy.
+    """
     if not PASSWORD_STRENGTH_PATTERN.match(value):
         raise ValueError(
-            "Password must be at least 8 characters and include uppercase, lowercase, and a number."
+            f"Password must be at least {PASSWORD_MIN_LENGTH} characters and include "
+            "uppercase, lowercase, a number, and a special character."
         )
     return value
 
@@ -85,8 +122,20 @@ class UserBase(BaseModel):
 class UserCreate(UserBase):
     """User creation schema"""
 
-    password: str
+    password: str = Field(..., min_length=PASSWORD_MIN_LENGTH)
     role: UserRole
+    # Chosen on the registration form; editable later in profile settings.
+    preferred_language: Optional[str] = DEFAULT_LANGUAGE
+
+    @field_validator("password")
+    @classmethod
+    def validate_password(cls, value: str) -> str:
+        return validate_strong_password(value)
+
+    @field_validator("preferred_language")
+    @classmethod
+    def validate_preferred_language(cls, value: Optional[str]) -> str:
+        return validate_language(value)
 
     # ── Communications consent (POPIA / GDPR / TCPA) ──────────────────
     # Required: user must accept terms & privacy policy.
@@ -123,6 +172,14 @@ class UserUpdate(BaseModel):
     phone: Optional[str] = None
     id_number: Optional[str] = None
     address: Optional[str] = None
+    # Users change their own UI language from profile settings.
+    preferred_language: Optional[str] = None
+
+    @field_validator("preferred_language")
+    @classmethod
+    def validate_preferred_language(cls, v: Optional[str]) -> Optional[str]:
+        # None means "not being changed" — only normalise an actual value.
+        return None if v is None else validate_language(v)
 
     @field_validator("phone")
     @classmethod
@@ -200,6 +257,7 @@ class UserResponse(BaseModel):
     role: UserRole
     status: UserStatus
     created_at: datetime
+    preferred_language: str = DEFAULT_LANGUAGE
 
     class Config:
         from_attributes = True

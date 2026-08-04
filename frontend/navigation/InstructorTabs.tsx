@@ -10,6 +10,7 @@ import React from 'react';
 import { Platform, Pressable, Text } from 'react-native';
 
 import { useResponsiveTabBar } from '../hooks/useResponsiveTabBar';
+import { useT } from '../i18n';
 import { useTheme } from '../theme/ThemeContext';
 import { useAuthActions } from './AuthContext';
 
@@ -163,6 +164,7 @@ function ProfileStackScreen() {
 
 export default function InstructorTabs() {
   const { colors } = useTheme();
+  const t = useT();
   const { tabBarPosition, tabBarStyle } = useResponsiveTabBar(colors);
 
   return (
@@ -184,7 +186,7 @@ export default function InstructorTabs() {
         name="HomeTab"
         component={HomeStackScreen}
         options={{
-          tabBarLabel: 'Home',
+          tabBarLabel: t('nav.home'),
           tabBarIcon: ({ focused, color, size }) => (
             <Ionicons name={focused ? 'home' : 'home-outline'} size={size} color={color} />
           ),
@@ -194,7 +196,7 @@ export default function InstructorTabs() {
         name="ScheduleTab"
         component={ScheduleStackScreen}
         options={{
-          tabBarLabel: 'Schedule',
+          tabBarLabel: t('nav.schedule'),
           tabBarIcon: ({ focused, color, size }) => (
             <Ionicons name={focused ? 'calendar' : 'calendar-outline'} size={size} color={color} />
           ),
@@ -204,7 +206,7 @@ export default function InstructorTabs() {
         name="EarningsTab"
         component={EarningsStackScreen}
         options={{
-          tabBarLabel: 'Earnings',
+          tabBarLabel: t('nav.earnings'),
           tabBarIcon: ({ focused, color, size }) => (
             <Ionicons name={focused ? 'cash' : 'cash-outline'} size={size} color={color} />
           ),
@@ -214,7 +216,7 @@ export default function InstructorTabs() {
         name="ProfileTab"
         component={ProfileStackScreen}
         options={{
-          tabBarLabel: 'Profile',
+          tabBarLabel: t('nav.profile'),
           tabBarIcon: ({ focused, color, size }) => (
             <Ionicons name={focused ? 'person' : 'person-outline'} size={size} color={color} />
           ),

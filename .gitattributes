@@ -1,0 +1,5 @@
+# Git hooks are executed by sh. With CRLF endings the shebang becomes
+# "/bin/sh\r" and the hook fails with "bad interpreter" — so pin them to LF
+# regardless of the checkout platform or the user's core.autocrlf setting.
+.githooks/* text eol=lf
+*.sh text eol=lf

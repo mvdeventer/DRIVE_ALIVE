@@ -101,6 +101,8 @@ temp/
 docs/~$
 backend/backups/*.json
 backend/backups/archived/*.zip
+# Backup output also lands at the repo root when the scheduler runs from here
+backups/
 
 # Coverage
 coverage/

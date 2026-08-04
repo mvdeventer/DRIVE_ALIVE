@@ -15,7 +15,11 @@ import AddressAutocomplete from '../../components/AddressAutocomplete';
 import FormFieldWithTip from '../../components/FormFieldWithTip';
 import InlineMessage from '../../components/InlineMessage';
 import { Button, Card, ThemedModal } from '../../components/ui';
+import LanguageSwitcher from '../../components/LanguageSwitcher';
 import { useTheme } from '../../theme/ThemeContext';
+import { useT } from '../../i18n';
+import { passwordErrorMessage } from '../../utils/passwordPolicy';
+import PasswordStrengthMeter from '../../components/PasswordStrengthMeter';
 import { DEBUG_CONFIG } from '../../config';
 import ApiService from '../../services/api';
 import { formatPhoneNumber } from '../../utils/phoneFormatter';
@@ -72,6 +76,7 @@ function ConsentRow({
 
 export default function RegisterStudentScreen({ navigation }: any) {
   const { colors } = useTheme();
+  const t = useT();
   // Create refs for all input fields
   const firstNameRef = useRef<TextInput>(null);
   const lastNameRef = useRef<TextInput>(null);
@@ -101,6 +106,9 @@ export default function RegisterStudentScreen({ navigation }: any) {
     address_line2: DEBUG_CONFIG.ENABLED ? 'Apartment 4B' : '',
     postal_code: DEBUG_CONFIG.ENABLED ? '2000' : '',
     accept_terms: DEBUG_CONFIG.ENABLED,
+    // Language chosen on this form; saved to the new account so it follows
+    // the student to any device and is editable in profile settings.
+    preferred_language: 'en',
     opt_in_email_marketing: false,
     opt_in_sms: false,
     opt_in_whatsapp: false,
@@ -137,9 +145,10 @@ export default function RegisterStudentScreen({ navigation }: any) {
     if (!formData.phone.trim()) newErrors.phone = 'Phone number is required';
     if (!formData.password) {
       newErrors.password = 'Password is required';
-    } else if (formData.password.length < 6) {
-      newErrors.password = 'Password must be at least 6 characters';
-    }
+    } else {
+        const pwdError = passwordErrorMessage(formData.password, t);
+        if (pwdError) newErrors.password = pwdError;
+      }
     if (formData.password !== formData.confirmPassword) {
       newErrors.confirmPassword = 'Passwords do not match';
     }
@@ -250,6 +259,20 @@ export default function RegisterStudentScreen({ navigation }: any) {
           autoDismissMs={4000}
         />
       )}
+
+      {/* Language — first, so the rest of the form appears in the chosen
+          language straight away. Saved with the account on submit. */}
+      <Card variant="outlined" padding="md" style={styles.section}>
+        <Text style={[styles.sectionTitle, { color: colors.primary }]}>{t('language.title')}</Text>
+        <LanguageSwitcher
+          compact
+          scope="device"
+          onChange={code => updateField('preferred_language', code)}
+        />
+        <Text style={[styles.languageHint, { color: colors.textSecondary }]}>
+          {t('language.registerHint')}
+        </Text>
+      </Card>
 
       {/* Personal Information */}
       <Card variant="outlined" padding="md" style={styles.section}>
@@ -382,16 +405,17 @@ export default function RegisterStudentScreen({ navigation }: any) {
           key={`password-${showPassword}`}
           ref={passwordRef}
           label="Password"
-          placeholder="At least 6 characters"
+          placeholder={t('password.placeholder')}
           value={formData.password}
           onChangeText={value => updateField('password', value)}
           secureTextEntry={!showPassword}
-          tip="Create a strong password (minimum 6 characters)"
+          tip="Create a strong password (minimum 8 characters, mixed case, digit, symbol)"
           returnKeyType="next"
           onSubmitEditing={() => confirmPasswordRef.current?.focus()}
           blurOnSubmit={false}
           error={fieldErrors.password}
         />
+        <PasswordStrengthMeter password={formData.password} />
         <FormFieldWithTip
           key={`confirm-password-${showPassword}`}
           ref={confirmPasswordRef}
@@ -542,6 +566,7 @@ export default function RegisterStudentScreen({ navigation }: any) {
 }
 
 const styles = StyleSheet.create({
+  languageHint: { fontSize: 12, marginTop: 8, lineHeight: 17 },
   container: { flex: 1 },
   contentContainer: {
     padding: Platform.OS === 'web' ? 40 : 20,

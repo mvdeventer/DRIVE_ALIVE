@@ -11,6 +11,9 @@ import {
 } from 'react-native';
 import { Button, Card, ThemedModal } from '../../components';
 import { useTheme } from '../../theme/ThemeContext';
+import { useT } from '../../i18n';
+import { passwordErrorMessage } from '../../utils/passwordPolicy';
+import PasswordStrengthMeter from '../../components/PasswordStrengthMeter';
 import InlineMessage from '../../components/InlineMessage';
 import WebNavigationHeader from '../../components/WebNavigationHeader';
 import AddressAutocomplete from '../../components/AddressAutocomplete';
@@ -36,6 +39,7 @@ interface FormData {
 
 export default function CreateAdminScreen({ navigation }: any) {
   const { colors } = useTheme();
+  const t = useT();
   const scrollViewRef = useRef<ScrollView>(null);
   const [formData, setFormData] = useState<FormData>({
     first_name: '',
@@ -113,9 +117,10 @@ export default function CreateAdminScreen({ navigation }: any) {
     if (!formData.id_number) errors.id_number = 'ID number is required';
     if (!formData.password) {
       errors.password = 'Password is required';
-    } else if (formData.password.length < 6) {
-      errors.password = 'Password must be at least 6 characters';
-    }
+    } else {
+        const pwdError = passwordErrorMessage(formData.password, t);
+        if (pwdError) errors.password = pwdError;
+      }
     if (!formData.confirmPassword) {
       errors.confirmPassword = 'Please confirm your password';
     } else if (formData.password !== formData.confirmPassword) {
@@ -288,6 +293,7 @@ export default function CreateAdminScreen({ navigation }: any) {
               placeholder="Min 6 characters"
               secureTextEntry={!showPassword}
             />
+            <PasswordStrengthMeter password={formData.password} />
             <Pressable
               style={styles.eyeButton}
               onPress={() => setShowPassword(!showPassword)}

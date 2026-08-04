@@ -121,7 +121,7 @@ this. Only if you must hand-roll one:
 ## Strings
 
 Every user-facing `accessibilityLabel` goes through `t('...')` and must exist in
-all four locales (`en` `af` `zu` `xh`). `npm --prefix frontend run i18n:detect-hardcoded`
+both locales (`en` `af`). `npm --prefix frontend run i18n:detect-hardcoded`
 scans `accessibilityLabel` attributes specifically.
 
 ## Enforcement

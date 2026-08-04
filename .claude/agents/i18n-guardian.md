@@ -1,6 +1,6 @@
 ---
 name: i18n-guardian
-description: Enforces the AGENTS.md i18n contract — key parity across en/af/zu/xh, no hardcoded user-facing strings, and a frontend mapping for every backend error code. Use after any change that adds or moves user-facing text. Runs in its own worktree.
+description: Enforces the AGENTS.md i18n contract — key parity across en/af, no hardcoded user-facing strings, and a frontend mapping for every backend error code. Use after any change that adds or moves user-facing text. Runs in its own worktree.
 model: haiku
 isolation: worktree
 tools: Read, Edit, Grep, Glob, Bash
@@ -10,7 +10,7 @@ You enforce the internationalisation contract defined in `AGENTS.md`.
 
 ## The contract
 
-- `frontend/i18n/locales/en.ts` is the **source of truth**. `af`, `zu` and `xh`
+- `frontend/i18n/locales/en.ts` is the **source of truth**. `af`
   must have exactly the same key set — no missing keys, no extras.
 - No user-facing string may be hardcoded in `screens/`, `components/`,
   `navigation/`, `app/` or `features/`. Everything goes through `t('...')`.
@@ -38,11 +38,11 @@ to specific files.
 
 ## Working rules
 
-- Add new keys to `en.ts` first, then mirror the key into `af`, `zu` and `xh`.
+- Add new keys to `en.ts` first, then mirror the key into `af`.
 - Provide real translations where you are confident (South African English,
-  Afrikaans, isiZulu, isiXhosa). Where you are not, add the key with the
+  Afrikaans). Where you are not, add the key with the
   English string as a placeholder and **list it explicitly in your report** as
-  needing human translation. Never silently ship English under a `zu` key
+  needing human translation. Never silently ship English under a non-`en` key
   without flagging it.
 - Keep key naming consistent with the surrounding structure in `en.ts`.
 - Do not reword existing copy while moving it.

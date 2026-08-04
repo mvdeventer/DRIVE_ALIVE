@@ -20,10 +20,14 @@ import WebNavigationHeader from '../../components/WebNavigationHeader';
 import CreditBanner from '../../components/CreditBanner';
 import { Button, Card, ThemedModal } from '../../components/ui';
 import { useTheme } from '../../theme/ThemeContext';
+import { useT } from '../../i18n';
+import { passwordErrorMessage } from '../../utils/passwordPolicy';
+import PasswordStrengthMeter from '../../components/PasswordStrengthMeter';
 import ApiService from '../../services/api';
 
 export default function EditStudentProfileScreen({ navigation: navProp }: any) {
   const { colors } = useTheme();
+  const t = useT();
   // useNavigation must run on every render — calling it inside `||` made the
   // hook conditional on navProp, so hook order changed if navProp appeared.
   const fallbackNavigation = useNavigation();
@@ -291,8 +295,9 @@ export default function EditStudentProfileScreen({ navigation: navProp }: any) {
       // Admin resetting another user's password — no current password needed
       if (!passwordData.newPassword) {
         pwErrors.newPassword = 'New password is required';
-      } else if (passwordData.newPassword.length < 6) {
-        pwErrors.newPassword = 'Password must be at least 6 characters';
+      } else {
+        const pwdError = passwordErrorMessage(passwordData.newPassword, t);
+        if (pwdError) pwErrors.newPassword = pwdError;
       }
       if (!passwordData.confirmPassword) {
         pwErrors.confirmPassword = 'Please confirm the password';
@@ -304,8 +309,9 @@ export default function EditStudentProfileScreen({ navigation: navProp }: any) {
       if (!passwordData.currentPassword) pwErrors.currentPassword = 'Current password is required';
       if (!passwordData.newPassword) {
         pwErrors.newPassword = 'New password is required';
-      } else if (passwordData.newPassword.length < 6) {
-        pwErrors.newPassword = 'Password must be at least 6 characters';
+      } else {
+        const pwdError = passwordErrorMessage(passwordData.newPassword, t);
+        if (pwdError) pwErrors.newPassword = pwdError;
       }
       if (!passwordData.confirmPassword) {
         pwErrors.confirmPassword = 'Please confirm your password';
@@ -648,9 +654,10 @@ export default function EditStudentProfileScreen({ navigation: navProp }: any) {
           value={passwordData.newPassword}
           onChangeText={value => { setPasswordData(prev => ({ ...prev, newPassword: value })); setPasswordFieldErrors(prev => ({ ...prev, newPassword: undefined as any })); }}
           secureTextEntry={!showPassword}
-          tooltip="New password (minimum 6 characters)"
+          tooltip="New password (minimum 8 characters, mixed case, digit, symbol)"
           error={passwordFieldErrors.newPassword}
         />
+        <PasswordStrengthMeter password={passwordData.newPassword} />
 
         <FormFieldWithTip
           label="Confirm New Password"

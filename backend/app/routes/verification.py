@@ -255,6 +255,33 @@ async def verify_account(
         )
 
 
+@router.get("/status")
+# The pending screen polls this every few seconds, so the ceiling is higher
+# than the other verification endpoints — but still bounded, because this is
+# an unauthenticated endpoint keyed on an email address.
+@limiter.limit("60/minute")
+async def verification_status(
+    request: Request,   # Required for rate limiter
+    response: Response,  # Required for rate limiter to inject headers
+    email: str = Query(...),
+    db: Session = Depends(get_db),
+):
+    """
+    Has this account been verified yet?
+
+    Polled by the "Verify Your Account" screen so it can move the user on once
+    they click the link — which usually happens on a *different device* (the
+    WhatsApp message opens on their phone), so the browser sitting on the
+    pending screen has no other way to find out.
+
+    Deliberately returns the same shape for an unknown address as for an
+    unverified one. Reporting "no such user" would turn this into an account
+    enumeration oracle, and it is reachable without authentication.
+    """
+    user = db.query(User).filter(User.email == email).first()
+    return {"verified": bool(user and user.status == "active")}
+
+
 @router.get("/resend")
 @limiter.limit("3/hour")  # Max 3 resend requests per hour per IP
 async def resend_verification(

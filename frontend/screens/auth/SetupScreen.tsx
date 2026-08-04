@@ -11,6 +11,9 @@ import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import AddressAutocomplete from '../../components/AddressAutocomplete';
 import { Button, Card, Input, ThemedModal } from '../../components/ui';
 import { useTheme } from '../../theme/ThemeContext';
+import { useT } from '../../i18n';
+import PasswordStrengthMeter from '../../components/PasswordStrengthMeter';
+import { passwordErrorMessage } from '../../utils/passwordPolicy';
 import { formatPhoneNumber } from '../../utils/phoneFormatter';
 import { API_BASE_URL, DEBUG_CONFIG } from '../../config';
 
@@ -39,6 +42,7 @@ interface SetupScreenProps {
 
 export default function SetupScreen({ navigation }: SetupScreenProps) {
   const { colors } = useTheme();
+  const t = useT();
   const [formData, setFormData] = useState<FormData>({
     firstName:              DEBUG_CONFIG.ENABLED ? DEBUG_CONFIG.ADMIN_FIRST_NAME    : '',
     lastName:               DEBUG_CONFIG.ENABLED ? DEBUG_CONFIG.ADMIN_LAST_NAME     : '',
@@ -105,15 +109,8 @@ export default function SetupScreen({ navigation }: SetupScreenProps) {
     if (!formData.password) {
       newErrors.password = 'Password is required';
     } else {
-      const pwdErrors: string[] = [];
-      if (formData.password.length < 12) pwdErrors.push('at least 12 characters');
-      if (!/[A-Z]/.test(formData.password)) pwdErrors.push('an uppercase letter');
-      if (!/[a-z]/.test(formData.password)) pwdErrors.push('a lowercase letter');
-      if (!/\d/.test(formData.password)) pwdErrors.push('a digit');
-      if (!/[!@#$%^&*()_+\-=\[\]{};':\"\\|,.<>\/?`~]/.test(formData.password)) pwdErrors.push('a special character');
-      if (pwdErrors.length > 0) {
-        newErrors.password = 'Password must contain: ' + pwdErrors.join(', ');
-      }
+      const pwdError = passwordErrorMessage(formData.password, t);
+      if (pwdError) newErrors.password = pwdError;
     }
     if (formData.password !== formData.confirmPassword) {
       newErrors.confirmPassword = 'Passwords do not match';
@@ -428,10 +425,10 @@ export default function SetupScreen({ navigation }: SetupScreenProps) {
           value={formData.password}
           onChangeText={(v) => handleChange('password', v)}
           error={errors.password}
-          hint="At least 8 characters recommended"
           secureTextEntry={!showPassword}
           editable={!loading}
         />
+        <PasswordStrengthMeter password={formData.password} />
         <Input
           key={`confirm-password-${showPassword}`}
           label="Confirm Password *"

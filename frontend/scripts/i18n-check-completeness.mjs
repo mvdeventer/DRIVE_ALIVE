@@ -4,7 +4,7 @@ import path from 'node:path';
 import process from 'node:process';
 
 const LOCALES_DIR = path.resolve(process.cwd(), 'i18n', 'locales');
-const LOCALES = ['en', 'af', 'zu', 'xh'];
+const LOCALES = ['en', 'af'];
 
 function fail(message) {
   console.error(message);

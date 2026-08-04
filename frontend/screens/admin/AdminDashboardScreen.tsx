@@ -26,6 +26,7 @@ const FileSystem = FileSystemModule as typeof FileSystemModule & {
 import InlineMessage from '../../components/InlineMessage';
 import WebNavigationHeader from '../../components/WebNavigationHeader';
 import { Button, Card, ThemedModal } from '../../components';
+import { useT } from '../../i18n';
 import { useTheme } from '../../theme/ThemeContext';
 import apiService from '../../services/api';
 
@@ -46,6 +47,7 @@ interface AdminStats {
 
 export default function AdminDashboardScreen({ navigation }: any) {
   const { colors, isDark, withAlpha } = useTheme();
+  const t = useT();
   const [stats, setStats] = useState<AdminStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -65,7 +67,7 @@ export default function AdminDashboardScreen({ navigation }: any) {
       const data = await apiService.getAdminStats();
       setStats(data);
     } catch (err: any) {
-      setError(err.response?.data?.detail || 'Failed to load statistics');
+      setError(err.response?.data?.detail || t('adminDashboard.msg.statsFailed'));
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -99,17 +101,17 @@ export default function AdminDashboardScreen({ navigation }: any) {
         document.body.appendChild(link);
         link.click();
         link.remove();
-        alert('✅ Database backup downloaded successfully!');
+        alert(t('adminDashboard.msg.backupOk'));
       } else {
         // Mobile: Save to device storage
         const fileUri = (FileSystem.documentDirectory || '') + `roadready_backup_${new Date().toISOString().split('T')[0]}.json`;
         await FileSystem.writeAsStringAsync(fileUri, JSON.stringify(response.data));
-        alert(`✅ Database backed up to: ${fileUri}`);
+        alert(t('adminDashboard.msg.backupTo', { path: fileUri }));
       }
       
       setShowDbModal(false);
     } catch (err: any) {
-      setError(err.response?.data?.detail || 'Backup failed');
+      setError(err.response?.data?.detail || t('adminDashboard.msg.backupFailed'));
     } finally {
       setDbAction(null);
     }
@@ -140,7 +142,7 @@ export default function AdminDashboardScreen({ navigation }: any) {
         }
       } catch (backupErr) {
         console.error('Backup before reset failed:', backupErr);
-        alert('⚠️ Warning: Backup failed. Do you still want to reset the database? This action cannot be undone.');
+        alert(t('adminDashboard.msg.backupBeforeResetFailed'));
         // If backup fails, abort reset for safety
         setDbAction(null);
         return;
@@ -154,7 +156,7 @@ export default function AdminDashboardScreen({ navigation }: any) {
       
       setShowDbModal(false);
       
-      alert('✅ Database reset successfully! Backup downloaded to your computer. Please create a new admin account.');
+      alert(t('adminDashboard.msg.resetOk'));
       
       // STEP 4: Force complete logout (reload page on web, reset navigation on mobile)
       if (Platform.OS === 'web') {
@@ -169,7 +171,7 @@ export default function AdminDashboardScreen({ navigation }: any) {
       }
       
     } catch (err: any) {
-      setError(err.response?.data?.detail || 'Reset failed');
+      setError(err.response?.data?.detail || t('adminDashboard.msg.resetFailed'));
     } finally {
       setDbAction(null);
     }
@@ -203,7 +205,7 @@ export default function AdminDashboardScreen({ navigation }: any) {
       setBackupConfig(config);
     } catch (err: any) {
       console.error('Failed to load backup config:', err);
-      setError(err.response?.data?.detail || 'Failed to load backup settings');
+      setError(err.response?.data?.detail || t('adminDashboard.msg.configLoadFailed'));
     } finally {
       setConfigLoading(false);
     }
@@ -213,10 +215,10 @@ export default function AdminDashboardScreen({ navigation }: any) {
     try {
       setConfigLoading(true);
       await apiService.updateBackupConfig(backupConfig);
-      alert('✅ Backup configuration updated successfully!');
+      alert(t('adminDashboard.msg.configSaved'));
       setShowBackupConfig(false);
     } catch (err: any) {
-      setError(err.response?.data?.detail || 'Failed to save backup settings');
+      setError(err.response?.data?.detail || t('adminDashboard.msg.configSaveFailed'));
     } finally {
       setConfigLoading(false);
     }
@@ -237,12 +239,12 @@ export default function AdminDashboardScreen({ navigation }: any) {
           if (file) {
             try {
               await apiService.restoreDatabase(file);
-              alert('✅ Database restored successfully from local file!');
+              alert(t('adminDashboard.msg.restoreLocalOk'));
               setShowDbModal(false);
               setShowRestoreOptions(false);
               loadStats();
             } catch (err: any) {
-              setError(err.response?.data?.detail || 'Restore failed');
+              setError(err.response?.data?.detail || t('adminDashboard.msg.restoreFailed'));
             } finally {
               setDbAction(null);
             }
@@ -259,14 +261,14 @@ export default function AdminDashboardScreen({ navigation }: any) {
           const fileContent = await FileSystem.readAsStringAsync(result.assets[0].uri);
           const blob = new Blob([fileContent], { type: 'application/json' });
           await apiService.restoreDatabase(blob);
-          alert('✅ Database restored successfully from local file!');
+          alert(t('adminDashboard.msg.restoreLocalOk'));
           setShowDbModal(false);
           setShowRestoreOptions(false);
           loadStats();
         }
       }
     } catch (err: any) {
-      setError(err.response?.data?.detail || 'Restore from local file failed');
+      setError(err.response?.data?.detail || t('adminDashboard.msg.restoreLocalFailed'));
     } finally {
       setDbAction(null);
     }
@@ -291,12 +293,12 @@ export default function AdminDashboardScreen({ navigation }: any) {
       
       await apiService.restoreDatabase(backupData);
       
-      alert('✅ Database restored successfully from server backup!');
+      alert(t('adminDashboard.msg.restoreServerOk'));
       setShowDbModal(false);
       setShowRestoreOptions(false);
       loadStats();
     } catch (err: any) {
-      setError(err.response?.data?.detail || 'Restore from server backup failed');
+      setError(err.response?.data?.detail || t('adminDashboard.msg.restoreServerFailed'));
     } finally {
       setDbAction(null);
     }
@@ -306,27 +308,27 @@ export default function AdminDashboardScreen({ navigation }: any) {
     return (
       <View style={[styles.centerContainer, { backgroundColor: colors.background }]}>
         <ActivityIndicator size="large" color={colors.primary} />
-        <Text style={[styles.loadingText, { color: colors.textSecondary }]}>Loading dashboard...</Text>
+        <Text style={[styles.loadingText, { color: colors.textSecondary }]}>{t('adminDashboard.loading')}</Text>
       </View>
     );
   }
 
   const actionItems = [
-    { key: 'verify', label: 'Verify Instructors', screen: 'InstructorVerification', badge: stats?.pending_verification },
-    { key: 'users', label: 'User Management', screen: 'UserManagement' },
-    { key: 'bookings', label: 'Booking Oversight', screen: 'BookingOversight', badge: stats?.pending_bookings },
-    { key: 'revenue', label: 'Revenue Analytics', screen: 'RevenueAnalytics' },
-    { key: 'analytics', label: 'Advanced Analytics', screen: 'AdvancedAnalytics' },
-    { key: 'earnings', label: 'Instructor Earnings', screen: 'InstructorEarningsOverview' },
-    { key: 'settings', label: 'Settings', screen: 'AdminSettings' },
-    { key: 'createAdmin', label: 'Create Admin', screen: 'CreateAdmin' },
-    { key: 'database', label: 'Database', screen: 'DatabaseInterface' },
+    { key: 'verify', label: t('adminDashboard.action.verify'), screen: 'InstructorVerification', badge: stats?.pending_verification },
+    { key: 'users', label: t('adminDashboard.action.users'), screen: 'UserManagement' },
+    { key: 'bookings', label: t('adminDashboard.action.bookings'), screen: 'BookingOversight', badge: stats?.pending_bookings },
+    { key: 'revenue', label: t('adminDashboard.action.revenue'), screen: 'RevenueAnalytics' },
+    { key: 'analytics', label: t('adminDashboard.action.analytics'), screen: 'AdvancedAnalytics' },
+    { key: 'earnings', label: t('adminDashboard.action.earnings'), screen: 'InstructorEarningsOverview' },
+    { key: 'settings', label: t('common.settings'), screen: 'AdminSettings' },
+    { key: 'createAdmin', label: t('adminDashboard.action.createAdmin'), screen: 'CreateAdmin' },
+    { key: 'database', label: t('adminDashboard.action.database'), screen: 'DatabaseInterface' },
   ];
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <WebNavigationHeader
-        title="Admin Dashboard"
+        title={t('adminDashboard.title')}
         onBack={() => navigation.goBack()}
         showBackButton={false}
       />
@@ -340,7 +342,7 @@ export default function AdminDashboardScreen({ navigation }: any) {
           <>
             {/* Quick Action Buttons */}
             <Card variant="elevated" style={styles.section}>
-              <Text style={[styles.sectionTitle, { color: colors.text }]}>Quick Actions</Text>
+              <Text style={[styles.sectionTitle, { color: colors.text }]}>{t('adminDashboard.quickActions')}</Text>
               <View style={styles.actionGrid}>
                 {actionItems.map((item) => (
                   <Pressable
@@ -374,88 +376,88 @@ export default function AdminDashboardScreen({ navigation }: any) {
 
             {/* User Statistics */}
             <Card variant="elevated" style={styles.section}>
-              <Text style={[styles.sectionTitle, { color: colors.text }]}>User Statistics</Text>
+              <Text style={[styles.sectionTitle, { color: colors.text }]}>{t('adminDashboard.userStats')}</Text>
               <View style={styles.statsGrid}>
                 <View style={[styles.statCard, { backgroundColor: colors.backgroundSecondary }]}>
                   <Text style={[styles.statValue, { color: colors.text }]}>{stats.total_users}</Text>
-                  <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Total Users</Text>
+                  <Text style={[styles.statLabel, { color: colors.textSecondary }]}>{t('adminDashboard.totalUsers')}</Text>
                 </View>
                 <View style={[styles.statCard, { backgroundColor: colors.backgroundSecondary }]}>
                   <Text style={[styles.statValue, { color: colors.success }]}>{stats.active_users}</Text>
-                  <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Active</Text>
+                  <Text style={[styles.statLabel, { color: colors.textSecondary }]}>{t('adminDashboard.active')}</Text>
                 </View>
                 <View style={[styles.statCard, { backgroundColor: colors.backgroundSecondary }]}>
                   <Text style={[styles.statValue, { color: colors.text }]}>{stats.total_instructors}</Text>
-                  <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Instructors</Text>
+                  <Text style={[styles.statLabel, { color: colors.textSecondary }]}>{t('adminDashboard.instructors')}</Text>
                 </View>
                 <View style={[styles.statCard, { backgroundColor: colors.backgroundSecondary }]}>
                   <Text style={[styles.statValue, { color: colors.text }]}>{stats.total_students}</Text>
-                  <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Students</Text>
+                  <Text style={[styles.statLabel, { color: colors.textSecondary }]}>{t('adminDashboard.students')}</Text>
                 </View>
               </View>
             </Card>
 
             {/* Instructor Verification */}
             <Card variant="elevated" style={styles.section}>
-              <Text style={[styles.sectionTitle, { color: colors.text }]}>Instructor Verification</Text>
+              <Text style={[styles.sectionTitle, { color: colors.text }]}>{t('adminDashboard.verification')}</Text>
               <View style={styles.statsGrid}>
                 <View style={[styles.statCard, { backgroundColor: colors.backgroundSecondary }]}>
                   <Text style={[styles.statValue, { color: colors.success }]}>
                     {stats.verified_instructors}
                   </Text>
-                  <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Verified</Text>
+                  <Text style={[styles.statLabel, { color: colors.textSecondary }]}>{t('adminDashboard.verified')}</Text>
                 </View>
                 <View style={[styles.statCard, { backgroundColor: colors.backgroundSecondary }]}>
                   <Text style={[styles.statValue, { color: colors.warning }]}>
                     {stats.pending_verification}
                   </Text>
-                  <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Pending</Text>
+                  <Text style={[styles.statLabel, { color: colors.textSecondary }]}>{t('adminDashboard.pending')}</Text>
                 </View>
               </View>
             </Card>
 
             {/* Booking Statistics */}
             <Card variant="elevated" style={styles.section}>
-              <Text style={[styles.sectionTitle, { color: colors.text }]}>Booking Statistics</Text>
+              <Text style={[styles.sectionTitle, { color: colors.text }]}>{t('adminDashboard.bookingStats')}</Text>
               <View style={styles.statsGrid}>
                 <View style={[styles.statCard, { backgroundColor: colors.backgroundSecondary }]}>
                   <Text style={[styles.statValue, { color: colors.text }]}>{stats.total_bookings}</Text>
-                  <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Total</Text>
+                  <Text style={[styles.statLabel, { color: colors.textSecondary }]}>{t('adminDashboard.total')}</Text>
                 </View>
                 <View style={[styles.statCard, { backgroundColor: colors.backgroundSecondary }]}>
                   <Text style={[styles.statValue, { color: colors.warning }]}>
                     {stats.pending_bookings}
                   </Text>
-                  <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Pending</Text>
+                  <Text style={[styles.statLabel, { color: colors.textSecondary }]}>{t('adminDashboard.pending')}</Text>
                 </View>
                 <View style={[styles.statCard, { backgroundColor: colors.backgroundSecondary }]}>
                   <Text style={[styles.statValue, { color: colors.success }]}>
                     {stats.completed_bookings}
                   </Text>
-                  <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Completed</Text>
+                  <Text style={[styles.statLabel, { color: colors.textSecondary }]}>{t('adminDashboard.completed')}</Text>
                 </View>
                 <View style={[styles.statCard, { backgroundColor: colors.backgroundSecondary }]}>
                   <Text style={[styles.statValue, { color: colors.danger }]}>
                     {stats.cancelled_bookings}
                   </Text>
-                  <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Cancelled</Text>
+                  <Text style={[styles.statLabel, { color: colors.textSecondary }]}>{t('adminDashboard.cancelled')}</Text>
                 </View>
               </View>
             </Card>
 
             {/* Revenue Overview */}
             <Card variant="elevated" style={styles.section}>
-              <Text style={[styles.sectionTitle, { color: colors.text }]}>Revenue Overview</Text>
+              <Text style={[styles.sectionTitle, { color: colors.text }]}>{t('adminDashboard.revenueOverview')}</Text>
               <View style={styles.statsGrid}>
                 <View style={[styles.statCard, { backgroundColor: colors.backgroundSecondary }]}>
                   <Text style={[styles.statValue, { color: colors.success }]}>
                     R{stats.total_revenue.toFixed(0)}
                   </Text>
-                  <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Total Revenue</Text>
+                  <Text style={[styles.statLabel, { color: colors.textSecondary }]}>{t('adminDashboard.totalRevenue')}</Text>
                 </View>
                 <View style={[styles.statCard, { backgroundColor: colors.backgroundSecondary }]}>
                   <Text style={[styles.statValue, { color: colors.text }]}>R{stats.avg_booking_value.toFixed(0)}</Text>
-                  <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Avg Booking</Text>
+                  <Text style={[styles.statLabel, { color: colors.textSecondary }]}>{t('adminDashboard.avgBooking')}</Text>
                 </View>
               </View>
             </Card>
@@ -467,15 +469,15 @@ export default function AdminDashboardScreen({ navigation }: any) {
       <ThemedModal
         visible={showDbModal}
         onClose={() => setShowDbModal(false)}
-        title="Database Management"
+        title={t('adminDashboard.db.title')}
         footer={
           <Button variant="secondary" onPress={() => setShowDbModal(false)} disabled={!!dbAction} fullWidth>
-            Cancel
+            {t('common.cancel')}
           </Button>
         }
       >
         <Text style={[styles.modalSubtitle, { color: colors.textSecondary }]}>
-          Backup, restore, or reset your database
+          {t('adminDashboard.db.subtitle')}
         </Text>
 
         <View style={styles.modalButtons}>
@@ -486,7 +488,7 @@ export default function AdminDashboardScreen({ navigation }: any) {
             loading={dbAction === 'backup'}
             fullWidth
           >
-            Backup to PC
+            {t('adminDashboard.db.backupToPc')}
           </Button>
 
           <Button
@@ -497,23 +499,23 @@ export default function AdminDashboardScreen({ navigation }: any) {
             loading={dbAction === 'restore'}
             fullWidth
           >
-            Restore from Backup
+            {t('adminDashboard.db.restoreFromBackup')}
           </Button>
 
           <Button
             variant="danger"
             onPress={() => {
               if (Platform.OS === 'web') {
-                if (confirm('This will DELETE ALL DATA! Are you absolutely sure?')) {
+                if (confirm(t('adminDashboard.db.confirmReset'))) {
                   handleResetDatabase();
                 }
               } else {
                 Alert.alert(
-                  'Reset Database',
-                  'This will DELETE ALL DATA! Are you absolutely sure?',
+                  t('adminDashboard.db.resetDatabase'),
+                  t('adminDashboard.db.confirmReset'),
                   [
-                    { text: 'Cancel', style: 'cancel' },
-                    { text: 'Reset', style: 'destructive', onPress: handleResetDatabase },
+                    { text: t('common.cancel'), style: 'cancel' },
+                    { text: t('adminDashboard.db.reset'), style: 'destructive', onPress: handleResetDatabase },
                   ]
                 );
               }
@@ -522,7 +524,7 @@ export default function AdminDashboardScreen({ navigation }: any) {
             loading={dbAction === 'reset'}
             fullWidth
           >
-            Reset Database
+            {t('adminDashboard.db.resetDatabase')}
           </Button>
         </View>
       </ThemedModal>
@@ -531,16 +533,16 @@ export default function AdminDashboardScreen({ navigation }: any) {
       <ThemedModal
         visible={showRestoreOptions}
         onClose={() => setShowRestoreOptions(false)}
-        title="Restore Database"
+        title={t('adminDashboard.db.restoreTitle')}
         size="lg"
         footer={
           <Button variant="secondary" onPress={() => setShowRestoreOptions(false)} disabled={!!dbAction} fullWidth>
-            Cancel
+            {t('common.cancel')}
           </Button>
         }
       >
         <Text style={[styles.modalSubtitle, { color: colors.textSecondary }]}>
-          Choose where to restore from
+          {t('adminDashboard.db.chooseSource')}
         </Text>
 
         {backupsLoading ? (
@@ -550,15 +552,17 @@ export default function AdminDashboardScreen({ navigation }: any) {
             {/* Server Backups Section */}
             {serverBackups.length > 0 && (
               <>
-                <Text style={[styles.restoreSectionTitle, { color: colors.text }]}>Server Backups ({serverBackups.length})</Text>
+                <Text style={[styles.restoreSectionTitle, { color: colors.text }]}>{t('adminDashboard.db.serverBackups', { count: serverBackups.length })}</Text>
                 <ScrollView style={[styles.backupsList, { borderColor: colors.border, backgroundColor: colors.backgroundSecondary }]} nestedScrollEnabled={true}>
                   {serverBackups.map((backup: any) => (
                     <Pressable
                       key={`${backup.type}-${backup.filename}`}
                       style={[styles.backupItem, { borderBottomColor: colors.border }]}
                       onPress={() => {
-                        const desc = backup.type === 'archived' ? `Archive: ${backup.filename}` : `${backup.filename}`;
-                        if (confirm(`Restore from ${desc}?\n\nThis will replace all current data!`)) {
+                        const desc = backup.type === 'archived'
+                          ? t('adminDashboard.db.archivePrefix', { filename: backup.filename })
+                          : `${backup.filename}`;
+                        if (confirm(t('adminDashboard.db.confirmRestore', { desc }))) {
                           restoreFromServerBackup(backup);
                         }
                       }}
@@ -569,8 +573,12 @@ export default function AdminDashboardScreen({ navigation }: any) {
                           {backup.filename}
                         </Text>
                         <Text style={[styles.backupMeta, { color: colors.textTertiary }]}>
-                          Size: {backup.size_mb}MB {'\u2022'} Created: {new Date(backup.created_at).toLocaleDateString()}
-                          {backup.type === 'archived' && ` \u2022 Files: ${backup.file_count}`}
+                          {t('adminDashboard.db.backupMeta', {
+                            size: backup.size_mb,
+                            created: new Date(backup.created_at).toLocaleDateString(),
+                          })}
+                          {backup.type === 'archived' &&
+                            t('adminDashboard.db.backupFiles', { count: backup.file_count })}
                         </Text>
                       </View>
                       {dbAction === 'restore' && (
@@ -592,7 +600,7 @@ export default function AdminDashboardScreen({ navigation }: any) {
               fullWidth
               style={{ marginBottom: 12 }}
             >
-              Backup Settings
+              {t('adminDashboard.db.backupSettings')}
             </Button>
 
             {/* Local File Option */}
@@ -603,7 +611,7 @@ export default function AdminDashboardScreen({ navigation }: any) {
               loading={dbAction === 'restore'}
               fullWidth
             >
-              Browse Local File
+              {t('adminDashboard.db.browseLocal')}
             </Button>
           </>
         )}
@@ -613,15 +621,15 @@ export default function AdminDashboardScreen({ navigation }: any) {
       <ThemedModal
         visible={showBackupConfig}
         onClose={() => setShowBackupConfig(false)}
-        title="Backup Configuration"
+        title={t('adminDashboard.db.configTitle')}
         footer={
           <Button variant="secondary" onPress={() => setShowBackupConfig(false)} disabled={configLoading} fullWidth>
-            Close
+            {t('common.close')}
           </Button>
         }
       >
         <Text style={[styles.modalSubtitle, { color: colors.textSecondary }]}>
-          Manage automatic backup settings
+          {t('adminDashboard.db.configSubtitle')}
         </Text>
 
         {configLoading || !backupConfig ? (
@@ -629,38 +637,38 @@ export default function AdminDashboardScreen({ navigation }: any) {
         ) : (
           <>
             <View style={[styles.configItem, { backgroundColor: colors.backgroundSecondary, borderLeftColor: colors.primary }]}>
-              <Text style={[styles.configLabel, { color: colors.text }]}>Retention Period (Days):</Text>
-              <Text style={[styles.configValue, { color: colors.primary }]}>{backupConfig.retention_days} days</Text>
+              <Text style={[styles.configLabel, { color: colors.text }]}>{t('adminDashboard.db.retentionLabel')}</Text>
+              <Text style={[styles.configValue, { color: colors.primary }]}>{t('adminDashboard.db.days', { count: backupConfig.retention_days })}</Text>
               <Text style={[styles.configDescription, { color: colors.textTertiary }]}>
-                Backups older than this will be automatically deleted
+                {t('adminDashboard.db.retentionHint')}
               </Text>
             </View>
 
             <View style={[styles.configItem, { backgroundColor: colors.backgroundSecondary, borderLeftColor: colors.primary }]}>
-              <Text style={[styles.configLabel, { color: colors.text }]}>Auto-Archive After (Days):</Text>
-              <Text style={[styles.configValue, { color: colors.primary }]}>{backupConfig.auto_archive_after_days} days</Text>
+              <Text style={[styles.configLabel, { color: colors.text }]}>{t('adminDashboard.db.archiveLabel')}</Text>
+              <Text style={[styles.configValue, { color: colors.primary }]}>{t('adminDashboard.db.days', { count: backupConfig.auto_archive_after_days })}</Text>
               <Text style={[styles.configDescription, { color: colors.textTertiary }]}>
-                Backups older than this will be compressed into ZIP files
+                {t('adminDashboard.db.archiveHint')}
               </Text>
             </View>
 
             <View style={[styles.configItem, { backgroundColor: colors.backgroundSecondary, borderLeftColor: colors.primary }]}>
-              <Text style={[styles.configLabel, { color: colors.text }]}>Backup Interval (Minutes):</Text>
-              <Text style={[styles.configValue, { color: colors.primary }]}>{backupConfig.backup_interval_minutes} minutes</Text>
+              <Text style={[styles.configLabel, { color: colors.text }]}>{t('adminDashboard.db.intervalLabel')}</Text>
+              <Text style={[styles.configValue, { color: colors.primary }]}>{t('adminDashboard.db.minutes', { count: backupConfig.backup_interval_minutes })}</Text>
               <Text style={[styles.configDescription, { color: colors.textTertiary }]}>
-                Automatic backups are created at this interval
+                {t('adminDashboard.db.intervalHint')}
               </Text>
             </View>
 
             <Button
               variant="secondary"
               onPress={() => {
-                alert('Note: Configuration editing requires a dedicated settings screen.\nContact admin to modify these settings via backend API.');
+                alert(t('adminDashboard.db.editSettingsNote'));
               }}
               fullWidth
               style={{ marginBottom: 12 }}
             >
-              Edit Settings (Admin API)
+              {t('adminDashboard.db.editSettings')}
             </Button>
           </>
         )}

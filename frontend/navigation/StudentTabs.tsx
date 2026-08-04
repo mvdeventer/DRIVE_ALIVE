@@ -11,6 +11,7 @@ import React from 'react';
 import { Platform, Pressable, Text } from 'react-native';
 
 import { useResponsiveTabBar } from '../hooks/useResponsiveTabBar';
+import { useT } from '../i18n';
 import { useTheme } from '../theme/ThemeContext';
 import { useAuthActions } from './AuthContext';
 
@@ -139,6 +140,7 @@ function ProfileStackScreen() {
 
 export default function StudentTabs() {
   const { colors } = useTheme();
+  const t = useT();
   const { tabBarPosition, tabBarStyle } = useResponsiveTabBar(colors);
 
   return (
@@ -160,7 +162,7 @@ export default function StudentTabs() {
         name="HomeTab"
         component={HomeStackScreen}
         options={{
-          tabBarLabel: 'Home',
+          tabBarLabel: t('nav.home'),
           tabBarIcon: ({ focused, color, size }) => (
             <Ionicons name={focused ? 'home' : 'home-outline'} size={size} color={color} />
           ),
@@ -170,7 +172,7 @@ export default function StudentTabs() {
         name="FindTab"
         component={FindStackScreen}
         options={{
-          tabBarLabel: 'Instructors',
+          tabBarLabel: t('nav.instructors'),
           tabBarIcon: ({ focused, color, size }) => (
             <Ionicons name={focused ? 'search' : 'search-outline'} size={size} color={color} />
           ),
@@ -180,7 +182,7 @@ export default function StudentTabs() {
         name="ProfileTab"
         component={ProfileStackScreen}
         options={{
-          tabBarLabel: 'Profile',
+          tabBarLabel: t('nav.profile'),
           tabBarIcon: ({ focused, color, size }) => (
             <Ionicons name={focused ? 'person' : 'person-outline'} size={size} color={color} />
           ),

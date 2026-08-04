@@ -4,6 +4,7 @@
  */
 import React, { useEffect, useRef } from 'react';
 import { Pressable, ScrollView, Text, View } from 'react-native';
+import { useT } from '../i18n';
 import { useTheme } from '../theme/ThemeContext';
 
 interface TimePickerWheelProps {
@@ -18,6 +19,7 @@ export default function TimePickerWheel({
   minuteInterval = 15,
 }: TimePickerWheelProps) {
   const { colors } = useTheme();
+  const t = useT();
   const [hours, minutes] = value.split(':').map(Number);
 
   const hourScrollRef = useRef<ScrollView>(null);
@@ -119,7 +121,7 @@ export default function TimePickerWheel({
   return (
     <View style={{ alignItems: 'center', justifyContent: 'center' }}>
       <View style={{ flexDirection: 'row', alignItems: 'center', height: 250 }}>
-        {renderWheel(hoursList, hours, handleHourSelect, hourScrollRef, 'Hour')}
+        {renderWheel(hoursList, hours, handleHourSelect, hourScrollRef, t('nav.hour'))}
         <Text
           style={{
             fontSize: 32,
@@ -130,7 +132,7 @@ export default function TimePickerWheel({
         >
           :
         </Text>
-        {renderWheel(minutesList, minutes, handleMinuteSelect, minuteScrollRef, 'Min')}
+        {renderWheel(minutesList, minutes, handleMinuteSelect, minuteScrollRef, t('nav.minuteShort'))}
       </View>
     </View>
   );

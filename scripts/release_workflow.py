@@ -4,6 +4,7 @@ import json
 import re
 import shutil
 import subprocess
+import sys
 from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
@@ -642,6 +643,42 @@ def _validate_worktree(dry_run: bool) -> None:
         warn("Dry-run continuing with a dirty worktree. A real release would fail until it is clean.")
 
 
+def _validate_no_secrets(dry_run: bool) -> None:
+    """
+    Refuse to publish a release carrying credentials or user records.
+
+    The pre-commit hook is the first line of defence, but it can be bypassed
+    with --no-verify and it never runs on commits made before it existed.
+    This is the last gate before code becomes public, so it scans the whole
+    tracked tree rather than just a diff.
+    """
+    scanner = ROOT / "scripts" / "secret_scan.py"
+    if not scanner.exists():
+        warn("secret_scan.py is missing — skipping the credential scan.")
+        return
+
+    result = subprocess.run(
+        [sys.executable, str(scanner), "--tracked", "--quiet"],
+        capture_output=True, text=True, cwd=ROOT, errors="replace",
+    )
+    if result.returncode == 0:
+        ok("Credential scan clean.")
+        return
+
+    report = (result.stderr or result.stdout).strip()
+    if result.returncode == 2:
+        warn(f"Credential scan could not run:\n{report}")
+        return
+
+    if dry_run:
+        warn("Dry-run continuing despite credential findings. A real release would abort:")
+        warn(report)
+        return
+    raise ReleaseError(
+        "Release aborted — credentials or personal data found in tracked files:\n" + report
+    )
+
+
 def _preflight(dry_run: bool) -> tuple[str, str | None]:
     _require_tool("git")
     branch = _current_branch()
@@ -649,6 +686,7 @@ def _preflight(dry_run: bool) -> tuple[str, str | None]:
         raise ReleaseError(f"Releases must be cut from the main branch. Current branch: {branch}")
 
     _validate_worktree(dry_run=dry_run)
+    _validate_no_secrets(dry_run=dry_run)
 
     previous_tag = _latest_tag()
     if not dry_run:
