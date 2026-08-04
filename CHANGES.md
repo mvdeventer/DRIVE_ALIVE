@@ -3,6 +3,34 @@
 All code improvements per release, newest first. Generated automatically
 by the release workflow (`s.bat minor` / `s.bat major` / `s.bat release`).
 
+## v8.1.0 — 2026-08-04 (Minor Release 8.1.0)
+
+> Drive Alive v8.1.0 — 5 new features, 1 fix, 4 maintenance updates, 4 other improvements across 522 files (+67541/-5389 lines). Top highlight: admin-created accounts, en/af locale rework, release-safety tooling. Full details in CHANGES.md.
+
+### New Features
+- feat: admin-created accounts, en/af locale rework, release-safety tooling
+- feat: design-token system, responsive foundation, a11y pass, agent toolkit
+- feat(release): auto-generated CHANGES.md + summary on tags and releases
+- feat(cli): self-updating help, one-command minor/major releases
+- feat(payments): hybrid commission platform fee
+
+### Bug Fixes
+- fix(cli): reject unknown arguments, lock against concurrent releases
+
+### Maintenance & Tooling
+- chore: refresh frontend lockfile after node_modules repair
+- chore: pre-release commit (minor bump)
+- chore: commit pending production-hardening and project work
+- chore: uninstall --all flag, untrack runtime artifacts
+
+### Other Improvements
+- auth: centralize runtime role readiness gating
+- auth: centralize login role picker policy
+- auth: centralize role transition policy
+- auth: enforce instructor verification for all roles
+
+**Scope:** 17 commits, 522 files changed, 67541 insertions(+), 5389 deletions(-) — touched: .claude: 256, frontend: 116, backend: 107, (root): 20, docs: 8, .claude-flow: 4, scripts: 4, backups: 2, .agents: 1, .codacy: 1, .githooks: 1, .github: 1, dist: 1
+
 ## v8.0.0 — 2026-06-12 (Major Release 8.0.0)
 
 > Drive Alive v8.0.0 — version maintenance only across 0 files. Full details in CHANGES.md.
