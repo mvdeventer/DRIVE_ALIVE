@@ -2,26 +2,50 @@
 Admin database backup and restore endpoints
 """
 
+import enum
 import json
 import os
-from datetime import datetime
+import secrets
+from datetime import date, datetime, time, timedelta
+from decimal import Decimal
 from typing import Any, Dict, List
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from fastapi.responses import FileResponse
-from sqlalchemy import text
+from sqlalchemy import select, text
+from sqlalchemy.sql import sqltypes
 from sqlalchemy.orm import Session
 
 from ..database import get_db
 from ..middleware.admin import require_admin
-from ..models.availability import CustomAvailability, InstructorSchedule, TimeOffException
-from ..models.booking import Booking, Review
-from ..models.company import Company
-from ..models.company_invite import CompanyInstructorInvite
-from ..models.password_reset import PasswordResetToken
-from ..models.payment import Transaction
-from ..models.payment_session import PaymentSession
-from ..models.user import Instructor, Student, User
+from ..utils.auth import get_password_hash
+# Imported for their side effect: each one registers its table on
+# ``Base.metadata``, which is what BACKUP_TABLES is resolved against. They
+# look unused — deleting them makes backup fail with a KeyError on whichever
+# table went missing, so they stay.
+from ..models.availability import (  # noqa: F401
+    CustomAvailability,
+    InstructorSchedule,
+    TimeOffException,
+)
+from ..models.booking import Booking, Review  # noqa: F401
+from ..models.booking_credit import BookingCredit  # noqa: F401
+from ..models.certification import Certification  # noqa: F401
+from ..models.company import Company  # noqa: F401
+from ..models.company_admin import CompanyAdmin  # noqa: F401
+from ..models.company_charge import (  # noqa: F401
+    CompanyPlatformCharge,
+    CompanySubscriptionCharge,
+)
+from ..models.company_invite import CompanyInstructorInvite  # noqa: F401
+from ..models.password_reset import PasswordResetToken  # noqa: F401
+from ..models.payment import Transaction  # noqa: F401
+from ..models.payment_session import PaymentSession  # noqa: F401
+from ..models.user import Instructor, Student, User  # noqa: F401
+from ..models.instructor_verification import (  # noqa: F401
+    InstructorVerificationToken,
+)
+from ..models.verification_token import VerificationToken  # noqa: F401
 
 router = APIRouter(prefix="/admin/database", tags=["admin-database"], dependencies=[Depends(require_admin)])
 
@@ -95,254 +119,245 @@ def download_backup(filename: str):
         )
 
 
+# ── What a backup contains ───────────────────────────────────────────────
+#
+# Backup and restore both derive their columns from the SQLAlchemy models
+# rather than from hand-written SQL. Three divergent column lists is how this
+# file came to have a backup that could not be restored: every new column had
+# to be added in three places, and was not.
+#
+# Ordered parents-first so foreign keys resolve on insert; restore deletes in
+# the reverse order.
+BACKUP_TABLES: List[str] = [
+    "users",
+    "companies",
+    "instructors",
+    "students",
+    "company_admins",
+    "company_instructor_invites",
+    "bookings",
+    "reviews",
+    "instructor_schedules",
+    "time_off_exceptions",
+    "custom_availability",
+    "transactions",
+    "booking_credits",
+    "certifications",
+    "company_platform_charges",
+    "company_subscription_charges",
+]
+
+# Credentials and secrets never leave the database. A backup gets copied to
+# operator laptops and cloud storage; a password hash or an API token sitting
+# in one is a breach waiting to happen (POPIA s19).
+SENSITIVE_COLUMNS: Dict[str, set] = {
+    "users": {
+        "password_hash",
+        "smtp_password",
+        "twilio_account_sid",
+        "twilio_auth_token",
+        "active_session_token",
+    },
+}
+
+# Deliberately not backed up: short-lived rows that normal operation
+# regenerates. Restoring them would resurrect password-reset links and
+# checkout sessions that should have died with the data they referred to.
+TRANSIENT_TABLES = [
+    "password_reset_tokens",
+    "verification_tokens",
+    "instructor_verification_tokens",
+    "payment_sessions",
+]
+
+# instructors.company_id and companies.owner_instructor_id point at each
+# other, so one of them has to be filled in on a second pass.
+_DEFERRED_COLUMNS = {"companies": ("owner_instructor_id",)}
+
+
+def _table(name: str):
+    """The live SQLAlchemy Table, which is the authority on what columns exist."""
+    from ..database import Base
+
+    return Base.metadata.tables[name]
+
+
+def _to_jsonable(value: Any) -> Any:
+    """Render a column value as JSON, losslessly enough to insert it back."""
+    if value is None or isinstance(value, (str, int, float, bool)):
+        return value
+    if isinstance(value, enum.Enum):
+        return value.value
+    if isinstance(value, (datetime, date, time)):
+        return value.isoformat()
+    if isinstance(value, timedelta):
+        return value.total_seconds()
+    if isinstance(value, Decimal):
+        return float(value)
+    if isinstance(value, (bytes, bytearray)):
+        return value.decode("utf-8", "replace")
+    return str(value)
+
+
 def backup_database_internal(db: Session) -> Dict[str, List[Dict[str, Any]]]:
-    """
-    Internal function to create a database backup as a dict
-    Used by both API endpoint and backup scheduler
-    Returns dict with all database tables
+    """Every table worth keeping, as plain JSON-safe dicts.
+
+    Used by the backup endpoint, the scheduler and the pre-reset snapshot, so
+    all three produce the identical format that restore reads.
     """
     backup_data: Dict[str, List[Dict[str, Any]]] = {}
-    
-    # Backup users
-    users = db.query(User).all()
-    backup_data['users'] = [
-        {
-            'id': u.id,
-            'email': u.email,
-            'phone': u.phone,
-            # password_hash, smtp_password, twilio_account_sid, twilio_auth_token
-            # intentionally excluded — POPIA/security: backups must not contain credentials
-            'first_name': u.first_name,
-            'last_name': u.last_name,
-            'role': u.role.value,
-            'status': u.status.value,
-            'firebase_uid': u.firebase_uid,
-            'created_at': u.created_at.isoformat() if u.created_at else None,
-            'updated_at': u.updated_at.isoformat() if u.updated_at else None,
-            'last_login': u.last_login.isoformat() if u.last_login else None,
-        }
-        for u in users
-    ]
-    
-    # Backup companies
-    companies = db.query(Company).all()
-    backup_data['companies'] = [
-        {
-            'id': c.id,
-            'name': c.name,
-            'slug': c.slug,
-            'owner_instructor_id': c.owner_instructor_id,
-            'owner_user_id': c.owner_user_id,
-            'is_platform_host': c.is_platform_host,
-            'platform_commission_percent': c.platform_commission_percent,
-            'subscription_price_per_instructor': c.subscription_price_per_instructor,
-            'billing_email': c.billing_email,
-            'is_active': c.is_active,
-            'created_at': c.created_at.isoformat() if c.created_at else None,
-        }
-        for c in companies
-    ]
 
-    # Backup company instructor invitations
-    invites = db.query(CompanyInstructorInvite).all()
-    backup_data['company_instructor_invites'] = [
-        {
-            'id': inv.id,
-            'company_id': inv.company_id,
-            'invited_by_user_id': inv.invited_by_user_id,
-            'direction': inv.direction,
-            'email': inv.email,
-            'instructor_id': inv.instructor_id,
-            'token': inv.token,
-            'status': inv.status,
-            'proposed_markup_type': inv.proposed_markup_type,
-            'proposed_markup_value': inv.proposed_markup_value,
-            'expires_at': inv.expires_at.isoformat() if inv.expires_at else None,
-            'created_at': inv.created_at.isoformat() if inv.created_at else None,
-            'responded_at': inv.responded_at.isoformat() if inv.responded_at else None,
-        }
-        for inv in invites
-    ]
+    for table_name in BACKUP_TABLES:
+        table = _table(table_name)
+        skip = SENSITIVE_COLUMNS.get(table_name, set())
+        columns = [c.name for c in table.columns if c.name not in skip]
 
-    # Backup instructors
-    instructors = db.query(Instructor).all()
-    backup_data['instructors'] = [
-        {
-            'id': i.id,
-            'user_id': i.user_id,
-            'license_number': i.license_number,
-            'license_types': i.license_types,
-            'id_number': i.id_number,
-            'vehicle_registration': i.vehicle_registration,
-            'vehicle_make': i.vehicle_make,
-            'vehicle_model': i.vehicle_model,
-            'vehicle_year': i.vehicle_year,
-            'current_latitude': i.current_latitude,
-            'current_longitude': i.current_longitude,
-            'province': i.province,
-            'city': i.city,
-            'suburb': i.suburb,
-            'service_radius_km': i.service_radius_km,
-            'max_travel_distance_km': i.max_travel_distance_km,
-            'rate_per_km_beyond_radius': i.rate_per_km_beyond_radius,
-            'is_available': i.is_available,
-            'hourly_rate': i.hourly_rate,
-            'company_id': i.company_id,
-            'is_company_owner': i.is_company_owner,
-            'company_joined_at': i.company_joined_at.isoformat() if i.company_joined_at else None,
-            'company_markup_type': i.company_markup_type,
-            'company_markup_value': i.company_markup_value,
-            'rating': i.rating,
-            'total_reviews': i.total_reviews,
-            'is_verified': i.is_verified,
-            'created_at': i.created_at.isoformat() if i.created_at else None,
-            'updated_at': i.updated_at.isoformat() if i.updated_at else None,
-        }
-        for i in instructors
-    ]
-    
-    # Backup students
-    students = db.query(Student).all()
-    backup_data['students'] = [
-        {
-            'id': s.id,
-            'user_id': s.user_id,
-            'id_number': s.id_number,
-            'learners_permit_number': s.learners_permit_number,
-            'emergency_contact_name': s.emergency_contact_name,
-            'emergency_contact_phone': s.emergency_contact_phone,
-            'address_line1': s.address_line1,
-            'address_line2': s.address_line2,
-            'province': s.province,
-            'city': s.city,
-            'suburb': s.suburb,
-            'postal_code': s.postal_code,
-            'default_pickup_latitude': s.default_pickup_latitude,
-            'default_pickup_longitude': s.default_pickup_longitude,
-            'created_at': s.created_at.isoformat() if s.created_at else None,
-            'updated_at': s.updated_at.isoformat() if s.updated_at else None,
-        }
-        for s in students
-    ]
-    
-    # Backup bookings
-    bookings = db.query(Booking).all()
-    backup_data['bookings'] = [
-        {
-            'id': b.id,
-            'booking_reference': b.booking_reference,
-            'student_id': b.student_id,
-            'instructor_id': b.instructor_id,
-            'lesson_date': b.lesson_date.isoformat() if b.lesson_date else None,
-            'duration_minutes': b.duration_minutes,
-            'lesson_type': b.lesson_type,
-            'pickup_address': b.pickup_address,
-            'pickup_latitude': b.pickup_latitude,
-            'pickup_longitude': b.pickup_longitude,
-            'dropoff_address': b.dropoff_address,
-            'dropoff_latitude': b.dropoff_latitude,
-            'dropoff_longitude': b.dropoff_longitude,
-            'student_notes': b.student_notes,
-            'instructor_notes': b.instructor_notes,
-            'status': b.status.value,
-            'amount': b.amount,
-            'instructor_base_amount': b.instructor_base_amount,
-            'company_markup_amount': b.company_markup_amount,
-            'company_id': b.company_id,
-            'booking_source': b.booking_source,
-            'payment_status': b.payment_status.value,
-            'payment_method': b.payment_method,
-            'payment_id': b.payment_id,
-            'cancelled_at': b.cancelled_at.isoformat() if b.cancelled_at else None,
-            'cancelled_by': b.cancelled_by,
-            'cancellation_reason': b.cancellation_reason,
-            'refund_amount': b.refund_amount,
-            'cancellation_fee': b.cancellation_fee,
-            'rebooking_count': b.rebooking_count,
-            'original_lesson_date': b.original_lesson_date.isoformat() if b.original_lesson_date else None,
-            'reminder_sent': b.reminder_sent,
-            'instructor_reminder_sent': b.instructor_reminder_sent,
-            'created_at': b.created_at.isoformat() if b.created_at else None,
-            'updated_at': b.updated_at.isoformat() if b.updated_at else None,
-        }
-        for b in bookings
-    ]
-    
-    # Backup reviews
-    reviews = db.query(Review).all()
-    backup_data['reviews'] = [
-        {
-            'id': r.id,
-            'booking_id': r.booking_id,
-            'student_id': r.student_id,
-            'instructor_id': r.instructor_id,
-            'rating': r.rating,
-            'comment': r.comment,
-            'created_at': r.created_at.isoformat() if r.created_at else None,
-        }
-        for r in reviews
-    ]
-    
-    # Backup instructor schedules
-    schedules = db.query(InstructorSchedule).all()
-    backup_data['instructor_schedules'] = [
-        {
-            'id': s.id,
-            'instructor_id': s.instructor_id,
-            'day_of_week': s.day_of_week,
-            'start_time': s.start_time.isoformat() if s.start_time else None,
-            'end_time': s.end_time.isoformat() if s.end_time else None,
-            'is_active': s.is_active,
-        }
-        for s in schedules
-    ]
-    
-    # Backup time off exceptions
-    time_offs = db.query(TimeOffException).all()
-    backup_data['time_off_exceptions'] = [
-        {
-            'id': t.id,
-            'instructor_id': t.instructor_id,
-            'start_date': t.start_date.isoformat() if t.start_date else None,
-            'end_date': t.end_date.isoformat() if t.end_date else None,
-            'start_time': t.start_time.isoformat() if t.start_time else None,
-            'end_time': t.end_time.isoformat() if t.end_time else None,
-            'reason': t.reason,
-            'notes': t.notes,
-        }
-        for t in time_offs
-    ]
-    
-    # Backup custom availability
-    custom_avail = db.query(CustomAvailability).all()
-    backup_data['custom_availability'] = [
-        {
-            'id': c.id,
-            'instructor_id': c.instructor_id,
-            'date': c.date.isoformat() if c.date else None,
-            'start_time': c.start_time.isoformat() if c.start_time else None,
-            'end_time': c.end_time.isoformat() if c.end_time else None,
-        }
-        for c in custom_avail
-    ]
-    
-    # Backup transactions
-    transactions = db.query(Transaction).all()
-    backup_data['transactions'] = [
-        {
-            'id': t.id,
-            'booking_id': t.booking_id,
-            'amount': t.amount,
-            'payment_method': t.payment_method,
-            'payment_provider': t.payment_provider,
-            'transaction_id': t.transaction_id,
-            'status': t.status,
-            'created_at': t.created_at.isoformat() if t.created_at else None,
-        }
-        for t in transactions
-    ]
-    
+        rows = db.execute(select(*[table.c[name] for name in columns])).all()
+        backup_data[table_name] = [
+            {name: _to_jsonable(value) for name, value in zip(columns, row)}
+            for row in rows
+        ]
+
     return backup_data
+
+
+def _from_jsonable(value: Any, column) -> Any:
+    """Turn a JSON value back into what the column expects.
+
+    JSON has no date type, so timestamps come back as ISO strings and the
+    driver rejects them. Conversion is driven by the column's own type rather
+    than by guessing from the string, so a column that genuinely holds text
+    that looks like a date is left alone.
+    """
+    if value is None or not isinstance(value, str):
+        if isinstance(column.type, sqltypes.Interval) and isinstance(
+            value, (int, float)
+        ):
+            return timedelta(seconds=value)
+        return value
+
+    try:
+        if isinstance(column.type, sqltypes.DateTime):
+            return datetime.fromisoformat(value)
+        if isinstance(column.type, sqltypes.Date):
+            return date.fromisoformat(value)
+        if isinstance(column.type, sqltypes.Time):
+            return time.fromisoformat(value)
+        if isinstance(column.type, sqltypes.LargeBinary):
+            return value.encode("utf-8")
+    except ValueError:
+        # Malformed in the file: let the driver reject it with a clearer
+        # error than a silently wrong value would ever produce.
+        return value
+    return value
+
+
+# Columns that are NOT NULL but deliberately absent from every backup. They
+# need a value at insert time; an UPDATE afterwards is too late.
+def _placeholder_password() -> str:
+    """A real bcrypt hash of something nobody knows.
+
+    Valid in format, so a login attempt fails as a wrong password rather than
+    raising on an unparseable hash — but unguessable, so every restored
+    account has to go through "forgot password".
+    """
+    return get_password_hash(secrets.token_urlsafe(64))
+
+
+def _restore_rows(
+    db: Session,
+    table_name: str,
+    rows: List[Dict[str, Any]],
+    placeholder_password: str = "",
+) -> int:
+    """Insert backed-up rows, tolerating a backup older than the schema.
+
+    Only keys that are still real columns are inserted, so a backup taken
+    before a column existed restores fine and that column takes its default.
+    """
+    if not rows:
+        return 0
+
+    table = _table(table_name)
+    valid = {c.name for c in table.columns}
+    deferred = set(_DEFERRED_COLUMNS.get(table_name, ()))
+
+    columns = table.columns
+    payload = []
+    for row in rows:
+        values = {
+            k: _from_jsonable(v, columns[k])
+            for k, v in row.items()
+            if k in valid and k not in deferred
+        }
+        if table_name == "users":
+            # Hashed once per restore, not once per row: bcrypt is meant to be
+            # slow, and a per-row hash turns a large restore into minutes of
+            # key stretching. Sharing one unusable hash costs nothing — the
+            # plaintext behind it is random and was never kept.
+            values["password_hash"] = placeholder_password
+        if values:
+            payload.append(values)
+
+    if not payload:
+        return 0
+
+    # Rows may differ in which columns they carry; executemany needs them
+    # uniform, so group by key set rather than silently dropping columns.
+    by_shape: Dict[tuple, List[Dict[str, Any]]] = {}
+    for values in payload:
+        by_shape.setdefault(tuple(sorted(values)), []).append(values)
+    for group in by_shape.values():
+        db.execute(table.insert(), group)
+
+    return len(payload)
+
+
+def _relink_deferred(db: Session, backup_data: Dict[str, List[Dict[str, Any]]]) -> None:
+    """Fill in the columns held back to break the circular foreign key."""
+    for table_name, columns in _DEFERRED_COLUMNS.items():
+        table = _table(table_name)
+        for row in backup_data.get(table_name, []):
+            values = {c: row.get(c) for c in columns if row.get(c) is not None}
+            if values and row.get("id") is not None:
+                db.execute(
+                    table.update().where(table.c.id == row["id"]).values(**values)
+                )
+
+
+def _resync_sequences(db: Session) -> None:
+    """Point each PostgreSQL id sequence past the rows just inserted.
+
+    Restore writes explicit primary keys, which leaves the sequence where it
+    was. Without this the next signup collides with a restored row and the
+    database looks corrupt the moment anyone uses it. SQLite derives the next
+    rowid from the table itself, so it needs nothing.
+    """
+    if db.bind is None or db.bind.dialect.name != "postgresql":
+        return
+
+    for table_name in BACKUP_TABLES:
+        table = _table(table_name)
+        if "id" not in table.c:
+            continue
+        db.execute(
+            text(
+                "SELECT setval("
+                "pg_get_serial_sequence(:table_name, 'id'), "
+                "COALESCE((SELECT MAX(id) FROM {t}), 1), "
+                "(SELECT MAX(id) IS NOT NULL FROM {t}))".format(t=table_name)
+            ),
+            {"table_name": table_name},
+        )
+
+
+def _purge_all(db: Session) -> None:
+    """Empty every table a restore is about to repopulate, children first."""
+    for table_name in reversed(BACKUP_TABLES):
+        db.execute(_table(table_name).delete())
+    # Stale sessions and reset links must not outlive the data they point at.
+    for table_name in TRANSIENT_TABLES:
+        db.execute(_table(table_name).delete())
 
 
 @router.get("/backup")
@@ -353,25 +368,22 @@ def backup_database(db: Session = Depends(get_db)):
     """
     try:
         backup_data = backup_database_internal(db)
-        
-        # Create backup file
+
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
         filename = f"roadready_backup_{timestamp}.json"
         filepath = os.path.join("backups", filename)
-        
-        # Create backups directory if it doesn't exist
+
         os.makedirs("backups", exist_ok=True)
-        
-        # Write backup to file
-        with open(filepath, 'w') as f:
+
+        with open(filepath, 'w', encoding='utf-8') as f:
             json.dump(backup_data, f, indent=2)
-        
+
         return FileResponse(
             filepath,
             media_type='application/json',
             filename=filename
         )
-        
+
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -381,114 +393,36 @@ def backup_database(db: Session = Depends(get_db)):
 
 @router.post("/reset")
 def reset_database(db: Session = Depends(get_db)):
-    """
-    Clear all data from the database (USE WITH CAUTION!)
-    Auto-creates a backup before resetting
-    This will delete ALL records from ALL tables
+    """Delete every record, after snapshotting what is about to be destroyed.
+
+    The snapshot goes through ``backup_database_internal``, so it is a file
+    ``/restore`` can actually read. It used to be a second, divergent copy of
+    the backup logic referring to columns the Booking model no longer had,
+    which meant this endpoint raised as soon as one booking existed — exactly
+    when the snapshot mattered most.
     """
     try:
-        # AUTO-BACKUP BEFORE RESET
-        backup_data: Dict[str, List[Dict[str, Any]]] = {}
-        
-        # Backup all tables (same as backup endpoint)
-        users = db.query(User).all()
-        backup_data['users'] = [
-            {
-                'id': u.id, 'email': u.email, 'phone': u.phone, 'password_hash': u.password_hash,
-                'first_name': u.first_name, 'last_name': u.last_name, 'role': u.role.value,
-                'status': u.status.value, 'firebase_uid': u.firebase_uid, 'address': u.address,
-                'address_latitude': u.address_latitude, 'address_longitude': u.address_longitude,
-                'created_at': u.created_at.isoformat() if u.created_at else None,
-                'updated_at': u.updated_at.isoformat() if u.updated_at else None,
-                'last_login': u.last_login.isoformat() if u.last_login else None,
-            } for u in users
-        ]
-        
-        instructors = db.query(Instructor).all()
-        backup_data['instructors'] = [
-            {
-                'id': i.id, 'user_id': i.user_id, 'license_number': i.license_number,
-                'license_types': i.license_types, 'id_number': i.id_number,
-                'vehicle_registration': i.vehicle_registration, 'vehicle_make': i.vehicle_make,
-                'vehicle_model': i.vehicle_model, 'vehicle_year': i.vehicle_year,
-                'current_latitude': i.current_latitude, 'current_longitude': i.current_longitude,
-                'province': i.province, 'city': i.city, 'suburb': i.suburb,
-                'service_radius_km': i.service_radius_km, 'max_travel_distance_km': i.max_travel_distance_km,
-                'rate_per_km_beyond_radius': i.rate_per_km_beyond_radius, 'is_available': i.is_available,
-                'hourly_rate': i.hourly_rate, 'rating': i.rating,
-                'total_reviews': i.total_reviews, 'is_verified': i.is_verified,
-                'created_at': i.created_at.isoformat() if i.created_at else None,
-                'updated_at': i.updated_at.isoformat() if i.updated_at else None,
-            } for i in instructors
-        ]
-        
-        students = db.query(Student).all()
-        backup_data['students'] = [
-            {
-                'id': s.id, 'user_id': s.user_id, 'id_number': s.id_number,
-                'learners_permit_number': s.learners_permit_number,
-                'emergency_contact_name': s.emergency_contact_name,
-                'emergency_contact_phone': s.emergency_contact_phone,
-                'address_line1': s.address_line1,
-                'address_line2': s.address_line2,
-                'province': s.province,
-                'city': s.city,
-                'suburb': s.suburb,
-                'postal_code': s.postal_code,
-                'default_pickup_latitude': s.default_pickup_latitude,
-                'default_pickup_longitude': s.default_pickup_longitude,
-                'created_at': s.created_at.isoformat() if s.created_at else None,
-                'updated_at': s.updated_at.isoformat() if s.updated_at else None,
-            } for s in db.query(Student).all()
-        ]
-        
-        bookings = db.query(Booking).all()
-        backup_data['bookings'] = [
-            {
-                'id': b.id, 'student_id': b.student_id, 'instructor_id': b.instructor_id,
-                'lesson_datetime': b.lesson_datetime.isoformat() if b.lesson_datetime else None,
-                'duration_hours': b.duration_hours, 'pickup_address': b.pickup_address,
-                'pickup_latitude': b.pickup_latitude, 'pickup_longitude': b.pickup_longitude,
-                'status': b.status.value, 'hourly_rate': b.hourly_rate,
-                'total_amount': b.total_amount, 'payment_status': b.payment_status.value,
-                'stripe_payment_intent_id': b.stripe_payment_intent_id,
-                'payfast_payment_id': b.payfast_payment_id,
-                'created_at': b.created_at.isoformat() if b.created_at else None,
-                'updated_at': b.updated_at.isoformat() if b.updated_at else None,
-            } for b in bookings
-        ]
-        
-        # Save auto-backup
+        backup_data = backup_database_internal(db)
+
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
         filename = f"auto_backup_before_reset_{timestamp}.json"
         filepath = os.path.join("backups", filename)
         os.makedirs("backups", exist_ok=True)
-        
-        with open(filepath, 'w') as f:
+
+        with open(filepath, 'w', encoding='utf-8') as f:
             json.dump(backup_data, f, indent=2)
-        
-        # Now reset database
-        db.query(Review).delete()
-        db.query(Transaction).delete()
-        db.query(PaymentSession).delete()
-        db.query(Booking).delete()
-        db.query(CustomAvailability).delete()
-        db.query(TimeOffException).delete()
-        db.query(InstructorSchedule).delete()
-        db.query(Instructor).delete()
-        db.query(Student).delete()
-        db.query(PasswordResetToken).delete()
-        db.query(User).delete()
-        
+
+        # Only now that the snapshot is safely on disk.
+        _purge_all(db)
         db.commit()
-        
+
         return {
             "message": "Database reset successfully. All data has been deleted.",
             "backup_file": filename,
             "backup_path": filepath,
-            "info": "An automatic backup was created before reset."
+            "info": "An automatic backup was created before reset.",
         }
-        
+
     except Exception as e:
         db.rollback()
         raise HTTPException(
@@ -555,6 +489,16 @@ def extract_from_archive(archive_name: str, backup_filename: str):
     Extract a backup file from a ZIP archive
     Returns the backup file content for restore
     """
+    # Same guard as the download endpoint. Path routing already stops a
+    # segment containing a slash, so this is belt and braces rather than an
+    # open hole — but the two endpoints should not differ on it.
+    for candidate in (archive_name, backup_filename):
+        if ".." in candidate or "/" in candidate or "\\" in candidate:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid filename"
+            )
+
     try:
         from ..services.backup_scheduler import backup_scheduler
         backup_content = backup_scheduler.extract_from_archive(archive_name, backup_filename)
@@ -573,156 +517,82 @@ def extract_from_archive(archive_name: str, backup_filename: str):
 
 @router.post("/restore")
 async def restore_database(file: UploadFile = File(...), db: Session = Depends(get_db)):
-    """
-    Restore database from a backup JSON file
-    This will REPLACE all existing data with the backup data
+    """Replace all data with the contents of a backup file.
+
+    The whole thing — the purge and every insert — is one transaction. It used
+    to delete everything and *commit*, then insert; any failure after that
+    point (and there always was one, because the INSERTs named columns the
+    models no longer had) rolled back only the inserts and left the database
+    permanently empty. Now a failed restore leaves the existing data exactly
+    as it was.
+
+    Restored accounts cannot log in until they reset their password: backups
+    deliberately carry no password hashes.
     """
     try:
-        # Read and parse uploaded JSON file
         content = await file.read()
         backup_data = json.loads(content)
-        
-        # First, clear existing data
-        db.query(Review).delete()
-        db.query(Transaction).delete()
-        db.query(PaymentSession).delete()
-        db.query(Booking).delete()
-        db.query(CustomAvailability).delete()
-        db.query(TimeOffException).delete()
-        db.query(InstructorSchedule).delete()
-        db.query(Instructor).delete()
-        db.query(Student).delete()
-        db.query(PasswordResetToken).delete()
-        db.query(User).delete()
-        
-        db.commit()
-        
-        # Restore users
-        for user_data in backup_data.get('users', []):
-            db.execute(text("""
-                INSERT INTO users (id, email, phone, password_hash, first_name, last_name, role, status, 
-                                   firebase_uid, address, address_latitude, address_longitude, 
-                                   created_at, updated_at, last_login)
-                VALUES (:id, :email, :phone, :password_hash, :first_name, :last_name, :role, :status,
-                        :firebase_uid, :address, :address_latitude, :address_longitude,
-                        :created_at, :updated_at, :last_login)
-            """), user_data)
-        
-        # Restore companies (before instructors, which FK to companies.id).
-        # owner_instructor_id is deliberately deferred — see the second pass below.
-        for company_data in backup_data.get('companies', []):
-            db.execute(text("""
-                INSERT INTO companies (id, name, slug, owner_instructor_id, owner_user_id,
-                                       is_platform_host, platform_commission_percent,
-                                       subscription_price_per_instructor, billing_email,
-                                       is_active, created_at)
-                VALUES (:id, :name, :slug, NULL, :owner_user_id,
-                        :is_platform_host, :platform_commission_percent,
-                        :subscription_price_per_instructor, :billing_email,
-                        :is_active, :created_at)
-            """), company_data)
-
-        # Restore instructors
-        for instructor_data in backup_data.get('instructors', []):
-            db.execute(text("""
-                INSERT INTO instructors (id, user_id, license_number, license_types, id_number,
-                                        vehicle_registration, vehicle_make, vehicle_model, vehicle_year,
-                                        current_latitude, current_longitude, province, city, suburb,
-                                        service_radius_km, max_travel_distance_km, rate_per_km_beyond_radius,
-                                        is_available, hourly_rate, rating, total_reviews,
-                                        is_verified, created_at, updated_at)
-                VALUES (:id, :user_id, :license_number, :license_types, :id_number,
-                        :vehicle_registration, :vehicle_make, :vehicle_model, :vehicle_year,
-                        :current_latitude, :current_longitude, :province, :city, :suburb,
-                        :service_radius_km, :max_travel_distance_km, :rate_per_km_beyond_radius,
-                        :is_available, :hourly_rate, :rating, :total_reviews,
-                        :is_verified, :created_at, :updated_at)
-            """), instructor_data)
-        
-        # Second pass: now that instructors exist, re-link company owners.
-        for company_data in backup_data.get('companies', []):
-            if company_data.get('owner_instructor_id') is not None:
-                db.execute(text("""
-                    UPDATE companies SET owner_instructor_id = :owner_instructor_id
-                    WHERE id = :id
-                """), company_data)
-
-        # Restore students
-        for student_data in backup_data.get('students', []):
-            db.execute(text("""
-                INSERT INTO students (id, user_id, id_number, date_of_birth, created_at, updated_at)
-                VALUES (:id, :user_id, :id_number, :date_of_birth, :created_at, :updated_at)
-            """), student_data)
-        
-        # Restore bookings
-        for booking_data in backup_data.get('bookings', []):
-            db.execute(text("""
-                INSERT INTO bookings (id, student_id, instructor_id, scheduled_time, duration_minutes,
-                                     pickup_address, pickup_latitude, pickup_longitude, notes, status,
-                                     cancellation_reason, payment_method, total_amount, instructor_fee,
-                                     payment_status, created_at, updated_at)
-                VALUES (:id, :student_id, :instructor_id, :scheduled_time, :duration_minutes,
-                        :pickup_address, :pickup_latitude, :pickup_longitude, :notes, :status,
-                        :cancellation_reason, :payment_method, :total_amount, :instructor_fee,
-                        :payment_status, :created_at, :updated_at)
-            """), booking_data)
-        
-        # Restore reviews
-        for review_data in backup_data.get('reviews', []):
-            db.execute(text("""
-                INSERT INTO reviews (id, booking_id, student_id, instructor_id, rating, comment, created_at)
-                VALUES (:id, :booking_id, :student_id, :instructor_id, :rating, :comment, :created_at)
-            """), review_data)
-        
-        # Restore schedules
-        for schedule_data in backup_data.get('instructor_schedules', []):
-            db.execute(text("""
-                INSERT INTO instructor_schedules (id, instructor_id, day_of_week, start_time, end_time, is_available)
-                VALUES (:id, :instructor_id, :day_of_week, :start_time, :end_time, :is_available)
-            """), schedule_data)
-        
-        # Restore time off
-        for timeoff_data in backup_data.get('time_off_exceptions', []):
-            db.execute(text("""
-                INSERT INTO time_off_exceptions (id, instructor_id, start_date, end_date, start_time, end_time, reason, notes)
-                VALUES (:id, :instructor_id, :start_date, :end_date, :start_time, :end_time, :reason, :notes)
-            """), timeoff_data)
-        
-        # Restore custom availability
-        for custom_data in backup_data.get('custom_availability', []):
-            db.execute(text("""
-                INSERT INTO custom_availability (id, instructor_id, date, start_time, end_time)
-                VALUES (:id, :instructor_id, :date, :start_time, :end_time)
-            """), custom_data)
-        
-        # Restore transactions
-        for transaction_data in backup_data.get('transactions', []):
-            db.execute(text("""
-                INSERT INTO transactions (id, booking_id, amount, payment_method, payment_provider,
-                                         transaction_id, status, created_at)
-                VALUES (:id, :booking_id, :amount, :payment_method, :payment_provider,
-                        :transaction_id, :status, :created_at)
-            """), transaction_data)
-        
-        db.commit()
-        
-        return {
-            "message": "Database restored successfully",
-            "users_restored": len(backup_data.get('users', [])),
-            "instructors_restored": len(backup_data.get('instructors', [])),
-            "students_restored": len(backup_data.get('students', [])),
-            "bookings_restored": len(backup_data.get('bookings', [])),
-            "reviews_restored": len(backup_data.get('reviews', [])),
-        }
-        
     except json.JSONDecodeError:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Invalid JSON file format"
         )
+
+    if not isinstance(backup_data, dict):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid backup file: expected an object of tables."
+        )
+
+    known = set(BACKUP_TABLES)
+    if not known.intersection(backup_data):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                "That file does not look like a RoadReady backup: it contains "
+                "none of the expected tables."
+            ),
+        )
+
+    try:
+        restored: Dict[str, int] = {}
+        placeholder_password = _placeholder_password()
+
+        _purge_all(db)
+
+        for table_name in BACKUP_TABLES:
+            rows = backup_data.get(table_name) or []
+            if not isinstance(rows, list):
+                raise ValueError(f"'{table_name}' should be a list of rows")
+            restored[table_name] = _restore_rows(
+                db, table_name, rows, placeholder_password
+            )
+
+        # Columns held back so the circular company/instructor foreign key
+        # had something to point at.
+        _relink_deferred(db, backup_data)
+
+        _resync_sequences(db)
+
+        db.commit()
+
     except Exception as e:
         db.rollback()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Database restore failed: {str(e)}"
+            detail=f"Database restore failed, no data was changed: {str(e)}"
         )
+
+    return {
+        "message": "Database restored successfully",
+        "restored": restored,
+        "users_restored": restored.get("users", 0),
+        "instructors_restored": restored.get("instructors", 0),
+        "students_restored": restored.get("students", 0),
+        "bookings_restored": restored.get("bookings", 0),
+        "reviews_restored": restored.get("reviews", 0),
+        "password_notice": (
+            "Backups contain no passwords. Every restored account must use "
+            "'forgot password' before signing in."
+        ),
+    }

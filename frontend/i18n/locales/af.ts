@@ -382,8 +382,10 @@ export const af: TranslationKeys = {
       configSaved: '\u2705 Rugsteunkonfigurasie suksesvol opgedateer!',
       configSaveFailed: 'Kon nie rugsteuninstellings stoor nie',
       configLoadFailed: 'Kon nie rugsteuninstellings laai nie',
-      restoreLocalOk: '\u2705 Databasis suksesvol herstel vanaf plaaslike l\u00easer!',
-      restoreServerOk: '\u2705 Databasis suksesvol herstel vanaf bedienerrugsteun!',
+      restoreLocalOk:
+        '\u2705 Databasis herstel vanaf plaaslike l\u00easer. Rugsteune bevat geen wagwoorde nie, dus moet elke herstelde rekening \u201cWagwoord vergeet\u201d gebruik voor aanmelding.',
+      restoreServerOk:
+        '\u2705 Databasis herstel vanaf bedienerrugsteun. Rugsteune bevat geen wagwoorde nie, dus moet elke herstelde rekening \u201cWagwoord vergeet\u201d gebruik voor aanmelding.',
       restoreFailed: 'Herstel het misluk',
       restoreLocalFailed: 'Herstel vanaf plaaslike l\u00easer het misluk',
       restoreServerFailed: 'Herstel vanaf bedienerrugsteun het misluk',

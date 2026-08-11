@@ -379,8 +379,10 @@ export const en = {
       configSaved: '\u2705 Backup configuration updated successfully!',
       configSaveFailed: 'Failed to save backup settings',
       configLoadFailed: 'Failed to load backup settings',
-      restoreLocalOk: '\u2705 Database restored successfully from local file!',
-      restoreServerOk: '\u2705 Database restored successfully from server backup!',
+      restoreLocalOk:
+        '\u2705 Database restored from local file. Backups contain no passwords, so every restored account must use \u201cForgot password\u201d before signing in.',
+      restoreServerOk:
+        '\u2705 Database restored from server backup. Backups contain no passwords, so every restored account must use \u201cForgot password\u201d before signing in.',
       restoreFailed: 'Restore failed',
       restoreLocalFailed: 'Restore from local file failed',
       restoreServerFailed: 'Restore from server backup failed',
