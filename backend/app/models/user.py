@@ -29,6 +29,10 @@ class UserRole(str, enum.Enum):
     STUDENT = "student"
     INSTRUCTOR = "instructor"
     ADMIN = "admin"
+    # Administers a single driving school. Deliberately distinct from ADMIN:
+    # require_admin compares by exact equality, so this value is refused by
+    # every /admin/* route without those routes needing to change.
+    COMPANY_ADMIN = "company_admin"
 
 
 class UserStatus(str, enum.Enum):
@@ -167,10 +171,7 @@ class Instructor(Base):
 
     # Availability
     is_available = Column(Boolean, default=True)
-    hourly_rate = Column(Float, nullable=False)  # In ZAR
-    booking_fee = Column(
-        Float, default=20.0
-    )  # Per-instructor booking fee in ZAR (admin configurable)
+    hourly_rate = Column(Float, nullable=False)  # In ZAR — what the instructor earns
 
     # Rating
     rating = Column(Float, default=0.0)
@@ -196,6 +197,17 @@ class Instructor(Base):
     # Company membership
     company_id = Column(Integer, ForeignKey("companies.id"), nullable=True)
     is_company_owner = Column(Boolean, default=False)
+    company_joined_at = Column(DateTime(timezone=True), nullable=True)
+
+    # Markup the instructor's school adds on top of hourly_rate. The student
+    # is charged the total and never sees the split; the instructor is paid
+    # hourly_rate and never sees the markup — it is the school's margin.
+    #
+    # "percent" is a percentage of the base lesson amount; "amount" is ZAR per
+    # HOUR (not per lesson), so both kinds scale with lesson duration and the
+    # school's break-even ratio does not shift with the length of the booking.
+    company_markup_type = Column(String(10), nullable=True)  # 'percent' | 'amount'
+    company_markup_value = Column(Float, nullable=False, default=0.0)
 
     # Initial setup token (one-time UUID issued at registration for pre-auth schedule setup)
     setup_token = Column(String, nullable=True)
@@ -265,6 +277,15 @@ class Student(Base):
     # Default pickup location
     default_pickup_latitude = Column(Float, nullable=True)
     default_pickup_longitude = Column(Float, nullable=True)
+
+    # The school that enrolled this learner, if one did. NULL means they came
+    # to the platform themselves. This is what decides whether a booking is
+    # company-sourced, so it is writable only by the enrolling school at the
+    # moment it creates the account — never afterwards, and never by the
+    # learner. See services/fees.py::resolve_booking_source.
+    origin_company_id = Column(
+        Integer, ForeignKey("companies.id", ondelete="SET NULL"), nullable=True
+    )
 
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())

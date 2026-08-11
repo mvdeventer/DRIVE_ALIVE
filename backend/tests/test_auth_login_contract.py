@@ -65,7 +65,7 @@ def test_login_returns_canonical_runtime_role(monkeypatch):
 
     assert response.status_code == 200
     payload = response.json()
-    assert payload['role'] in {'admin', 'instructor', 'student'}
+    assert payload['role'] in {'admin', 'company_admin', 'instructor', 'student'}
 
 
 def test_login_rejects_unknown_runtime_role_output(monkeypatch):

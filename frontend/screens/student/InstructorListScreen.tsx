@@ -4,6 +4,7 @@
 import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   FlatList,
   Platform,
   Pressable,
@@ -17,11 +18,12 @@ import WebNavigationHeader from '../../components/WebNavigationHeader';
 import CreditBanner from '../../components/CreditBanner';
 import InlineMessage from '../../components/InlineMessage';
 import { Badge, Button, Card, Input, ThemedModal } from '../../components/ui';
+import { useT } from '../../i18n';
 import { useTheme } from '../../theme/ThemeContext';
 import { useBreakpoint } from '../../hooks/useBreakpoint';
 import ApiService from '../../services/api';
 import { getAllCitiesAndSuburbs } from '../../utils/cities';
-import { lessonTotalWithFee } from '../../utils/bookingFees';
+import { studentLessonPrice } from '../../utils/bookingFees';
 
 interface Instructor {
   id: number;
@@ -40,8 +42,7 @@ interface Instructor {
   suburb?: string;
   is_available: boolean;
   hourly_rate: number;
-  booking_fee?: number;
-  platform_commission_percent?: number; // Global commission %; fee = max(flat, lesson * %)
+  display_hourly_rate?: number; // Server-computed price the student pays
   rating: number;
   total_reviews: number;
   is_verified: boolean;
@@ -52,6 +53,7 @@ interface Instructor {
 
 export default function InstructorListScreen({ navigation }: any) {
   const { colors } = useTheme();
+  const t = useT();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   // Viewport-driven; useBreakpoint re-renders on resize and rotation on every
@@ -98,7 +100,7 @@ export default function InstructorListScreen({ navigation }: any) {
       setFilteredInstructors(allInstructors);
     } catch (error: any) {
       console.error('Error loading instructors:', error);
-      setErrorMessage(error?.response?.data?.detail || 'Failed to load instructors. Please try again.');
+      setErrorMessage(error?.response?.data?.detail || t('instructorList.msg.loadFailed'));
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -149,24 +151,24 @@ export default function InstructorListScreen({ navigation }: any) {
   const handleBookLesson = (instructor: Instructor) => {
     if (instructor.is_self) {
       if (Platform.OS === 'web') {
-        alert('You cannot book lessons with your own instructor profile.');
+        alert(t('instructorList.msg.ownProfile'));
       } else {
-        Alert.alert('Not Allowed', 'You cannot book lessons with your own instructor profile.');
+        Alert.alert(t('instructorList.msg.ownProfileTitle'), t('instructorList.msg.ownProfile'));
       }
       return;
     }
 
     if (!instructor.is_available) {
       if (Platform.OS === 'web') {
-        alert('This instructor is currently unavailable');
+        alert(t('instructorList.msg.unavailable'));
       } else {
-        Alert.alert('Unavailable', 'This instructor is currently unavailable');
+        Alert.alert(t('instructorList.msg.unavailableTitle'), t('instructorList.msg.unavailable'));
       }
       return;
     }
 
     // Navigate to booking screen with instructor data
-    navigation.navigate('Booking' as never, { instructor } as never);
+    navigation.navigate('Booking' as never, { instructorId: instructor.instructor_id } as never);
   };
 
   const handleCallInstructor = (instructor: Instructor) => {
@@ -234,7 +236,7 @@ export default function InstructorListScreen({ navigation }: any) {
           }
         } else {
           Alert.alert(
-            'Invalid Phone Number',
+            t('instructorList.msg.invalidPhoneTitle'),
             `Cannot open WhatsApp.\nPhone: ${instructor.phone}\nFormatted: ${phoneNumber}`,
             [
               { text: 'Cancel', style: 'cancel' },
@@ -253,7 +255,7 @@ export default function InstructorListScreen({ navigation }: any) {
             `Invalid phone number: ${phoneNumber}\nMust start with 27 (South African country code)`
           );
         } else {
-          Alert.alert('Invalid Phone Number', `Number must start with country code 27`);
+          Alert.alert(t('instructorList.msg.invalidPhoneTitle'), `Number must start with country code 27`);
         }
         return;
       }
@@ -303,7 +305,7 @@ ${studentName}`;
         Linking.openURL(whatsappUrl).catch(error => {
           console.error('❌ Error opening WhatsApp:', error);
           Alert.alert(
-            'WhatsApp Error',
+            t('misc.whatsappError'),
             `This phone number may not be registered with WhatsApp: ${instructor.phone}\n\nWould you like to call instead?`,
             [
               { text: 'Cancel', style: 'cancel' },
@@ -343,7 +345,7 @@ ${studentName}`;
       instructor.is_verified ? '✅ Verified Instructor' : '⚠️ Not Verified'
     }\n\n📍 Location\n${location}\n\n🪪 License Types\n${licenseTypes}\n\n🚗 Vehicle\n${
       instructor.vehicle_make
-    } ${instructor.vehicle_model} (${instructor.vehicle_year})\n\n💰 Pricing\nR${lessonTotalWithFee(
+    } ${instructor.vehicle_model} (${instructor.vehicle_year})\n\n💰 Pricing\nR${studentLessonPrice(
       instructor,
       60
     ).toFixed(2)}/hr\n\n⭐ Rating\n${instructor.rating.toFixed(1)} stars (${
@@ -382,7 +384,7 @@ ${studentName}`;
                   {item.first_name} {item.last_name} {item.is_verified && '✅'}
                 </Text>
                 {item.is_self && (
-                  <Badge variant="default" size="sm">Your Profile</Badge>
+                  <Badge variant="default" size="sm">{t('instructorList.yourProfile')}</Badge>
                 )}
               </View>
               <Badge
@@ -413,7 +415,7 @@ ${studentName}`;
           </View>
           <View style={styles.infoRow}>
             <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>
-              💰 R{lessonTotalWithFee(item, 60).toFixed(2)}/hr
+              💰 R{studentLessonPrice(item, 60).toFixed(2)}/hr
             </Text>
             {/* `accent` (amber500) as text on a light card measures 2.14:1.
                 `warning` is the amber slot tuned for text (5.02:1). */}
@@ -433,7 +435,7 @@ ${studentName}`;
             disabled={!item.is_available || !!item.is_self}
             icon="📅"
           >
-            Book Lesson
+            {t('misc.bookLesson')}
           </Button>
         </View>
       </Pressable>
@@ -444,7 +446,7 @@ ${studentName}`;
     return (
       <View style={[styles.loadingContainer, { backgroundColor: colors.background }]}>
         <ActivityIndicator size="large" color={colors.primary} />
-        <Text style={[styles.loadingText, { color: colors.textSecondary }]}>Loading instructors...</Text>
+        <Text style={[styles.loadingText, { color: colors.textSecondary }]}>{t('instructorList.loading')}</Text>
       </View>
     );
   }
@@ -452,7 +454,7 @@ ${studentName}`;
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <WebNavigationHeader
-        title="Instructor List"
+        title={t('instructorList.title')}
         onBack={() => navigation.goBack()}
         showBackButton={true}
       />
@@ -463,7 +465,7 @@ ${studentName}`;
       <View style={[styles.searchAndFilterRow, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
         <View style={styles.searchContainer}>
           <Input
-            placeholder="Search by name, vehicle, city, suburb, or province..."
+            placeholder={t('instructorList.searchPlaceholder')}
             value={searchQuery}
             onChangeText={setSearchQuery}
           />
@@ -523,12 +525,12 @@ ${studentName}`;
           setShowCityPicker(false);
           setLocationSearchQuery('');
         }}
-        title="Select City or Suburb"
+        title={t('instructorList.selectLocation')}
         size="md"
       >
         <View style={{ marginBottom: 12 }}>
           <Input
-            placeholder="Search locations..."
+            placeholder={t('instructorList.searchLocations')}
             value={locationSearchQuery}
             onChangeText={setLocationSearchQuery}
             autoFocus={Platform.OS !== 'android'}
@@ -583,13 +585,13 @@ ${studentName}`;
               <InlineMessage type="error" message={errorMessage} />
             ) : instructors.length === 0 ? (
               <>
-                <InlineMessage type="info" message="No instructors have registered yet. Please check back later." />
+                <InlineMessage type="info" message={t('instructorList.noneRegistered')} />
               </>
             ) : (
               <>
-                <Text style={[styles.emptyStateText, { color: colors.text }]}>No instructors match your filters</Text>
+                <Text style={[styles.emptyStateText, { color: colors.text }]}>{t('instructorList.noMatches')}</Text>
                 <Text style={[styles.emptyStateSubtext, { color: colors.textSecondary }]}>
-                  Try adjusting your filters or search query
+                  {t('instructorList.adjustFilters')}
                 </Text>
               </>
             )}

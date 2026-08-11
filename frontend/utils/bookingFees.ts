@@ -1,34 +1,33 @@
 /**
- * Platform booking-fee calculation (hybrid commission model).
+ * Student-facing lesson pricing.
  *
- * Mirrors backend/app/services/fees.py — the backend is the source of truth
- * at payment time; this helper exists so prices shown before checkout match
- * what the server will charge.
+ * The server sends one number — `display_hourly_rate` — already inclusive of
+ * the instructor's school markup. The client only scales it by duration.
  *
- * Effective fee per booking = max(instructor flat fee, lesson amount * commission%)
+ * This file used to mirror the backend's fee formula so a price could be shown
+ * before checkout. That is gone deliberately: reproducing it here meant the
+ * API had to hand every student `booking_fee` and `platform_commission_percent`,
+ * which let anyone reconstruct the school's margin and the platform's cut.
+ * Pricing now lives only in backend/app/services/fees.py.
  */
 
-export const DEFAULT_BOOKING_FEE = 20.0; // ZAR
-export const DEFAULT_COMMISSION_PERCENT = 8.0; // % of lesson amount
-
-export interface FeeSource {
-  booking_fee?: number;
-  platform_commission_percent?: number;
+export interface StudentPriceSource {
+  /** Server-computed price per hour, markup included. */
+  display_hourly_rate?: number;
+  /** The instructor's own rate. Fallback only — schools may add a markup. */
+  hourly_rate?: number;
 }
 
-/** Effective platform fee for a single booking. */
-export function calculateBookingFee(instructor: FeeSource, lessonAmount: number): number {
-  const flatFee = instructor.booking_fee ?? DEFAULT_BOOKING_FEE;
-  const percent = instructor.platform_commission_percent ?? DEFAULT_COMMISSION_PERCENT;
-  const commission = lessonAmount * (percent / 100);
-  return Math.round(Math.max(flatFee, commission) * 100) / 100;
+/** Price per hour to show a student. */
+export function studentHourlyRate(instructor: StudentPriceSource): number {
+  return instructor.display_hourly_rate ?? instructor.hourly_rate ?? 0;
 }
 
-/** Lesson price + platform fee for a lesson of `durationMinutes` at `hourlyRate`. */
-export function lessonTotalWithFee(
-  instructor: FeeSource & { hourly_rate: number },
+/** Price of a lesson of `durationMinutes`, as the student will be charged. */
+export function studentLessonPrice(
+  instructor: StudentPriceSource,
   durationMinutes: number
 ): number {
-  const lessonAmount = (instructor.hourly_rate || 0) * (durationMinutes / 60);
-  return lessonAmount + calculateBookingFee(instructor, lessonAmount);
+  const price = studentHourlyRate(instructor) * ((durationMinutes || 0) / 60);
+  return Math.round(price * 100) / 100;
 }

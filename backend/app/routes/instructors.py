@@ -3,6 +3,8 @@ Instructor routes
 """
 
 from datetime import datetime, timezone
+
+from pydantic import BaseModel
 from typing import Annotated, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -16,13 +18,42 @@ from ..models.booking import Booking, BookingStatus
 from ..models.user import Instructor as InstructorModel
 from ..models.user import User, UserRole
 from ..routes.auth import get_current_user, get_active_role
-from ..services.fees import get_platform_commission_percent
+from ..models.company import Company
+from ..models.company_invite import (
+    CompanyInstructorInvite,
+    InviteDirection,
+    InviteStatus,
+)
+from ..services.company_service import resolve_managed_company_id
+from ..services.recruitment_service import (
+    accept_invite,
+    assert_instructor_can_join,
+    assert_invite_open,
+    find_invite_by_token,
+    leave_company,
+)
+from ..services.fees import get_platform_commission_percent, resolve_student_price
 from ..schemas.user import InstructorLocation, InstructorResponse, InstructorUpdate
 
 router = APIRouter(prefix="/instructors", tags=["Instructors"])
 
 
-@router.get("/", response_model=List[InstructorResponse])
+#: Fields a student must never receive. ``hourly_rate`` is the instructor's
+#: base: publishing it next to ``display_hourly_rate`` would let anyone
+#: subtract one from the other and read the school's margin. The platform's
+#: cut is withheld for the same reason. Pydantic serialises unset fields with
+#: their defaults, so these must be excluded rather than merely left unset.
+STUDENT_HIDDEN_INSTRUCTOR_FIELDS = {
+    "hourly_rate",
+    "platform_commission_percent",
+}
+
+
+@router.get(
+    "/",
+    response_model=List[InstructorResponse],
+    response_model_exclude={"__all__": STUDENT_HIDDEN_INSTRUCTOR_FIELDS},
+)
 async def get_instructors(
     latitude: Optional[float] = Query(None, ge=-90, le=90),
     longitude: Optional[float] = Query(None, ge=-180, le=180),
@@ -86,7 +117,6 @@ async def get_instructors(
 
         # Build responses (user is already loaded via joinedload — no extra queries)
         responses = []
-        commission_percent = get_platform_commission_percent(db)
         for instructor in instructors:
             user = instructor.user
             if user:
@@ -112,9 +142,11 @@ async def get_instructors(
                     suburb=instructor.suburb,
                     is_available=instructor.is_available,
                     hourly_rate=instructor.hourly_rate,
-                    booking_fee=instructor.booking_fee
-                    or 20.0,  # Include per-instructor booking fee (default R20)
-                    platform_commission_percent=commission_percent,
+                    # One number, already inclusive of the school's markup.
+                    # platform_commission_percent is withheld:
+                    # this endpoint is public and students must not be able to
+                    # reconstruct the split.
+                    display_hourly_rate=resolve_student_price(instructor, 60)[2],
                     service_radius_km=instructor.service_radius_km,
                     max_travel_distance_km=instructor.max_travel_distance_km,
                     rate_per_km_beyond_radius=instructor.rate_per_km_beyond_radius,
@@ -185,8 +217,6 @@ async def get_instructor_profile(
         suburb=instructor.suburb,
         is_available=instructor.is_available,
         hourly_rate=instructor.hourly_rate,
-        booking_fee=instructor.booking_fee
-        or 20.0,  # Include booking fee for instructor dashboard
         platform_commission_percent=get_platform_commission_percent(db),
         service_radius_km=instructor.service_radius_km,
         max_travel_distance_km=instructor.max_travel_distance_km,
@@ -333,7 +363,11 @@ async def get_earnings_report(
     return response_data
 
 
-@router.get("/{instructor_id}", response_model=InstructorResponse)
+@router.get(
+    "/{instructor_id}",
+    response_model=InstructorResponse,
+    response_model_exclude=STUDENT_HIDDEN_INSTRUCTOR_FIELDS,
+)
 async def get_instructor(instructor_id: int, db: Session = Depends(get_db)):
     """
     Get instructor by instructor_id (NOT user_id!)
@@ -371,6 +405,7 @@ async def get_instructor(instructor_id: int, db: Session = Depends(get_db)):
         suburb=instructor.suburb,
         is_available=instructor.is_available,
         hourly_rate=instructor.hourly_rate,
+        display_hourly_rate=resolve_student_price(instructor, 60)[2],
         service_radius_km=instructor.service_radius_km,
         max_travel_distance_km=instructor.max_travel_distance_km,
         rate_per_km_beyond_radius=instructor.rate_per_km_beyond_radius,
@@ -793,41 +828,49 @@ async def get_unverified_instructors(
 # ==================== Instructor Company Management ====================
 
 
+def _require_company_authority(db: Session, user: User) -> int:
+    """Return the company the caller may manage, or raise 403.
+
+    The company id comes from the caller's own profile — never from a request
+    parameter — so one school cannot act on another's records.
+    """
+    company_id = resolve_managed_company_id(db, user)
+    if company_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={
+                "code": "COMPANY_AUTHORITY_REQUIRED",
+                "message": "You do not manage a driving school.",
+            },
+        )
+    return company_id
+
+
 @router.get("/company/my-instructors")
 async def get_my_company_instructors(
     current_user: Annotated[User, Depends(get_current_user)],
     db: Session = Depends(get_db),
 ):
     """
-    Company-owner endpoint: list all instructors belonging to the same company.
-    Requires the authenticated user to be a company owner.
+    List the instructors belonging to the caller's school.
+
+    Open to a company administrator or, for schools created before that role
+    existed, the instructor who owns the company.
     """
-    instructor = (
+    company_id = _require_company_authority(db, current_user)
+
+    # A company administrator has no instructor profile to exclude; an
+    # instructor-owner should not see themselves in their own roster.
+    self_instructor = (
         db.query(InstructorModel)
         .filter(InstructorModel.user_id == current_user.id)
         .first()
     )
-    if not instructor:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Instructor profile not found")
-    if not instructor.is_company_owner:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only company owners can view company instructors",
-        )
-    if not instructor.company_id:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="You are not associated with a company",
-        )
 
-    members = (
-        db.query(InstructorModel)
-        .filter(
-            InstructorModel.company_id == instructor.company_id,
-            InstructorModel.id != instructor.id,
-        )
-        .all()
-    )
+    query = db.query(InstructorModel).filter(InstructorModel.company_id == company_id)
+    if self_instructor is not None:
+        query = query.filter(InstructorModel.id != self_instructor.id)
+    members = query.all()
 
     result = []
     for member in members:
@@ -857,26 +900,18 @@ async def company_verify_instructor(
     db: Session = Depends(get_db),
 ):
     """
-    Company-owner approves a pending instructor from the same company.
+    Approve a pending instructor who applied to the caller's school.
+
     Changes status from 'pending_company' → 'verified'.
     """
     from ..models.user import InstructorVerificationStatus as IVS
 
-    owner = (
-        db.query(InstructorModel)
-        .filter(InstructorModel.user_id == current_user.id)
-        .first()
-    )
-    if not owner or not owner.is_company_owner:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only company owners can approve instructors",
-        )
+    company_id = _require_company_authority(db, current_user)
 
     member = db.query(InstructorModel).filter(InstructorModel.id == instructor_id).first()
     if not member:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Instructor not found")
-    if member.company_id != owner.company_id:
+    if member.company_id != company_id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Instructor is not part of your company",
@@ -904,26 +939,18 @@ async def company_reject_instructor(
     db: Session = Depends(get_db),
 ):
     """
-    Company-owner rejects a pending instructor from the same company.
+    Reject a pending instructor who applied to the caller's school.
+
     Changes status to 'rejected'.
     """
     from ..models.user import InstructorVerificationStatus as IVS
 
-    owner = (
-        db.query(InstructorModel)
-        .filter(InstructorModel.user_id == current_user.id)
-        .first()
-    )
-    if not owner or not owner.is_company_owner:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only company owners can reject instructors",
-        )
+    company_id = _require_company_authority(db, current_user)
 
     member = db.query(InstructorModel).filter(InstructorModel.id == instructor_id).first()
     if not member:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Instructor not found")
-    if member.company_id != owner.company_id:
+    if member.company_id != company_id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Instructor is not part of your company",
@@ -937,3 +964,228 @@ async def company_reject_instructor(
         "status": "rejected",
         "instructor_id": instructor_id,
     }
+
+
+# ==================== Joining and leaving a school ====================
+
+
+class JoinRequest(BaseModel):
+    """Ask a driving school to take you on."""
+
+    company_id: int
+
+
+def _my_instructor(db: Session, user: User) -> InstructorModel:
+    instructor = (
+        db.query(InstructorModel).filter(InstructorModel.user_id == user.id).first()
+    )
+    if instructor is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={
+                "code": "INSTRUCTOR_PROFILE_REQUIRED",
+                "message": "You need an instructor profile to do that.",
+            },
+        )
+    return instructor
+
+
+def _offer_view(db: Session, invite: CompanyInstructorInvite) -> dict:
+    company = db.query(Company).filter(Company.id == invite.company_id).first()
+    return {
+        "id": invite.id,
+        "company_id": invite.company_id,
+        "company_name": company.name if company else None,
+        "direction": invite.direction,
+        "status": invite.status,
+        "markup_type": invite.proposed_markup_type,
+        "markup_value": invite.proposed_markup_value,
+        "expires_at": invite.expires_at.isoformat() if invite.expires_at else None,
+        "is_open": invite.is_valid(),
+    }
+
+
+@router.get("/invites/token/{token}")
+async def preview_invite(token: str, db: Session = Depends(get_db)):
+    """Show the terms behind an invitation link.
+
+    Unauthenticated on purpose: the recipient may not have an account yet and
+    needs to see who is inviting them before deciding to register. The token
+    is unguessable and this returns no personal data beyond the school's name.
+    """
+    invite = find_invite_by_token(db, token)
+    return _offer_view(db, invite)
+
+
+@router.get("/invites")
+async def list_my_invites(
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Session = Depends(get_db),
+):
+    """Invitations addressed to me, newest first."""
+    instructor = (
+        db.query(InstructorModel)
+        .filter(InstructorModel.user_id == current_user.id)
+        .first()
+    )
+    query = db.query(CompanyInstructorInvite).filter(
+        CompanyInstructorInvite.email == current_user.email
+    )
+    if instructor is not None:
+        query = db.query(CompanyInstructorInvite).filter(
+            (CompanyInstructorInvite.email == current_user.email)
+            | (CompanyInstructorInvite.instructor_id == instructor.id)
+        )
+
+    invites = query.order_by(CompanyInstructorInvite.id.desc()).all()
+    return {"invites": [_offer_view(db, invite) for invite in invites]}
+
+
+@router.post("/invites/token/{token}/accept")
+async def accept_school_invite(
+    token: str,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Session = Depends(get_db),
+):
+    """Join the school that invited me."""
+    invite = find_invite_by_token(db, token)
+    assert_invite_open(invite)
+
+    if invite.direction != InviteDirection.INVITE.value:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                "code": "INVITE_NOT_FOR_YOU",
+                "message": "That request is awaiting the school, not you.",
+            },
+        )
+
+    # The invitation is addressed to an email; only that person may take it up.
+    if invite.email.lower() != (current_user.email or "").lower():
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={
+                "code": "INVITE_NOT_FOR_YOU",
+                "message": "That invitation was sent to a different email address.",
+            },
+        )
+
+    instructor = _my_instructor(db, current_user)
+    assert_instructor_can_join(instructor)
+    accept_invite(db, invite, instructor)
+    db.commit()
+    db.refresh(instructor)
+
+    company = db.query(Company).filter(Company.id == instructor.company_id).first()
+    return {
+        "joined": True,
+        "company_id": instructor.company_id,
+        "company_name": company.name if company else None,
+        "verification_status": instructor.verification_status,
+    }
+
+
+@router.post("/invites/token/{token}/decline")
+async def decline_school_invite(
+    token: str,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Session = Depends(get_db),
+):
+    """Turn down an invitation."""
+    invite = find_invite_by_token(db, token)
+    assert_invite_open(invite)
+
+    if invite.email.lower() != (current_user.email or "").lower():
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={
+                "code": "INVITE_NOT_FOR_YOU",
+                "message": "That invitation was sent to a different email address.",
+            },
+        )
+
+    invite.status = InviteStatus.DECLINED.value
+    invite.responded_at = datetime.now(timezone.utc)
+    db.commit()
+    return _offer_view(db, invite)
+
+
+@router.post("/me/company-requests", status_code=status.HTTP_201_CREATED)
+async def request_to_join_company(
+    payload: JoinRequest,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Session = Depends(get_db),
+):
+    """Ask a school to take me on.
+
+    The mirror image of an invitation: the school answers it through
+    ``POST /company/invites/{id}/approve``.
+    """
+    instructor = _my_instructor(db, current_user)
+    assert_instructor_can_join(instructor)
+
+    company = (
+        db.query(Company)
+        .filter(Company.id == payload.company_id, Company.is_active.is_(True))
+        .first()
+    )
+    if company is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={
+                "code": "COMPANY_NOT_FOUND",
+                "message": "That driving school is not available.",
+            },
+        )
+
+    existing = (
+        db.query(CompanyInstructorInvite)
+        .filter(
+            CompanyInstructorInvite.company_id == company.id,
+            CompanyInstructorInvite.instructor_id == instructor.id,
+            CompanyInstructorInvite.status == InviteStatus.PENDING.value,
+        )
+        .first()
+    )
+    if existing is not None and existing.is_valid():
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={
+                "code": "INVITE_ALREADY_PENDING",
+                "message": "You have already asked to join this school.",
+            },
+        )
+
+    invite = CompanyInstructorInvite(
+        company_id=company.id,
+        invited_by_user_id=current_user.id,
+        direction=InviteDirection.REQUEST.value,
+        email=current_user.email,
+        instructor_id=instructor.id,
+        token=CompanyInstructorInvite.generate_token(),
+        status=InviteStatus.PENDING.value,
+        # The school sets the terms when it approves.
+        proposed_markup_type=None,
+        proposed_markup_value=0.0,
+        expires_at=CompanyInstructorInvite.get_expiration_time(),
+    )
+    db.add(invite)
+    db.commit()
+    db.refresh(invite)
+    return _offer_view(db, invite)
+
+
+@router.post("/me/leave-company")
+async def leave_my_company(
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Session = Depends(get_db),
+):
+    """Leave my school.
+
+    Existing bookings keep the price they were made at — they carry their own
+    snapshot — so leaving cannot rewrite anybody's history.
+    """
+    instructor = _my_instructor(db, current_user)
+    leave_company(db, instructor)
+    db.commit()
+    return {"left": True, "instructor_id": instructor.id}

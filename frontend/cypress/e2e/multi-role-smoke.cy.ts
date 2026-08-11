@@ -5,9 +5,10 @@
  * - CYPRESS_smokeAdminEmail / CYPRESS_smokeAdminPassword
  * - CYPRESS_smokeInstructorEmail / CYPRESS_smokeInstructorPassword
  * - CYPRESS_smokeStudentEmail / CYPRESS_smokeStudentPassword
+ * - CYPRESS_smokeCompanyAdminEmail / CYPRESS_smokeCompanyAdminPassword
  */
 
-type Role = 'admin' | 'instructor' | 'student';
+type Role = 'admin' | 'company_admin' | 'instructor' | 'student';
 
 type Credentials = {
   email: string;
@@ -24,6 +25,14 @@ const credentialsByRole: Record<Role, Credentials> = {
   admin: {
     email: Cypress.env('smokeAdminEmail') || DEFAULT_ADMIN_EMAIL,
     password: Cypress.env('smokeAdminPassword') || DEFAULT_ADMIN_PASSWORD,
+  },
+  company_admin: {
+    email:
+      Cypress.env('smokeCompanyAdminEmail') || Cypress.env('smokeAdminEmail') || DEFAULT_ADMIN_EMAIL,
+    password:
+      Cypress.env('smokeCompanyAdminPassword') ||
+      Cypress.env('smokeAdminPassword') ||
+      DEFAULT_ADMIN_PASSWORD,
   },
   instructor: {
     email: Cypress.env('smokeInstructorEmail') || Cypress.env('smokeAdminEmail') || DEFAULT_ADMIN_EMAIL,

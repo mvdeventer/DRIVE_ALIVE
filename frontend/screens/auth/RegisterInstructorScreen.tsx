@@ -91,6 +91,10 @@ export default function RegisterInstructorScreen({ navigation, route }: any) {
   const timestamp = DEBUG_CONFIG.ENABLED ? Date.now().toString().slice(-6) : '';
   const presetCompanyChoice = route?.params?.presetCompanyChoice;
   const presetCompanyName = route?.params?.presetCompanyName;
+  // Arriving from a school's invitation link: the school is already chosen and
+  // the token joins them on submit, so they never touch the dropdown.
+  const presetCompanyId = route?.params?.presetCompanyId;
+  const inviteToken = route?.params?.inviteToken;
 
   // ── Step state ──────────────────────────────────────────
   const [step, setStep] = useState(1);
@@ -135,7 +139,13 @@ export default function RegisterInstructorScreen({ navigation, route }: any) {
       ? presetCompanyChoice
       : 'independent'
   );
-  const [selectedCompanyId, setSelectedCompanyId] = useState<number | null>(null);
+  const [selectedCompanyId, setSelectedCompanyId] = useState<number | null>(
+    typeof presetCompanyId === 'number'
+      ? presetCompanyId
+      : typeof presetCompanyId === 'string' && presetCompanyId !== ''
+        ? Number(presetCompanyId)
+        : null
+  );
   const [newCompanyName, setNewCompanyName] = useState(
     typeof presetCompanyName === 'string' ? presetCompanyName : ''
   );
@@ -266,7 +276,11 @@ export default function RegisterInstructorScreen({ navigation, route }: any) {
           is_active: s.is_active,
         })),
       };
-      if (companyChoice === 'join' && selectedCompanyId) {
+      if (inviteToken) {
+        // The invitation carries the school and the agreed markup; the server
+        // reads both from it and marks the invitation accepted.
+        payload.invite_token = inviteToken;
+      } else if (companyChoice === 'join' && selectedCompanyId) {
         payload.company_id = selectedCompanyId;
       } else if (companyChoice === 'create' && newCompanyName.trim()) {
         payload.company_name = newCompanyName.trim();

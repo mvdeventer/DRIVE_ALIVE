@@ -673,6 +673,7 @@ export default function LoginScreen({ navigation, onAuthChange }: any) {
 
   const getRoleLabel = (role: string) => {
     if (role === 'admin') return 'Admin Profile';
+    if (role === 'company_admin') return 'Driving School Profile';
     if (role === 'instructor') return 'Instructor Profile';
     if (role === 'student') return 'Student Profile';
     return role;

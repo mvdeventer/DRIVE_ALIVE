@@ -20,6 +20,7 @@ import {
 import { Button, Card, ThemedModal } from '../../components';
 import InlineMessage from '../../components/InlineMessage';
 import WebNavigationHeader from '../../components/WebNavigationHeader';
+import { useT } from '../../i18n';
 import { useTheme } from '../../theme/ThemeContext';
 import { useBreakpoint } from '../../hooks/useBreakpoint';
 import apiService from '../../services/api';
@@ -48,6 +49,7 @@ interface Booking {
 
 export default function BookingOversightScreen({ navigation }: any) {
   const { colors } = useTheme();
+  const t = useT();
   // Grid density is viewport-driven and must be read during render — putting
   // it in StyleSheet.create froze the layout at whatever width the module
   // happened to be imported at.
@@ -78,7 +80,7 @@ export default function BookingOversightScreen({ navigation }: any) {
       );
       setBookings(sorted);
     } catch (err: any) {
-      setError(err.response?.data?.detail || 'Failed to load bookings');
+      setError(err.response?.data?.detail || t('bookingOversight.msg.loadFailed'));
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -108,7 +110,7 @@ export default function BookingOversightScreen({ navigation }: any) {
       await apiService.cancelBookingAdmin(confirmCancel.id);
       showMessage(
         setSuccess,
-        'Booking cancelled successfully',
+        t('bookingOversight.msg.cancelled'),
         SCREEN_NAME,
         'bookingCancel',
         'success'
@@ -118,7 +120,7 @@ export default function BookingOversightScreen({ navigation }: any) {
     } catch (err: any) {
       showMessage(
         setError,
-        err.response?.data?.detail || 'Failed to cancel booking',
+        err.response?.data?.detail || t('bookingOversight.msg.cancelFailed'),
         SCREEN_NAME,
         'error',
         'error'
@@ -207,7 +209,7 @@ Lesson Type:    ${booking.lesson_type.toUpperCase()}
 `.trim();
 
     Clipboard.setString(details);
-    setSuccess('Booking details copied to clipboard!');
+    setSuccess(t('bookingOversight.msg.copied'));
     setTimeout(() => setSuccess(''), 3000);
   };
 
@@ -261,15 +263,15 @@ Lesson Type:    ${booking.lesson_type.toUpperCase()}
 
       <View style={styles.bookingDetails}>
         <View style={styles.detailRow}>
-          <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>Type:</Text>
+          <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>{t('bookingOversight.label.type')}</Text>
           <Text style={[styles.detailValue, { color: colors.text }]}>{item.lesson_type.toUpperCase()}</Text>
         </View>
         <View style={styles.detailRow}>
-          <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>Date:</Text>
+          <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>{t('bookingOversight.label.date')}</Text>
           <Text style={[styles.detailValue, { color: colors.text }]}>{new Date(item.lesson_date).toLocaleDateString()}</Text>
         </View>
         <View style={styles.detailRow}>
-          <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>Time:</Text>
+          <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>{t('bookingOversight.label.time')}</Text>
           <Text style={[styles.detailValue, { color: colors.text }]}>
             {new Date(item.lesson_date).toLocaleTimeString([], {
               hour: '2-digit',
@@ -278,40 +280,40 @@ Lesson Type:    ${booking.lesson_type.toUpperCase()}
           </Text>
         </View>
         <View style={styles.detailRow}>
-          <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>Duration:</Text>
+          <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>{t('bookingOversight.label.duration')}</Text>
           <Text style={[styles.detailValue, { color: colors.text }]}>{item.duration_minutes} min</Text>
         </View>
         <View style={styles.detailRow}>
-          <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>Pickup:</Text>
+          <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>{t('bookingOversight.label.pickup')}</Text>
           <Text style={[styles.detailValue, { color: colors.text }]} numberOfLines={2}>
             {item.pickup_address}
           </Text>
         </View>
         {item.dropoff_address ? (
           <View style={styles.detailRow}>
-            <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>Dropoff:</Text>
+            <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>{t('bookingOversight.label.dropoff')}</Text>
             <Text style={[styles.detailValue, { color: colors.text }]} numberOfLines={2}>
               {item.dropoff_address}
             </Text>
           </View>
         ) : null}
         <View style={styles.detailRow}>
-          <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>Amount:</Text>
+          <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>{t('bookingOversight.label.amount')}</Text>
           <Text style={[styles.amountText, { color: colors.success }]}>R{item.amount.toFixed(2)}</Text>
         </View>
         <View style={styles.detailRow}>
-          <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>Created:</Text>
+          <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>{t('bookingOversight.label.created')}</Text>
           <Text style={[styles.detailValue, { color: colors.text }]}>{new Date(item.created_at).toLocaleDateString()}</Text>
         </View>
       </View>
 
       <View style={styles.actionButtons}>
         <Button variant="primary" size="sm" style={{ flex: 1 }} onPress={() => copyBookingDetails(item)}>
-          Copy Details
+          {t('misc.copyDetails')}
         </Button>
         {item.status.toLowerCase() !== 'cancelled' && item.status.toLowerCase() !== 'completed' && (
           <Button variant="danger" size="sm" style={{ flex: 1 }} onPress={() => handleCancelBooking(item)}>
-            Cancel
+            {t('common.cancel')}
           </Button>
         )}
       </View>
@@ -322,7 +324,7 @@ Lesson Type:    ${booking.lesson_type.toUpperCase()}
     return (
       <View style={[styles.centerContainer, { backgroundColor: colors.background }]}>
         <ActivityIndicator size="large" color={colors.primary} />
-        <Text style={[styles.loadingText, { color: colors.textSecondary }]}>Loading bookings...</Text>
+        <Text style={[styles.loadingText, { color: colors.textSecondary }]}>{t('bookingOversight.loading')}</Text>
       </View>
     );
   }
@@ -330,7 +332,7 @@ Lesson Type:    ${booking.lesson_type.toUpperCase()}
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <WebNavigationHeader
-        title="Booking Oversight"
+        title={t('bookingOversight.title')}
         onBack={() => navigation.goBack()}
         showBackButton={navigation.canGoBack()}
       />
@@ -344,7 +346,7 @@ Lesson Type:    ${booking.lesson_type.toUpperCase()}
       <View style={[styles.tabContainer, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
         {(['all', 'pending', 'completed', 'cancelled'] as const).map((tab) => {
           const count = tab === 'all' ? bookings.length : bookings.filter(b => b.status.toLowerCase() === tab).length;
-          const label = tab.charAt(0).toUpperCase() + tab.slice(1);
+          const label = t(`bookingOversight.tab.${tab}`, { count });
           return (
             <Pressable
               key={tab}
@@ -362,7 +364,7 @@ Lesson Type:    ${booking.lesson_type.toUpperCase()}
       <View style={[styles.searchContainer, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
         <TextInput
           style={[styles.searchInput, { borderColor: colors.border, backgroundColor: colors.backgroundSecondary, color: colors.text }]}
-          placeholder="Search by name, booking reference, student/instructor ID, or date..."
+          placeholder={t('bookingOversight.searchPlaceholder')}
           value={searchQuery}
           onChangeText={setSearchQuery}
           placeholderTextColor={colors.textTertiary}
@@ -385,15 +387,15 @@ Lesson Type:    ${booking.lesson_type.toUpperCase()}
       <ThemedModal
         visible={modalVisible}
         onClose={closeModal}
-        title="Booking Details"
+        title={t('bookingOversight.detailsTitle')}
         size="lg"
         footer={
           <View style={{ flexDirection: 'row', gap: 12 }}>
             <Button variant="primary" style={{ flex: 1 }} onPress={copyAndCloseModal}>
-              Copy Details
+              {t('misc.copyDetails')}
             </Button>
             <Button variant="secondary" style={{ flex: 1 }} onPress={closeModal}>
-              Close
+              {t('common.close')}
             </Button>
           </View>
         }
@@ -401,17 +403,17 @@ Lesson Type:    ${booking.lesson_type.toUpperCase()}
             {selectedBooking && (
               <ScrollView>
                 <View style={styles.modalSection}>
-                  <Text style={[styles.modalLabel, { color: colors.textSecondary }]}>Booking Reference:</Text>
+                  <Text style={[styles.modalLabel, { color: colors.textSecondary }]}>{t('bookingOversight.label.reference')}</Text>
                   <Text style={[styles.modalValue, { color: colors.text }]}>{selectedBooking.booking_reference}</Text>
                 </View>
 
                 <View style={styles.modalSection}>
-                  <Text style={[styles.modalLabel, { color: colors.textSecondary }]}>Booking ID:</Text>
+                  <Text style={[styles.modalLabel, { color: colors.textSecondary }]}>{t('bookingOversight.label.bookingId')}</Text>
                   <Text style={[styles.modalValue, { color: colors.text }]}>#{selectedBooking.id}</Text>
                 </View>
 
                 <View style={styles.modalSection}>
-                  <Text style={[styles.modalLabel, { color: colors.textSecondary }]}>Status:</Text>
+                  <Text style={[styles.modalLabel, { color: colors.textSecondary }]}>{t('bookingOversight.label.status')}</Text>
                   <View style={[styles.modalStatusBadge, { backgroundColor: getStatusColor(selectedBooking.status) }]}>
                     <Text style={styles.modalStatusText}>
                       {selectedBooking.status.toUpperCase()}
@@ -420,20 +422,20 @@ Lesson Type:    ${booking.lesson_type.toUpperCase()}
                 </View>
 
                 <View style={styles.modalSection}>
-                  <Text style={[styles.modalLabel, { color: colors.textSecondary }]}>Lesson Type:</Text>
+                  <Text style={[styles.modalLabel, { color: colors.textSecondary }]}>{t('bookingOversight.label.lessonType')}</Text>
                   <Text style={[styles.modalValue, { color: colors.text }]}>{selectedBooking.lesson_type.toUpperCase()}</Text>
                 </View>
 
                 <View style={[styles.modalDivider, { backgroundColor: colors.border }]} />
 
                 <View style={styles.modalSection}>
-                  <Text style={[styles.modalSectionTitle, { color: colors.text }]}>Student</Text>
+                  <Text style={[styles.modalSectionTitle, { color: colors.text }]}>{t('createUser.roleStudent')}</Text>
                   <Text style={[styles.modalValue, { color: colors.text }]}>{selectedBooking.student_name}</Text>
                   <Text style={[styles.modalSubvalue, { color: colors.textTertiary }]}>ID: {selectedBooking.student_id_number}</Text>
                 </View>
 
                 <View style={styles.modalSection}>
-                  <Text style={[styles.modalSectionTitle, { color: colors.text }]}>Instructor</Text>
+                  <Text style={[styles.modalSectionTitle, { color: colors.text }]}>{t('createUser.roleInstructor')}</Text>
                   <Text style={[styles.modalValue, { color: colors.text }]}>{selectedBooking.instructor_name}</Text>
                   <Text style={[styles.modalSubvalue, { color: colors.textTertiary }]}>
                     ID: {selectedBooking.instructor_id_number}
@@ -443,14 +445,14 @@ Lesson Type:    ${booking.lesson_type.toUpperCase()}
                 <View style={[styles.modalDivider, { backgroundColor: colors.border }]} />
 
                 <View style={styles.modalSection}>
-                  <Text style={[styles.modalLabel, { color: colors.textSecondary }]}>Date:</Text>
+                  <Text style={[styles.modalLabel, { color: colors.textSecondary }]}>{t('bookingOversight.label.date')}</Text>
                   <Text style={[styles.modalValue, { color: colors.text }]}>
                     {new Date(selectedBooking.lesson_date).toLocaleDateString()}
                   </Text>
                 </View>
 
                 <View style={styles.modalSection}>
-                  <Text style={[styles.modalLabel, { color: colors.textSecondary }]}>Time:</Text>
+                  <Text style={[styles.modalLabel, { color: colors.textSecondary }]}>{t('bookingOversight.label.time')}</Text>
                   <Text style={[styles.modalValue, { color: colors.text }]}>
                     {new Date(selectedBooking.lesson_date).toLocaleTimeString([], {
                       hour: '2-digit',
@@ -460,20 +462,20 @@ Lesson Type:    ${booking.lesson_type.toUpperCase()}
                 </View>
 
                 <View style={styles.modalSection}>
-                  <Text style={[styles.modalLabel, { color: colors.textSecondary }]}>Duration:</Text>
+                  <Text style={[styles.modalLabel, { color: colors.textSecondary }]}>{t('bookingOversight.label.duration')}</Text>
                   <Text style={[styles.modalValue, { color: colors.text }]}>{selectedBooking.duration_minutes} minutes</Text>
                 </View>
 
                 <View style={[styles.modalDivider, { backgroundColor: colors.border }]} />
 
                 <View style={styles.modalSection}>
-                  <Text style={[styles.modalLabel, { color: colors.textSecondary }]}>Pickup:</Text>
+                  <Text style={[styles.modalLabel, { color: colors.textSecondary }]}>{t('bookingOversight.label.pickup')}</Text>
                   <Text style={[styles.modalValue, { color: colors.text }]}>{selectedBooking.pickup_address}</Text>
                 </View>
 
                 {selectedBooking.dropoff_address ? (
                   <View style={styles.modalSection}>
-                    <Text style={[styles.modalLabel, { color: colors.textSecondary }]}>Dropoff:</Text>
+                    <Text style={[styles.modalLabel, { color: colors.textSecondary }]}>{t('bookingOversight.label.dropoff')}</Text>
                     <Text style={[styles.modalValue, { color: colors.text }]}>{selectedBooking.dropoff_address}</Text>
                   </View>
                 ) : null}
@@ -481,12 +483,12 @@ Lesson Type:    ${booking.lesson_type.toUpperCase()}
                 <View style={[styles.modalDivider, { backgroundColor: colors.border }]} />
 
                 <View style={styles.modalSection}>
-                  <Text style={[styles.modalLabel, { color: colors.textSecondary }]}>Amount:</Text>
+                  <Text style={[styles.modalLabel, { color: colors.textSecondary }]}>{t('bookingOversight.label.amount')}</Text>
                   <Text style={[styles.modalAmount, { color: colors.success }]}>R{selectedBooking.amount.toFixed(2)}</Text>
                 </View>
 
                 <View style={styles.modalSection}>
-                  <Text style={[styles.modalLabel, { color: colors.textSecondary }]}>Created:</Text>
+                  <Text style={[styles.modalLabel, { color: colors.textSecondary }]}>{t('bookingOversight.label.created')}</Text>
                   <Text style={[styles.modalValue, { color: colors.text }]}>
                     {new Date(selectedBooking.created_at).toLocaleString()}
                   </Text>
@@ -499,41 +501,41 @@ Lesson Type:    ${booking.lesson_type.toUpperCase()}
       <ThemedModal
         visible={!!confirmCancel}
         onClose={() => setConfirmCancel(null)}
-        title="Cancel Booking"
+        title={t('bookingOversight.cancelBooking')}
         footer={
           <View style={{ flexDirection: 'row', gap: 12 }}>
             <Button variant="secondary" style={{ flex: 1 }} onPress={() => setConfirmCancel(null)}>
-              No, Keep It
+              {t('bookingOversight.msg.keepIt')}
             </Button>
             <Button variant="danger" style={{ flex: 1 }} onPress={confirmCancelBooking}>
-              Yes, Cancel Booking
+              {t('bookingOversight.msg.yesCancel')}
             </Button>
           </View>
         }
       >
             <Text style={{ fontSize: 16, color: colors.text, textAlign: 'center', marginBottom: 15, fontFamily: 'Inter_400Regular' }}>
-              Are you sure you want to cancel this booking?
+              {t('bookingOversight.msg.confirmCancel')}
             </Text>
 
               {confirmCancel && (
                 <View style={[styles.confirmDetails, { backgroundColor: colors.backgroundSecondary }]}>
                   <Text style={{ fontSize: 14, color: colors.text, marginBottom: 5, fontFamily: 'Inter_400Regular' }}>
-                    <Text style={{ fontFamily: 'Inter_700Bold', color: colors.primary }}>Student: </Text>
+                    <Text style={{ fontFamily: 'Inter_700Bold', color: colors.primary }}>{t('bookingOversight.label.student')} </Text>
                     <Text>{confirmCancel.student_name}</Text>
                   </Text>
                   <Text style={{ fontSize: 14, color: colors.text, marginBottom: 5, fontFamily: 'Inter_400Regular' }}>
-                    <Text style={{ fontFamily: 'Inter_700Bold', color: colors.primary }}>Instructor: </Text>
+                    <Text style={{ fontFamily: 'Inter_700Bold', color: colors.primary }}>{t('bookingOversight.label.instructor')} </Text>
                     <Text>{confirmCancel.instructor_name}</Text>
                   </Text>
                   <Text style={{ fontSize: 14, color: colors.text, marginBottom: 5, fontFamily: 'Inter_400Regular' }}>
-                    <Text style={{ fontFamily: 'Inter_700Bold', color: colors.primary }}>Date: </Text>
+                    <Text style={{ fontFamily: 'Inter_700Bold', color: colors.primary }}>{t('bookingOversight.label.date')} </Text>
                     <Text>{new Date(confirmCancel.lesson_date).toLocaleString()}</Text>
                   </Text>
                 </View>
               )}
 
             <Text style={{ fontSize: 14, color: colors.danger, textAlign: 'center', fontStyle: 'italic', fontFamily: 'Inter_400Regular' }}>
-              This action cannot be undone.
+              {t('misc.cannotBeUndone')}
             </Text>
       </ThemedModal>
     </View>

@@ -22,7 +22,6 @@ import { Badge, Button, Card, Input, ThemedModal } from '../../components/ui';
 import { useTheme } from '../../theme/ThemeContext';
 import ApiService from '../../services/api';
 import { showMessage } from '../../utils/messageConfig';
-import { calculateBookingFee } from '../../utils/bookingFees';
 
 interface Booking {
   id: number;
@@ -55,8 +54,9 @@ interface InstructorProfile {
   phone: string;
   license_type: string;
   hourly_rate: number;
-  booking_fee?: number; // Per-instructor booking fee
-  platform_commission_percent?: number; // Global commission %; fee = max(flat, lesson * %)
+  // Legacy fee fields are still returned by /instructors/me but are no longer
+  // shown: the instructor pays no fee, and their school's markup is not theirs
+  // to see.
   is_available: boolean;
   total_earnings: number;
   // Company fields (added in verification overhaul)
@@ -444,7 +444,7 @@ export default function InstructorHomeScreen() {
         const instructor = response.data;
 
         (navigation as any).navigate('Booking', {
-          instructor,
+          instructorId: instructor.instructor_id,
           rescheduleBookingId: booking.id,
           reschedulePickupAddress: booking.pickup_location || '',
           isInstructorReschedule: true,
@@ -805,18 +805,18 @@ export default function InstructorHomeScreen() {
               />
             </Card>
 
-            {/* Booking Fee Display */}
-            {profile?.booking_fee !== undefined && (
+            {/* Earnings rate.
+                Deliberately shows the instructor's own rate only. Any markup
+                their school adds is the school's margin, not a deduction from
+                these earnings, and is not theirs to see. */}
+            {profile?.hourly_rate !== undefined && (
               <Card variant="outlined" style={[styles.bookingFeeCard, { borderColor: colors.accent }]}>
-                <Text style={[styles.bookingFeeLabel, { color: colors.accent }]}>💰 Your Booking Fee</Text>
-                <Text style={[styles.bookingFeeValue, { color: colors.accent }]}>R{profile.booking_fee.toFixed(2)}</Text>
-                <Text style={[styles.bookingFeeNote, { color: colors.textSecondary }]}>
-                  This fee is added to your hourly rate when students book lessons.
+                <Text style={[styles.bookingFeeLabel, { color: colors.accent }]}>💰 Your Rate</Text>
+                <Text style={[styles.bookingFeeValue, { color: colors.accent }]}>
+                  R{profile.hourly_rate.toFixed(2)}/hr
                 </Text>
-                <Text style={[styles.bookingFeeExample, { color: colors.text, borderTopColor: colors.accent }]}>
-                  Students pay: R{profile.hourly_rate.toFixed(2)} + R
-                  {calculateBookingFee(profile, profile.hourly_rate).toFixed(2)} = R
-                  {(profile.hourly_rate + calculateBookingFee(profile, profile.hourly_rate)).toFixed(2)}/hr
+                <Text style={[styles.bookingFeeNote, { color: colors.textSecondary }]}>
+                  You earn this for every hour taught.
                 </Text>
               </Card>
             )}

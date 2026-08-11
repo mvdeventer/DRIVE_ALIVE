@@ -34,7 +34,8 @@
     "eas:submit:ios": "npx eas-cli submit --platform ios --profile production",
     "eas:update": "npx eas-cli update --auto",
     "i18n:check-completeness": "node ./scripts/i18n-check-completeness.mjs",
-    "i18n:detect-hardcoded": "node ./scripts/i18n-detect-hardcoded.mjs"
+    "i18n:detect-hardcoded": "node ./scripts/i18n-detect-hardcoded.mjs",
+    "i18n:worklist": "node ./scripts/i18n-worklist.mjs"
   },
   "dependencies": {
     "@expo-google-fonts/inter": "^0.4.2",

@@ -59,6 +59,7 @@ class VerificationCleanupScheduler:
             try:
                 # Run cleanup
                 await self._cleanup_unverified_users()
+                await self._expire_stale_invites()
 
                 # Wait for next interval
                 await asyncio.sleep(self.interval_minutes * 60)
@@ -70,6 +71,27 @@ class VerificationCleanupScheduler:
                 logger.error(f"Error in verification cleanup scheduler: {str(e)}")
                 # Wait a bit before retrying
                 await asyncio.sleep(60)
+
+    async def _expire_stale_invites(self):
+        """Mark lapsed school invitations expired.
+
+        Shares this loop rather than starting a fourth scheduler: main.py
+        already runs three, and each one needs its own shutdown path.
+        """
+        db = SessionLocal()
+        try:
+            from .recruitment_service import expire_stale_invites
+
+            expired = expire_stale_invites(db)
+            if expired > 0:
+                logger.info(
+                    f"[{datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')}] "
+                    f"Invite cleanup: expired {expired} stale invitation(s)"
+                )
+        except Exception as e:
+            logger.error(f"Failed to expire stale invites: {str(e)}")
+        finally:
+            db.close()
 
     async def _cleanup_unverified_users(self):
         """Delete users with expired unverified tokens"""

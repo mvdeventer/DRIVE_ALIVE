@@ -156,6 +156,30 @@ class UserCreate(UserBase):
         return v
 
 
+class CompanyRegistrationCreate(UserCreate):
+    """Registering a driving school and its administrator together.
+
+    The administrator runs the school; they are not an instructor and have no
+    licence or vehicle. Inherits UserCreate for the shared password, language
+    and consent rules.
+    """
+
+    # Defaulted so callers need not send it. Anything else is refused outright
+    # rather than silently coerced, so a caller cannot probe for escalation.
+    role: UserRole = UserRole.COMPANY_ADMIN
+    company_name: str = Field(..., min_length=2, max_length=200)
+    billing_email: Optional[str] = None
+
+    @field_validator("role")
+    @classmethod
+    def only_company_admin(cls, v: UserRole) -> UserRole:
+        if v != UserRole.COMPANY_ADMIN:
+            raise ValueError(
+                "Company registration can only create a company administrator."
+            )
+        return v
+
+
 class UserLogin(BaseModel):
     """User login schema"""
 
@@ -333,11 +357,20 @@ class InstructorCreate(UserCreate, InstructorBase):
     company_id: Optional[int] = None    # Join an existing company
     company_name: Optional[str] = Field(None, min_length=3, max_length=200)  # Create new company
 
+    # Registering straight from a school's invitation link. When present this
+    # wins over company_id: the school and the agreed markup come from the
+    # invitation, which the caller cannot forge, rather than from the body.
+    invite_token: Optional[str] = Field(None, max_length=200)
+
     @model_validator(mode="after")
     def _validate_company_fields(self) -> "InstructorCreate":
         if self.company_id is not None and self.company_name is not None:
             raise ValueError(
                 "Provide either company_id (join existing) or company_name (create new), not both."
+            )
+        if self.invite_token is not None and self.company_name is not None:
+            raise ValueError(
+                "An invitation joins an existing school; it cannot also create one."
             )
         return self
 
@@ -356,9 +389,6 @@ class InstructorUpdate(BaseModel):
     city: Optional[str] = None
     suburb: Optional[str] = None
     hourly_rate: Optional[float] = None
-    booking_fee: Optional[float] = (
-        None  # Allow updating booking fee (admin-only in practice)
-    )
     service_radius_km: Optional[float] = None
     max_travel_distance_km: Optional[float] = None
     rate_per_km_beyond_radius: Optional[float] = None
@@ -389,9 +419,14 @@ class InstructorResponse(UserResponse):
     suburb: Optional[str] = None
     is_available: bool
     hourly_rate: float
-    booking_fee: Optional[float] = 20.0  # Per-instructor booking fee in ZAR
+    # The single price a student sees: the instructor's rate plus their
+    # school's markup. Computed server-side so no client can reconstruct the
+    # split or the platform's cut.
+    display_hourly_rate: Optional[float] = None
+    # Internals. Populated on /instructors/me and admin responses only — never
+    # on the public list, which any student can call.
     platform_commission_percent: Optional[float] = (
-        None  # Global commission %; effective fee = max(booking_fee, lesson * %)
+        None  # School's commission rate; not for student-facing responses
     )
     service_radius_km: Optional[float] = 20.0
     max_travel_distance_km: Optional[float] = 50.0

@@ -58,6 +58,9 @@ class AdminCreateRequest(BaseModel):
     address: Optional[str] = None
     address_latitude: Optional[float] = -33.9249  # Default: Cape Town
     address_longitude: Optional[float] = 18.4241
+    # Name for the platform host company created alongside this admin.
+    # Optional: falls back to DEFAULT_HOST_COMPANY_NAME, renameable later.
+    company_name: Optional[str] = Field(default=None, max_length=200)
     smtp_email: Optional[str] = None  # Gmail address for sending verification emails
 
     @field_validator("password")
@@ -124,6 +127,9 @@ class AdminSettingsUpdate(BaseModel):
     commission_percent: Optional[float] = Field(
         default=None, ge=0, le=50
     )  # Platform commission % — effective fee = max(flat fee, lesson * %)
+    subscription_price_per_instructor: Optional[float] = Field(
+        default=None, ge=0, le=100000
+    )  # Monthly ZAR charged to each school per active instructor
 
     @field_validator('twilio_sender_phone_number', 'twilio_phone_number')
     @classmethod
@@ -203,7 +209,6 @@ class UserManagementResponse(BaseModel):
     status: UserStatus
     id_number: Optional[str] = None
     address: Optional[str] = None
-    booking_fee: Optional[float] = None  # Only for instructors
     available_credit: Optional[float] = None  # Only for students
     pending_credit: Optional[float] = None  # Only for students
     created_at: datetime

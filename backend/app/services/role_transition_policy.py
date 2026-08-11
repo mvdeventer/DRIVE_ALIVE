@@ -8,6 +8,7 @@ from typing import Optional
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
+from ..models.company_admin import CompanyAdmin
 from ..models.user import (
     Instructor,
     InstructorVerificationStatus,
@@ -23,6 +24,8 @@ class TransitionChannel(str, Enum):
     PUBLIC_REGISTRATION = "public_registration"
     ADMIN_GRANT = "admin_grant"
     INITIAL_SETUP = "initial_setup"
+    COMPANY_REGISTRATION = "company_registration"
+    SCHOOL_ENROLMENT = "school_enrolment"
 
 
 class RoleTransitionPolicy:
@@ -34,6 +37,8 @@ class RoleTransitionPolicy:
             UserRole.STUDENT: {UserRole.INSTRUCTOR},
             UserRole.INSTRUCTOR: {UserRole.STUDENT},
             UserRole.ADMIN: {UserRole.STUDENT, UserRole.INSTRUCTOR},
+            # A school administrator may also learn or teach personally.
+            UserRole.COMPANY_ADMIN: {UserRole.STUDENT, UserRole.INSTRUCTOR},
         },
         # An admin may create or upgrade any role. `_validate_actor` rejects a
         # non-admin actor on this channel, so every target here is admin-only by
@@ -45,9 +50,40 @@ class RoleTransitionPolicy:
             UserRole.STUDENT: {UserRole.ADMIN, UserRole.INSTRUCTOR},
             UserRole.INSTRUCTOR: {UserRole.ADMIN, UserRole.STUDENT},
             UserRole.ADMIN: {UserRole.ADMIN, UserRole.STUDENT, UserRole.INSTRUCTOR},
+            UserRole.COMPANY_ADMIN: {
+                UserRole.ADMIN,
+                UserRole.STUDENT,
+                UserRole.INSTRUCTOR,
+            },
         },
         TransitionChannel.INITIAL_SETUP: {
             None: {UserRole.ADMIN},
+        },
+        # Registering a driving school. Open to the public like instructor and
+        # student registration, but it can only ever mint COMPANY_ADMIN — the
+        # global ADMIN role stays reachable through ADMIN_GRANT/INITIAL_SETUP only.
+        TransitionChannel.COMPANY_REGISTRATION: {
+            None: {UserRole.COMPANY_ADMIN},
+            UserRole.STUDENT: {UserRole.COMPANY_ADMIN},
+            UserRole.INSTRUCTOR: {UserRole.COMPANY_ADMIN},
+            UserRole.ADMIN: {UserRole.COMPANY_ADMIN},
+            # One school per administrator. Absent-key would fail closed too,
+            # but stating it makes the rule deliberate rather than incidental.
+            # AuthService.create_company_admin refuses earlier with a clearer
+            # message; this is the backstop.
+            UserRole.COMPANY_ADMIN: set(),
+        },
+        # A driving school signing up one of its own learners. Only ever mints
+        # a student, and ``_validate_actor`` requires the actor to actually run
+        # a school — this channel marks the learner as the school's own, which
+        # exempts their bookings from commission.
+        TransitionChannel.SCHOOL_ENROLMENT: {
+            None: {UserRole.STUDENT},
+            UserRole.INSTRUCTOR: {UserRole.STUDENT},
+            UserRole.COMPANY_ADMIN: {UserRole.STUDENT},
+            UserRole.ADMIN: {UserRole.STUDENT},
+            # Already a learner; the route reports that more clearly.
+            UserRole.STUDENT: set(),
         },
     }
 
@@ -60,6 +96,13 @@ class RoleTransitionPolicy:
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail="Only admins may grant admin role.",
                 )
+        if channel == TransitionChannel.SCHOOL_ENROLMENT and actor_user is None:
+            # The route resolves the school from the caller's own profile; an
+            # actorless call would have no school to attribute the learner to.
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Only a driving school may enrol its own learners.",
+            )
 
     @staticmethod
     def _get_effective_roles(db: Session, user: User) -> set[UserRole]:
@@ -69,6 +112,8 @@ class RoleTransitionPolicy:
             roles.add(UserRole.STUDENT)
         if db.query(Instructor).filter(Instructor.user_id == user.id).first():
             roles.add(UserRole.INSTRUCTOR)
+        if db.query(CompanyAdmin).filter(CompanyAdmin.user_id == user.id).first():
+            roles.add(UserRole.COMPANY_ADMIN)
         return roles
 
     @classmethod

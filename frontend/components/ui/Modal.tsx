@@ -73,6 +73,15 @@ export default function ThemedModal({
   const slideAnim = useRef(new Animated.Value(0)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const containerRef = useRef<any>(null);
+
+  // Callers pass `onClose` as an inline arrow, so its identity changes on every
+  // parent render. The focus trap below must not depend on it: re-running the
+  // effect tears focus out of whatever the user is typing in, which swallowed
+  // every character after the first.
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+  const persistentRef = useRef(persistent);
+  persistentRef.current = persistent;
   const titleId = useId();
 
   useEffect(() => {
@@ -122,9 +131,9 @@ export default function ThemedModal({
     }, 0);
 
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape' && !persistent) {
+      if (event.key === 'Escape' && !persistentRef.current) {
         event.stopPropagation();
-        onClose();
+        onCloseRef.current();
         return;
       }
       if (event.key !== 'Tab') return;
@@ -153,7 +162,8 @@ export default function ThemedModal({
       doc.removeEventListener('keydown', onKeyDown, true);
       previouslyFocused?.focus?.();
     };
-  }, [visible, persistent, onClose]);
+    // Deliberately only `visible`: see onCloseRef above.
+  }, [visible]);
 
   const s = sizeMap[size];
   // Narrow viewports get a near-full-bleed sheet; wide ones get a centred
@@ -274,6 +284,11 @@ const styles = StyleSheet.create({
     padding: Platform.OS === 'web' ? 20 : 10,
   },
   keyboardAvoid: {
+    // Must fill the overlay. Without a height it shrink-wraps the dialog, and
+    // the dialog's `maxHeight: 85%` then resolves against its own height —
+    // a circular constraint that clipped ~15% of every modal body.
+    flex: 1,
+    alignSelf: 'stretch',
     justifyContent: 'center',
     alignItems: 'center',
     width: '100%',
@@ -319,7 +334,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: Platform.OS === 'web' ? 28 : 20,
     paddingTop: 12,
     paddingBottom: 16,
+    // Size to content; the container's maxHeight caps it, and only then does
+    // the ScrollView scroll.
+    flexGrow: 0,
     flexShrink: 1,
+    flexBasis: 'auto',
   },
   footer: {
     paddingHorizontal: Platform.OS === 'web' ? 28 : 20,

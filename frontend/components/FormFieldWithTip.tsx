@@ -4,6 +4,7 @@
 import React, { useState } from 'react';
 import { Modal, Pressable, Text, TextInput, TextInputProps, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useT } from '../i18n';
 import { useTheme } from '../theme/ThemeContext';
 
 interface FormFieldWithTipProps extends TextInputProps {
@@ -21,6 +22,7 @@ export default function FormFieldWithTip({
   ...textInputProps
 }: FormFieldWithTipProps) {
   const { colors } = useTheme();
+  const t = useT();
   const [showTooltip, setShowTooltip] = useState(false);
 
   return (
@@ -156,7 +158,7 @@ export default function FormFieldWithTip({
                   fontFamily: 'Inter_600SemiBold',
                 }}
               >
-                Got it!
+                {t('misc.gotIt')}
               </Text>
             </Pressable>
           </View>

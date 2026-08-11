@@ -42,7 +42,7 @@ class PaymentSession(Base):
 
     # Payment amounts
     amount = Column(Float, nullable=False)  # Lesson fees
-    booking_fee = Column(Float, nullable=False)  # R10 per booking
+    booking_fee = Column(Float, nullable=False)  # Accrued platform charge for the session
     total_amount = Column(Float, nullable=False)  # amount + booking_fee
 
     # Payment gateway

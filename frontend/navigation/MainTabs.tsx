@@ -8,6 +8,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { useAuthActions } from './AuthContext';
 import AdminTabs from './AdminTabs';
+import CompanyAdminTabs from './CompanyAdminTabs';
 import InstructorTabs from './InstructorTabs';
 import StudentTabs from './StudentTabs';
 
@@ -34,6 +35,7 @@ export default function MainTabs() {
   const { userRole, onLogout } = useAuthActions();
 
   if (userRole === 'admin') return <AdminTabs />;
+  if (userRole === 'company_admin') return <CompanyAdminTabs />;
   if (userRole === 'instructor') return <InstructorTabs />;
   if (userRole === 'student') return <StudentTabs />;
   return <UnknownRoleGuard role={userRole} onLogout={onLogout} />;

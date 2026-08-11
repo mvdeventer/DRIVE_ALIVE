@@ -41,7 +41,6 @@ interface User {
   status: string;
   id_number?: string;
   address?: string;
-  booking_fee?: number; // Only for instructors
   available_credit?: number | null; // Only for students
   pending_credit?: number | null; // Only for students
   created_at: string;
@@ -62,7 +61,7 @@ export default function UserManagementScreen({ navigation }: any) {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
-  const [activeTab, setActiveTab] = useState<'all' | 'admin' | 'instructor' | 'student'>('all');
+  const [activeTab, setActiveTab] = useState<'all' | 'admin' | 'company_admin' | 'instructor' | 'student'>('all');
   const [roleFilter, setRoleFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
@@ -83,8 +82,6 @@ export default function UserManagementScreen({ navigation }: any) {
   const [scheduleModalVisible, setScheduleModalVisible] = useState(false);
   const [instructorSchedule, setInstructorSchedule] = useState<any>(null);
   const [loadingSchedule, setLoadingSchedule] = useState(false);
-  const [editBookingFeeModalVisible, setEditBookingFeeModalVisible] = useState(false);
-  const [bookingFeeValue, setBookingFeeValue] = useState('20.00');
   const [confirmResetCredit, setConfirmResetCredit] = useState<User | null>(null);
   const [resetCreditLoading, setResetCreditLoading] = useState(false);
 
@@ -94,7 +91,7 @@ export default function UserManagementScreen({ navigation }: any) {
       const data = await apiService.getAllUsers(roleFilter, statusFilter);
       setUsers(data);
     } catch (err: any) {
-      setError(err.response?.data?.detail || 'Failed to load users');
+      setError(err.response?.data?.detail || t('userMgmt.msg.loadFailed'));
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -127,7 +124,7 @@ export default function UserManagementScreen({ navigation }: any) {
     (navigation as any).replace('Login');
   };
 
-  const handleTabChange = (tab: 'all' | 'admin' | 'instructor' | 'student') => {
+  const handleTabChange = (tab: 'all' | 'admin' | 'company_admin' | 'instructor' | 'student') => {
     setActiveTab(tab);
     setRoleFilter(tab === 'all' ? '' : tab);
     setSearchQuery('');
@@ -172,10 +169,15 @@ export default function UserManagementScreen({ navigation }: any) {
         if (b.id === firstAdminId && b.role === 'admin') return 1;
 
         if (activeTab === 'all') {
-          // Group by role: admin > instructor > student
-          const roleOrder: Record<string, number> = { admin: 0, instructor: 1, student: 2 };
-          const roleA = roleOrder[a.role] ?? 3;
-          const roleB = roleOrder[b.role] ?? 3;
+          // Group by role: admin > company admin > instructor > student
+          const roleOrder: Record<string, number> = {
+            admin: 0,
+            company_admin: 1,
+            instructor: 2,
+            student: 3,
+          };
+          const roleA = roleOrder[a.role] ?? 4;
+          const roleB = roleOrder[b.role] ?? 4;
           if (roleA !== roleB) return roleA - roleB;
         }
 
@@ -206,7 +208,7 @@ export default function UserManagementScreen({ navigation }: any) {
       if (user.id === currentUserId && user.role === 'admin' && user.id === firstAdminId) {
         showMessage(
           setError,
-          'You cannot suspend your own admin profile. Use Database Interface to manage your other profiles.',
+          t('misc.cannotSuspendSelf'),
           SCREEN_NAME,
           'statusChange',
           'error'
@@ -448,7 +450,7 @@ export default function UserManagementScreen({ navigation }: any) {
     if (!newPassword || !confirmPassword) {
       showMessage(
         setError,
-        'Please enter and confirm the new password',
+        t('misc.enterConfirmPassword'),
         SCREEN_NAME,
         'passwordReset',
         'error'
@@ -457,7 +459,7 @@ export default function UserManagementScreen({ navigation }: any) {
     }
 
     if (newPassword !== confirmPassword) {
-      showMessage(setError, 'Passwords do not match', SCREEN_NAME, 'passwordReset', 'error');
+      showMessage(setError, t('userMgmt.msg.passwordMismatch'), SCREEN_NAME, 'passwordReset', 'error');
       return;
     }
 
@@ -583,7 +585,7 @@ export default function UserManagementScreen({ navigation }: any) {
 
       showMessage(
         setSuccess,
-        'Schedule refreshed successfully',
+        t('misc.scheduleRefreshed'),
         SCREEN_NAME,
         'scheduleRefresh',
         'success'
@@ -607,50 +609,6 @@ export default function UserManagementScreen({ navigation }: any) {
     setInstructorSchedule(null);
   };
 
-  const handleOpenEditBookingFee = (user: User) => {
-    setSelectedUser(user);
-    setBookingFeeValue((user.booking_fee || 20).toFixed(2));
-    setEditBookingFeeModalVisible(true);
-  };
-
-  const handleSaveBookingFee = async () => {
-    if (!selectedUser) return;
-
-    const fee = parseFloat(bookingFeeValue);
-    if (isNaN(fee) || fee < 0) {
-      showMessage(
-        setError,
-        'Please enter a valid booking fee (minimum R0)',
-        SCREEN_NAME,
-        'bookingFee',
-        'error'
-      );
-      return;
-    }
-
-    try {
-      const instructorId = selectedUser.id; // In context, this is the instructor profile ID
-      await apiService.updateInstructorBookingFee(instructorId, fee);
-      showMessage(
-        setSuccess,
-        `Booking fee updated to R${fee.toFixed(2)} for ${selectedUser.full_name}`,
-        SCREEN_NAME,
-        'bookingFee',
-        'success'
-      );
-      setEditBookingFeeModalVisible(false);
-      loadUsers();
-    } catch (err: any) {
-      showMessage(
-        setError,
-        err.response?.data?.detail || 'Failed to update booking fee',
-        SCREEN_NAME,
-        'bookingFee',
-        'error'
-      );
-    }
-  };
-
   const renderUser = ({ item }: { item: User }) => {
     const isAdminItem = activeTab === 'admin' || (activeTab === 'all' && item.role === 'admin');
     const isInstructorItem = activeTab === 'instructor' || (activeTab === 'all' && item.role === 'instructor');
@@ -664,14 +622,14 @@ export default function UserManagementScreen({ navigation }: any) {
     return (
       <Card variant="elevated" style={{ width: '100%' }}>
         <View style={[styles.userIdBadge, { backgroundColor: colors.primaryLight }]}>
-          <Text style={[styles.userIdText, { color: colors.primary, fontFamily: 'Inter_700Bold' }]}>User ID: #{item.id}</Text>
+          <Text style={[styles.userIdText, { color: colors.primary, fontFamily: 'Inter_700Bold' }]}>{t('userMgmt.card.userId', { id: item.id })}</Text>
         </View>
         <View style={styles.userHeader}>
           <View style={styles.userInfo}>
             <Text style={[styles.userName, { color: colors.text, fontFamily: 'Inter_700Bold' }]}>{item.full_name}</Text>
             <Text style={[styles.userEmail, { color: colors.textSecondary, fontFamily: 'Inter_400Regular' }]}>{item.email}</Text>
             <Text style={[styles.userPhone, { color: colors.textSecondary, fontFamily: 'Inter_400Regular' }]}>{item.phone}</Text>
-            {item.id_number ? <Text style={[styles.userIdNumber, { color: colors.primary, fontFamily: 'Inter_600SemiBold' }]}>SA ID: {item.id_number}</Text> : null}
+            {item.id_number ? <Text style={[styles.userIdNumber, { color: colors.primary, fontFamily: 'Inter_600SemiBold' }]}>{t('userMgmt.card.saId', { id: item.id_number })}</Text> : null}
           </View>
           <View style={styles.badges}>
             <View style={[styles.badge, { backgroundColor: getRoleColor(item.role) }]}>
@@ -685,16 +643,13 @@ export default function UserManagementScreen({ navigation }: any) {
 
       <View style={[styles.userDetails, { borderTopColor: colors.border }]}>
         <Text style={[styles.userDetailText, { color: colors.textSecondary, fontFamily: 'Inter_400Regular' }]}>
-          Joined: {new Date(item.created_at).toLocaleDateString()}
+          {t('userMgmt.card.joined', { date: new Date(item.created_at).toLocaleDateString() })}
         </Text>
         {item.last_login ? (
           <Text style={[styles.userDetailText, { color: colors.textSecondary, fontFamily: 'Inter_400Regular' }]}>
-            Last Login: {new Date(item.last_login).toLocaleDateString()}
+            {t('userMgmt.card.lastLogin', { date: new Date(item.last_login).toLocaleDateString() })}
           </Text>
         ) : null}
-        {(isInstructorItem) && item.booking_fee !== undefined && item.booking_fee !== null && (
-          <Text style={[styles.userDetailText, { color: colors.textSecondary, fontFamily: 'Inter_400Regular' }]}>Booking Fee: R{item.booking_fee.toFixed(2)}</Text>
-        )}
         {isStudentItem && (
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 4 }}>
             {((item.available_credit ?? 0) > 0 || (item.pending_credit ?? 0) > 0) ? (
@@ -716,7 +671,7 @@ export default function UserManagementScreen({ navigation }: any) {
               </>
             ) : (
               <Text style={{ color: colors.textSecondary, fontSize: 12, fontFamily: 'Inter_400Regular', fontStyle: 'italic' }}>
-                No credits available
+                {t('userMgmt.noCredits')}
               </Text>
             )}
           </View>
@@ -727,7 +682,7 @@ export default function UserManagementScreen({ navigation }: any) {
         {isOriginalAdmin && (
           <View style={[styles.originalAdminActionBadge, { backgroundColor: colors.warning, borderColor: colors.accent }]}>
             <Text style={[styles.originalAdminActionBadgeText, { fontFamily: 'Inter_700Bold' }]} numberOfLines={1} ellipsizeMode="tail">
-              ORIGINAL ADMIN - PROTECTED
+              {t('userMgmt.originalAdmin')}
             </Text>
           </View>
         )}
@@ -743,45 +698,44 @@ export default function UserManagementScreen({ navigation }: any) {
             }
           }
           return (
-            <Button variant="primary" size="sm" onPress={() => handleEditUser(item)}>Edit</Button>
+            <Button variant="primary" size="sm" onPress={() => handleEditUser(item)}>{t('common.edit')}</Button>
           );
         })()}
-        <Button variant="secondary" size="sm" onPress={() => handleOpenResetPassword(item)}>Reset PW</Button>
+        <Button variant="secondary" size="sm" onPress={() => handleOpenResetPassword(item)}>{t('userMgmt.action.resetPw')}</Button>
         {isAdminItem && (() => {
           const adminUsers2 = users.filter(u => u.role === 'admin');
           if (adminUsers2.length === 0) return null;
           const firstId = Math.min(...adminUsers2.map(u => u.id));
           if (item.id === firstId) return null;
           return (
-            <Button variant="danger" size="sm" onPress={() => handleDeleteAdmin(item)}>Delete</Button>
+            <Button variant="danger" size="sm" onPress={() => handleDeleteAdmin(item)}>{t('common.delete')}</Button>
           );
         })()}
         {isInstructorItem && (
           <>
-            <Button variant="outline" size="sm" onPress={() => handleViewSchedule(item)}>Schedule</Button>
-            <Button variant="accent" size="sm" onPress={() => handleOpenEditBookingFee(item)}>Manage Fee</Button>
-            <Button variant="danger" size="sm" onPress={() => handleDeleteInstructor(item)}>Delete</Button>
+            <Button variant="outline" size="sm" onPress={() => handleViewSchedule(item)}>{t('userMgmt.action.schedule')}</Button>
+            <Button variant="danger" size="sm" onPress={() => handleDeleteInstructor(item)}>{t('common.delete')}</Button>
           </>
         )}
         {isStudentItem && (
           <>
             {((item.available_credit ?? 0) > 0 || (item.pending_credit ?? 0) > 0) ? (
-              <Button variant="primary" size="sm" style={{ backgroundColor: '#7C3AED' }} onPress={() => setConfirmResetCredit(item)}>Reset Credit</Button>
+              <Button variant="primary" size="sm" style={{ backgroundColor: '#7C3AED' }} onPress={() => setConfirmResetCredit(item)}>{t('userMgmt.action.resetCredit')}</Button>
             ) : (
-              <Button variant="primary" size="sm" style={{ backgroundColor: '#A78BFA', opacity: 0.5 }} onPress={() => Alert.alert('No Credits', `${item.full_name} has no active credits to reset.`)}>Reset Credit</Button>
+              <Button variant="primary" size="sm" style={{ backgroundColor: '#A78BFA', opacity: 0.5 }} onPress={() => Alert.alert(t('userMgmt.action.noCreditsTitle'), `${item.full_name} has no active credits to reset.`)}>{t('userMgmt.action.resetCredit')}</Button>
             )}
-            <Button variant="danger" size="sm" onPress={() => handleDeleteStudent(item)}>Delete</Button>
+            <Button variant="danger" size="sm" onPress={() => handleDeleteStudent(item)}>{t('common.delete')}</Button>
           </>
         )}
         {item.status === 'suspended' ? (
-          <Button variant="primary" size="sm" style={{ backgroundColor: colors.success }} onPress={() => handleStatusChange(item, 'active')}>Unsuspend</Button>
+          <Button variant="primary" size="sm" style={{ backgroundColor: colors.success }} onPress={() => handleStatusChange(item, 'active')}>{t('userMgmt.action.unsuspend')}</Button>
         ) : item.status === 'inactive' ? (
-          <Button variant="primary" size="sm" style={{ backgroundColor: colors.success }} onPress={() => handleStatusChange(item, 'active')}>Activate</Button>
+          <Button variant="primary" size="sm" style={{ backgroundColor: colors.success }} onPress={() => handleStatusChange(item, 'active')}>{t('userMgmt.action.activate')}</Button>
         ) : null}
         {item.status === 'active' && !isOriginalAdmin && (
           <>
-            <Button variant="danger" size="sm" onPress={() => handleStatusChange(item, 'inactive')}>Deactivate</Button>
-            <Button variant="danger" size="sm" onPress={() => handleStatusChange(item, 'suspended')}>Suspend</Button>
+            <Button variant="danger" size="sm" onPress={() => handleStatusChange(item, 'inactive')}>{t('userMgmt.action.deactivate')}</Button>
+            <Button variant="danger" size="sm" onPress={() => handleStatusChange(item, 'suspended')}>{t('userMgmt.action.suspend')}</Button>
           </>
         )}
       </View>
@@ -793,7 +747,7 @@ export default function UserManagementScreen({ navigation }: any) {
     return (
       <View style={[styles.centerContainer, { backgroundColor: colors.background }]}>
         <ActivityIndicator size="large" color={colors.primary} />
-        <Text style={[styles.loadingText, { color: colors.textSecondary, fontFamily: 'Inter_400Regular' }]}>Loading users...</Text>
+        <Text style={[styles.loadingText, { color: colors.textSecondary, fontFamily: 'Inter_400Regular' }]}>{t('userMgmt.loading')}</Text>
       </View>
     );
   }
@@ -801,7 +755,7 @@ export default function UserManagementScreen({ navigation }: any) {
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <WebNavigationHeader
-        title="User Management"
+        title={t('userMgmt.title')}
         onBack={() => navigation.goBack()}
         showBackButton={navigation.canGoBack()}
       />
@@ -827,14 +781,14 @@ export default function UserManagementScreen({ navigation }: any) {
 
       {/* Tab Navigation */}
       <View style={[styles.tabContainer, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
-        {(['all', 'admin', 'instructor', 'student'] as const).map(tab => (
+        {(['all', 'admin', 'company_admin', 'instructor', 'student'] as const).map(tab => (
           <Pressable
             key={tab}
             style={[styles.tab, activeTab === tab && { borderBottomColor: colors.primary, backgroundColor: colors.primaryLight }]}
             onPress={() => handleTabChange(tab)}
           >
             <Text style={[styles.tabText, { color: colors.textSecondary, fontFamily: 'Inter_600SemiBold' }, activeTab === tab && { color: colors.primary, fontFamily: 'Inter_700Bold' }]}>
-              {tab === 'all' ? 'All Users' : tab === 'admin' ? 'Admins' : tab === 'instructor' ? 'Instructors' : 'Students'}
+              {t(`userMgmt.tab.${tab}`)}
             </Text>
           </Pressable>
         ))}
@@ -844,7 +798,7 @@ export default function UserManagementScreen({ navigation }: any) {
       <View style={[styles.searchContainer, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
         <TextInput
           style={[styles.searchInput, { borderColor: colors.border, backgroundColor: colors.backgroundSecondary, color: colors.text, fontFamily: 'Inter_400Regular' }]}
-          placeholder={`Search ${activeTab === 'all' ? 'user' : activeTab}s by name, ID, phone, or email...`}
+          placeholder={t(`userMgmt.search.${activeTab}`)}
           value={searchQuery}
           onChangeText={setSearchQuery}
           placeholderTextColor={colors.textTertiary}
@@ -859,17 +813,17 @@ export default function UserManagementScreen({ navigation }: any) {
       {/* Status Filter */}
       <View style={[styles.filters, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
         <View style={styles.filterGroup}>
-          <Text style={[styles.filterLabel, { color: colors.text, fontFamily: 'Inter_600SemiBold' }]}>Filter by Status:</Text>
+          <Text style={[styles.filterLabel, { color: colors.text, fontFamily: 'Inter_600SemiBold' }]}>{t('userMgmt.filterByStatus')}</Text>
           <View style={[styles.pickerContainer, { borderColor: colors.border, backgroundColor: colors.card }]}>
             <Picker
               selectedValue={statusFilter}
               onValueChange={value => setStatusFilter(value)}
               style={[styles.picker, { color: colors.text }]}
             >
-              <Picker.Item label="All Statuses" value="" />
-              <Picker.Item label="Active" value="active" />
-              <Picker.Item label="Inactive" value="inactive" />
-              <Picker.Item label="Suspended" value="suspended" />
+              <Picker.Item label={t('userMgmt.status.all')} value="" />
+              <Picker.Item label={t('userMgmt.status.active')} value="active" />
+              <Picker.Item label={t('userMgmt.status.inactive')} value="inactive" />
+              <Picker.Item label={t('userMgmt.status.suspended')} value="suspended" />
             </Picker>
           </View>
         </View>
@@ -895,18 +849,18 @@ export default function UserManagementScreen({ navigation }: any) {
         title={`Reset Password: ${selectedUser?.full_name || ''}`}
         footer={
           <View style={{ flexDirection: 'row', gap: 12 }}>
-            <Button variant="secondary" onPress={() => setResetPasswordModalVisible(false)}>Cancel</Button>
-            <Button variant="primary" onPress={handleResetPassword}>Reset Password</Button>
+            <Button variant="secondary" onPress={() => setResetPasswordModalVisible(false)}>{t('common.cancel')}</Button>
+            <Button variant="primary" onPress={handleResetPassword}>{t('userMgmt.modal.resetPassword')}</Button>
           </View>
         }
       >
         <View style={styles.formGroup}>
-          <Text style={[styles.label, { color: colors.text }]}>New Password *</Text>
+          <Text style={[styles.label, { color: colors.text }]}>{t('userMgmt.modal.newPassword')}</Text>
           <TextInput
             style={[styles.input, { borderColor: colors.border, backgroundColor: colors.backgroundSecondary, color: colors.text }]}
             value={newPassword}
             onChangeText={setNewPassword}
-            placeholder="Enter new password"
+            placeholder={t('userMgmt.modal.newPasswordPh')}
             placeholderTextColor={colors.textTertiary}
             secureTextEntry={!showPassword}
           />
@@ -914,12 +868,12 @@ export default function UserManagementScreen({ navigation }: any) {
         </View>
 
         <View style={styles.formGroup}>
-          <Text style={[styles.label, { color: colors.text }]}>Confirm Password *</Text>
+          <Text style={[styles.label, { color: colors.text }]}>{t('userMgmt.modal.confirmPassword')}</Text>
           <TextInput
             style={[styles.input, { borderColor: colors.border, backgroundColor: colors.backgroundSecondary, color: colors.text }]}
             value={confirmPassword}
             onChangeText={setConfirmPassword}
-            placeholder="Confirm new password"
+            placeholder={t('userMgmt.modal.confirmPasswordPh')}
             placeholderTextColor={colors.textTertiary}
             secureTextEntry={!showPassword}
           />
@@ -950,13 +904,13 @@ export default function UserManagementScreen({ navigation }: any) {
         }
         footer={
           <View style={{ flexDirection: 'row', gap: 12 }}>
-            <Button variant="secondary" onPress={() => setConfirmAction(null)}>Cancel</Button>
+            <Button variant="secondary" onPress={() => setConfirmAction(null)}>{t('common.cancel')}</Button>
             <Button
               variant={confirmAction?.newStatus === 'ACTIVE' ? 'primary' : 'danger'}
               onPress={confirmStatusChange}
               style={confirmAction?.newStatus === 'ACTIVE' ? { backgroundColor: colors.success } : undefined}
             >
-              Confirm
+              {t('common.confirm')}
             </Button>
           </View>
         }
@@ -970,13 +924,13 @@ export default function UserManagementScreen({ navigation }: any) {
 
         {confirmAction?.newStatus.toUpperCase() === 'INACTIVE' && (
           <Text style={{ fontSize: 14, color: colors.danger, textAlign: 'center', marginTop: 15, fontStyle: 'italic', fontFamily: 'Inter_400Regular' }}>
-            User will not be able to log in until reactivated.
+            {t('misc.deactivateWarning')}
           </Text>
         )}
 
         {confirmAction?.newStatus.toUpperCase() === 'SUSPENDED' && (
           <Text style={{ fontSize: 14, color: colors.danger, textAlign: 'center', marginTop: 15, fontStyle: 'italic', fontFamily: 'Inter_400Regular' }}>
-            This will set the user status to SUSPENDED. The record will remain in the database.
+            {t('misc.suspendWarning')}
           </Text>
         )}
       </ThemedModal>
@@ -985,11 +939,11 @@ export default function UserManagementScreen({ navigation }: any) {
       <ThemedModal
         visible={!!confirmDeleteAdmin}
         onClose={() => setConfirmDeleteAdmin(null)}
-        title="Confirm Admin Deletion"
+        title={t('userMgmt.modal.confirmAdminDelete')}
         footer={
           <View style={{ flexDirection: 'row', gap: 12 }}>
-            <Button variant="secondary" onPress={() => setConfirmDeleteAdmin(null)}>Cancel</Button>
-            <Button variant="danger" onPress={confirmDeleteAdminAction}>Delete</Button>
+            <Button variant="secondary" onPress={() => setConfirmDeleteAdmin(null)}>{t('common.cancel')}</Button>
+            <Button variant="danger" onPress={confirmDeleteAdminAction}>{t('common.delete')}</Button>
           </View>
         }
       >
@@ -998,7 +952,7 @@ export default function UserManagementScreen({ navigation }: any) {
           <Text style={{ fontWeight: 'bold', color: colors.primary, fontFamily: 'Inter_700Bold' }}>{confirmDeleteAdmin?.full_name}</Text>?
         </Text>
         <Text style={{ fontSize: 14, color: colors.danger, textAlign: 'center', marginTop: 15, fontStyle: 'italic', fontFamily: 'Inter_400Regular' }}>
-          This permanently removes the admin account.
+          {t('misc.deleteAdminWarning')}
         </Text>
       </ThemedModal>
 
@@ -1006,11 +960,11 @@ export default function UserManagementScreen({ navigation }: any) {
       <ThemedModal
         visible={!!confirmDeleteInstructor}
         onClose={() => { setConfirmDeleteInstructor(null); setInstructorBookingSummary(null); }}
-        title="Confirm Instructor Deletion"
+        title={t('userMgmt.modal.confirmInstructorDelete')}
         footer={
           <View style={{ flexDirection: 'row', gap: 12 }}>
-            <Button variant="secondary" onPress={() => { setConfirmDeleteInstructor(null); setInstructorBookingSummary(null); }}>Cancel</Button>
-            <Button variant="danger" onPress={confirmDeleteInstructorAction}>Delete Profile</Button>
+            <Button variant="secondary" onPress={() => { setConfirmDeleteInstructor(null); setInstructorBookingSummary(null); }}>{t('common.cancel')}</Button>
+            <Button variant="danger" onPress={confirmDeleteInstructorAction}>{t('userMgmt.action.deleteProfile')}</Button>
           </View>
         }
       >
@@ -1040,11 +994,11 @@ export default function UserManagementScreen({ navigation }: any) {
       <ThemedModal
         visible={!!confirmDeleteStudent}
         onClose={() => { setConfirmDeleteStudent(null); setStudentBookingSummary(null); }}
-        title="Confirm Student Deletion"
+        title={t('userMgmt.modal.confirmStudentDelete')}
         footer={
           <View style={{ flexDirection: 'row', gap: 12 }}>
-            <Button variant="secondary" onPress={() => { setConfirmDeleteStudent(null); setStudentBookingSummary(null); }}>Cancel</Button>
-            <Button variant="danger" onPress={confirmDeleteStudentAction}>Delete Profile</Button>
+            <Button variant="secondary" onPress={() => { setConfirmDeleteStudent(null); setStudentBookingSummary(null); }}>{t('common.cancel')}</Button>
+            <Button variant="danger" onPress={confirmDeleteStudentAction}>{t('userMgmt.action.deleteProfile')}</Button>
           </View>
         }
       >
@@ -1074,10 +1028,10 @@ export default function UserManagementScreen({ navigation }: any) {
       <ThemedModal
         visible={!!confirmResetCredit}
         onClose={() => setConfirmResetCredit(null)}
-        title="Reset Student Credits"
+        title={t('userMgmt.modal.resetCredits')}
         footer={
           <View style={{ flexDirection: 'row', gap: 12 }}>
-            <Button variant="secondary" onPress={() => setConfirmResetCredit(null)}>Cancel</Button>
+            <Button variant="secondary" onPress={() => setConfirmResetCredit(null)}>{t('common.cancel')}</Button>
             <Button variant="primary" style={{ backgroundColor: '#7C3AED' }} onPress={handleResetCredit} disabled={resetCreditLoading}>
               {resetCreditLoading ? 'Resetting...' : 'Reset Credits'}
             </Button>
@@ -1089,7 +1043,7 @@ export default function UserManagementScreen({ navigation }: any) {
           <Text style={{ fontWeight: 'bold', color: colors.primary, fontFamily: 'Inter_700Bold' }}>{confirmResetCredit?.full_name}</Text>?
         </Text>
         <Text style={{ fontSize: 14, color: colors.warning, textAlign: 'center', marginTop: 15, fontStyle: 'italic', fontFamily: 'Inter_400Regular' }}>
-          ⚠️ This will expire all unused credits. The student will no longer be able to apply these credits to future bookings. This action cannot be undone.
+          {t('misc.resetCreditsWarning')}
         </Text>
       </ThemedModal>
 
@@ -1108,9 +1062,9 @@ export default function UserManagementScreen({ navigation }: any) {
               onPress={refreshScheduleData}
               disabled={loadingSchedule}
             >
-              Refresh
+              {t('misc.refresh')}
             </Button>
-            <Button variant="secondary" onPress={closeScheduleModal}>Close</Button>
+            <Button variant="secondary" onPress={closeScheduleModal}>{t('common.close')}</Button>
           </View>
         }
       >
@@ -1118,13 +1072,13 @@ export default function UserManagementScreen({ navigation }: any) {
           {loadingSchedule ? (
             <View style={styles.loadingContainer}>
               <ActivityIndicator size="large" color={colors.primary} />
-              <Text style={[styles.loadingText, { color: colors.textSecondary }]}>Loading schedule...</Text>
+              <Text style={[styles.loadingText, { color: colors.textSecondary }]}>{t('userMgmt.schedule.loading')}</Text>
             </View>
           ) : instructorSchedule ? (
             <>
               {/* Weekly Schedule */}
               <View style={[styles.scheduleSection, { backgroundColor: colors.backgroundSecondary }]}>
-                <Text style={[styles.scheduleSectionTitle, { color: colors.text, fontFamily: 'Inter_600SemiBold' }]}>Weekly Schedule</Text>
+                <Text style={[styles.scheduleSectionTitle, { color: colors.text, fontFamily: 'Inter_600SemiBold' }]}>{t('userMgmt.schedule.weekly')}</Text>
                 {instructorSchedule.schedule && instructorSchedule.schedule.length > 0 ? (
                   instructorSchedule.schedule.map((day: any) => (
                     <View key={day.day_of_week} style={[styles.scheduleItem, { borderBottomColor: colors.border }]}>
@@ -1137,13 +1091,13 @@ export default function UserManagementScreen({ navigation }: any) {
                     </View>
                   ))
                 ) : (
-                  <Text style={[styles.emptyText, { color: colors.textTertiary }]}>No weekly schedule set</Text>
+                  <Text style={[styles.emptyText, { color: colors.textTertiary }]}>{t('userMgmt.schedule.noWeekly')}</Text>
                 )}
               </View>
 
               {/* Time Off */}
               <View style={[styles.scheduleSection, { backgroundColor: colors.backgroundSecondary }]}>
-                <Text style={[styles.scheduleSectionTitle, { color: colors.text, fontFamily: 'Inter_600SemiBold' }]}>Time Off (All Dates)</Text>
+                <Text style={[styles.scheduleSectionTitle, { color: colors.text, fontFamily: 'Inter_600SemiBold' }]}>{t('userMgmt.schedule.timeOff')}</Text>
                 {instructorSchedule.timeOff && instructorSchedule.timeOff.length > 0 ? (
                   instructorSchedule.timeOff.map((timeOff: any, index: number) => (
                     <View key={index} style={[styles.timeOffItem, { borderBottomColor: colors.border }]}>
@@ -1156,13 +1110,13 @@ export default function UserManagementScreen({ navigation }: any) {
                     </View>
                   ))
                 ) : (
-                  <Text style={[styles.emptyText, { color: colors.textTertiary }]}>No time off scheduled</Text>
+                  <Text style={[styles.emptyText, { color: colors.textTertiary }]}>{t('userMgmt.schedule.noTimeOff')}</Text>
                 )}
               </View>
 
               {/* Recent Bookings */}
               <View style={[styles.scheduleSection, { backgroundColor: colors.backgroundSecondary }]}>
-                <Text style={[styles.scheduleSectionTitle, { color: colors.text, fontFamily: 'Inter_600SemiBold' }]}>Recent Bookings</Text>
+                <Text style={[styles.scheduleSectionTitle, { color: colors.text, fontFamily: 'Inter_600SemiBold' }]}>{t('userMgmt.schedule.recentBookings')}</Text>
                 {instructorSchedule.bookings && instructorSchedule.bookings.length > 0 ? (
                   instructorSchedule.bookings
                     .sort((a: any, b: any) => {
@@ -1208,48 +1162,16 @@ export default function UserManagementScreen({ navigation }: any) {
                       );
                     })
                 ) : (
-                  <Text style={[styles.emptyText, { color: colors.textTertiary }]}>No bookings found</Text>
+                  <Text style={[styles.emptyText, { color: colors.textTertiary }]}>{t('userMgmt.schedule.noBookings')}</Text>
                 )}
               </View>
             </>
           ) : (
-            <Text style={[styles.emptyText, { color: colors.textTertiary }]}>Failed to load schedule</Text>
+            <Text style={[styles.emptyText, { color: colors.textTertiary }]}>{t('userMgmt.schedule.loadFailed')}</Text>
           )}
         </ScrollView>
       </ThemedModal>
 
-      {/* Edit Booking Fee Modal */}
-      <ThemedModal
-        visible={editBookingFeeModalVisible}
-        onClose={() => setEditBookingFeeModalVisible(false)}
-        title="Manage Booking Fee"
-        footer={
-          <View style={{ flexDirection: 'row', gap: 12 }}>
-            <Button variant="secondary" onPress={() => setEditBookingFeeModalVisible(false)}>Cancel</Button>
-            <Button variant="primary" onPress={handleSaveBookingFee}>Save Fee</Button>
-          </View>
-        }
-      >
-        <Text style={{ fontSize: 14, color: colors.textSecondary, marginBottom: 5, fontFamily: 'Inter_400Regular' }}>Instructor: {selectedUser?.full_name}</Text>
-        <Text style={{ fontSize: 14, color: colors.textSecondary, marginBottom: 20, fontFamily: 'Inter_400Regular' }}>
-          This fee is added to the instructor's rate when students book lessons.
-        </Text>
-
-        <View style={styles.formGroup}>
-          <Text style={[styles.label, { color: colors.text }]}>Booking Fee (ZAR) *</Text>
-          <TextInput
-            style={[styles.input, { borderColor: colors.border, backgroundColor: colors.backgroundSecondary, color: colors.text }]}
-            value={bookingFeeValue}
-            onChangeText={setBookingFeeValue}
-            placeholder="20.00"
-            placeholderTextColor={colors.textTertiary}
-            keyboardType="decimal-pad"
-          />
-          <Text style={[styles.helperText, { color: colors.textTertiary }]}>
-            Students will pay: Instructor Rate + R{bookingFeeValue || '0.00'}
-          </Text>
-        </View>
-      </ThemedModal>
     </View>
   );
 }

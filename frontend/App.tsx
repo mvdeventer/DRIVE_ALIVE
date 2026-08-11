@@ -77,6 +77,7 @@ import InstructorScheduleSetupScreen from './screens/auth/InstructorScheduleSetu
 import LoginScreen from './screens/auth/LoginScreen';
 import RegisterChoiceScreen from './screens/auth/RegisterChoiceScreen';
 import RegisterCompanyScreen from './screens/auth/RegisterCompanyScreen';
+import InstructorInviteScreen from './screens/auth/InstructorInviteScreen';
 import RegisterInstructorScreen from './screens/auth/RegisterInstructorScreen';
 import RegisterStudentScreen from './screens/auth/RegisterStudentScreen';
 import ResetPasswordScreen from './screens/auth/ResetPasswordScreen';
@@ -120,6 +121,7 @@ const linking = {
       VerifyAccount: 'verify-account',
       InstructorVerify: 'instructor-verify',
       InstructorCompanyVerify: 'company-instructor-verify',
+      InstructorInvite: 'instructor-invite',
       ResetPassword: 'reset-password',
       // Without this the pending screen has no resolvable path, so refreshing
       // it (or reopening the tab) dropped the user back to Login mid-signup.
@@ -278,7 +280,7 @@ function AppContent() {
         endpoint = '/instructors/me';
       } else if (role === 'student') {
         endpoint = '/students/me';
-      } else if (role === 'admin') {
+      } else if (role === 'admin' || role === 'company_admin') {
         endpoint = '/auth/me';
       }
 
@@ -286,7 +288,10 @@ function AppContent() {
         const response = await ApiService.get(endpoint);
         const firstName = response.data.first_name || '';
         const lastName = response.data.last_name || '';
-        const roleName = role.charAt(0).toUpperCase() + role.slice(1);
+        const roleName =
+          role === 'company_admin'
+            ? 'Driving School'
+            : role.charAt(0).toUpperCase() + role.slice(1);
         setUserName(`${firstName} ${lastName} (${roleName})`);
         setAccountLocale(response.data.preferred_language);
       }
@@ -475,6 +480,7 @@ function AppContent() {
 
           {/* Deep-linked screens — always available regardless of auth state */}
           <Stack.Group>
+            <Stack.Screen name="InstructorInvite" component={InstructorInviteScreen} options={{ title: 'School Invitation' }} />
             <Stack.Screen name="VerifyAccount" component={VerifyAccountScreen} options={{ title: 'Verify Account' }} />
             <Stack.Screen name="InstructorVerify" component={InstructorVerifyScreen} options={{ title: 'Verify Instructor' }} />
             <Stack.Screen name="InstructorCompanyVerify" component={InstructorCompanyVerifyScreen} options={{ title: 'Approve Instructor' }} />

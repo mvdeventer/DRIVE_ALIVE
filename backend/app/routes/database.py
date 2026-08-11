@@ -16,6 +16,8 @@ from ..database import get_db
 from ..middleware.admin import require_admin
 from ..models.availability import CustomAvailability, InstructorSchedule, TimeOffException
 from ..models.booking import Booking, Review
+from ..models.company import Company
+from ..models.company_invite import CompanyInstructorInvite
 from ..models.password_reset import PasswordResetToken
 from ..models.payment import Transaction
 from ..models.payment_session import PaymentSession
@@ -24,13 +26,6 @@ from ..models.user import Instructor, Student, User
 router = APIRouter(prefix="/admin/database", tags=["admin-database"], dependencies=[Depends(require_admin)])
 
 
-def backup_database_internal(db: Session) -> Dict[str, List[Dict[str, Any]]]:
-    """
-    Internal function to create a database backup as a dict
-    Used by both API endpoint and backup scheduler
-    Returns dict with all database tables
-    """
-    backup_data: Dict[str, List[Dict[str, Any]]] = {}
 def list_available_backups():
     """
     List all available backup files in the backups directory
@@ -129,6 +124,46 @@ def backup_database_internal(db: Session) -> Dict[str, List[Dict[str, Any]]]:
         for u in users
     ]
     
+    # Backup companies
+    companies = db.query(Company).all()
+    backup_data['companies'] = [
+        {
+            'id': c.id,
+            'name': c.name,
+            'slug': c.slug,
+            'owner_instructor_id': c.owner_instructor_id,
+            'owner_user_id': c.owner_user_id,
+            'is_platform_host': c.is_platform_host,
+            'platform_commission_percent': c.platform_commission_percent,
+            'subscription_price_per_instructor': c.subscription_price_per_instructor,
+            'billing_email': c.billing_email,
+            'is_active': c.is_active,
+            'created_at': c.created_at.isoformat() if c.created_at else None,
+        }
+        for c in companies
+    ]
+
+    # Backup company instructor invitations
+    invites = db.query(CompanyInstructorInvite).all()
+    backup_data['company_instructor_invites'] = [
+        {
+            'id': inv.id,
+            'company_id': inv.company_id,
+            'invited_by_user_id': inv.invited_by_user_id,
+            'direction': inv.direction,
+            'email': inv.email,
+            'instructor_id': inv.instructor_id,
+            'token': inv.token,
+            'status': inv.status,
+            'proposed_markup_type': inv.proposed_markup_type,
+            'proposed_markup_value': inv.proposed_markup_value,
+            'expires_at': inv.expires_at.isoformat() if inv.expires_at else None,
+            'created_at': inv.created_at.isoformat() if inv.created_at else None,
+            'responded_at': inv.responded_at.isoformat() if inv.responded_at else None,
+        }
+        for inv in invites
+    ]
+
     # Backup instructors
     instructors = db.query(Instructor).all()
     backup_data['instructors'] = [
@@ -152,7 +187,11 @@ def backup_database_internal(db: Session) -> Dict[str, List[Dict[str, Any]]]:
             'rate_per_km_beyond_radius': i.rate_per_km_beyond_radius,
             'is_available': i.is_available,
             'hourly_rate': i.hourly_rate,
-            'booking_fee': i.booking_fee,
+            'company_id': i.company_id,
+            'is_company_owner': i.is_company_owner,
+            'company_joined_at': i.company_joined_at.isoformat() if i.company_joined_at else None,
+            'company_markup_type': i.company_markup_type,
+            'company_markup_value': i.company_markup_value,
             'rating': i.rating,
             'total_reviews': i.total_reviews,
             'is_verified': i.is_verified,
@@ -207,6 +246,10 @@ def backup_database_internal(db: Session) -> Dict[str, List[Dict[str, Any]]]:
             'instructor_notes': b.instructor_notes,
             'status': b.status.value,
             'amount': b.amount,
+            'instructor_base_amount': b.instructor_base_amount,
+            'company_markup_amount': b.company_markup_amount,
+            'company_id': b.company_id,
+            'booking_source': b.booking_source,
             'payment_status': b.payment_status.value,
             'payment_method': b.payment_method,
             'payment_id': b.payment_id,
@@ -372,7 +415,7 @@ def reset_database(db: Session = Depends(get_db)):
                 'province': i.province, 'city': i.city, 'suburb': i.suburb,
                 'service_radius_km': i.service_radius_km, 'max_travel_distance_km': i.max_travel_distance_km,
                 'rate_per_km_beyond_radius': i.rate_per_km_beyond_radius, 'is_available': i.is_available,
-                'hourly_rate': i.hourly_rate, 'booking_fee': i.booking_fee, 'rating': i.rating,
+                'hourly_rate': i.hourly_rate, 'rating': i.rating,
                 'total_reviews': i.total_reviews, 'is_verified': i.is_verified,
                 'created_at': i.created_at.isoformat() if i.created_at else None,
                 'updated_at': i.updated_at.isoformat() if i.updated_at else None,
@@ -406,7 +449,7 @@ def reset_database(db: Session = Depends(get_db)):
                 'lesson_datetime': b.lesson_datetime.isoformat() if b.lesson_datetime else None,
                 'duration_hours': b.duration_hours, 'pickup_address': b.pickup_address,
                 'pickup_latitude': b.pickup_latitude, 'pickup_longitude': b.pickup_longitude,
-                'status': b.status.value, 'hourly_rate': b.hourly_rate, 'booking_fee': b.booking_fee,
+                'status': b.status.value, 'hourly_rate': b.hourly_rate,
                 'total_amount': b.total_amount, 'payment_status': b.payment_status.value,
                 'stripe_payment_intent_id': b.stripe_payment_intent_id,
                 'payfast_payment_id': b.payfast_payment_id,
@@ -565,6 +608,20 @@ async def restore_database(file: UploadFile = File(...), db: Session = Depends(g
                         :created_at, :updated_at, :last_login)
             """), user_data)
         
+        # Restore companies (before instructors, which FK to companies.id).
+        # owner_instructor_id is deliberately deferred — see the second pass below.
+        for company_data in backup_data.get('companies', []):
+            db.execute(text("""
+                INSERT INTO companies (id, name, slug, owner_instructor_id, owner_user_id,
+                                       is_platform_host, platform_commission_percent,
+                                       subscription_price_per_instructor, billing_email,
+                                       is_active, created_at)
+                VALUES (:id, :name, :slug, NULL, :owner_user_id,
+                        :is_platform_host, :platform_commission_percent,
+                        :subscription_price_per_instructor, :billing_email,
+                        :is_active, :created_at)
+            """), company_data)
+
         # Restore instructors
         for instructor_data in backup_data.get('instructors', []):
             db.execute(text("""
@@ -572,16 +629,24 @@ async def restore_database(file: UploadFile = File(...), db: Session = Depends(g
                                         vehicle_registration, vehicle_make, vehicle_model, vehicle_year,
                                         current_latitude, current_longitude, province, city, suburb,
                                         service_radius_km, max_travel_distance_km, rate_per_km_beyond_radius,
-                                        is_available, hourly_rate, booking_fee, rating, total_reviews,
+                                        is_available, hourly_rate, rating, total_reviews,
                                         is_verified, created_at, updated_at)
                 VALUES (:id, :user_id, :license_number, :license_types, :id_number,
                         :vehicle_registration, :vehicle_make, :vehicle_model, :vehicle_year,
                         :current_latitude, :current_longitude, :province, :city, :suburb,
                         :service_radius_km, :max_travel_distance_km, :rate_per_km_beyond_radius,
-                        :is_available, :hourly_rate, :booking_fee, :rating, :total_reviews,
+                        :is_available, :hourly_rate, :rating, :total_reviews,
                         :is_verified, :created_at, :updated_at)
             """), instructor_data)
         
+        # Second pass: now that instructors exist, re-link company owners.
+        for company_data in backup_data.get('companies', []):
+            if company_data.get('owner_instructor_id') is not None:
+                db.execute(text("""
+                    UPDATE companies SET owner_instructor_id = :owner_instructor_id
+                    WHERE id = :id
+                """), company_data)
+
         # Restore students
         for student_data in backup_data.get('students', []):
             db.execute(text("""
@@ -595,11 +660,11 @@ async def restore_database(file: UploadFile = File(...), db: Session = Depends(g
                 INSERT INTO bookings (id, student_id, instructor_id, scheduled_time, duration_minutes,
                                      pickup_address, pickup_latitude, pickup_longitude, notes, status,
                                      cancellation_reason, payment_method, total_amount, instructor_fee,
-                                     booking_fee, payment_status, created_at, updated_at)
+                                     payment_status, created_at, updated_at)
                 VALUES (:id, :student_id, :instructor_id, :scheduled_time, :duration_minutes,
                         :pickup_address, :pickup_latitude, :pickup_longitude, :notes, :status,
                         :cancellation_reason, :payment_method, :total_amount, :instructor_fee,
-                        :booking_fee, :payment_status, :created_at, :updated_at)
+                        :payment_status, :created_at, :updated_at)
             """), booking_data)
         
         # Restore reviews

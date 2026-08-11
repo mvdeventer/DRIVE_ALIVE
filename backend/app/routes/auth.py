@@ -14,9 +14,10 @@ from sqlalchemy.sql import func
 from ..config import settings
 from ..database import get_db
 from ..models.password_reset import PasswordResetToken
-from ..models.user import Instructor, Student, User, UserRole
+from ..models.user import Instructor, Student, User, UserRole, UserStatus
 from ..schemas.user import (
     ChangePasswordRequest,
+    CompanyRegistrationCreate,
     ForgotPasswordRequest,
     InstructorCreate,
     ResetPasswordRequest,
@@ -198,6 +199,90 @@ async def register_student(
         "student_id": student.id,
         "verification_sent": verification_result,
         "note": "Account will be activated after verification. The verification link is valid for {} minutes.".format(validity_minutes)
+    }
+
+
+@router.post(
+    "/register/company", response_model=dict, status_code=status.HTTP_201_CREATED
+)
+@limiter.limit("3/hour")  # Max 3 school registrations per hour per IP
+async def register_company(
+    request: Request,  # Required for rate limiter
+    response: Response,  # Required for rate limiter to inject headers
+    company_data: CompanyRegistrationCreate,
+    db: Session = Depends(get_db),
+):
+    """Register a driving school and its administrator.
+
+    The administrator manages the school; they are not an instructor. Creating
+    them through the instructor wizard was the old behaviour and forced school
+    owners to invent a licence number and a vehicle.
+    """
+    from ..config import settings
+    from ..services.initialization import InitializationService
+    from ..services.verification_service import VerificationService
+
+    if not InitializationService.admin_exists(db):
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="System is not initialized. Please contact administrator to complete initial setup first.",
+        )
+
+    client_ip = request.client.host if request.client else None
+    user, company, _profile = AuthService.create_company_admin(
+        db, company_data, client_ip=client_ip
+    )
+
+    admin = db.query(User).filter(User.role == UserRole.ADMIN).first()
+    validity_minutes = admin.verification_link_validity_minutes if admin else 30
+
+    # Only a brand-new account needs verifying. An existing active user adding
+    # a school to their account is already verified.
+    verification_result = {
+        "email_sent": False,
+        "whatsapp_sent": False,
+        "expires_in_minutes": 0,
+    }
+    if user.status != UserStatus.ACTIVE:
+        verification_token = VerificationService.create_verification_token(
+            db=db,
+            user_id=user.id,
+            token_type="email",
+            validity_minutes=validity_minutes,
+        )
+        smtp_password = (
+            EncryptionService.decrypt(admin.smtp_password)
+            if admin and admin.smtp_password
+            else None
+        )
+        result = VerificationService.send_verification_messages(
+            db=db,
+            user=user,
+            verification_token=verification_token,
+            frontend_url=settings.FRONTEND_URL,
+            admin_smtp_email=admin.smtp_email if admin else None,
+            admin_smtp_password=smtp_password,
+            notify_admins=True,
+            user_type="company",
+        )
+        verification_result = {
+            "email_sent": result.get("email_sent", False),
+            "whatsapp_sent": result.get("whatsapp_sent", False),
+            "expires_in_minutes": validity_minutes,
+        }
+
+    return {
+        "message": (
+            "Driving school registered! Please check your email and WhatsApp to "
+            "verify your account."
+            if user.status != UserStatus.ACTIVE
+            else "Driving school registered! You can manage it from your account."
+        ),
+        "user_id": user.id,
+        "company_id": company.id,
+        "company_name": company.name,
+        "requires_verification": user.status != UserStatus.ACTIVE,
+        "verification_sent": verification_result,
     }
 
 
@@ -482,6 +567,28 @@ async def get_current_user_info(
                     "is_available": instructor.is_available,
                     "total_earnings": float(total_earnings),
                     "rating": float(instructor.rating) if instructor.rating else 0.0,
+                }
+            )
+
+    elif active_role == UserRole.COMPANY_ADMIN.value:
+        from ..models.company import Company
+        from ..models.company_admin import CompanyAdmin
+
+        profile = (
+            db.query(CompanyAdmin)
+            .filter(CompanyAdmin.user_id == current_user.id)
+            .first()
+        )
+        if profile:
+            company = (
+                db.query(Company).filter(Company.id == profile.company_id).first()
+            )
+            user_data.update(
+                {
+                    "company_admin_id": profile.id,
+                    "company_id": profile.company_id,
+                    "company_name": company.name if company else None,
+                    "is_primary_company_admin": bool(profile.is_primary),
                 }
             )
 

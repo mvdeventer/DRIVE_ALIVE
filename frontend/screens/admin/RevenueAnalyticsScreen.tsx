@@ -35,6 +35,20 @@ interface RevenueStats {
   }>;
 }
 
+interface PlatformRevenue {
+  period: string;
+  commission_total: number;
+  subscription_total: number;
+  total: number;
+  companies: Array<{
+    company_id: number;
+    company_name: string | null;
+    commission: number;
+    subscription: number;
+    total: number;
+  }>;
+}
+
 interface InstructorOption {
   instructor_id: number;
   instructor_name: string;
@@ -45,6 +59,7 @@ interface InstructorOption {
 export default function RevenueAnalyticsScreen({ navigation }: any) {
   const { colors } = useTheme();
   const [stats, setStats] = useState<RevenueStats | null>(null);
+  const [platformRevenue, setPlatformRevenue] = useState<PlatformRevenue | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState('');
@@ -56,6 +71,12 @@ export default function RevenueAnalyticsScreen({ navigation }: any) {
     try {
       setError('');
       const data = await apiService.getRevenueStats(instructorId || undefined);
+      // What the platform actually keeps, as opposed to the gross above.
+      try {
+        setPlatformRevenue(await apiService.getPlatformRevenue());
+      } catch {
+        setPlatformRevenue(null);
+      }
       setStats(data);
     } catch (err: any) {
       setError(err.response?.data?.detail || 'Failed to load revenue statistics');
@@ -183,17 +204,48 @@ export default function RevenueAnalyticsScreen({ navigation }: any) {
       {stats && (
         <>
           {/* Main Revenue Stats */}
+          {platformRevenue && (
+            <Card variant="elevated" style={{ marginTop: 15, marginHorizontal: 15 }}>
+              <Text style={[styles.sectionTitle, { color: colors.text }]}>
+                Platform Earnings ({platformRevenue.period})
+              </Text>
+              <View style={styles.statsGrid}>
+                <View style={[styles.statCard, { backgroundColor: colors.backgroundSecondary }]}>
+                  <Text style={[styles.statCardLabel, { color: colors.textSecondary }]}>Commission</Text>
+                  <Text style={[styles.statCardValue, { color: colors.primary }]}>
+                    R{platformRevenue.commission_total.toFixed(2)}
+                  </Text>
+                </View>
+                <View style={[styles.statCard, { backgroundColor: colors.backgroundSecondary }]}>
+                  <Text style={[styles.statCardLabel, { color: colors.textSecondary }]}>Subscriptions</Text>
+                  <Text style={[styles.statCardValue, { color: colors.primary }]}>
+                    R{platformRevenue.subscription_total.toFixed(2)}
+                  </Text>
+                </View>
+                <View style={[styles.statCard, { backgroundColor: colors.backgroundSecondary }]}>
+                  <Text style={[styles.statCardLabel, { color: colors.textSecondary }]}>Total Kept</Text>
+                  <Text style={[styles.statCardValue, { color: colors.success }]}>
+                    R{platformRevenue.total.toFixed(2)}
+                  </Text>
+                </View>
+              </View>
+            </Card>
+          )}
+
           <Card variant="elevated" style={{ marginTop: 15, marginHorizontal: 15 }}>
-            <Text style={[styles.sectionTitle, { color: colors.text }]}>Revenue Summary</Text>
+            <Text style={[styles.sectionTitle, { color: colors.text }]}>Lesson Volume</Text>
             <View style={styles.statsGrid}>
               <View style={[styles.statCard, { backgroundColor: colors.backgroundSecondary }]}>
-                <Text style={[styles.statCardLabel, { color: colors.textSecondary }]}>Total Revenue</Text>
+                {/* Gross lesson value, not platform income: most of this
+                    belongs to instructors and their schools. Platform
+                    earnings are the separate card below. */}
+                <Text style={[styles.statCardLabel, { color: colors.textSecondary }]}>Lesson Volume (gross)</Text>
                 <Text style={[styles.statCardValue, { color: colors.success }]}>
                   R{stats.total_revenue.toFixed(2)}
                 </Text>
               </View>
               <View style={[styles.statCard, { backgroundColor: colors.backgroundSecondary }]}>
-                <Text style={[styles.statCardLabel, { color: colors.textSecondary }]}>Pending Revenue</Text>
+                <Text style={[styles.statCardLabel, { color: colors.textSecondary }]}>Pending Volume</Text>
                 <Text style={[styles.statCardValue, { color: colors.warning }]}>
                   R{stats.pending_revenue.toFixed(2)}
                 </Text>

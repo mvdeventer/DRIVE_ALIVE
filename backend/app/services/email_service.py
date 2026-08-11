@@ -395,6 +395,30 @@ If you didn't create an account with us, please ignore this email.
             logger.error("Failed to send test email to %s: %s", to_email, e)
             return False
 
+    @staticmethod
+    def for_admin(db) -> "EmailService":
+        """Build a sender using the platform admin's stored SMTP credentials.
+
+        The module-level ``email_service`` singleton falls back to
+        ``settings.SMTP_*``, which is unset in this deployment — anything using
+        it silently sends nothing. Credentials actually live encrypted on the
+        first admin row, which is what the registration flows already read.
+        """
+        from ..models.user import User, UserRole
+        from ..utils.encryption import EncryptionService
+
+        admin = (
+            db.query(User)
+            .filter(User.role == UserRole.ADMIN)
+            .order_by(User.id.asc())
+            .first()
+        )
+        if admin is None or not admin.smtp_email or not admin.smtp_password:
+            return email_service  # unconfigured; callers check the return value
+        return EmailService(
+            admin.smtp_email, EncryptionService.decrypt(admin.smtp_password)
+        )
+
     def send_simple_email(self, to_email: str, subject: str, body: str) -> bool:
         """
         Send a plain-text email with a custom subject and body.

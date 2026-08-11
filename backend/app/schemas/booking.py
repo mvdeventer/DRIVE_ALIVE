@@ -62,7 +62,6 @@ class BookingResponse(BookingBase):
     instructor_id: int
     status: BookingStatus
     amount: float
-    booking_fee: float
     payment_status: PaymentStatus
     credit_applied_amount: Optional[float] = 0.0
     replacement_booking_id: Optional[int] = None

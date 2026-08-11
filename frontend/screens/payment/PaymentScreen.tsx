@@ -23,8 +23,6 @@ interface RouteParams {
   instructor: any;
   bookings: any[];
   total_amount: number;
-  booking_fee: number;
-  lesson_amount: number;
   reschedule_booking_id?: number;
 }
 
@@ -34,7 +32,7 @@ export default function PaymentScreen() {
   const { colors } = useTheme();
   const params = route.params as RouteParams;
 
-  const { instructor, bookings, total_amount, booking_fee, lesson_amount, reschedule_booking_id } = params;
+  const { instructor, bookings, total_amount, reschedule_booking_id } = params;
 
   const [loading, setLoading] = useState(false);
   const [creditInfo, setCreditInfo] = useState<{
@@ -183,7 +181,7 @@ export default function PaymentScreen() {
 
           <View style={styles.summaryRow}>
             <Text style={[styles.summaryLabel, { color: colors.textSecondary }]}>
-              Lesson Fee ({bookings.length} {bookings.length === 1 ? 'lesson' : 'lessons'})
+              {bookings.length} {bookings.length === 1 ? 'lesson' : 'lessons'}
             </Text>
             <Text style={[styles.summaryValue, { color: colors.text }]}>R{total_amount.toFixed(2)}</Text>
           </View>
