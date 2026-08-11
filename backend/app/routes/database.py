@@ -175,6 +175,32 @@ TRANSIENT_TABLES = [
 _DEFERRED_COLUMNS = {"companies": ("owner_instructor_id",)}
 
 
+def _ordered(names) -> List[str]:
+    """Order tables parents-first, from the model dependency graph.
+
+    Hand-maintained ordering is what this module keeps getting wrong: a purge
+    that deletes users before the rows still pointing at them fails on any
+    database that enforces foreign keys. SQLAlchemy already knows the order,
+    so ask it rather than restating it. (The companies/instructors cycle is
+    excluded from the graph by ``use_alter`` on that key, and is closed
+    afterwards by _relink_deferred.)
+    """
+    from ..database import Base
+
+    wanted = set(names)
+    return [t.name for t in Base.metadata.sorted_tables if t.name in wanted]
+
+
+def _insert_order() -> List[str]:
+    """Parents before children, for restore."""
+    return _ordered(BACKUP_TABLES)
+
+
+def _purge_order() -> List[str]:
+    """Children before parents, for emptying."""
+    return list(reversed(_ordered(list(BACKUP_TABLES) + list(TRANSIENT_TABLES))))
+
+
 def _table(name: str):
     """The live SQLAlchemy Table, which is the authority on what columns exist."""
     from ..database import Base
@@ -352,11 +378,12 @@ def _resync_sequences(db: Session) -> None:
 
 
 def _purge_all(db: Session) -> None:
-    """Empty every table a restore is about to repopulate, children first."""
-    for table_name in reversed(BACKUP_TABLES):
-        db.execute(_table(table_name).delete())
-    # Stale sessions and reset links must not outlive the data they point at.
-    for table_name in TRANSIENT_TABLES:
+    """Empty every table a restore is about to repopulate, children first.
+
+    Transient tables go too: stale checkout sessions and password-reset links
+    must not outlive the data they point at.
+    """
+    for table_name in _purge_order():
         db.execute(_table(table_name).delete())
 
 
@@ -560,7 +587,7 @@ async def restore_database(file: UploadFile = File(...), db: Session = Depends(g
 
         _purge_all(db)
 
-        for table_name in BACKUP_TABLES:
+        for table_name in _insert_order():
             rows = backup_data.get(table_name) or []
             if not isinstance(rows, list):
                 raise ValueError(f"'{table_name}' should be a list of rows")

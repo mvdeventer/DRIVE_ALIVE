@@ -12,7 +12,7 @@ import json
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine, text
+from sqlalchemy import create_engine, event, text
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
@@ -28,6 +28,9 @@ from app.models.user import Instructor, Student, User, UserRole, UserStatus
 from app.routes.database import (
     BACKUP_TABLES,
     SENSITIVE_COLUMNS,
+    TRANSIENT_TABLES,
+    _insert_order,
+    _purge_order,
     backup_database_internal,
 )
 from app.utils.auth import get_password_hash, verify_password
@@ -42,6 +45,17 @@ def db():
         connect_args={"check_same_thread": False},
         poolclass=StaticPool,
     )
+
+    # SQLite ignores foreign keys unless told not to, and production runs on
+    # PostgreSQL, which does not. Without this the tests happily accept a
+    # purge order that deletes parents before their children — which is a bug
+    # this module has shipped twice.
+    @event.listens_for(engine, "connect")
+    def _enforce_foreign_keys(dbapi_connection, _record):
+        cursor = dbapi_connection.cursor()
+        cursor.execute("PRAGMA foreign_keys=ON")
+        cursor.close()
+
     Base.metadata.create_all(bind=engine)
     with engine.connect() as conn:
         conn.execute(
@@ -422,3 +436,48 @@ def test_the_pre_reset_snapshot_holds_no_credentials(client, db):
         raw = f.read()
     assert "smtp-secret" not in raw
     assert "password_hash" not in raw
+
+
+# ── Ordering, checked against the schema itself ──────────────────────────
+#
+# These read the dependency graph rather than exercising a database, so they
+# hold for PostgreSQL even though the tests above run on SQLite. Ordering is
+# what this module has got wrong twice.
+
+
+def _foreign_keys():
+    for name, table in Base.metadata.tables.items():
+        for fk in table.foreign_keys:
+            yield name, fk.parent.name, fk.column.table.name, fk.ondelete
+
+
+def test_nothing_is_purged_before_the_rows_pointing_at_it():
+    position = {name: i for i, name in enumerate(_purge_order())}
+    offenders = [
+        f"{parent} purged before {child}.{column}"
+        for child, column, parent, ondelete in _foreign_keys()
+        if child in position
+        and parent in position
+        and position[parent] < position[child]
+        and not ondelete
+    ]
+    assert offenders == []
+
+
+def test_every_managed_table_is_purged():
+    """A table left behind would survive a restore and duplicate rows."""
+    assert set(_purge_order()) == set(BACKUP_TABLES) | set(TRANSIENT_TABLES)
+
+
+def test_rows_are_inserted_after_what_they_reference():
+    position = {name: i for i, name in enumerate(_insert_order())}
+    offenders = [
+        f"{child}.{column} inserted before {parent}"
+        for child, column, parent, _ondelete in _foreign_keys()
+        if child in position
+        and parent in position
+        and position[parent] > position[child]
+        # Held back deliberately and filled in by _relink_deferred.
+        and (child, column) != ("companies", "owner_instructor_id")
+    ]
+    assert offenders == []
