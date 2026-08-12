@@ -26,6 +26,23 @@ import time
 from pathlib import Path
 
 # ============================================================================
+# Console encoding
+# ============================================================================
+# Progress output below uses check marks, arrows and box-drawing characters.
+# When stdout is a pipe or a file rather than a console (CI, `| tail`, release
+# log capture), Windows Python falls back to cp1252 and the first such
+# character raises UnicodeEncodeError. That kills the run *after* the real work
+# has already succeeded -- `--bundle` downloads every package, then dies
+# printing "done". Force UTF-8 and degrade gracefully instead of crashing.
+
+for _stream in (sys.stdout, sys.stderr):
+    if hasattr(_stream, "reconfigure"):
+        try:
+            _stream.reconfigure(encoding="utf-8", errors="replace")
+        except (ValueError, OSError):
+            pass
+
+# ============================================================================
 # Configuration
 # ============================================================================
 
