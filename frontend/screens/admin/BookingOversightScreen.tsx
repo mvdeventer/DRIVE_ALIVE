@@ -3,7 +3,7 @@
  * View and manage all bookings across the system
  */
 import { useFocusEffect } from '@react-navigation/native';
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Clipboard,
@@ -20,12 +20,15 @@ import {
 import { Button, Card, ThemedModal } from '../../components';
 import InlineMessage from '../../components/InlineMessage';
 import WebNavigationHeader from '../../components/WebNavigationHeader';
+import { useT } from '../../i18n';
 import { useTheme } from '../../theme/ThemeContext';
 import { useBreakpoint } from '../../hooks/useBreakpoint';
 import apiService from '../../services/api';
 import { showMessage } from '../../utils/messageConfig';
 
 const SCREEN_NAME = 'BookingOversightScreen';
+// The server caps /admin/bookings at 100 per request.
+const PAGE_SIZE = 100;
 
 interface Booking {
   id: number;
@@ -48,6 +51,7 @@ interface Booking {
 
 export default function BookingOversightScreen({ navigation }: any) {
   const { colors } = useTheme();
+  const t = useT();
   // Grid density is viewport-driven and must be read during render — putting
   // it in StyleSheet.create froze the layout at whatever width the module
   // happened to be imported at.
@@ -67,33 +71,105 @@ export default function BookingOversightScreen({ navigation }: any) {
   const [modalVisible, setModalVisible] = useState(false);
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
   const [confirmCancel, setConfirmCancel] = useState<Booking | null>(null);
+  // Tab counts must describe every booking, not the page in hand — see
+  // loadBookings. /admin/stats already counts server-side for the dashboard.
+  const [statusCounts, setStatusCounts] = useState<Record<string, number>>({});
+  const [hasMore, setHasMore] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
 
-  const loadBookings = async () => {
+  const byDate = (list: Booking[]) =>
+    [...list].sort(
+      (a, b) => new Date(a.lesson_date).getTime() - new Date(b.lesson_date).getTime()
+    );
+
+  /**
+   * `/admin/bookings` is paged and caps `limit` at 100, so the screen only ever
+   * holds a page. Two consequences drove this shape:
+   *
+   *  - the tab must filter server-side, or selecting "Completed" would only
+   *    find the completed bookings that happened to be in the page already;
+   *  - the counts beside each tab must come from `/admin/stats`, which counts
+   *    the whole table, or they describe the page and read as nonsense (a
+   *    database with 1143 completed bookings showed "Completed (0)").
+   */
+  const loadBookings = async (tab = activeTab, append = false, search = searchQuery) => {
     try {
       setError('');
-      const data = await apiService.getAllBookingsAdmin(''); // Load all bookings
-      // Sort by lesson_date (earliest first)
-      const sorted = data.sort(
-        (a, b) => new Date(a.lesson_date).getTime() - new Date(b.lesson_date).getTime()
+      const skip = append ? bookings.length : 0;
+      const data: Booking[] = await apiService.getAllBookingsAdmin(
+        tab === 'all' ? '' : tab,
+        skip,
+        PAGE_SIZE,
+        search
       );
-      setBookings(sorted);
+      setBookings(prev => byDate(append ? [...prev, ...data] : data));
+      setHasMore(data.length === PAGE_SIZE);
     } catch (err: any) {
-      setError(err.response?.data?.detail || 'Failed to load bookings');
+      setError(err.response?.data?.detail || t('bookingOversight.msg.loadFailed'));
     } finally {
       setLoading(false);
       setRefreshing(false);
+      setLoadingMore(false);
+    }
+  };
+
+  const loadCounts = async () => {
+    try {
+      const stats = await apiService.getAdminStats();
+      setStatusCounts({
+        all: stats.total_bookings ?? 0,
+        pending: stats.pending_bookings ?? 0,
+        completed: stats.completed_bookings ?? 0,
+        cancelled: stats.cancelled_bookings ?? 0,
+      });
+    } catch {
+      // A failed count must not blank the list the admin came here for.
     }
   };
 
   useFocusEffect(
     useCallback(() => {
-      loadBookings();
-    }, [])
+      loadBookings(activeTab);
+      loadCounts();
+    }, [activeTab])
   );
 
   const onRefresh = () => {
     setRefreshing(true);
-    loadBookings();
+    loadBookings(activeTab);
+    loadCounts();
+  };
+
+  const onLoadMore = () => {
+    setLoadingMore(true);
+    loadBookings(activeTab, true);
+  };
+
+  // Search runs server-side (the list is paged, so a local filter would only
+  // ever see the current page). Debounced so typing is not one request per key.
+  const searchDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const firstSearchRun = useRef(true);
+  useEffect(() => {
+    if (firstSearchRun.current) {
+      firstSearchRun.current = false;
+      return;
+    }
+    if (searchDebounce.current) clearTimeout(searchDebounce.current);
+    searchDebounce.current = setTimeout(() => {
+      setLoading(true);
+      loadBookings(activeTab, false, searchQuery);
+    }, 350);
+    return () => {
+      if (searchDebounce.current) clearTimeout(searchDebounce.current);
+    };
+  }, [searchQuery]);
+
+  const selectTab = (tab: typeof activeTab) => {
+    if (tab === activeTab) return;
+    setActiveTab(tab);
+    setLoading(true);
+    setBookings([]);
+    loadBookings(tab);
   };
 
   const handleCancelBooking = (booking: Booking) => {
@@ -108,7 +184,7 @@ export default function BookingOversightScreen({ navigation }: any) {
       await apiService.cancelBookingAdmin(confirmCancel.id);
       showMessage(
         setSuccess,
-        'Booking cancelled successfully',
+        t('bookingOversight.msg.cancelled'),
         SCREEN_NAME,
         'bookingCancel',
         'success'
@@ -118,7 +194,7 @@ export default function BookingOversightScreen({ navigation }: any) {
     } catch (err: any) {
       showMessage(
         setError,
-        err.response?.data?.detail || 'Failed to cancel booking',
+        err.response?.data?.detail || t('bookingOversight.msg.cancelFailed'),
         SCREEN_NAME,
         'error',
         'error'
@@ -127,46 +203,10 @@ export default function BookingOversightScreen({ navigation }: any) {
     }
   };
 
-  // Filter bookings based on active tab and search query
-  const filteredBookings = bookings
-    .filter(booking => {
-      // Tab filter
-      if (activeTab !== 'all') {
-        if (booking.status.toLowerCase() !== activeTab) return false;
-      }
-
-      // Search filter
-      if (!searchQuery) return true;
-      const query = searchQuery.toLowerCase().trim();
-
-      // Format lesson date for searching (multiple formats)
-      const lessonDate = new Date(booking.lesson_date);
-      const dateStr = lessonDate.toLocaleDateString(); // e.g., "12/26/2025"
-      const dateStrShort = lessonDate.toLocaleDateString('en-ZA'); // e.g., "2025/12/26"
-      const dateStrLong = lessonDate.toLocaleDateString('en-US', {
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric',
-      }); // e.g., "December 26, 2025"
-      const dateStrISO = booking.lesson_date.split('T')[0]; // e.g., "2025-12-26"
-
-      // Search by booking reference, booking ID, student/instructor name, ID numbers, or date
-      return (
-        (booking.booking_reference || '').toLowerCase().includes(query) ||
-        booking.id.toString().includes(query) ||
-        (booking.student_name || '').toLowerCase().includes(query) ||
-        (booking.instructor_name || '').toLowerCase().includes(query) ||
-        (booking.student_id_number || '').toString().toLowerCase().includes(query) ||
-        (booking.instructor_id_number || '').toString().toLowerCase().includes(query) ||
-        booking.student_id.toString().includes(query) ||
-        booking.instructor_id.toString().includes(query) ||
-        dateStr.toLowerCase().includes(query) ||
-        dateStrShort.toLowerCase().includes(query) ||
-        dateStrLong.toLowerCase().includes(query) ||
-        dateStrISO.toLowerCase().includes(query)
-      );
-    })
-    .sort((a, b) => new Date(a.lesson_date).getTime() - new Date(b.lesson_date).getTime());
+  // Both the tab filter and the search now run server-side in loadBookings,
+  // because the list is paged and a local filter could only ever see one page.
+  // loadBookings already sorts by lesson date.
+  const filteredBookings = bookings;
 
   const copyBookingDetails = (booking: Booking) => {
     const details = `
@@ -207,7 +247,7 @@ Lesson Type:    ${booking.lesson_type.toUpperCase()}
 `.trim();
 
     Clipboard.setString(details);
-    setSuccess('Booking details copied to clipboard!');
+    setSuccess(t('bookingOversight.msg.copied'));
     setTimeout(() => setSuccess(''), 3000);
   };
 
@@ -261,15 +301,15 @@ Lesson Type:    ${booking.lesson_type.toUpperCase()}
 
       <View style={styles.bookingDetails}>
         <View style={styles.detailRow}>
-          <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>Type:</Text>
+          <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>{t('bookingOversight.label.type')}</Text>
           <Text style={[styles.detailValue, { color: colors.text }]}>{item.lesson_type.toUpperCase()}</Text>
         </View>
         <View style={styles.detailRow}>
-          <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>Date:</Text>
+          <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>{t('bookingOversight.label.date')}</Text>
           <Text style={[styles.detailValue, { color: colors.text }]}>{new Date(item.lesson_date).toLocaleDateString()}</Text>
         </View>
         <View style={styles.detailRow}>
-          <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>Time:</Text>
+          <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>{t('bookingOversight.label.time')}</Text>
           <Text style={[styles.detailValue, { color: colors.text }]}>
             {new Date(item.lesson_date).toLocaleTimeString([], {
               hour: '2-digit',
@@ -278,40 +318,40 @@ Lesson Type:    ${booking.lesson_type.toUpperCase()}
           </Text>
         </View>
         <View style={styles.detailRow}>
-          <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>Duration:</Text>
+          <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>{t('bookingOversight.label.duration')}</Text>
           <Text style={[styles.detailValue, { color: colors.text }]}>{item.duration_minutes} min</Text>
         </View>
         <View style={styles.detailRow}>
-          <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>Pickup:</Text>
+          <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>{t('bookingOversight.label.pickup')}</Text>
           <Text style={[styles.detailValue, { color: colors.text }]} numberOfLines={2}>
             {item.pickup_address}
           </Text>
         </View>
         {item.dropoff_address ? (
           <View style={styles.detailRow}>
-            <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>Dropoff:</Text>
+            <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>{t('bookingOversight.label.dropoff')}</Text>
             <Text style={[styles.detailValue, { color: colors.text }]} numberOfLines={2}>
               {item.dropoff_address}
             </Text>
           </View>
         ) : null}
         <View style={styles.detailRow}>
-          <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>Amount:</Text>
+          <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>{t('bookingOversight.label.amount')}</Text>
           <Text style={[styles.amountText, { color: colors.success }]}>R{item.amount.toFixed(2)}</Text>
         </View>
         <View style={styles.detailRow}>
-          <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>Created:</Text>
+          <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>{t('bookingOversight.label.created')}</Text>
           <Text style={[styles.detailValue, { color: colors.text }]}>{new Date(item.created_at).toLocaleDateString()}</Text>
         </View>
       </View>
 
       <View style={styles.actionButtons}>
         <Button variant="primary" size="sm" style={{ flex: 1 }} onPress={() => copyBookingDetails(item)}>
-          Copy Details
+          {t('misc.copyDetails')}
         </Button>
         {item.status.toLowerCase() !== 'cancelled' && item.status.toLowerCase() !== 'completed' && (
           <Button variant="danger" size="sm" style={{ flex: 1 }} onPress={() => handleCancelBooking(item)}>
-            Cancel
+            {t('common.cancel')}
           </Button>
         )}
       </View>
@@ -322,7 +362,7 @@ Lesson Type:    ${booking.lesson_type.toUpperCase()}
     return (
       <View style={[styles.centerContainer, { backgroundColor: colors.background }]}>
         <ActivityIndicator size="large" color={colors.primary} />
-        <Text style={[styles.loadingText, { color: colors.textSecondary }]}>Loading bookings...</Text>
+        <Text style={[styles.loadingText, { color: colors.textSecondary }]}>{t('bookingOversight.loading')}</Text>
       </View>
     );
   }
@@ -330,7 +370,7 @@ Lesson Type:    ${booking.lesson_type.toUpperCase()}
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <WebNavigationHeader
-        title="Booking Oversight"
+        title={t('bookingOversight.title')}
         onBack={() => navigation.goBack()}
         showBackButton={navigation.canGoBack()}
       />
@@ -343,16 +383,22 @@ Lesson Type:    ${booking.lesson_type.toUpperCase()}
       {/* Tab Navigation */}
       <View style={[styles.tabContainer, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
         {(['all', 'pending', 'completed', 'cancelled'] as const).map((tab) => {
-          const count = tab === 'all' ? bookings.length : bookings.filter(b => b.status.toLowerCase() === tab).length;
-          const label = tab.charAt(0).toUpperCase() + tab.slice(1);
+          const count = statusCounts[tab] ?? 0;
+          // The label already interpolates the count; appending another pair of
+          // brackets here rendered "All (50) (50)".
+          const label = t(`bookingOversight.tab.${tab}`, { count });
           return (
             <Pressable
               key={tab}
+              accessibilityRole="tab"
+              accessibilityLabel={label}
+              accessibilityState={{ selected: activeTab === tab }}
+              {...({ 'aria-selected': activeTab === tab } as any)}
               style={[styles.tab, activeTab === tab && { borderBottomColor: colors.primary, backgroundColor: colors.primaryLight }]}
-              onPress={() => setActiveTab(tab)}
+              onPress={() => selectTab(tab)}
             >
               <Text style={[styles.tabText, { color: colors.textSecondary }, activeTab === tab && { color: colors.primary, fontFamily: 'Inter_700Bold' }]}>
-                {label} ({count})
+                {label}
               </Text>
             </Pressable>
           );
@@ -362,7 +408,7 @@ Lesson Type:    ${booking.lesson_type.toUpperCase()}
       <View style={[styles.searchContainer, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
         <TextInput
           style={[styles.searchInput, { borderColor: colors.border, backgroundColor: colors.backgroundSecondary, color: colors.text }]}
-          placeholder="Search by name, booking reference, student/instructor ID, or date..."
+          placeholder={t('bookingOversight.searchPlaceholder')}
           value={searchQuery}
           onChangeText={setSearchQuery}
           placeholderTextColor={colors.textTertiary}
@@ -380,20 +426,29 @@ Lesson Type:    ${booking.lesson_type.toUpperCase()}
         columnWrapperStyle={columns > 1 ? styles.row : undefined}
         contentContainerStyle={styles.listContainer}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+        ListFooterComponent={
+          hasMore ? (
+            <View style={styles.loadMoreWrap}>
+              <Button variant="secondary" onPress={onLoadMore} disabled={loadingMore}>
+                {loadingMore ? t('common.loading') : t('bookingOversight.loadMore')}
+              </Button>
+            </View>
+          ) : null
+        }
       />
 
       <ThemedModal
         visible={modalVisible}
         onClose={closeModal}
-        title="Booking Details"
+        title={t('bookingOversight.detailsTitle')}
         size="lg"
         footer={
           <View style={{ flexDirection: 'row', gap: 12 }}>
             <Button variant="primary" style={{ flex: 1 }} onPress={copyAndCloseModal}>
-              Copy Details
+              {t('misc.copyDetails')}
             </Button>
             <Button variant="secondary" style={{ flex: 1 }} onPress={closeModal}>
-              Close
+              {t('common.close')}
             </Button>
           </View>
         }
@@ -401,17 +456,17 @@ Lesson Type:    ${booking.lesson_type.toUpperCase()}
             {selectedBooking && (
               <ScrollView>
                 <View style={styles.modalSection}>
-                  <Text style={[styles.modalLabel, { color: colors.textSecondary }]}>Booking Reference:</Text>
+                  <Text style={[styles.modalLabel, { color: colors.textSecondary }]}>{t('bookingOversight.label.reference')}</Text>
                   <Text style={[styles.modalValue, { color: colors.text }]}>{selectedBooking.booking_reference}</Text>
                 </View>
 
                 <View style={styles.modalSection}>
-                  <Text style={[styles.modalLabel, { color: colors.textSecondary }]}>Booking ID:</Text>
+                  <Text style={[styles.modalLabel, { color: colors.textSecondary }]}>{t('bookingOversight.label.bookingId')}</Text>
                   <Text style={[styles.modalValue, { color: colors.text }]}>#{selectedBooking.id}</Text>
                 </View>
 
                 <View style={styles.modalSection}>
-                  <Text style={[styles.modalLabel, { color: colors.textSecondary }]}>Status:</Text>
+                  <Text style={[styles.modalLabel, { color: colors.textSecondary }]}>{t('bookingOversight.label.status')}</Text>
                   <View style={[styles.modalStatusBadge, { backgroundColor: getStatusColor(selectedBooking.status) }]}>
                     <Text style={styles.modalStatusText}>
                       {selectedBooking.status.toUpperCase()}
@@ -420,20 +475,20 @@ Lesson Type:    ${booking.lesson_type.toUpperCase()}
                 </View>
 
                 <View style={styles.modalSection}>
-                  <Text style={[styles.modalLabel, { color: colors.textSecondary }]}>Lesson Type:</Text>
+                  <Text style={[styles.modalLabel, { color: colors.textSecondary }]}>{t('bookingOversight.label.lessonType')}</Text>
                   <Text style={[styles.modalValue, { color: colors.text }]}>{selectedBooking.lesson_type.toUpperCase()}</Text>
                 </View>
 
                 <View style={[styles.modalDivider, { backgroundColor: colors.border }]} />
 
                 <View style={styles.modalSection}>
-                  <Text style={[styles.modalSectionTitle, { color: colors.text }]}>Student</Text>
+                  <Text style={[styles.modalSectionTitle, { color: colors.text }]}>{t('createUser.roleStudent')}</Text>
                   <Text style={[styles.modalValue, { color: colors.text }]}>{selectedBooking.student_name}</Text>
                   <Text style={[styles.modalSubvalue, { color: colors.textTertiary }]}>ID: {selectedBooking.student_id_number}</Text>
                 </View>
 
                 <View style={styles.modalSection}>
-                  <Text style={[styles.modalSectionTitle, { color: colors.text }]}>Instructor</Text>
+                  <Text style={[styles.modalSectionTitle, { color: colors.text }]}>{t('createUser.roleInstructor')}</Text>
                   <Text style={[styles.modalValue, { color: colors.text }]}>{selectedBooking.instructor_name}</Text>
                   <Text style={[styles.modalSubvalue, { color: colors.textTertiary }]}>
                     ID: {selectedBooking.instructor_id_number}
@@ -443,14 +498,14 @@ Lesson Type:    ${booking.lesson_type.toUpperCase()}
                 <View style={[styles.modalDivider, { backgroundColor: colors.border }]} />
 
                 <View style={styles.modalSection}>
-                  <Text style={[styles.modalLabel, { color: colors.textSecondary }]}>Date:</Text>
+                  <Text style={[styles.modalLabel, { color: colors.textSecondary }]}>{t('bookingOversight.label.date')}</Text>
                   <Text style={[styles.modalValue, { color: colors.text }]}>
                     {new Date(selectedBooking.lesson_date).toLocaleDateString()}
                   </Text>
                 </View>
 
                 <View style={styles.modalSection}>
-                  <Text style={[styles.modalLabel, { color: colors.textSecondary }]}>Time:</Text>
+                  <Text style={[styles.modalLabel, { color: colors.textSecondary }]}>{t('bookingOversight.label.time')}</Text>
                   <Text style={[styles.modalValue, { color: colors.text }]}>
                     {new Date(selectedBooking.lesson_date).toLocaleTimeString([], {
                       hour: '2-digit',
@@ -460,20 +515,20 @@ Lesson Type:    ${booking.lesson_type.toUpperCase()}
                 </View>
 
                 <View style={styles.modalSection}>
-                  <Text style={[styles.modalLabel, { color: colors.textSecondary }]}>Duration:</Text>
+                  <Text style={[styles.modalLabel, { color: colors.textSecondary }]}>{t('bookingOversight.label.duration')}</Text>
                   <Text style={[styles.modalValue, { color: colors.text }]}>{selectedBooking.duration_minutes} minutes</Text>
                 </View>
 
                 <View style={[styles.modalDivider, { backgroundColor: colors.border }]} />
 
                 <View style={styles.modalSection}>
-                  <Text style={[styles.modalLabel, { color: colors.textSecondary }]}>Pickup:</Text>
+                  <Text style={[styles.modalLabel, { color: colors.textSecondary }]}>{t('bookingOversight.label.pickup')}</Text>
                   <Text style={[styles.modalValue, { color: colors.text }]}>{selectedBooking.pickup_address}</Text>
                 </View>
 
                 {selectedBooking.dropoff_address ? (
                   <View style={styles.modalSection}>
-                    <Text style={[styles.modalLabel, { color: colors.textSecondary }]}>Dropoff:</Text>
+                    <Text style={[styles.modalLabel, { color: colors.textSecondary }]}>{t('bookingOversight.label.dropoff')}</Text>
                     <Text style={[styles.modalValue, { color: colors.text }]}>{selectedBooking.dropoff_address}</Text>
                   </View>
                 ) : null}
@@ -481,12 +536,12 @@ Lesson Type:    ${booking.lesson_type.toUpperCase()}
                 <View style={[styles.modalDivider, { backgroundColor: colors.border }]} />
 
                 <View style={styles.modalSection}>
-                  <Text style={[styles.modalLabel, { color: colors.textSecondary }]}>Amount:</Text>
+                  <Text style={[styles.modalLabel, { color: colors.textSecondary }]}>{t('bookingOversight.label.amount')}</Text>
                   <Text style={[styles.modalAmount, { color: colors.success }]}>R{selectedBooking.amount.toFixed(2)}</Text>
                 </View>
 
                 <View style={styles.modalSection}>
-                  <Text style={[styles.modalLabel, { color: colors.textSecondary }]}>Created:</Text>
+                  <Text style={[styles.modalLabel, { color: colors.textSecondary }]}>{t('bookingOversight.label.created')}</Text>
                   <Text style={[styles.modalValue, { color: colors.text }]}>
                     {new Date(selectedBooking.created_at).toLocaleString()}
                   </Text>
@@ -499,41 +554,41 @@ Lesson Type:    ${booking.lesson_type.toUpperCase()}
       <ThemedModal
         visible={!!confirmCancel}
         onClose={() => setConfirmCancel(null)}
-        title="Cancel Booking"
+        title={t('bookingOversight.cancelBooking')}
         footer={
           <View style={{ flexDirection: 'row', gap: 12 }}>
             <Button variant="secondary" style={{ flex: 1 }} onPress={() => setConfirmCancel(null)}>
-              No, Keep It
+              {t('bookingOversight.msg.keepIt')}
             </Button>
             <Button variant="danger" style={{ flex: 1 }} onPress={confirmCancelBooking}>
-              Yes, Cancel Booking
+              {t('bookingOversight.msg.yesCancel')}
             </Button>
           </View>
         }
       >
             <Text style={{ fontSize: 16, color: colors.text, textAlign: 'center', marginBottom: 15, fontFamily: 'Inter_400Regular' }}>
-              Are you sure you want to cancel this booking?
+              {t('bookingOversight.msg.confirmCancel')}
             </Text>
 
               {confirmCancel && (
                 <View style={[styles.confirmDetails, { backgroundColor: colors.backgroundSecondary }]}>
                   <Text style={{ fontSize: 14, color: colors.text, marginBottom: 5, fontFamily: 'Inter_400Regular' }}>
-                    <Text style={{ fontFamily: 'Inter_700Bold', color: colors.primary }}>Student: </Text>
+                    <Text style={{ fontFamily: 'Inter_700Bold', color: colors.primary }}>{t('bookingOversight.label.student')} </Text>
                     <Text>{confirmCancel.student_name}</Text>
                   </Text>
                   <Text style={{ fontSize: 14, color: colors.text, marginBottom: 5, fontFamily: 'Inter_400Regular' }}>
-                    <Text style={{ fontFamily: 'Inter_700Bold', color: colors.primary }}>Instructor: </Text>
+                    <Text style={{ fontFamily: 'Inter_700Bold', color: colors.primary }}>{t('bookingOversight.label.instructor')} </Text>
                     <Text>{confirmCancel.instructor_name}</Text>
                   </Text>
                   <Text style={{ fontSize: 14, color: colors.text, marginBottom: 5, fontFamily: 'Inter_400Regular' }}>
-                    <Text style={{ fontFamily: 'Inter_700Bold', color: colors.primary }}>Date: </Text>
+                    <Text style={{ fontFamily: 'Inter_700Bold', color: colors.primary }}>{t('bookingOversight.label.date')} </Text>
                     <Text>{new Date(confirmCancel.lesson_date).toLocaleString()}</Text>
                   </Text>
                 </View>
               )}
 
             <Text style={{ fontSize: 14, color: colors.danger, textAlign: 'center', fontStyle: 'italic', fontFamily: 'Inter_400Regular' }}>
-              This action cannot be undone.
+              {t('misc.cannotBeUndone')}
             </Text>
       </ThemedModal>
     </View>
@@ -541,6 +596,7 @@ Lesson Type:    ${booking.lesson_type.toUpperCase()}
 }
 
 const styles = StyleSheet.create({
+  loadMoreWrap: { padding: 16, alignItems: 'center' },
   container: {
     flex: 1,
   },

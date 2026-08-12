@@ -2,6 +2,7 @@
  * Edit Admin Profile Screen
  */
 import { useNavigation, useRoute } from '@react-navigation/native';
+import type { NavigationAction } from '@react-navigation/native';
 import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
@@ -66,7 +67,7 @@ export default function EditAdminProfileScreen({ navigation: navProp }: any) {
   }, []);
 
   useEffect(() => {
-    const unsubscribe = navigation.addListener('beforeRemove', e => {
+    const unsubscribe = navigation.addListener('beforeRemove', (e: { preventDefault: () => void; data: { action: NavigationAction } }) => {
       if (!hasUnsavedChanges) {
         return;
       }
@@ -142,8 +143,10 @@ export default function EditAdminProfileScreen({ navigation: navProp }: any) {
       });
     } catch (error: any) {
       console.error('Error loading profile:', error);
-      showAlert(
-        'Error',
+      // Was showAlert(), which is not defined or imported anywhere: a failed
+      // load threw ReferenceError from inside its own error handler. This
+      // screen reports errors through InlineMessage.
+      setErrorMessage(
         error.response?.data?.detail || 'Failed to load admin profile. Please try again.'
       );
     } finally {

@@ -30,6 +30,11 @@
     "**/*.tsx"
   ],
   "exclude": [
-    "node_modules"
+    "node_modules",
+    // Cypress ships its own Chai types, whose global `expect` shadows Jest's
+    // across the whole program — which is what made every Jest assertion in
+    // this project fail to typecheck. The specs are checked by
+    // cypress/tsconfig.json, which sets types to cypress + node.
+    "cypress"
   ]
 }

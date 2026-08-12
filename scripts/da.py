@@ -27,6 +27,19 @@ from pathlib import Path
 
 from release_workflow import ReleaseError, execute_release
 
+# ── Console encoding ───────────────────────────────────────────────────────────
+# Every banner in this file contains box-drawing characters, arrows and emoji.
+# When stdout is a pipe rather than a console (CI, `| tail`, log capture),
+# Windows Python falls back to cp1252 and the first such character raises
+# UnicodeEncodeError — killing the command *before* it does any work. Force
+# UTF-8 and degrade gracefully instead of crashing.
+for _stream in (sys.stdout, sys.stderr):
+    if hasattr(_stream, "reconfigure"):
+        try:
+            _stream.reconfigure(encoding="utf-8", errors="replace")
+        except (ValueError, OSError):
+            pass
+
 # ── Constants ──────────────────────────────────────────────────────────────────
 
 ROOT = Path(__file__).resolve().parent.parent       # repo root
@@ -1013,8 +1026,33 @@ def cmd_uninstall(yes: bool = False, full: bool = False) -> None:
     # ── Remove files ────────────────────────────────────────────────────────────
     header("Removing files")
 
+    def _tracked_under(p: Path) -> list[str]:
+        """Git-tracked files inside p. Uninstall must never delete these."""
+        try:
+            r = subprocess.run(
+                ["git", "ls-files", "-z", "--", str(p)],
+                cwd=str(ROOT), capture_output=True, text=True,
+            )
+        except OSError:
+            return []
+        if r.returncode != 0:
+            return []
+        return [f for f in r.stdout.split("\0") if f]
+
     def rm(p: Path, label: str) -> None:
         if p.exists():
+            # `dist/` is gitignored, yet dist/install-manifest.json was
+            # force-added at some point. Blindly deleting the directory left a
+            # staged deletion of a tracked file that `git commit -a` would
+            # quietly pick up. Preserve anything git knows about.
+            tracked = _tracked_under(p)
+            if tracked:
+                warn(f"{label} contains git-tracked files – skipping to avoid deleting them:")
+                for f in tracked[:5]:
+                    info(f"    {f}")
+                if len(tracked) > 5:
+                    info(f"    … and {len(tracked) - 5} more")
+                return
             info(f"Removing {label} …")
             info(f"  Path : {p}")
             if p.is_dir():
@@ -1124,8 +1162,11 @@ def cmd_status() -> None:
     env = read_env()
     for k in ["FRONTEND_URL", "ENVIRONMENT", "DEBUG", "DATABASE_URL"]:
         v = env.get(k, _c("red", "(not set)"))
-        if k == "DATABASE_URL" and len(v) > 60:
-            v = v[:57] + "..."
+        if k == "DATABASE_URL" and v:
+            # Mask the password rather than truncating. Truncating at 57 chars
+            # happened to leave most of it visible, so `s.bat status` leaked the
+            # database password into terminal scrollback and any captured log.
+            v = re.sub(r"://([^:/@]+):[^@]*@", r"://\1:***@", v)
         print(f"    {k} = {v}")
 
     # Versions

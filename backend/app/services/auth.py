@@ -14,7 +14,13 @@ from sqlalchemy.orm import Session
 from ..config import settings
 from ..models.availability import InstructorSchedule
 from ..models.user import Instructor, InstructorVerificationStatus, Student, User, UserRole, UserStatus
-from ..schemas.user import InstructorCreate, StudentCreate, UserCreate
+from ..models.company_admin import CompanyAdmin
+from ..schemas.user import (
+    CompanyRegistrationCreate,
+    InstructorCreate,
+    StudentCreate,
+    UserCreate,
+)
 from .role_transition_policy import RoleTransitionPolicy, TransitionChannel
 from ..utils.auth import create_access_token, get_password_hash, verify_password
 
@@ -217,7 +223,64 @@ class AuthService:
             db.flush()  # get instructor.id so we can link company/schedule
 
             # —— Company logic ——
-            if instructor_data.company_name:
+            invite_token = getattr(instructor_data, "invite_token", None)
+            if invite_token:
+                # Registering from a school's invitation. The school, and the
+                # markup agreed with it, come from the invitation rather than
+                # the request body — the caller cannot forge either.
+                from ..models.company_invite import CompanyInstructorInvite
+                from ..services.recruitment_service import (
+                    assert_invite_open,
+                    find_invite_by_token,
+                )
+
+                invite = find_invite_by_token(db, invite_token)
+                assert_invite_open(invite)
+
+                if (invite.email or "").lower() != (instructor_data.email or "").lower():
+                    raise HTTPException(
+                        status_code=status.HTTP_403_FORBIDDEN,
+                        detail={
+                            "code": "INVITE_NOT_FOR_YOU",
+                            "message": (
+                                "That invitation was sent to a different email address."
+                            ),
+                        },
+                    )
+
+                from ..services.company_service import get_company_by_id
+
+                company = get_company_by_id(db, invite.company_id)
+                if not company or not company.is_active:
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail={
+                            "code": "COMPANY_NOT_FOUND",
+                            "message": "That driving school is no longer available.",
+                        },
+                    )
+
+                from ..services.company_service import promote_solo_to_school
+
+                promote_solo_to_school(company)
+
+                instructor.company_id = company.id
+                instructor.is_company_owner = False
+                instructor.company_markup_type = invite.proposed_markup_type
+                instructor.company_markup_value = invite.proposed_markup_value or 0.0
+                instructor.company_joined_at = datetime.now(timezone.utc)
+
+                # The invitation IS the school's approval, so only the admin
+                # credential check remains — no second company approval step.
+                instructor.verification_status = (
+                    InstructorVerificationStatus.PENDING_ADMIN.value
+                )
+
+                invite.status = "accepted"
+                invite.instructor_id = instructor.id
+                invite.responded_at = datetime.now(timezone.utc)
+
+            elif instructor_data.company_name:
                 # Create a brand-new company owned by this instructor
                 from ..services.company_service import create_company
                 company = create_company(db, instructor_data.company_name)
@@ -237,6 +300,10 @@ class AuthService:
                         status_code=status.HTTP_400_BAD_REQUEST,
                         detail="The selected company does not exist or is inactive.",
                     )
+                from ..services.company_service import promote_solo_to_school
+
+                promote_solo_to_school(company)
+
                 instructor.company_id = company.id
                 instructor.is_company_owner = False
 
@@ -244,6 +311,20 @@ class AuthService:
                 instructor.company_verification_token = secrets.token_urlsafe(32)
                 instructor.verification_status = InstructorVerificationStatus.PENDING_COMPANY.value
                 print(f"[INFO] Instructor {instructor.id} joining company {company.id} – pending company + admin verification")
+
+            else:
+                # Registering independently. They still get a company — a
+                # one-person one — because a booking with no company behind it
+                # is a booking the platform earns nothing on. See
+                # company_service.ensure_solo_company for what that does and
+                # does not imply.
+                from ..services.company_service import ensure_solo_company
+
+                solo = ensure_solo_company(db, user, instructor)
+                print(
+                    f"[INFO] Created solo company '{solo.name}' "
+                    f"for independent instructor {instructor.id}"
+                )
 
             # —— Schedule ——
             for slot in instructor_data.schedule:
@@ -300,12 +381,18 @@ class AuthService:
         client_ip: Optional[str] = None,
         channel: TransitionChannel = TransitionChannel.PUBLIC_REGISTRATION,
         actor_user: Optional[User] = None,
+        origin_company_id: Optional[int] = None,
     ) -> tuple[User, Student]:
         """
         Create a new student with profile.
 
         ``channel`` selects the transition rules; admin-created students come
         through ADMIN_GRANT, which the policy restricts to admin actors.
+
+        ``origin_company_id`` records the school that signed this learner up,
+        which is what makes their bookings with that school company-sourced
+        and so exempt from commission. It is set only by the school-enrolment
+        route, from the caller's own profile — never from a request body.
         """
         try:
             # Check if email exists - allow multi-role users
@@ -385,6 +472,7 @@ class AuthService:
                 city=student_data.city,
                 suburb=student_data.suburb,
                 postal_code=student_data.postal_code,
+                origin_company_id=origin_company_id,
             )
 
             db.add(student)
@@ -412,6 +500,119 @@ class AuthService:
         except IntegrityError:
             db.rollback()
             # Re-raise integrity errors with generic message
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Registration failed due to duplicate data.",
+            )
+        except Exception:
+            db.rollback()
+            raise
+
+    @staticmethod
+    def create_company_admin(
+        db: Session,
+        data: CompanyRegistrationCreate,
+        client_ip: Optional[str] = None,
+        channel: TransitionChannel = TransitionChannel.COMPANY_REGISTRATION,
+        actor_user: Optional[User] = None,
+    ) -> tuple[User, "Company", CompanyAdmin]:
+        """Register a driving school and the person who administers it.
+
+        The school and its administrator are created in one transaction — a
+        company with nobody able to manage it would be unreachable.
+
+        Mirrors ``create_student``: an existing account may take on this role
+        as well, provided the correct password is supplied.
+        """
+        from .company_service import create_company
+
+        try:
+            existing_user = db.query(User).filter(User.email == data.email).first()
+
+            # Checked ahead of the policy so the caller always gets this
+            # specific message. The policy would otherwise refuse with a
+            # generic 403 for a single-role account but allow a multi-role one
+            # through (targets are unioned across source roles), giving two
+            # different answers to the same question.
+            if existing_user:
+                already_admin = (
+                    db.query(CompanyAdmin)
+                    .filter(CompanyAdmin.user_id == existing_user.id)
+                    .first()
+                )
+                if already_admin:
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail={
+                            "code": "COMPANY_ADMIN_ALREADY_EXISTS",
+                            "message": (
+                                "This email already administers a driving school. "
+                                "Please log in instead."
+                            ),
+                        },
+                    )
+
+            RoleTransitionPolicy.assert_transition_allowed(
+                db=db,
+                target_role=UserRole.COMPANY_ADMIN,
+                channel=channel,
+                existing_user=existing_user,
+                actor_user=actor_user,
+            )
+
+            if existing_user:
+                if not verify_password(data.password, existing_user.password_hash):
+                    raise HTTPException(
+                        status_code=status.HTTP_401_UNAUTHORIZED,
+                        detail=(
+                            "Email is already registered with a different password. "
+                            "Please use the correct password or log in to add a school."
+                        ),
+                    )
+
+                # Adding a role must not deactivate an account that already works.
+                user = existing_user
+                if user.status != UserStatus.ACTIVE:
+                    user.status = UserStatus.INACTIVE
+            else:
+                user = User(
+                    email=data.email,
+                    phone=data.phone,
+                    first_name=data.first_name,
+                    last_name=data.last_name,
+                    password_hash=get_password_hash(data.password),
+                    role=UserRole.COMPANY_ADMIN,
+                    status=UserStatus.INACTIVE,  # Requires verification
+                    preferred_language=getattr(data, "preferred_language", None) or "en",
+                )
+                db.add(user)
+                db.flush()  # need user.id to own the company
+
+            AuthService._apply_consent(user, data, client_ip)
+
+            company = create_company(
+                db,
+                data.company_name,
+                owner_user_id=user.id,
+                billing_email=data.billing_email or user.email,
+            )
+            profile = CompanyAdmin(
+                user_id=user.id, company_id=company.id, is_primary=True
+            )
+            db.add(profile)
+
+            db.commit()
+            db.refresh(user)
+            db.refresh(company)
+            db.refresh(profile)
+
+            return user, company, profile
+
+        except HTTPException:
+            db.rollback()
+            raise
+        except IntegrityError:
+            db.rollback()
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Registration failed due to duplicate data.",

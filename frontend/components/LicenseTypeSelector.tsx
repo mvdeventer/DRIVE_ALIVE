@@ -5,6 +5,7 @@
 import React, { useState } from 'react';
 import { Modal, Pressable, ScrollView, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useT } from '../i18n';
 import { useTheme } from '../theme/ThemeContext';
 
 interface LicenseTypeSelectorProps {
@@ -66,6 +67,7 @@ export default function LicenseTypeSelector({
   onSelectionChange,
 }: LicenseTypeSelectorProps) {
   const { colors } = useTheme();
+  const t = useT();
   const [showSelector, setShowSelector] = useState(false);
   const [showTooltip, setShowTooltip] = useState(false);
 
@@ -256,7 +258,7 @@ export default function LicenseTypeSelector({
                   color: colors.text,
                 }}
               >
-                Select License Types
+                {t('misc.selectLicenceTypes')}
               </Text>
               <Pressable
                 onPress={() => setShowSelector(false)}
@@ -271,7 +273,7 @@ export default function LicenseTypeSelector({
                     color: colors.primary,
                   }}
                 >
-                  Done
+                  {t('misc.done')}
                 </Text>
               </Pressable>
             </View>
@@ -419,7 +421,7 @@ export default function LicenseTypeSelector({
                   fontFamily: 'Inter_600SemiBold',
                 }}
               >
-                Got it!
+                {t('misc.gotIt')}
               </Text>
             </Pressable>
           </View>

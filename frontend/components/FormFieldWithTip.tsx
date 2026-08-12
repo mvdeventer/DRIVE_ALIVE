@@ -1,26 +1,36 @@
 /**
  * Form Field with Info Tooltip Component
  */
-import React, { useState } from 'react';
+import React, { forwardRef, useState } from 'react';
 import { Modal, Pressable, Text, TextInput, TextInputProps, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useT } from '../i18n';
 import { useTheme } from '../theme/ThemeContext';
 
 interface FormFieldWithTipProps extends TextInputProps {
   label?: string;
-  tooltip: string;
+  /**
+   * Help text behind the ⓘ button. Optional: some fields explain
+   * themselves, and without this the button appeared anyway and opened an
+   * empty panel.
+   */
+  tooltip?: string;
   required?: boolean;
   error?: string;
 }
 
-export default function FormFieldWithTip({
-  label,
-  tooltip,
-  required = false,
-  error,
-  ...textInputProps
-}: FormFieldWithTipProps) {
+/**
+ * Wrapped in forwardRef because callers pass a ref to focus the next field
+ * when the keyboard's "next" key is pressed. A plain function component
+ * accepts no ref, so those chains did nothing at all.
+ */
+const FormFieldWithTip = forwardRef<TextInput, FormFieldWithTipProps>(function
+FormFieldWithTip(
+  { label, tooltip, required = false, error, ...textInputProps },
+  ref
+) {
   const { colors } = useTheme();
+  const t = useT();
   const [showTooltip, setShowTooltip] = useState(false);
 
   return (
@@ -38,6 +48,7 @@ export default function FormFieldWithTip({
             {label}
             {required && <Text style={{ color: colors.danger }}> *</Text>}
           </Text>
+          {tooltip ? (
           <Pressable
             style={{
               marginLeft: 8,
@@ -56,10 +67,12 @@ export default function FormFieldWithTip({
           >
             <Ionicons name="information" size={14} color={colors.textInverse} />
           </Pressable>
+          ) : null}
         </View>
       ) : null}
 
       <TextInput
+        ref={ref}
         {...textInputProps}
         autoComplete={textInputProps.autoComplete ?? (textInputProps.secureTextEntry ? 'new-password' : 'off')}
         autoCorrect={textInputProps.autoCorrect ?? false}
@@ -156,7 +169,7 @@ export default function FormFieldWithTip({
                   fontFamily: 'Inter_600SemiBold',
                 }}
               >
-                Got it!
+                {t('misc.gotIt')}
               </Text>
             </Pressable>
           </View>
@@ -164,4 +177,6 @@ export default function FormFieldWithTip({
       </Modal>
     </View>
   );
-}
+});
+
+export default FormFieldWithTip;

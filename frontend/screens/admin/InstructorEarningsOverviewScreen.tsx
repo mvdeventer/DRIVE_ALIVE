@@ -713,7 +713,6 @@ export default function InstructorEarningsOverviewScreen({ navigation }: any) {
         data={instructors}
         renderItem={renderInstructorCard}
         keyExtractor={item => item.instructor_id.toString()}
-        estimatedItemSize={160}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
         ListHeaderComponent={
           <View style={[styles.header, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>

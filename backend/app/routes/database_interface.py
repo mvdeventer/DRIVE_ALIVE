@@ -6,7 +6,7 @@ Standards: REST API, OpenAPI 3.0, RFC 7807 error responses
 """
 
 from fastapi import APIRouter, Depends, Query, Header, HTTPException, Body
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import or_
 from typing import Optional
 import hashlib
@@ -482,7 +482,7 @@ async def list_instructors(
     db: Session = Depends(get_db)
 ):
     """List all instructors with pagination and filtering"""
-    query = db.query(Instructor).join(User)
+    query = db.query(Instructor).join(User, Instructor.user_id == User.id)
     
     # Apply search
     if search:
@@ -568,7 +568,7 @@ async def list_students(
     db: Session = Depends(get_db)
 ):
     """List all students with pagination and filtering"""
-    query = db.query(Student).join(User)
+    query = db.query(Student).join(User, Student.user_id == User.id)
     
     # Apply search
     if search:
@@ -1076,7 +1076,6 @@ async def get_booking_detail(
             "status": booking.status.value if booking.status else None,
             "payment_status": booking.payment_status.value if booking.payment_status else None,
             "amount": float(booking.amount) if booking.amount else None,
-            "booking_fee": float(booking.booking_fee) if booking.booking_fee else None,
             "pickup_address": booking.pickup_address,
             "dropoff_address": booking.dropoff_address,
             "pickup_latitude": booking.pickup_latitude,
@@ -1208,7 +1207,7 @@ async def list_reviews(
     db: Session = Depends(get_db)
 ):
     """List all reviews with pagination"""
-    query = db.query(Review)
+    query = db.query(Review).options(joinedload(Review.booking))
     
     # Apply sorting
     if sort:
@@ -1231,6 +1230,8 @@ async def list_reviews(
         {
             "id": review.id,
             "booking_id": review.booking_id,
+            "student_id": review.booking.student_id if review.booking else None,
+            "instructor_id": review.booking.instructor_id if review.booking else None,
             "rating": review.rating,
             "comment": review.comment,
             "created_at": review.created_at.isoformat() if review.created_at else None,
@@ -1269,7 +1270,9 @@ async def list_schedules(
     db: Session = Depends(get_db)
 ):
     """List all instructor schedules with pagination"""
-    query = db.query(InstructorSchedule)
+    query = db.query(InstructorSchedule).options(
+        joinedload(InstructorSchedule.instructor).joinedload(Instructor.user)
+    )
     
     # Apply instructor filter
     if filter_instructor_id:
@@ -1296,10 +1299,15 @@ async def list_schedules(
         {
             "id": schedule.id,
             "instructor_id": schedule.instructor_id,
+            "instructor_name": (
+                f"{schedule.instructor.user.first_name} {schedule.instructor.user.last_name}"
+                if schedule.instructor and schedule.instructor.user
+                else None
+            ),
             "day_of_week": schedule.day_of_week.value if schedule.day_of_week else None,
             "start_time": schedule.start_time,
             "end_time": schedule.end_time,
-            "is_available": schedule.is_available,
+            "is_available": schedule.is_active,
         }
         for schedule in schedules
     ]

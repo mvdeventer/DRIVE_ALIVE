@@ -7,7 +7,9 @@ import os
 import sys
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, Request, status
+from fastapi import Depends, FastAPI, Request, status
+
+from .middleware.authentication_gate import authentication_gate
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -17,6 +19,12 @@ from .config import settings
 from .database import Base, engine, SessionLocal
 from .models.user import User, UserRole
 from .models.company import Company  # noqa: F401 – ensures table is created by metadata
+from .models.company_admin import CompanyAdmin  # noqa: F401 – ditto
+from .models.company_invite import CompanyInstructorInvite  # noqa: F401 – ditto
+from .models.company_charge import (  # noqa: F401 – ditto
+    CompanyPlatformCharge,
+    CompanySubscriptionCharge,
+)
 from .utils.logging_config import setup_logging
 from .utils.rate_limiter import limiter, rate_limit_exceeded_handler
 from .routes import (
@@ -26,6 +34,7 @@ from .routes import (
     bookings,
     certifications,
     companies,
+    company,
     database,
     database_interface,
     db_setup,
@@ -196,6 +205,173 @@ def _apply_incremental_migrations():
     except Exception as exc:
         print(f"⚠️  [MIGRATION] Preferred language column: {exc}")
 
+    # ── Company admin runtime role (Aug 2026) ─────────────────────────────────
+    # Unlike every other block here, this cannot use `with engine.connect()` +
+    # commit(): PostgreSQL forbids ALTER TYPE ... ADD VALUE inside a transaction.
+    # It is also forward-only — PostgreSQL cannot remove an enum label.
+    #
+    # SQLAlchemy's SQLEnum persists the member NAME, so the label is the
+    # uppercase COMPANY_ADMIN, matching STUDENT/INSTRUCTOR/ADMIN already there.
+    # SQLite stores the column as VARCHAR and needs nothing.
+    if engine.dialect.name == "postgresql":
+        try:
+            with engine.connect().execution_options(
+                isolation_level="AUTOCOMMIT"
+            ) as conn:
+                conn.execute(
+                    text("ALTER TYPE userrole ADD VALUE IF NOT EXISTS 'COMPANY_ADMIN'")
+                )
+            print("✅ [MIGRATION] userrole enum accepts COMPANY_ADMIN")
+        except Exception as exc:
+            print(f"⚠️  [MIGRATION] Could not extend userrole enum: {exc}")
+
+    # ── Platform host company & revenue settings (Aug 2026) ───────────────────
+    try:
+        existing_company_cols = [col["name"] for col in inspector.get_columns("companies")]
+        new_company_cols = [
+            ("owner_user_id",                     "INTEGER REFERENCES users(id)"),
+            ("is_platform_host",                  "BOOLEAN NOT NULL DEFAULT FALSE"),
+            ("platform_commission_percent",       "FLOAT"),
+            ("subscription_price_per_instructor", "FLOAT"),
+            ("billing_email",                     "VARCHAR(255)"),
+            ("is_solo",                           "BOOLEAN NOT NULL DEFAULT FALSE"),
+        ]
+        with engine.connect() as conn:
+            for col_name, col_def in new_company_cols:
+                if col_name not in existing_company_cols:
+                    try:
+                        conn.execute(text(f"ALTER TABLE companies ADD COLUMN {col_name} {col_def}"))
+                        conn.commit()
+                        print(f"✅ [MIGRATION] Added {col_name} to companies")
+                    except Exception as col_exc:
+                        conn.rollback()
+                        print(f"⚠️  [MIGRATION] Could not add {col_name}: {col_exc}")
+    except Exception as exc:
+        print(f"⚠️  [MIGRATION] Company host columns: {exc}")
+
+    # Exactly one platform host. A partial unique index makes a second one a
+    # database error rather than something application code has to remember.
+    # Supported by both PostgreSQL and SQLite (3.8+).
+    try:
+        with engine.connect() as conn:
+            conn.execute(
+                text(
+                    "CREATE UNIQUE INDEX IF NOT EXISTS ix_companies_single_platform_host "
+                    "ON companies (is_platform_host) WHERE is_platform_host = true"
+                )
+            )
+            conn.commit()
+    except Exception as exc:
+        print(f"⚠️  [MIGRATION] Single-host index: {exc}")
+
+    # ── Company markup & booking price breakdown (Aug 2026) ───────────────────
+    try:
+        existing_instructor_cols = [col["name"] for col in inspector.get_columns("instructors")]
+        markup_cols = [
+            ("company_joined_at",    "TIMESTAMP WITH TIME ZONE"),
+            ("company_markup_type",  "VARCHAR(10)"),
+            ("company_markup_value", "FLOAT NOT NULL DEFAULT 0"),
+        ]
+        with engine.connect() as conn:
+            for col_name, col_def in markup_cols:
+                if col_name not in existing_instructor_cols:
+                    try:
+                        conn.execute(text(f"ALTER TABLE instructors ADD COLUMN {col_name} {col_def}"))
+                        conn.commit()
+                        print(f"✅ [MIGRATION] Added {col_name} to instructors")
+                    except Exception as col_exc:
+                        conn.rollback()
+                        print(f"⚠️  [MIGRATION] Could not add {col_name}: {col_exc}")
+    except Exception as exc:
+        print(f"⚠️  [MIGRATION] Instructor markup columns: {exc}")
+
+    # ── Commission reversal (Aug 2026) ───────────────────────────────────────
+    # A cancelled booking earned the platform nothing; the charge is reversed
+    # rather than deleted so the statement still shows what happened.
+    try:
+        existing_charge_cols = [
+            col["name"] for col in inspector.get_columns("company_platform_charges")
+        ]
+        for col_name, col_def in (
+            ("reversed_at", "TIMESTAMP WITH TIME ZONE"),
+            ("reversal_reason", "VARCHAR(200)"),
+        ):
+            if col_name not in existing_charge_cols:
+                with engine.connect() as conn:
+                    try:
+                        conn.execute(
+                            text(
+                                "ALTER TABLE company_platform_charges "
+                                f"ADD COLUMN {col_name} {col_def}"
+                            )
+                        )
+                        conn.commit()
+                        print(f"✅ [MIGRATION] Added {col_name} to company_platform_charges")
+                    except Exception as col_exc:
+                        conn.rollback()
+                        print(f"⚠️  [MIGRATION] Could not add {col_name}: {col_exc}")
+    except Exception as exc:
+        print(f"⚠️  [MIGRATION] Charge reversal columns: {exc}")
+
+    # ── Learner origin attribution (Aug 2026) ────────────────────────────────
+    # Which school signed a learner up, if any. Drives booking_source, and so
+    # decides whether a booking attracts commission.
+    try:
+        existing_student_cols = [col["name"] for col in inspector.get_columns("students")]
+        if "origin_company_id" not in existing_student_cols:
+            with engine.connect() as conn:
+                try:
+                    conn.execute(
+                        text(
+                            "ALTER TABLE students ADD COLUMN origin_company_id "
+                            "INTEGER REFERENCES companies(id)"
+                        )
+                    )
+                    conn.commit()
+                    print("✅ [MIGRATION] Added origin_company_id to students")
+                except Exception as col_exc:
+                    conn.rollback()
+                    print(f"⚠️  [MIGRATION] Could not add origin_company_id: {col_exc}")
+    except Exception as exc:
+        print(f"⚠️  [MIGRATION] Student origin column: {exc}")
+
+    try:
+        existing_booking_cols = [col["name"] for col in inspector.get_columns("bookings")]
+        breakdown_cols = [
+            ("instructor_base_amount", "FLOAT NOT NULL DEFAULT 0"),
+            ("company_markup_amount",  "FLOAT NOT NULL DEFAULT 0"),
+            ("company_id",             "INTEGER REFERENCES companies(id)"),
+            ("booking_source",         "VARCHAR(20) NOT NULL DEFAULT 'platform'"),
+        ]
+        newly_added = []
+        with engine.connect() as conn:
+            for col_name, col_def in breakdown_cols:
+                if col_name not in existing_booking_cols:
+                    try:
+                        conn.execute(text(f"ALTER TABLE bookings ADD COLUMN {col_name} {col_def}"))
+                        conn.commit()
+                        newly_added.append(col_name)
+                        print(f"✅ [MIGRATION] Added {col_name} to bookings")
+                    except Exception as col_exc:
+                        conn.rollback()
+                        print(f"⚠️  [MIGRATION] Could not add {col_name}: {col_exc}")
+
+            # Historical rows predate markup, so their whole amount was the
+            # instructor's base and the markup was zero. Done once, guarded on
+            # the column having just been created.
+            if "instructor_base_amount" in newly_added:
+                try:
+                    conn.execute(
+                        text("UPDATE bookings SET instructor_base_amount = amount")
+                    )
+                    conn.commit()
+                    print("✅ [MIGRATION] Backfilled bookings.instructor_base_amount")
+                except Exception as bf_exc:
+                    conn.rollback()
+                    print(f"⚠️  [MIGRATION] Could not backfill base amounts: {bf_exc}")
+    except Exception as exc:
+        print(f"⚠️  [MIGRATION] Booking breakdown columns: {exc}")
+
 
 _apply_incremental_migrations()
 
@@ -287,6 +463,30 @@ async def lifespan(app: FastAPI):
             existing_admin = db.query(User).filter(User.role == UserRole.ADMIN).all()
             if existing_admin:
                 print(f"✅ Admin user exists: {existing_admin[0].email}")
+                # Deployments predating the host-company model have an admin but
+                # no company to receive platform commission. Idempotent — a
+                # no-op once the host row exists.
+                try:
+                    from .services.company_service import ensure_platform_host_company
+
+                    from .services.company_service import (
+                        backfill_legacy_company_admins,
+                    )
+
+                    promoted = backfill_legacy_company_admins(db)
+                    if promoted:
+                        print(f"✅ Gave {promoted} legacy company owner(s) an admin profile")
+
+                    host = ensure_platform_host_company(db)
+                    if host is not None:
+                        # create_company() flushes without committing, so this
+                        # commit is required on the creating boot. It is a
+                        # no-op on every later boot.
+                        db.commit()
+                        print(f"✅ Platform host company ready: {host.name}")
+                except Exception as host_exc:
+                    db.rollback()
+                    print(f"⚠️  Could not ensure platform host company: {host_exc}")
             else:
                 print("⚠️  No admin user found - setup required")
                 print("📋 Navigate to the app to create an admin via the setup screen")
@@ -389,6 +589,11 @@ app = FastAPI(
     description="API for South African driving school booking system",
     version="1.0.0",
     lifespan=lifespan,
+    # Authentication is required unless a route is named in
+    # middleware/public_routes.py. Declared on the application so it covers
+    # every route, including ones added later — an endpoint that forgets its
+    # own guard is refused rather than exposed.
+    dependencies=[Depends(authentication_gate)],
     docs_url=None if _is_production else "/docs",
     redoc_url=None if _is_production else "/redoc",
     openapi_url=None if _is_production else "/openapi.json",
@@ -563,6 +768,7 @@ app.include_router(database_interface.router)  # 🗄️ Database Interface (Adm
 app.include_router(auth.router)
 app.include_router(verification.router)
 app.include_router(companies.router)  # 🏢 Company management
+app.include_router(company.router)  # 🏫 Company administrator (pricing, roster)
 app.include_router(availability.router)
 app.include_router(bookings.router)
 app.include_router(instructors.router)

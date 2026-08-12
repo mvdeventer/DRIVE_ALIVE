@@ -9,10 +9,12 @@ from app.database import get_db
 from app.config import settings
 from app.services.verification_service import VerificationService
 from app.services.email_service import EmailService
+from app.services.company_service import needs_company_approval
 from app.models.user import User, UserRole
 from app.utils.rate_limiter import limiter
 from app.utils.encryption import EncryptionService
 import logging
+import re
 
 logger = logging.getLogger(__name__)
 
@@ -108,6 +110,58 @@ def _validate_phone(phone_num: str, phone_label: str) -> None:
                 "Must have 10-15 digits after the + sign."
             )
         )
+
+
+# Twilio formats its exceptions for a terminal, colour codes and all, and
+# str() on one returns the whole banner. Sent to a browser it renders as
+# literal escape sequences.
+_ANSI = re.compile(r"\x1b\[[0-9;]*m")
+
+# The advice that used to be appended to every failure — check your SID and
+# token, join the sandbox — is wrong for most of these, and sends people
+# hunting for a credentials problem they do not have.
+_TWILIO_GUIDANCE = {
+    63038: (
+        "The Twilio sandbox allows 50 messages a day and that limit has been "
+        "reached. It resets on a rolling 24-hour window, so this will start "
+        "working again on its own. Your credentials are fine — Twilio "
+        "accepted them and refused on volume."
+    ),
+    20003: (
+        "Twilio rejected the Account SID or Auth Token. Copy them again from "
+        "console.twilio.com."
+    ),
+    63007: (
+        "That sender number is not a WhatsApp sender on this account. For the "
+        "sandbox use +14155238886."
+    ),
+    63015: (
+        "The recipient has not joined the sandbox. Send 'join <keyword>' from "
+        "that phone to whatsapp:+14155238886 first."
+    ),
+    63016: (
+        "Outside the 24-hour window, a WhatsApp message has to use an approved "
+        "template. For the sandbox, message it from your phone first."
+    ),
+}
+
+
+def _twilio_error_detail(error: Exception) -> str:
+    """A message worth showing someone, from a Twilio exception.
+
+    Prefers the structured fields over str(), which is a coloured banner
+    meant for a terminal.
+    """
+    code = getattr(error, "code", None)
+    message = getattr(error, "msg", None) or str(error)
+    message = _ANSI.sub("", message).strip()
+
+    guidance = _TWILIO_GUIDANCE.get(code)
+    if guidance:
+        return guidance
+    if code:
+        return f"Twilio refused the message (error {code}): {message}"
+    return f"Twilio refused the message: {message}"
 
 
 def _resolve_twilio_config(
@@ -467,14 +521,7 @@ You're all set to receive booking confirmations and reminders.""",
             logger.info(f"Test WhatsApp sent: {msg.sid}")
         except Exception as twilio_err:
             logger.error(f"Twilio send failed: {twilio_err}")
-            raise HTTPException(
-                status_code=400,
-                detail=(
-                    f"Twilio error: {twilio_err}. "
-                    "Check your Account SID, Auth Token, and ensure the sandbox is joined "
-                    "(whatsapp:+14155238886 → 'join <keyword>')."
-                )
-            )
+            raise HTTPException(status_code=400, detail=_twilio_error_detail(twilio_err))
 
         return {
             "success": True,
@@ -598,10 +645,7 @@ async def admin_decide_instructor(
             raise HTTPException(status_code=400, detail="Associated user not found")
 
         if body.approve:
-            is_company_member = (
-                getattr(instructor, "company_id", None) is not None
-                and not getattr(instructor, "is_company_owner", False)
-            )
+            is_company_member = needs_company_approval(db, instructor)
             instructor.is_verified = True
             if is_company_member:
                 instructor.verification_status = InstructorVerificationStatus.PENDING_COMPANY.value

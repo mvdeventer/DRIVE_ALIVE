@@ -8,7 +8,8 @@ Implement and maintain production-grade internationalization and error-code cons
 
 ## Current Stack Context
 
-- Backend: FastAPI + SQLAlchemy + Alembic (Python)
+- Backend: FastAPI + SQLAlchemy (Python). **No Alembic** — schema changes go in
+  `_apply_incremental_migrations()` in `app/main.py`.
 - Frontend: Expo React Native + TypeScript + react-native-web
 - Locales currently in use: en, af
 - i18n provider: frontend/i18n/index.tsx
@@ -76,13 +77,15 @@ Not merge-blocking yet, but run them:
 
 ```
 npm --prefix frontend run lint        # eslint + react-native-a11y rules
-npm --prefix frontend run typecheck   # ~297 pre-existing errors; do not add more
+npm --prefix frontend run typecheck   # 89 pre-existing errors, all in __tests__; do not add more
 npm --prefix frontend test -- --ci
 ```
 
 ### Known baselines — do not mistake these for new regressions
 
-- `typecheck` has ~297 pre-existing errors. What matters is whether the count
+- `typecheck` has 89 pre-existing errors, every one inside `__tests__` (Cypress's
+  Chai types shadow Jest's global `expect`). Application code is clean. What
+  matters is whether the count
   rose and whether any error is in a file you touched.
 - 2 of 5 Jest suites fail to load: the config uses the bare `react-native`
   preset, not `jest-expo`, so anything importing expo-modules-core dies. See the

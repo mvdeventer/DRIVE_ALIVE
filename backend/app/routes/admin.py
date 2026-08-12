@@ -7,8 +7,8 @@ from datetime import datetime, timezone
 from typing import Annotated, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import func
-from sqlalchemy.orm import Session
+from sqlalchemy import String, func, or_
+from sqlalchemy.orm import Session, aliased
 
 from ..database import get_db
 from ..middleware.admin import require_admin
@@ -17,6 +17,10 @@ from ..models.booking import Booking, BookingStatus
 from ..models.booking_credit import BookingCredit, CreditStatus
 from ..models.user import Instructor, Student, User, UserRole, UserStatus
 from ..models.company import Company
+from ..models.company_admin import CompanyAdmin
+from ..services.billing_service import platform_revenue
+from ..services.company_service import get_platform_host_company, needs_company_approval
+from ..services.fees import DEFAULT_COMMISSION_PERCENT
 from ..schemas.admin import (
     AdminCreateRequest,
     AdminCreateResponse,
@@ -436,10 +440,7 @@ async def verify_instructor(
     if verification_data.is_verified:
         instructor.is_verified = True
         instructor.verified_by_admin_id = current_admin.id
-        is_company_member = (
-            getattr(instructor, "company_id", None) is not None
-            and not getattr(instructor, "is_company_owner", False)
-        )
+        is_company_member = needs_company_approval(db, instructor)
         if is_company_member:
             # Admin approved but still needs company owner
             instructor.verification_status = IVS.PENDING_COMPANY.value
@@ -570,6 +571,9 @@ async def get_all_users(
     elif role == UserRole.ADMIN:
         # Admin is role-based, not profile-based
         query = query.filter(User.role == UserRole.ADMIN)
+    elif role == UserRole.COMPANY_ADMIN:
+        # Company admin is profile-based, like student and instructor
+        query = query.join(CompanyAdmin, CompanyAdmin.user_id == User.id)
     
     if status:
         query = query.filter(User.status == status)
@@ -578,7 +582,7 @@ async def get_all_users(
 
     result = []
 
-    def _make_entry(user, display_role, id_number=None, booking_fee=None,
+    def _make_entry(user, display_role, id_number=None,
                     available_credit=None, pending_credit=None):
         """Helper to build a UserManagementResponse entry."""
         resolved_id_number = id_number or user.id_number
@@ -593,7 +597,6 @@ async def get_all_users(
             status=user.status,
             id_number=resolved_id_number,
             address=user.address,
-            booking_fee=booking_fee,
             available_credit=available_credit,
             pending_credit=pending_credit,
             created_at=user.created_at,
@@ -617,7 +620,6 @@ async def get_all_users(
             # Role-specific tab: return one entry with the *filtered* role
             # so Instructor tab always shows "INSTRUCTOR" badge, etc.
             id_number = None
-            booking_fee = None
             available_credit = None
             pending_credit = None
 
@@ -627,7 +629,6 @@ async def get_all_users(
                 ).first()
                 if instructor:
                     id_number = instructor.id_number
-                    booking_fee = instructor.booking_fee
             elif role == UserRole.STUDENT:
                 student = db.query(Student).filter(
                     Student.user_id == user.id
@@ -636,10 +637,10 @@ async def get_all_users(
                     id_number = student.id_number
                     available_credit, pending_credit = _get_student_credits(student.id)
             else:
-                # Admin tab
+                # Admin / company-admin tab
                 id_number = user.id_number
 
-            result.append(_make_entry(user, role, id_number, booking_fee,
+            result.append(_make_entry(user, role, id_number,
                                       available_credit, pending_credit))
         else:
             # All Users tab: return a separate entry for EACH role the user has
@@ -658,16 +659,21 @@ async def get_all_users(
             ).first()
             if instructor:
                 result.append(
-                    _make_entry(
-                        user,
-                        UserRole.INSTRUCTOR,
-                        instructor.id_number,
-                        instructor.booking_fee,
-                    )
+                    _make_entry(user, UserRole.INSTRUCTOR, instructor.id_number)
                 )
                 has_entry = True
 
-            # 3) Student entry (if user has a student profile)
+            # 3) Company admin entry (if user administers a school)
+            company_admin = db.query(CompanyAdmin).filter(
+                CompanyAdmin.user_id == user.id
+            ).first()
+            if company_admin:
+                result.append(
+                    _make_entry(user, UserRole.COMPANY_ADMIN, user.id_number)
+                )
+                has_entry = True
+
+            # 4) Student entry (if user has a student profile)
             student = db.query(Student).filter(
                 Student.user_id == user.id
             ).first()
@@ -1061,6 +1067,13 @@ async def delete_user(
         # Delete student profile
         db.delete(student)
 
+    # Delete company-administrator profile. The FK is ON DELETE CASCADE, but
+    # deleting explicitly keeps this consistent with the other profiles and
+    # works on SQLite, where FK enforcement is off by default.
+    company_admin = db.query(CompanyAdmin).filter(CompanyAdmin.user_id == user_id).first()
+    if company_admin:
+        db.delete(company_admin)
+
     # Delete user account
     user_email = user.email
     db.delete(user)
@@ -1074,50 +1087,21 @@ async def delete_user(
     }
 
 
-@router.put("/instructors/{instructor_id}/booking-fee")
-async def update_instructor_booking_fee(
-    instructor_id: int,
-    current_admin: Annotated[User, Depends(require_admin)],
-    db: Session = Depends(get_db),
-    booking_fee: float = Query(..., ge=0, description="Booking fee in ZAR"),
-):
-    """
-    Update the booking fee for a specific instructor
-    """
-    instructor = db.query(Instructor).filter(Instructor.id == instructor_id).first()
-    if not instructor:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Instructor not found",
-        )
-
-    old_fee = instructor.booking_fee
-    instructor.booking_fee = booking_fee
-    db.commit()
-    db.refresh(instructor)
-
-    return {
-        "message": f"Booking fee updated from R{old_fee:.2f} to R{booking_fee:.2f}",
-        "instructor_id": instructor_id,
-        "old_fee": old_fee,
-        "new_fee": booking_fee,
-    }
-
-
-# ==================== Booking Oversight ====================
-
-
 @router.get("/bookings", response_model=List[BookingOverview])
 async def get_all_bookings(
     current_admin: Annotated[User, Depends(require_admin)],
     db: Session = Depends(get_db),
     status_filter: Optional[BookingStatus] = Query(None),
     instructor_id: Optional[int] = Query(None),
+    search: Optional[str] = Query(None),
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
 ):
-    """
-    Get overview of all bookings with optional status filter and instructor filter
+    """Overview of bookings, optionally filtered by status, instructor or search.
+
+    ``search`` matches server-side across the whole table. It has to: the
+    response is paged and capped at 100, so a client-side search can only ever
+    look at the page in hand and silently misses the rest.
     """
     # Auto-update past pending bookings to completed
     from ..routes.bookings import auto_update_past_bookings
@@ -1131,6 +1115,39 @@ async def get_all_bookings(
 
     if instructor_id:
         query = query.filter(Booking.instructor_id == instructor_id)
+
+    if search and search.strip():
+        term = f"%{search.strip().lower()}%"
+        student_user = aliased(User)
+        instructor_user = aliased(User)
+        # Names live on User, id numbers on the role profiles, so searching by
+        # person needs all four tables joined.
+        query = (
+            query.join(Student, Student.id == Booking.student_id)
+            .join(student_user, student_user.id == Student.user_id)
+            .join(Instructor, Instructor.id == Booking.instructor_id)
+            .join(instructor_user, instructor_user.id == Instructor.user_id)
+        )
+        full_name = lambda u: func.lower(  # noqa: E731
+            func.concat(u.first_name, " ", u.last_name)
+        )
+        query = query.filter(
+            or_(
+                func.lower(Booking.booking_reference).like(term),
+                func.cast(Booking.id, String).like(term),
+                full_name(student_user).like(term),
+                full_name(instructor_user).like(term),
+                func.lower(Student.id_number).like(term),
+                func.lower(Instructor.id_number).like(term),
+                func.cast(Booking.student_id, String).like(term),
+                func.cast(Booking.instructor_id, String).like(term),
+                # The four date shapes the screen's search box used to accept.
+                func.lower(func.to_char(Booking.lesson_date, "YYYY-MM-DD")).like(term),
+                func.lower(func.to_char(Booking.lesson_date, "FMMM/FMDD/YYYY")).like(term),
+                func.lower(func.to_char(Booking.lesson_date, "YYYY/MM/DD")).like(term),
+                func.lower(func.to_char(Booking.lesson_date, 'FMMonth FMDD, YYYY')).like(term),
+            )
+        )
 
     bookings = (
         query.order_by(Booking.lesson_date.desc()).offset(skip).limit(limit).all()
@@ -1178,7 +1195,7 @@ async def get_all_bookings(
                 pickup_address=booking.pickup_address,
                 dropoff_address=booking.dropoff_address,
                 status=booking.status,
-                amount=booking.amount + (booking.booking_fee or 0.0),
+                amount=booking.amount,
                 created_at=booking.created_at,
             )
         )
@@ -2293,7 +2310,8 @@ async def get_admin_settings(
             raise HTTPException(status_code=500, detail="No admin user found in system")
         
         first_admin = admins[0]
-        
+        host_company = get_platform_host_company(db)
+
         smtp_password_set = bool(first_admin.smtp_password)
 
         # Mask Twilio credentials for API response
@@ -2316,10 +2334,21 @@ async def get_admin_settings(
             "twilio_account_sid": masked_sid,
             "twilio_auth_token": masked_token,
             "inactivity_timeout_minutes": first_admin.inactivity_timeout_minutes or 15,
+            # Platform revenue settings live on the host company. The admin
+            # column is only read for deployments not yet backfilled.
+            "host_company_id": host_company.id if host_company else None,
+            "host_company_name": host_company.name if host_company else None,
             "commission_percent": (
-                first_admin.commission_percent
-                if first_admin.commission_percent is not None
-                else 8.0
+                host_company.platform_commission_percent
+                if host_company and host_company.platform_commission_percent is not None
+                else (
+                    first_admin.commission_percent
+                    if first_admin.commission_percent is not None
+                    else DEFAULT_COMMISSION_PERCENT
+                )
+            ),
+            "subscription_price_per_instructor": (
+                host_company.subscription_price_per_instructor if host_company else None
             ),
         }
     except HTTPException:
@@ -2388,8 +2417,26 @@ async def update_admin_settings(
             )
         if settings_update.inactivity_timeout_minutes is not None:
             first_admin.inactivity_timeout_minutes = settings_update.inactivity_timeout_minutes
+        # Platform revenue settings belong to the host company. The admin
+        # column is kept in step so a rollback to an older build still reads
+        # the rate the operator set.
+        host_company = get_platform_host_company(db)
         if settings_update.commission_percent is not None:
             first_admin.commission_percent = settings_update.commission_percent
+            if host_company:
+                host_company.platform_commission_percent = settings_update.commission_percent
+        if settings_update.subscription_price_per_instructor is not None:
+            if not host_company:
+                raise HTTPException(
+                    status_code=400,
+                    detail={
+                        "code": "HOST_COMPANY_MISSING",
+                        "message": "No platform host company exists yet.",
+                    },
+                )
+            host_company.subscription_price_per_instructor = (
+                settings_update.subscription_price_per_instructor
+            )
 
         db.commit()
         db.refresh(first_admin)
@@ -2415,3 +2462,19 @@ async def update_admin_settings(
         raise HTTPException(status_code=500, detail=f"Failed to update settings: {str(e)}")
 
 
+
+
+@router.get("/platform-revenue")
+async def get_platform_revenue(
+    current_admin: Annotated[User, Depends(require_admin)],
+    db: Session = Depends(get_db),
+    period: Optional[str] = None,
+):
+    """The platform's actual earnings for a period, by school.
+
+    Distinct from ``/admin/revenue/stats``, which sums ``Booking.amount`` —
+    that is the gross the students paid, most of which belongs to instructors
+    and their schools. This returns commission plus subscriptions: the money
+    the platform itself keeps.
+    """
+    return platform_revenue(db, period=period)

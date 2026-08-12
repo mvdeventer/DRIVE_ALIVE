@@ -20,7 +20,6 @@ import { useTheme } from '../../theme/ThemeContext';
 import { useT } from '../../i18n';
 import ThemedModal from '../../components/ui/Modal';
 import { Button } from '../../components/ui';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { useNavigation } from '@react-navigation/native';
 import WebNavigationHeader from '../../components/WebNavigationHeader';
@@ -43,8 +42,115 @@ import {
 } from '../../services/database-interface';
 import apiService from '../../services/api';
 
-type TabType = 'users' | 'instructors' | 'students' | 'bookings' | 'reviews' | 'schedules';
+type TabType = 'users' | 'admins' | 'instructors' | 'students' | 'bookings' | 'reviews' | 'schedules';
 type DeletableTab = 'users' | 'instructors' | 'students' | 'bookings';
+
+// Column keys mirror the field names each /admin/database-interface endpoint
+// actually returns, so the picker and the exports stay in step with the API.
+const COLUMN_DEFINITIONS: Record<TabType, Array<{ key: string; label: string }>> = {
+  users: [
+    { key: 'id', label: 'ID' },
+    { key: 'first_name', label: 'First Name' },
+    { key: 'last_name', label: 'Last Name' },
+    { key: 'email', label: 'Email' },
+    { key: 'phone', label: 'Phone' },
+    { key: 'id_number', label: 'ID Number' },
+    { key: 'role', label: 'Role' },
+    { key: 'status', label: 'Status' },
+    { key: 'address', label: 'Address' },
+    { key: 'created_at', label: 'Created At' },
+    { key: 'updated_at', label: 'Updated At' },
+  ],
+  admins: [
+    { key: 'id', label: 'ID' },
+    { key: 'first_name', label: 'First Name' },
+    { key: 'last_name', label: 'Last Name' },
+    { key: 'email', label: 'Email' },
+    { key: 'phone', label: 'Phone' },
+    { key: 'id_number', label: 'ID Number' },
+    { key: 'status', label: 'Status' },
+    { key: 'address', label: 'Address' },
+    { key: 'created_at', label: 'Created At' },
+    { key: 'updated_at', label: 'Updated At' },
+  ],
+  instructors: [
+    { key: 'id', label: 'ID' },
+    { key: 'user_id', label: 'User ID' },
+    { key: 'instructor_name', label: 'Name' },
+    { key: 'license_number', label: 'License #' },
+    { key: 'vehicle_make', label: 'Vehicle Make' },
+    { key: 'vehicle_model', label: 'Vehicle Model' },
+    { key: 'vehicle_year', label: 'Vehicle Year' },
+    { key: 'is_verified', label: 'Verified' },
+    { key: 'hourly_rate', label: 'Hourly Rate' },
+    { key: 'average_rating', label: 'Rating' },
+    { key: 'created_at', label: 'Created At' },
+  ],
+  students: [
+    { key: 'id', label: 'ID' },
+    { key: 'user_id', label: 'User ID' },
+    { key: 'student_name', label: 'Name' },
+    { key: 'email', label: 'Email' },
+    { key: 'phone', label: 'Phone' },
+    { key: 'city', label: 'City' },
+    { key: 'suburb', label: 'Suburb' },
+    { key: 'created_at', label: 'Created At' },
+  ],
+  bookings: [
+    { key: 'id', label: 'ID' },
+    { key: 'booking_reference', label: 'Reference' },
+    { key: 'student_id', label: 'Student ID' },
+    { key: 'instructor_id', label: 'Instructor ID' },
+    { key: 'lesson_date', label: 'Lesson Date' },
+    { key: 'duration_minutes', label: 'Duration' },
+    { key: 'status', label: 'Status' },
+    { key: 'payment_status', label: 'Payment Status' },
+    { key: 'amount', label: 'Amount' },
+    { key: 'pickup_address', label: 'Pickup Address' },
+    { key: 'created_at', label: 'Created At' },
+  ],
+  reviews: [
+    { key: 'id', label: 'ID' },
+    { key: 'booking_id', label: 'Booking ID' },
+    { key: 'student_id', label: 'Student ID' },
+    { key: 'instructor_id', label: 'Instructor ID' },
+    { key: 'rating', label: 'Rating' },
+    { key: 'comment', label: 'Comment' },
+    { key: 'created_at', label: 'Created At' },
+  ],
+  schedules: [
+    { key: 'id', label: 'ID' },
+    { key: 'instructor_id', label: 'Instructor ID' },
+    { key: 'instructor_name', label: 'Instructor' },
+    { key: 'day_of_week', label: 'Day of Week' },
+    { key: 'start_time', label: 'Start Time' },
+    { key: 'end_time', label: 'End Time' },
+    { key: 'is_available', label: 'Available' },
+  ],
+};
+
+// Every column visible by default, derived from the definitions above so the
+// two can never drift apart.
+const ALL_COLUMN_KEYS = Object.fromEntries(
+  Object.entries(COLUMN_DEFINITIONS).map(([tab, cols]) => [tab, cols.map((col) => col.key)])
+) as Record<TabType, string[]>;
+
+// Bumped when the column keys changed; preferences saved against the old key
+// names describe columns that no longer exist.
+const COLUMN_PREFS_KEY = 'dbInterfaceColumns.v2';
+
+// Reviews and schedules are list-only on the backend: no search, no detail,
+// no update, no delete. Their tables render read-only.
+const READ_ONLY_TABS: TabType[] = ['reviews', 'schedules'];
+
+const formatDate = (value?: string | null) =>
+  value ? new Date(value).toLocaleDateString() : '-';
+
+// Backend serialises time columns as HH:MM:SS
+const formatTime = (value?: string | null) => (value ? String(value).slice(0, 5) : '-');
+
+const formatDay = (value?: string | null) =>
+  value ? value.charAt(0).toUpperCase() + value.slice(1) : '-';
 
 interface TableState {
   data: any[];
@@ -65,72 +171,13 @@ const DatabaseInterfaceScreen = ({ navigation }: any) => {
   const platformDetection = useWindowsDetection();
   const isDeletableTab = (tab: TabType): tab is DeletableTab => tab !== 'reviews' && tab !== 'schedules';
   const searchDebounceTimer = useRef<NodeJS.Timeout | null>(null);
-  const queryClient = useQueryClient();
 
-  // Column definitions for each table
-  const getColumnDefinitions = (tab: TabType) => {
-    const columnDefs: Record<TabType, Array<{ key: string; label: string }>> = {
-      users: [
-        { key: 'id', label: 'ID' },
-        { key: 'name', label: 'Name' },
-        { key: 'email', label: 'Email' },
-        { key: 'phone', label: 'Phone' },
-        { key: 'role', label: 'Role' },
-        { key: 'status', label: 'Status' },
-        { key: 'created_at', label: 'Created At' },
-      ],
-      instructors: [
-        { key: 'id', label: 'ID' },
-        { key: 'user_id', label: 'User ID' },
-        { key: 'name', label: 'Name' },
-        { key: 'license', label: 'License' },
-        { key: 'vehicle', label: 'Vehicle' },
-        { key: 'city', label: 'City' },
-        { key: 'is_verified', label: 'Verified' },
-        { key: 'rating', label: 'Rating' },
-      ],
-      students: [
-        { key: 'id', label: 'ID' },
-        { key: 'user_id', label: 'User ID' },
-        { key: 'name', label: 'Name' },
-        { key: 'id_number', label: 'ID Number' },
-        { key: 'city', label: 'City' },
-        { key: 'created_at', label: 'Created At' },
-      ],
-      bookings: [
-        { key: 'id', label: 'ID' },
-        { key: 'booking_reference', label: 'Reference' },
-        { key: 'student_id', label: 'Student ID' },
-        { key: 'instructor_id', label: 'Instructor ID' },
-        { key: 'lesson_date', label: 'Lesson Date' },
-        { key: 'duration_minutes', label: 'Duration' },
-        { key: 'status', label: 'Status' },
-        { key: 'payment_status', label: 'Payment Status' },
-        { key: 'amount', label: 'Amount' },
-      ],
-      reviews: [
-        { key: 'id', label: 'ID' },
-        { key: 'student_id', label: 'Student ID' },
-        { key: 'instructor_id', label: 'Instructor ID' },
-        { key: 'booking_id', label: 'Booking ID' },
-        { key: 'rating', label: 'Rating' },
-        { key: 'comment', label: 'Comment' },
-        { key: 'created_at', label: 'Created At' },
-      ],
-      schedules: [
-        { key: 'id', label: 'ID' },
-        { key: 'instructor_id', label: 'Instructor ID' },
-        { key: 'day_of_week', label: 'Day of Week' },
-        { key: 'start_time', label: 'Start Time' },
-        { key: 'end_time', label: 'End Time' },
-        { key: 'is_available', label: 'Available' },
-      ],
-    };
-    return columnDefs[tab];
-  };
+  const getColumnDefinitions = (tab: TabType) => COLUMN_DEFINITIONS[tab];
 
   // Tab & UI state
   const [activeTab, setActiveTab] = useState<TabType>('users');
+  // Admins are User rows filtered to role=admin, so they share the users API surface.
+  const apiTab: Exclude<TabType, 'admins'> = activeTab === 'admins' ? 'users' : activeTab;
   const [showEditModal, setShowEditModal] = useState(false);
   const [selectedRecord, setSelectedRecord] = useState<any>(null);
   const [selectedRecordETag, setSelectedRecordETag] = useState<string>('');
@@ -190,6 +237,42 @@ const DatabaseInterfaceScreen = ({ navigation }: any) => {
     sort: '-created_at',
   });
 
+  const [adminsTable, setAdminsTable] = useState<TableState>({
+    data: [],
+    total: 0,
+    page: 1,
+    pageSize: 20,
+    totalPages: 0,
+    loading: false,
+    error: null,
+    search: '',
+    sort: '-created_at',
+  });
+
+  const [reviewsTable, setReviewsTable] = useState<TableState>({
+    data: [],
+    total: 0,
+    page: 1,
+    pageSize: 20,
+    totalPages: 0,
+    loading: false,
+    error: null,
+    search: '',
+    sort: '-created_at',
+  });
+
+  const [schedulesTable, setSchedulesTable] = useState<TableState>({
+    data: [],
+    total: 0,
+    page: 1,
+    pageSize: 20,
+    totalPages: 0,
+    loading: false,
+    error: null,
+    search: '',
+    sort: 'day_of_week',
+  });
+
   const [userRoleFilter, setUserRoleFilter] = useState<'ALL' | 'ADMIN' | 'INSTRUCTOR' | 'STUDENT'>('ALL');
   const [userStatusFilter, setUserStatusFilter] = useState<'ALL' | 'ACTIVE' | 'INACTIVE' | 'SUSPENDED'>('ALL');
   const [instructorVerifiedFilter, setInstructorVerifiedFilter] = useState<'ALL' | 'VERIFIED' | 'UNVERIFIED'>('ALL');
@@ -199,17 +282,7 @@ const DatabaseInterfaceScreen = ({ navigation }: any) => {
   const [bookingEndDate, setBookingEndDate] = useState<string>('');
 
   // Phase 4.1: Column visibility (persisted to localStorage)
-  const [visibleColumns, setVisibleColumns] = useState<{
-    users: string[];
-    instructors: string[];
-    students: string[];
-    bookings: string[];
-  }>({
-    users: ['id', 'name', 'email', 'role', 'status', 'created_at', 'actions'],
-    instructors: ['id', 'name', 'email', 'verified', 'license', 'vehicle', 'rating', 'actions'],
-    students: ['id', 'name', 'email', 'phone', 'created_at', 'actions'],
-    bookings: ['id', 'student', 'instructor', 'date', 'time', 'status', 'payment', 'actions'],
-  });
+  const [visibleColumns, setVisibleColumns] = useState<Record<TabType, string[]>>(ALL_COLUMN_KEYS);
 
   // Phase 4.2: Bulk selection state
   const [selectedRows, setSelectedRows] = useState<{ [key: string]: boolean }>({});
@@ -236,6 +309,8 @@ const DatabaseInterfaceScreen = ({ navigation }: any) => {
     // Update search state immediately for input responsiveness
     if (table === 'users') {
       setUsersTable((prev) => ({ ...prev, search: text }));
+    } else if (table === 'admins') {
+      setAdminsTable((prev) => ({ ...prev, search: text }));
     } else if (table === 'instructors') {
       setInstructorsTable((prev) => ({ ...prev, search: text }));
     } else if (table === 'students') {
@@ -249,6 +324,9 @@ const DatabaseInterfaceScreen = ({ navigation }: any) => {
       switch (table) {
         case 'users':
           fetchUsers(1);
+          break;
+        case 'admins':
+          fetchAdmins(1);
           break;
         case 'instructors':
           fetchInstructors(1);
@@ -288,6 +366,83 @@ const DatabaseInterfaceScreen = ({ navigation }: any) => {
     } catch (error: any) {
       const errorMsg = handleApiError(error);
       setUsersTable((prev) => ({
+        ...prev,
+        error: errorMsg,
+        loading: false,
+      }));
+      scrollViewRef.current?.scrollTo({ y: 0, animated: true });
+      setErrorMessage(errorMsg);
+    }
+  };
+
+  const fetchReviews = async (page = 1) => {
+    setReviewsTable((prev) => ({ ...prev, loading: true, error: null }));
+    try {
+      const response = await getDatabaseReviews(page, reviewsTable.pageSize, reviewsTable.sort);
+      setReviewsTable((prev) => ({
+        ...prev,
+        data: response.data,
+        total: response.meta.total,
+        page: response.meta.page,
+        totalPages: response.meta.total_pages,
+        loading: false,
+      }));
+    } catch (error: any) {
+      const errorMsg = handleApiError(error);
+      setReviewsTable((prev) => ({ ...prev, error: errorMsg, loading: false }));
+      scrollViewRef.current?.scrollTo({ y: 0, animated: true });
+      setErrorMessage(errorMsg);
+    }
+  };
+
+  const fetchSchedules = async (page = 1) => {
+    setSchedulesTable((prev) => ({ ...prev, loading: true, error: null }));
+    try {
+      const response = await getDatabaseSchedules(
+        page,
+        schedulesTable.pageSize,
+        undefined,
+        schedulesTable.sort
+      );
+      setSchedulesTable((prev) => ({
+        ...prev,
+        data: response.data,
+        total: response.meta.total,
+        page: response.meta.page,
+        totalPages: response.meta.total_pages,
+        loading: false,
+      }));
+    } catch (error: any) {
+      const errorMsg = handleApiError(error);
+      setSchedulesTable((prev) => ({ ...prev, error: errorMsg, loading: false }));
+      scrollViewRef.current?.scrollTo({ y: 0, animated: true });
+      setErrorMessage(errorMsg);
+    }
+  };
+
+  // Fetch admins (users API pinned to role=admin)
+  const fetchAdmins = async (page = 1) => {
+    setAdminsTable((prev) => ({ ...prev, loading: true, error: null }));
+    try {
+      const response = await getDatabaseUsers(
+        page,
+        adminsTable.pageSize,
+        adminsTable.search,
+        'ADMIN',
+        undefined,
+        adminsTable.sort
+      );
+      setAdminsTable((prev) => ({
+        ...prev,
+        data: response.data,
+        total: response.meta.total,
+        page: response.meta.page,
+        totalPages: response.meta.total_pages,
+        loading: false,
+      }));
+    } catch (error: any) {
+      const errorMsg = handleApiError(error);
+      setAdminsTable((prev) => ({
         ...prev,
         error: errorMsg,
         loading: false,
@@ -389,11 +544,35 @@ const DatabaseInterfaceScreen = ({ navigation }: any) => {
 
   // Similar for other tables...
 
+  const isReadOnlyTab = READ_ONLY_TABS.includes(activeTab);
+
+  // One place that knows which table state the active tab is showing, so the
+  // pagination, export and refresh paths do not each carry their own chain.
+  const activeTableState: TableState =
+    activeTab === 'users' ? usersTable :
+    activeTab === 'admins' ? adminsTable :
+    activeTab === 'instructors' ? instructorsTable :
+    activeTab === 'students' ? studentsTable :
+    activeTab === 'bookings' ? bookingsTable :
+    activeTab === 'reviews' ? reviewsTable : schedulesTable;
+
+  const fetchActiveTable = (page = 1) => {
+    switch (activeTab) {
+      case 'users': return fetchUsers(page);
+      case 'admins': return fetchAdmins(page);
+      case 'instructors': return fetchInstructors(page);
+      case 'students': return fetchStudents(page);
+      case 'bookings': return fetchBookings(page);
+      case 'reviews': return fetchReviews(page);
+      case 'schedules': return fetchSchedules(page);
+    }
+  };
+
   // Open edit modal with ETag
   const openEditModal = async (recordId: number) => {
     try {
       let detail;
-      switch (activeTab) {
+      switch (apiTab) {
         case 'users':
           detail = await getUserDetail(recordId);
           break;
@@ -424,7 +603,7 @@ const DatabaseInterfaceScreen = ({ navigation }: any) => {
   const openDeleteModal = async (recordId: number, rowType?: string) => {
     try {
       let detail;
-      switch (activeTab) {
+      switch (apiTab) {
         case 'users':
           detail = await getUserDetail(recordId);
           // Preserve row_type from the expanded row
@@ -466,20 +645,7 @@ const DatabaseInterfaceScreen = ({ navigation }: any) => {
     setTimeout(() => setSuccessMessage(null), 4000);
     
     // Refresh current table
-    switch (activeTab) {
-      case 'users':
-        fetchUsers(usersTable.page);
-        break;
-      case 'instructors':
-        fetchInstructors(instructorsTable.page);
-        break;
-      case 'students':
-        fetchStudents(studentsTable.page);
-        break;
-      case 'bookings':
-        fetchBookings(bookingsTable.page);
-        break;
-    }
+    fetchActiveTable(activeTableState.page);
   };
 
   // Handle edit error
@@ -497,20 +663,7 @@ const DatabaseInterfaceScreen = ({ navigation }: any) => {
 
     setTimeout(() => setSuccessMessage(null), 4000);
 
-    switch (activeTab) {
-      case 'users':
-        fetchUsers(usersTable.page);
-        break;
-      case 'instructors':
-        fetchInstructors(instructorsTable.page);
-        break;
-      case 'students':
-        fetchStudents(studentsTable.page);
-        break;
-      case 'bookings':
-        fetchBookings(bookingsTable.page);
-        break;
-    }
+    fetchActiveTable(activeTableState.page);
   };
 
   const handleDeleteError = (error: string) => {
@@ -526,10 +679,12 @@ const DatabaseInterfaceScreen = ({ navigation }: any) => {
   // Toggle column sort (ascending/descending)
   const handleColumnSort = (column: string) => {
     const currentTable = activeTab === 'users' ? usersTable :
+                        activeTab === 'admins' ? adminsTable :
                         activeTab === 'instructors' ? instructorsTable :
                         activeTab === 'students' ? studentsTable : bookingsTable;
     
     const setTable = activeTab === 'users' ? setUsersTable :
+                     activeTab === 'admins' ? setAdminsTable :
                      activeTab === 'instructors' ? setInstructorsTable :
                      activeTab === 'students' ? setStudentsTable : setBookingsTable;
     
@@ -549,6 +704,7 @@ const DatabaseInterfaceScreen = ({ navigation }: any) => {
     setTimeout(() => {
       switch (activeTab) {
         case 'users': fetchUsers(1); break;
+        case 'admins': fetchAdmins(1); break;
         case 'instructors': fetchInstructors(1); break;
         case 'students': fetchStudents(1); break;
         case 'bookings': fetchBookings(1); break;
@@ -559,6 +715,7 @@ const DatabaseInterfaceScreen = ({ navigation }: any) => {
   // Get sort icon for column
   const getSortIcon = (column: string) => {
     const currentSort = activeTab === 'users' ? usersTable.sort :
+                       activeTab === 'admins' ? adminsTable.sort :
                        activeTab === 'instructors' ? instructorsTable.sort :
                        activeTab === 'students' ? studentsTable.sort : bookingsTable.sort;
     
@@ -567,10 +724,20 @@ const DatabaseInterfaceScreen = ({ navigation }: any) => {
     return ' ↕';
   };
 
+  const isColumnVisible = (column: string) => (visibleColumns[activeTab] ?? []).includes(column);
+
+  // Column keys to export, in definition order, honouring the picker
+  const getExportColumns = (): string[] => {
+    const defined = COLUMN_DEFINITIONS[activeTab].map((col) => col.key);
+    const visible = visibleColumns[activeTab] ?? defined;
+    const selected = defined.filter((key) => visible.includes(key));
+    return selected.length > 0 ? selected : defined;
+  };
+
   // Toggle column visibility
   const toggleColumnVisibility = (column: string) => {
     setVisibleColumns((prev) => {
-      const currentColumns = prev[activeTab];
+      const currentColumns = prev[activeTab] ?? [];
       const newColumns = currentColumns.includes(column)
         ? currentColumns.filter((col) => col !== column)
         : [...currentColumns, column];
@@ -579,7 +746,7 @@ const DatabaseInterfaceScreen = ({ navigation }: any) => {
       
       // Persist to localStorage
       if (Platform.OS === 'web') {
-        localStorage.setItem('dbInterfaceColumns', JSON.stringify(updated));
+        localStorage.setItem(COLUMN_PREFS_KEY, JSON.stringify(updated));
       }
       
       return updated;
@@ -600,9 +767,7 @@ const DatabaseInterfaceScreen = ({ navigation }: any) => {
 
   // Select all visible rows
   const selectAllRows = () => {
-    const currentData = activeTab === 'users' ? usersTable.data :
-                       activeTab === 'instructors' ? instructorsTable.data :
-                       activeTab === 'students' ? studentsTable.data : bookingsTable.data;
+    const currentData = activeTableState.data;
     
     const allSelected: { [key: string]: boolean } = {};
     currentData.forEach((item: any) => {
@@ -637,7 +802,7 @@ const DatabaseInterfaceScreen = ({ navigation }: any) => {
       let field: string;
       let value: any;
       
-      if (activeTab === 'users') {
+      if (activeTab === 'users' || activeTab === 'admins') {
         field = 'status';
         value = newStatus; // ACTIVE, INACTIVE, SUSPENDED
       } else if (activeTab === 'instructors') {
@@ -653,7 +818,7 @@ const DatabaseInterfaceScreen = ({ navigation }: any) => {
       
       // Call backend API
       const response = await bulkUpdateRecords({
-        table: activeTab as 'users' | 'instructors' | 'students' | 'bookings',
+        table: apiTab as 'users' | 'instructors' | 'students' | 'bookings',
         ids: selectedIds,
         field,
         value,
@@ -668,17 +833,7 @@ const DatabaseInterfaceScreen = ({ navigation }: any) => {
       clearAllSelections();
       
       // Refresh current table
-      switch (activeTab) {
-        case 'users':
-          fetchUsers(usersTable.page);
-          break;
-        case 'instructors':
-          fetchInstructors(instructorsTable.page);
-          break;
-        case 'bookings':
-          fetchBookings(bookingsTable.page);
-          break;
-      }
+      fetchActiveTable(activeTableState.page);
     } catch (error: any) {
       const errorMsg = handleApiError(error);
       scrollViewRef.current?.scrollTo({ y: 0, animated: true });
@@ -693,9 +848,7 @@ const DatabaseInterfaceScreen = ({ navigation }: any) => {
 
   // Export to CSV
   const exportToCSV = () => {
-    const currentData = activeTab === 'users' ? usersTable.data :
-                       activeTab === 'instructors' ? instructorsTable.data :
-                       activeTab === 'students' ? studentsTable.data : bookingsTable.data;
+    const currentData = activeTableState.data;
     
     if (currentData.length === 0) {
       setErrorMessage('No data to export');
@@ -703,7 +856,7 @@ const DatabaseInterfaceScreen = ({ navigation }: any) => {
     }
 
     // Get column headers
-    const headers = Object.keys(currentData[0]);
+    const headers = getExportColumns();
     
     // Build CSV content
     let csvContent = headers.join(',') + '\\n';
@@ -740,9 +893,7 @@ const DatabaseInterfaceScreen = ({ navigation }: any) => {
 
   // Export to Excel (XLSX)
   const exportToExcel = async () => {
-    const currentData = activeTab === 'users' ? usersTable.data :
-                       activeTab === 'instructors' ? instructorsTable.data :
-                       activeTab === 'students' ? studentsTable.data : bookingsTable.data;
+    const currentData = activeTableState.data;
     
     if (currentData.length === 0) {
       setErrorMessage('No data to export');
@@ -762,7 +913,7 @@ const DatabaseInterfaceScreen = ({ navigation }: any) => {
       worksheet.addRow([]);
 
       // Add headers
-      const headers = Object.keys(currentData[0]);
+      const headers = getExportColumns();
       const headerRow = worksheet.addRow(headers);
       headerRow.font = { bold: true };
       headerRow.fill = {
@@ -809,9 +960,7 @@ const DatabaseInterfaceScreen = ({ navigation }: any) => {
 
   // Export to PDF
   const exportToPDF = async () => {
-    const currentData = activeTab === 'users' ? usersTable.data :
-                       activeTab === 'instructors' ? instructorsTable.data :
-                       activeTab === 'students' ? studentsTable.data : bookingsTable.data;
+    const currentData = activeTableState.data;
     
     if (currentData.length === 0) {
       setErrorMessage('No data to export');
@@ -832,18 +981,18 @@ const DatabaseInterfaceScreen = ({ navigation }: any) => {
       doc.text(`Total Records: ${currentData.length}`, 14, 40);
 
       // Add table data (simplified - first 5 columns only)
-      const headers = Object.keys(currentData[0]).slice(0, 5);
+      const headers = getExportColumns().slice(0, 5);
       let yPosition = 50;
 
       // Headers
       doc.setFontSize(8);
-      doc.setFont(undefined, 'bold');
+      doc.setFont(doc.getFont().fontName, 'bold');
       headers.forEach((header, index) => {
         doc.text(header, 14 + (index * 35), yPosition);
       });
 
       // Data rows
-      doc.setFont(undefined, 'normal');
+      doc.setFont(doc.getFont().fontName, 'normal');
       currentData.forEach((row: any, rowIndex) => {
         yPosition += 7;
         if (yPosition > 280) {
@@ -941,10 +1090,7 @@ const DatabaseInterfaceScreen = ({ navigation }: any) => {
               setSuccessMessage('Database restored successfully!');
               setShowDbModal(false);
               // Refresh current table
-              if (activeTab === 'users') fetchUsers(1);
-              else if (activeTab === 'instructors') fetchInstructors(1);
-              else if (activeTab === 'students') fetchStudents(1);
-              else if (activeTab === 'bookings') fetchBookings(1);
+              fetchActiveTable(1);
             } catch (err: any) {
               setErrorMessage(err.response?.data?.detail || 'Restore failed');
             } finally {
@@ -1000,10 +1146,19 @@ const DatabaseInterfaceScreen = ({ navigation }: any) => {
   // Load column preferences from localStorage
   useEffect(() => {
     if (Platform.OS !== 'web') return;
-    const saved = localStorage.getItem('dbInterfaceColumns');
+    const saved = localStorage.getItem(COLUMN_PREFS_KEY);
     if (saved) {
       try {
-        setVisibleColumns(JSON.parse(saved));
+        // Drop anything that is no longer a real column so preferences saved
+        // against the old key names cannot hide every column.
+        const parsed = JSON.parse(saved);
+        const merged = { ...ALL_COLUMN_KEYS };
+        (Object.keys(ALL_COLUMN_KEYS) as TabType[]).forEach((tab) => {
+          if (!Array.isArray(parsed?.[tab])) return;
+          const valid = parsed[tab].filter((col: string) => ALL_COLUMN_KEYS[tab].includes(col));
+          if (valid.length > 0) merged[tab] = valid;
+        });
+        setVisibleColumns(merged);
       } catch (error) {
         console.error('Failed to load column preferences:', error);
       }
@@ -1014,20 +1169,11 @@ const DatabaseInterfaceScreen = ({ navigation }: any) => {
   useEffect(() => {
     if (!platformDetection.isPlatformAllowed) return;
 
-    switch (activeTab) {
-      case 'users':
-        fetchUsers();
-        break;
-      case 'instructors':
-        fetchInstructors();
-        break;
-      case 'students':
-        fetchStudents();
-        break;
-      case 'bookings':
-        fetchBookings();
-        break;
-    }
+    // Row selections are ids into the previous tab's table; carrying them
+    // across would point bulk actions at the wrong records.
+    clearAllSelections();
+    setBulkActionMenuVisible(false);
+    fetchActiveTable();
   }, [activeTab, platformDetection.isPlatformAllowed]);
 
   useEffect(() => {
@@ -1100,34 +1246,22 @@ const DatabaseInterfaceScreen = ({ navigation }: any) => {
       // Page Up - Previous page
       if (event.key === 'PageUp') {
         event.preventDefault();
-        if (activeTab === 'users' && usersTable.page > 1) {
-          fetchUsers(usersTable.page - 1);
-        } else if (activeTab === 'instructors' && instructorsTable.page > 1) {
-          fetchInstructors(instructorsTable.page - 1);
-        } else if (activeTab === 'students' && studentsTable.page > 1) {
-          fetchStudents(studentsTable.page - 1);
-        } else if (activeTab === 'bookings' && bookingsTable.page > 1) {
-          fetchBookings(bookingsTable.page - 1);
+        if (activeTableState.page > 1) {
+          fetchActiveTable(activeTableState.page - 1);
         }
       }
       // Page Down - Next page
       else if (event.key === 'PageDown') {
         event.preventDefault();
-        if (activeTab === 'users' && usersTable.page < usersTable.totalPages) {
-          fetchUsers(usersTable.page + 1);
-        } else if (activeTab === 'instructors' && instructorsTable.page < instructorsTable.totalPages) {
-          fetchInstructors(instructorsTable.page + 1);
-        } else if (activeTab === 'students' && studentsTable.page < studentsTable.totalPages) {
-          fetchStudents(studentsTable.page + 1);
-        } else if (activeTab === 'bookings' && bookingsTable.page < bookingsTable.totalPages) {
-          fetchBookings(bookingsTable.page + 1);
+        if (activeTableState.page < activeTableState.totalPages) {
+          fetchActiveTable(activeTableState.page + 1);
         }
       }
     };
 
     window.addEventListener('keydown', handleKeyPress);
     return () => window.removeEventListener('keydown', handleKeyPress);
-  }, [activeTab, usersTable.page, usersTable.totalPages, instructorsTable.page, instructorsTable.totalPages, studentsTable.page, studentsTable.totalPages, bookingsTable.page, bookingsTable.totalPages]);
+  }, [activeTab, activeTableState.page, activeTableState.totalPages]);
 
   // Platform check - show access denied
   if (!platformDetection.isPlatformAllowed) {
@@ -1174,8 +1308,8 @@ const DatabaseInterfaceScreen = ({ navigation }: any) => {
           </View>
         )}
 
-        {/* Main Admin Protection Info (Users tab only) */}
-        {activeTab === 'users' && (
+        {/* Main Admin Protection Info (Users + Admins tabs) */}
+        {(activeTab === 'users' || activeTab === 'admins') && (
           <View style={[styles.infoMessage, { backgroundColor: colors.primaryLight, borderColor: colors.primary }]}>
             <Text style={[styles.messageText, { color: colors.text }]}>
               The original admin account (ID: 1) cannot be suspended. 
@@ -1186,7 +1320,7 @@ const DatabaseInterfaceScreen = ({ navigation }: any) => {
 
         {/* Tab Navigation */}
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={[styles.tabNavigation, { borderBottomColor: colors.border }]}>
-          {(['users', 'instructors', 'students', 'bookings', 'reviews', 'schedules'] as TabType[]).map((tab) => (
+          {(['users', 'admins', 'instructors', 'students', 'bookings', 'reviews', 'schedules'] as TabType[]).map((tab) => (
             <Pressable
               key={tab}
               style={[styles.tab, activeTab === tab && { borderBottomColor: colors.primary }]}
@@ -1201,18 +1335,17 @@ const DatabaseInterfaceScreen = ({ navigation }: any) => {
 
         {/* Search & Filter */}
         <View style={styles.filterSection}>
-          <TextInput
-            style={[styles.searchInput, { backgroundColor: colors.card, borderColor: colors.border, color: colors.text }]}
-            placeholder="Search..."
-            placeholderTextColor={colors.inputPlaceholder}
-            accessibilityLabel="Search database records"
-            accessibilityHint="Type to search and results will update after 300ms"
-            value={activeTab === 'users' ? usersTable.search :
-              activeTab === 'instructors' ? instructorsTable.search :
-              activeTab === 'students' ? studentsTable.search :
-              activeTab === 'bookings' ? bookingsTable.search : ''}
-            onChangeText={(text) => handleSearchChange(text, activeTab)}
-          />
+          {!isReadOnlyTab && (
+            <TextInput
+              style={[styles.searchInput, { backgroundColor: colors.card, borderColor: colors.border, color: colors.text }]}
+              placeholder="Search..."
+              placeholderTextColor={colors.inputPlaceholder}
+              accessibilityLabel="Search database records"
+              accessibilityHint="Type to search and results will update after 300ms"
+              value={activeTableState.search}
+              onChangeText={(text) => handleSearchChange(text, activeTab)}
+            />
+          )}
 
           {activeTab === 'users' && (
             <View style={styles.filterRow}>
@@ -1445,8 +1578,8 @@ const DatabaseInterfaceScreen = ({ navigation }: any) => {
             </View>
           )}
 
-          {/* Select All Button */}
-          {!getSelectedIds().length && (
+          {/* Select All Button (read-only tables have no row selection) */}
+          {!getSelectedIds().length && !isReadOnlyTab && (
             <Pressable
               style={[styles.selectAllButton, { backgroundColor: colors.textSecondary }]}
               onPress={selectAllRows}
@@ -1481,7 +1614,7 @@ const DatabaseInterfaceScreen = ({ navigation }: any) => {
         )}
 
         {/* Table Loading */}
-        {(usersTable.loading || instructorsTable.loading || studentsTable.loading || bookingsTable.loading) && (
+        {activeTableState.loading && (
           <View style={styles.loadingContainer}>
             <ActivityIndicator size="large" color={colors.primary} />
             <Text style={[styles.loadingText, { color: colors.textSecondary }]}>Loading...</Text>
@@ -1549,7 +1682,7 @@ const DatabaseInterfaceScreen = ({ navigation }: any) => {
                 <View style={{ flex: 3, flexDirection: 'column' }}>
                   <Text style={[styles.tableCell, { color: colors.text }]}>{user.first_name} {user.last_name}</Text>
                   {user.id === 1 && user.role === 'admin' && (!user.row_type || user.row_type === 'primary') && (
-                    <Text style={{ fontSize: 11, fontFamily: 'Inter_700Bold', color: '#D97706', marginTop: 2 }}>PROTECTED ADMIN</Text>
+                    <Text style={[styles.protectedBadge, { color: colors.warning }]}>PROTECTED ADMIN</Text>
                   )}
                 </View>
                 <Text style={[styles.tableCell, { color: colors.text, flex: 2 }]} numberOfLines={1}>{user.email}</Text>
@@ -1606,6 +1739,124 @@ const DatabaseInterfaceScreen = ({ navigation }: any) => {
                 </View>
               </View>
             );
+            })}
+          </View>
+        )}
+
+        {/* Admins Table */}
+        {activeTab === 'admins' && !adminsTable.loading && adminsTable.data.length > 0 && (
+          <View style={[styles.table, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <View style={[styles.tableHeader, { backgroundColor: colors.backgroundSecondary, borderBottomColor: colors.border }]}>
+              <View style={{ flex: 0.5 }}>
+                <Pressable
+                  onPress={selectAllRows}
+                  style={styles.headerCheckbox}
+                  accessibilityRole="checkbox"
+                  accessibilityLabel="Select all rows"
+                  accessibilityState={{ checked: getSelectedIds().length > 0 }}
+                  {...({ 'aria-checked': getSelectedIds().length > 0 } as any)}
+                >
+                  <View style={[
+                    styles.checkbox,
+                    { borderColor: colors.primary },
+                    getSelectedIds().length === adminsTable.data.length && { backgroundColor: colors.primary }
+                  ]}>
+                    {getSelectedIds().length === adminsTable.data.length && (
+                      <Text style={styles.checkboxIcon}>✓</Text>
+                    )}
+                  </View>
+                </Pressable>
+              </View>
+              <Text style={[styles.tableCell, { color: colors.text, flex: 1 }]}>ID</Text>
+              <Text style={[styles.tableCell, { color: colors.text, flex: 3 }]}>Name</Text>
+              <Text style={[styles.tableCell, { color: colors.text, flex: 3 }]}>Email</Text>
+              <Text style={[styles.tableCell, { color: colors.text, flex: 2 }]}>Phone</Text>
+              <Text style={[styles.tableCell, { color: colors.text, flex: 1 }]}>Status</Text>
+              <Text style={[styles.tableCell, { color: colors.text, flex: 1 }]}>Actions</Text>
+            </View>
+            {adminsTable.data.map((admin: any, idx: number) => {
+              const adminStatus = String(admin.status || '').toUpperCase();
+              const isProtected = admin.id === 1;
+
+              return (
+                <View key={idx} style={[styles.tableRow, { borderBottomColor: colors.border }]}>
+                  <View style={{ flex: 0.5 }}>
+                    <Pressable
+                      onPress={() => toggleRowSelection(admin.id)}
+                      style={styles.rowCheckbox}
+                      accessibilityRole="checkbox"
+                      accessibilityState={{ checked: !!selectedRows[admin.id] }}
+                      accessibilityLabel={t('common.selectRow', { id: admin.id })}
+                      {...({ 'aria-checked': !!selectedRows[admin.id] } as any)}
+                    >
+                      <View style={[
+                        styles.checkbox,
+                        { borderColor: colors.primary },
+                        selectedRows[admin.id] && { backgroundColor: colors.primary }
+                      ]}>
+                        {selectedRows[admin.id] && (
+                          <Text style={styles.checkboxIcon}>✓</Text>
+                        )}
+                      </View>
+                    </Pressable>
+                  </View>
+                  <Text style={[styles.tableCell, { color: colors.text, flex: 1 }]}>{admin.id}</Text>
+                  <View style={{ flex: 3, flexDirection: 'column' }}>
+                    <Text style={[styles.tableCell, { color: colors.text }]}>{admin.first_name} {admin.last_name}</Text>
+                    {isProtected && (
+                      <Text style={[styles.protectedBadge, { color: colors.warning }]}>PROTECTED ADMIN</Text>
+                    )}
+                  </View>
+                  <Text style={[styles.tableCell, { color: colors.text, flex: 3 }]} numberOfLines={1}>{admin.email}</Text>
+                  <Text style={[styles.tableCell, { color: colors.text, flex: 2 }]} numberOfLines={1}>{admin.phone || '-'}</Text>
+                  <Text
+                    style={[
+                      styles.tableCell,
+                      {
+                        flex: 1,
+                        fontWeight: '600',
+                        color:
+                          adminStatus === 'SUSPENDED'
+                            ? colors.warning
+                            : adminStatus === 'INACTIVE'
+                              ? colors.textSecondary
+                              : colors.success,
+                      },
+                    ]}
+                  >
+                    {adminStatus || 'ACTIVE'}
+                  </Text>
+                  <View style={styles.actionButtons}>
+                    <Pressable
+                      style={[styles.editButton, { backgroundColor: colors.primary }]}
+                      onPress={() => openEditModal(admin.id)}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Edit admin ${admin.first_name} ${admin.last_name}`}
+                    >
+                      <Text style={styles.editButtonText}>Edit</Text>
+                    </Pressable>
+                    {!isProtected ? (
+                      <Pressable
+                        style={[
+                          styles.deleteButton,
+                          { backgroundColor: colors.buttonDanger },
+                          adminStatus === 'ACTIVE' && { backgroundColor: colors.success },
+                          adminStatus === 'SUSPENDED' && { backgroundColor: colors.warning }
+                        ]}
+                        onPress={() => openDeleteModal(admin.id, admin.row_type)}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Toggle status for admin ${admin.first_name} ${admin.last_name}`}
+                      >
+                        <Text style={styles.deleteButtonText}>
+                          {adminStatus === 'SUSPENDED' ? 'Suspended' : 'Active'}
+                        </Text>
+                      </Pressable>
+                    ) : (
+                      <View style={{ minWidth: 80 }} />
+                    )}
+                  </View>
+                </View>
+              );
             })}
           </View>
         )}
@@ -1909,11 +2160,80 @@ const DatabaseInterfaceScreen = ({ navigation }: any) => {
           </View>
         )}
 
+        {/* Reviews Table (read-only: the endpoint is list-only) */}
+        {activeTab === 'reviews' && !reviewsTable.loading && reviewsTable.data.length > 0 && (
+          <View style={[styles.table, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <View style={[styles.tableHeader, { backgroundColor: colors.backgroundSecondary, borderBottomColor: colors.border }]}>
+              <Text style={[styles.tableCell, { color: colors.text, flex: 1 }]}>ID</Text>
+              <Text style={[styles.tableCell, { color: colors.text, flex: 1 }]}>Booking</Text>
+              <Text style={[styles.tableCell, { color: colors.text, flex: 1 }]}>Student</Text>
+              <Text style={[styles.tableCell, { color: colors.text, flex: 1 }]}>Instructor</Text>
+              <Text style={[styles.tableCell, { color: colors.text, flex: 1 }]}>Rating</Text>
+              <Text style={[styles.tableCell, { color: colors.text, flex: 4 }]}>Comment</Text>
+              <Text style={[styles.tableCell, { color: colors.text, flex: 2 }]}>Created</Text>
+            </View>
+            {reviewsTable.data.map((review: any, idx: number) => (
+              <View key={idx} style={[styles.tableRow, { borderBottomColor: colors.border }]}>
+                <Text style={[styles.tableCell, { color: colors.text, flex: 1 }]}>{review.id}</Text>
+                <Text style={[styles.tableCell, { color: colors.text, flex: 1 }]}>{review.booking_id ?? '-'}</Text>
+                <Text style={[styles.tableCell, { color: colors.text, flex: 1 }]}>{review.student_id ?? '-'}</Text>
+                <Text style={[styles.tableCell, { color: colors.text, flex: 1 }]}>{review.instructor_id ?? '-'}</Text>
+                <Text style={[styles.tableCell, { color: colors.text, flex: 1, fontWeight: '600' }]}>
+                  {review.rating != null ? `${review.rating} / 5` : '-'}
+                </Text>
+                <Text style={[styles.tableCell, { color: colors.text, flex: 4 }]} numberOfLines={2}>
+                  {review.comment || '-'}
+                </Text>
+                <Text style={[styles.tableCell, { color: colors.text, flex: 2 }]}>{formatDate(review.created_at)}</Text>
+              </View>
+            ))}
+          </View>
+        )}
+
+        {/* Schedules Table (read-only: the endpoint is list-only) */}
+        {activeTab === 'schedules' && !schedulesTable.loading && schedulesTable.data.length > 0 && (
+          <View style={[styles.table, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <View style={[styles.tableHeader, { backgroundColor: colors.backgroundSecondary, borderBottomColor: colors.border }]}>
+              <Text style={[styles.tableCell, { color: colors.text, flex: 1 }]}>ID</Text>
+              <Text style={[styles.tableCell, { color: colors.text, flex: 3 }]}>Instructor</Text>
+              <Text style={[styles.tableCell, { color: colors.text, flex: 2 }]}>Day of Week</Text>
+              <Text style={[styles.tableCell, { color: colors.text, flex: 2 }]}>Start</Text>
+              <Text style={[styles.tableCell, { color: colors.text, flex: 2 }]}>End</Text>
+              <Text style={[styles.tableCell, { color: colors.text, flex: 1 }]}>Available</Text>
+            </View>
+            {schedulesTable.data.map((schedule: any, idx: number) => (
+              <View key={idx} style={[styles.tableRow, { borderBottomColor: colors.border }]}>
+                <Text style={[styles.tableCell, { color: colors.text, flex: 1 }]}>{schedule.id}</Text>
+                <Text style={[styles.tableCell, { color: colors.text, flex: 3 }]} numberOfLines={1}>
+                  {schedule.instructor_name || `#${schedule.instructor_id}`}
+                </Text>
+                <Text style={[styles.tableCell, { color: colors.text, flex: 2 }]}>{formatDay(schedule.day_of_week)}</Text>
+                <Text style={[styles.tableCell, { color: colors.text, flex: 2 }]}>{formatTime(schedule.start_time)}</Text>
+                <Text style={[styles.tableCell, { color: colors.text, flex: 2 }]}>{formatTime(schedule.end_time)}</Text>
+                <Text
+                  style={[
+                    styles.tableCell,
+                    { flex: 1, fontWeight: '600', color: schedule.is_available ? colors.success : colors.textSecondary },
+                  ]}
+                >
+                  {schedule.is_available ? 'Yes' : 'No'}
+                </Text>
+              </View>
+            ))}
+          </View>
+        )}
+
         {/* Empty State */}
         {activeTab === 'users' && !usersTable.loading && usersTable.data.length === 0 && (
           <View style={styles.emptyState}>
             <Text style={styles.emptyStateIcon}></Text>
             <Text style={[styles.emptyStateText, { color: colors.textSecondary }]}>No users found</Text>
+          </View>
+        )}
+        {activeTab === 'admins' && !adminsTable.loading && adminsTable.data.length === 0 && (
+          <View style={styles.emptyState}>
+            <Text style={styles.emptyStateIcon}></Text>
+            <Text style={[styles.emptyStateText, { color: colors.textSecondary }]}>No admins found</Text>
           </View>
         )}
         {activeTab === 'instructors' && !instructorsTable.loading && instructorsTable.data.length === 0 && (
@@ -1934,63 +2254,51 @@ const DatabaseInterfaceScreen = ({ navigation }: any) => {
             <Text style={[styles.emptyStateText, { color: colors.textSecondary }]}>No bookings found</Text>
           </View>
         )}
+        {activeTab === 'reviews' && !reviewsTable.loading && reviewsTable.data.length === 0 && (
+          <View style={styles.emptyState}>
+            <Text style={styles.emptyStateIcon}></Text>
+            <Text style={[styles.emptyStateText, { color: colors.textSecondary }]}>No reviews found</Text>
+          </View>
+        )}
+        {activeTab === 'schedules' && !schedulesTable.loading && schedulesTable.data.length === 0 && (
+          <View style={styles.emptyState}>
+            <Text style={styles.emptyStateIcon}></Text>
+            <Text style={[styles.emptyStateText, { color: colors.textSecondary }]}>No schedules found</Text>
+          </View>
+        )}
 
         {/* Pagination */}
         <View style={styles.paginationContainer}>
           <Pressable
-            disabled={
-              (activeTab === 'users' && usersTable.page <= 1) ||
-              (activeTab === 'instructors' && instructorsTable.page <= 1) ||
-              (activeTab === 'students' && studentsTable.page <= 1) ||
-              (activeTab === 'bookings' && bookingsTable.page <= 1)
-            }
-            onPress={() => {
-              if (activeTab === 'users') fetchUsers(usersTable.page - 1);
-              else if (activeTab === 'instructors') fetchInstructors(instructorsTable.page - 1);
-              else if (activeTab === 'students') fetchStudents(studentsTable.page - 1);
-              else if (activeTab === 'bookings') fetchBookings(bookingsTable.page - 1);
-            }}
+            disabled={activeTableState.page <= 1}
+            onPress={() => fetchActiveTable(activeTableState.page - 1)}
             style={[
               styles.paginationButton,
               { backgroundColor: colors.primary },
-              ((activeTab === 'users' && usersTable.page <= 1) ||
-               (activeTab === 'instructors' && instructorsTable.page <= 1) ||
-               (activeTab === 'students' && studentsTable.page <= 1) ||
-               (activeTab === 'bookings' && bookingsTable.page <= 1)) && { backgroundColor: colors.border }
+              activeTableState.page <= 1 && { backgroundColor: colors.border },
             ]}
             accessibilityRole="button"
             accessibilityLabel="Go to previous page"
+            accessibilityState={{ disabled: activeTableState.page <= 1 }}
           >
             <Text style={styles.paginationButtonText}>◀ Previous</Text>
           </Pressable>
 
           <Text style={[styles.paginationInfo, { color: colors.textSecondary }]}>
-            Page {activeTab === 'users' ? usersTable.page : activeTab === 'instructors' ? instructorsTable.page : activeTab === 'bookings' ? bookingsTable.page : studentsTable.page} of {activeTab === 'users' ? usersTable.totalPages : activeTab === 'instructors' ? instructorsTable.totalPages : activeTab === 'bookings' ? bookingsTable.totalPages : studentsTable.totalPages}
+            Page {activeTableState.page} of {activeTableState.totalPages}
           </Text>
 
           <Pressable
-            disabled={
-              (activeTab === 'users' && usersTable.page >= usersTable.totalPages) ||
-              (activeTab === 'instructors' && instructorsTable.page >= instructorsTable.totalPages) ||
-              (activeTab === 'students' && studentsTable.page >= studentsTable.totalPages) ||
-              (activeTab === 'bookings' && bookingsTable.page >= bookingsTable.totalPages)
-            }
-            onPress={() => {
-              if (activeTab === 'users') fetchUsers(usersTable.page + 1);
-              else if (activeTab === 'instructors') fetchInstructors(instructorsTable.page + 1);
-              else if (activeTab === 'students') fetchStudents(studentsTable.page + 1);
-              else if (activeTab === 'bookings') fetchBookings(bookingsTable.page + 1);
-            }}
+            disabled={activeTableState.page >= activeTableState.totalPages}
+            onPress={() => fetchActiveTable(activeTableState.page + 1)}
             style={[
               styles.paginationButton,
               { backgroundColor: colors.primary },
-              ((activeTab === 'users' && usersTable.page >= usersTable.totalPages) ||
-               (activeTab === 'instructors' && instructorsTable.page >= instructorsTable.totalPages) ||
-               (activeTab === 'students' && studentsTable.page >= studentsTable.totalPages) ||
-               (activeTab === 'bookings' && bookingsTable.page >= bookingsTable.totalPages)) && { backgroundColor: colors.border }
+              activeTableState.page >= activeTableState.totalPages && { backgroundColor: colors.border },
             ]}
             accessibilityRole="button"
             accessibilityLabel="Go to next page"
+            accessibilityState={{ disabled: activeTableState.page >= activeTableState.totalPages }}
           >
             <Text style={styles.paginationButtonText}>Next ▶</Text>
           </Pressable>
@@ -2001,7 +2309,7 @@ const DatabaseInterfaceScreen = ({ navigation }: any) => {
       {selectedRecord && (
         <DatabaseEditForm
           visible={showEditModal}
-          tableType={activeTab}
+          tableType={apiTab}
           recordId={selectedRecord.id}
           currentData={selectedRecord}
           etag={selectedRecordETag}
@@ -2041,15 +2349,15 @@ const DatabaseInterfaceScreen = ({ navigation }: any) => {
               style={[styles.columnCheckboxItem, { borderBottomColor: colors.border }]}
               onPress={() => toggleColumnVisibility(column.key)}
               accessibilityRole="checkbox"
-              accessibilityState={{ checked: visibleColumns[column.key] }}
+              accessibilityState={{ checked: isColumnVisible(column.key) }}
             >
               <View style={styles.columnCheckboxRow}>
                 <View style={[
                   styles.checkbox,
                   { borderColor: colors.primary },
-                  visibleColumns[column.key] && { backgroundColor: colors.primary }
+                  isColumnVisible(column.key) && { backgroundColor: colors.primary }
                 ]}>
-                  {visibleColumns[column.key] && (
+                  {isColumnVisible(column.key) && (
                     <Text style={styles.checkboxIcon}>✓</Text>
                   )}
                 </View>
@@ -2060,10 +2368,10 @@ const DatabaseInterfaceScreen = ({ navigation }: any) => {
         </ScrollView>
       </ThemedModal>
 
-      {selectedDeleteRecord && isDeletableTab(activeTab) && (
+      {selectedDeleteRecord && isDeletableTab(apiTab) && (
         <DatabaseDeleteConfirm
           visible={showDeleteModal}
-          tableType={activeTab}
+          tableType={apiTab}
           record={selectedDeleteRecord}
           etag={selectedDeleteETag}
           onClose={() => {
@@ -2303,8 +2611,9 @@ const styles = StyleSheet.create({
     textAlign: 'center' as const,
   },
   protectedBadge: {
-    fontSize: 14,
-    marginLeft: 4,
+    fontSize: 11,
+    fontFamily: 'Inter_700Bold',
+    marginTop: 2,
   },
   emptyState: {
     justifyContent: 'center' as const,
@@ -2342,6 +2651,11 @@ const styles = StyleSheet.create({
   },
   // Toolbar & Export Styles
   toolbarSection: {
+    flexDirection: 'row' as const,
+    flexWrap: 'wrap' as const,
+    alignItems: 'center' as const,
+    rowGap: 10,
+    columnGap: 20,
     padding: 12,
     borderRadius: 8,
     marginBottom: 12,
@@ -2366,12 +2680,14 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600' as const,
     fontFamily: 'Inter_600SemiBold',
-    marginRight: 8,
+    marginRight: 2,
   },
   exportButton: {
-    paddingHorizontal: 12,
+    paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: 4,
+    minHeight: 36,
+    justifyContent: 'center' as const,
   },
   exportButtonText: {
     color: '#fff',
@@ -2383,7 +2699,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row' as const,
     alignItems: 'center' as const,
     gap: 8,
-    marginTop: 12,
   },
   bulkActionsText: {
     fontSize: 13,
@@ -2391,9 +2706,11 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter_600SemiBold',
   },
   bulkActionButton: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
     borderRadius: 4,
+    minHeight: 36,
+    justifyContent: 'center' as const,
   },
   bulkActionButtonText: {
     color: '#fff',
@@ -2413,10 +2730,12 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter_600SemiBold',
   },
   selectAllButton: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+    alignSelf: 'center' as const,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
     borderRadius: 4,
-    marginTop: 8,
+    minHeight: 36,
+    justifyContent: 'center' as const,
   },
   selectAllText: {
     color: '#fff',
@@ -2452,12 +2771,15 @@ const styles = StyleSheet.create({
   },
   // Column Visibility Styles
   columnControls: {
-    marginLeft: 8,
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
   },
   columnToggleButton: {
-    paddingHorizontal: 12,
+    paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: 4,
+    minHeight: 36,
+    justifyContent: 'center' as const,
   },
   columnToggleButtonText: {
     color: '#fff',

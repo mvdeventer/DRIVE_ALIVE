@@ -3,6 +3,7 @@
  * Allows instructors to set up their weekly schedule and manage availability
  */
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import type { NavigationAction } from '@react-navigation/native';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -117,14 +118,14 @@ export default function ManageAvailabilityScreen({ navigation: navProp }: any) {
     const hasTimeOffFormData =
       newTimeOff.start_date.length > 0 ||
       newTimeOff.end_date.length > 0 ||
-      newTimeOff.reason.trim().length > 0;
+      (newTimeOff.reason ?? '').trim().length > 0;
     if (hasTimeOffFormData && !hasUnsavedChanges) {
       setHasUnsavedChanges(true);
     }
   }, [newTimeOff.start_date, newTimeOff.end_date, newTimeOff.reason]);
 
   useEffect(() => {
-    const unsubscribe = navInstance.addListener('beforeRemove', e => {
+    const unsubscribe = navInstance.addListener('beforeRemove', (e: { preventDefault: () => void; data: { action: NavigationAction } }) => {
       if (!hasUnsavedChanges) {
         return;
       }
@@ -498,7 +499,7 @@ export default function ManageAvailabilityScreen({ navigation: navProp }: any) {
         </Text>
 
         {/* Enable All Toggle */}
-        <View style={[styles.enableAllCard, { backgroundColor: colors.successLight, borderColor: colors.success }]}>
+        <View style={[styles.enableAllCard, { backgroundColor: colors.successBg, borderColor: colors.success }]}>
           <View style={styles.enableAllHeader}>
             <Text style={[styles.enableAllLabel, { color: colors.success }]}>Enable All Days</Text>
             <Switch

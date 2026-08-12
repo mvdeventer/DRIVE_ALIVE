@@ -2,6 +2,7 @@
  * Edit Student Profile Screen
  */
 import { useNavigation, useRoute } from '@react-navigation/native';
+import type { NavigationAction } from '@react-navigation/native';
 import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
@@ -75,7 +76,7 @@ export default function EditStudentProfileScreen({ navigation: navProp }: any) {
   }, []);
 
   useEffect(() => {
-    const unsubscribe = navigation.addListener('beforeRemove', e => {
+    const unsubscribe = navigation.addListener('beforeRemove', (e: { preventDefault: () => void; data: { action: NavigationAction } }) => {
       if (!hasUnsavedChanges) {
         return;
       }
@@ -163,7 +164,7 @@ export default function EditStudentProfileScreen({ navigation: navProp }: any) {
       });
     } catch (error: any) {
       console.error('Error loading profile:', error);
-      setErrorMessage(error.response?.data?.detail || 'Failed to load profile data');
+      setErrorMessage(error.response?.data?.detail || t('editStudentProfile.msg.loadFailed'));
       setTimeout(() => setErrorMessage(''), 5000);
     } finally {
       setLoading(false);
@@ -197,7 +198,7 @@ export default function EditStudentProfileScreen({ navigation: navProp }: any) {
 
     if (Object.keys(errors).length > 0) {
       setFieldErrors(errors);
-      setErrorMessage('Please fix the highlighted errors');
+      setErrorMessage(t('editStudentProfile.msg.fixErrors'));
       setTimeout(() => setErrorMessage(''), 5000);
       return;
     }
@@ -268,7 +269,7 @@ export default function EditStudentProfileScreen({ navigation: navProp }: any) {
         console.log('✅ Self-edit save successful');
       }
 
-      setSuccessMessage('Profile updated successfully!');
+      setSuccessMessage(t('editStudentProfile.msg.updated'));
       setTimeout(() => setSuccessMessage(''), 4000);
       setHasUnsavedChanges(false);
       setTimeout(() => navigation.goBack(), 1500);
@@ -331,13 +332,13 @@ export default function EditStudentProfileScreen({ navigation: navProp }: any) {
     try {
       if (isAdminEditing && params?.userId) {
         await ApiService.resetUserPassword(params.userId, passwordData.newPassword);
-        setSuccessMessage('Password reset successfully!');
+        setSuccessMessage(t('editStudentProfile.msg.passwordReset'));
       } else {
         await ApiService.post('/auth/change-password', {
           current_password: passwordData.currentPassword,
           new_password: passwordData.newPassword,
         });
-        setSuccessMessage('Password changed successfully!');
+        setSuccessMessage(t('editStudentProfile.msg.passwordChanged'));
       }
 
       setShowPasswordModal(false);
@@ -354,7 +355,7 @@ export default function EditStudentProfileScreen({ navigation: navProp }: any) {
     return (
       <View style={[styles.loadingContainer, { backgroundColor: colors.background }]}>
         <ActivityIndicator size="large" color={colors.primary} />
-        <Text style={[styles.loadingText, { color: colors.textSecondary }]}>Loading profile...</Text>
+        <Text style={[styles.loadingText, { color: colors.textSecondary }]}>{t('editStudentProfile.loading')}</Text>
       </View>
     );
   }
@@ -375,7 +376,7 @@ export default function EditStudentProfileScreen({ navigation: navProp }: any) {
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <WebNavigationHeader
-        title="Edit Student Profile"
+        title={t('editStudentProfile.title')}
         onBack={() => navigation.goBack()}
         showBackButton={true}
       />
@@ -409,12 +410,12 @@ export default function EditStudentProfileScreen({ navigation: navProp }: any) {
 
         {/* Personal Information */}
         <Card variant="default" style={{ marginBottom: 16 }}>
-          <Text style={[styles.sectionTitle, { color: colors.text }]}>Personal Information</Text>
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>{t('editStudentProfile.personalInfo')}</Text>
 
           <FormFieldWithTip
-            label="First Name"
+            label={t('editStudentProfile.field.firstName')}
             required
-            placeholder="Your first name"
+            placeholder={t('editStudentProfile.field.firstNamePh')}
             value={formData.first_name}
             onChangeText={value => updateField('first_name', value)}
             tooltip="Your legal first name as it appears on your ID"
@@ -422,9 +423,9 @@ export default function EditStudentProfileScreen({ navigation: navProp }: any) {
           />
 
           <FormFieldWithTip
-            label="Last Name"
+            label={t('editStudentProfile.field.lastName')}
             required
-            placeholder="Your last name"
+            placeholder={t('editStudentProfile.field.lastNamePh')}
             value={formData.last_name}
             onChangeText={value => updateField('last_name', value)}
             tooltip="Your legal last name as it appears on your ID"
@@ -432,9 +433,9 @@ export default function EditStudentProfileScreen({ navigation: navProp }: any) {
           />
 
           <FormFieldWithTip
-            label="Email Address"
+            label={t('editStudentProfile.field.email')}
             required
-            placeholder="email@example.com"
+            placeholder={t('editStudentProfile.field.emailPh')}
             value={formData.email}
             onChangeText={value => updateField('email', value)}
             tooltip="Your account email address"
@@ -444,9 +445,9 @@ export default function EditStudentProfileScreen({ navigation: navProp }: any) {
           />
 
           <FormFieldWithTip
-            label="Phone Number"
+            label={t('editStudentProfile.field.phone')}
             required
-            placeholder="+27821234567"
+            placeholder={t('editStudentProfile.field.phonePh')}
             value={formData.phone}
             onChangeText={value => updateField('phone', value)}
             tooltip="Your contact number for instructors to reach you"
@@ -455,9 +456,9 @@ export default function EditStudentProfileScreen({ navigation: navProp }: any) {
           />
 
           <FormFieldWithTip
-            label="ID Number"
+            label={t('editStudentProfile.field.idNumber')}
             required
-            placeholder="e.g., 7901175104084"
+            placeholder={t('editStudentProfile.field.idNumberPh')}
             value={formData.id_number}
             onChangeText={value => updateField('id_number', value)}
             tooltip="Your South African ID number (13 digits)"
@@ -466,8 +467,8 @@ export default function EditStudentProfileScreen({ navigation: navProp }: any) {
           />
 
           <FormFieldWithTip
-            label="Learner's Permit Number (Optional)"
-            placeholder="e.g., LP123456789"
+            label={t('editStudentProfile.field.permit')}
+            placeholder={t('editStudentProfile.field.permitPh')}
             value={formData.learners_permit_number}
             onChangeText={value => updateField('learners_permit_number', value)}
             tooltip="Your learner's permit number if you have one"
@@ -476,12 +477,12 @@ export default function EditStudentProfileScreen({ navigation: navProp }: any) {
 
         {/* Emergency Contact */}
         <Card variant="default" style={{ marginBottom: 16 }}>
-          <Text style={[styles.sectionTitle, { color: colors.text }]}>Emergency Contact</Text>
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>{t('editStudentProfile.emergencyContact')}</Text>
 
           <FormFieldWithTip
-            label="Emergency Contact Name"
+            label={t('editStudentProfile.field.emergencyName')}
             required
-            placeholder="e.g., Jane Doe"
+            placeholder={t('editStudentProfile.field.emergencyNamePh')}
             value={formData.emergency_contact_name}
             onChangeText={value => updateField('emergency_contact_name', value)}
             tooltip="Full name of your emergency contact person"
@@ -489,9 +490,9 @@ export default function EditStudentProfileScreen({ navigation: navProp }: any) {
           />
 
           <FormFieldWithTip
-            label="Emergency Contact Phone"
+            label={t('editStudentProfile.field.emergencyPhone')}
             required
-            placeholder="+27821234567"
+            placeholder={t('editStudentProfile.field.phonePh')}
             value={formData.emergency_contact_phone}
             onChangeText={value => updateField('emergency_contact_phone', value)}
             tooltip="Phone number of your emergency contact"
@@ -502,12 +503,12 @@ export default function EditStudentProfileScreen({ navigation: navProp }: any) {
 
         {/* Residential Address */}
         <Card variant="default" style={{ marginBottom: 16 }}>
-          <Text style={[styles.sectionTitle, { color: colors.text }]}>Residential Address</Text>
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>{t('editStudentProfile.residentialAddress')}</Text>
 
           <FormFieldWithTip
-            label="Address Line 1"
+            label={t('editStudentProfile.field.address1')}
             required
-            placeholder="e.g., 123 Main Street"
+            placeholder={t('editStudentProfile.field.address1Ph')}
             value={formData.address_line1}
             onChangeText={value => updateField('address_line1', value)}
             tooltip="Your street address"
@@ -515,15 +516,15 @@ export default function EditStudentProfileScreen({ navigation: navProp }: any) {
           />
 
           <FormFieldWithTip
-            label="Address Line 2 (Optional)"
-            placeholder="e.g., Apartment 4B"
+            label={t('editStudentProfile.field.address2')}
+            placeholder={t('editStudentProfile.field.address2Ph')}
             value={formData.address_line2}
             onChangeText={value => updateField('address_line2', value)}
             tooltip="Additional address information (optional)"
           />
 
           <LocationSelector
-            label="Residential Location"
+            label={t('editStudentProfile.field.location')}
             tooltip="Select your province, city, and suburb where you live"
             required
             selectedProvince={formData.province}
@@ -541,9 +542,9 @@ export default function EditStudentProfileScreen({ navigation: navProp }: any) {
           />
 
           <FormFieldWithTip
-            label="Postal Code"
+            label={t('editStudentProfile.field.postalCode')}
             required
-            placeholder="4-digit postal code"
+            placeholder={t('editStudentProfile.field.postalCodePh')}
             value={formData.postal_code}
             onChangeText={value => updateField('postal_code', value)}
             keyboardType="numeric"
@@ -567,7 +568,7 @@ export default function EditStudentProfileScreen({ navigation: navProp }: any) {
               icon="📜"
               style={{ marginBottom: 8 }}
             >
-              Manage Certifications
+              {t('certifications.manage')}
             </Button>
           )}
           <Button
@@ -582,7 +583,7 @@ export default function EditStudentProfileScreen({ navigation: navProp }: any) {
           {/* Validation Summary */}
           {Object.values(fieldErrors).some(Boolean) && (
             <View style={[styles.validationSummary, { backgroundColor: colors.dangerBg, borderColor: colors.danger }]}>
-              <Text style={[styles.validationSummaryTitle, { color: colors.danger }]}>⚠️ Please fix the following:</Text>
+              <Text style={[styles.validationSummaryTitle, { color: colors.danger }]}>{t('editStudentProfile.fixFollowing')}</Text>
               {Object.entries(fieldErrors).map(([field, msg]) =>
                 msg ? (
                   <Text key={field} style={[styles.validationSummaryItem, { color: colors.danger }]}>
@@ -622,7 +623,7 @@ export default function EditStudentProfileScreen({ navigation: navProp }: any) {
               }}
               style={{ flex: 1 }}
             >
-              Cancel
+              {t('common.cancel')}
             </Button>
             <Button
               variant="primary"
@@ -636,9 +637,9 @@ export default function EditStudentProfileScreen({ navigation: navProp }: any) {
       >
         {!isAdminEditing && (
           <FormFieldWithTip
-            label="Current Password"
+            label={t('editStudentProfile.field.currentPassword')}
             required
-            placeholder="Enter current password"
+            placeholder={t('editStudentProfile.field.currentPasswordPh')}
             value={passwordData.currentPassword}
             onChangeText={value => { setPasswordData(prev => ({ ...prev, currentPassword: value })); setPasswordFieldErrors(prev => ({ ...prev, currentPassword: undefined as any })); }}
             secureTextEntry={!showPassword}
@@ -648,9 +649,9 @@ export default function EditStudentProfileScreen({ navigation: navProp }: any) {
         )}
 
         <FormFieldWithTip
-          label="New Password"
+          label={t('editStudentProfile.field.newPassword')}
           required
-          placeholder="Enter new password"
+          placeholder={t('editStudentProfile.field.newPasswordPh')}
           value={passwordData.newPassword}
           onChangeText={value => { setPasswordData(prev => ({ ...prev, newPassword: value })); setPasswordFieldErrors(prev => ({ ...prev, newPassword: undefined as any })); }}
           secureTextEntry={!showPassword}
@@ -660,9 +661,9 @@ export default function EditStudentProfileScreen({ navigation: navProp }: any) {
         <PasswordStrengthMeter password={passwordData.newPassword} />
 
         <FormFieldWithTip
-          label="Confirm New Password"
+          label={t('editStudentProfile.field.confirmPassword')}
           required
-          placeholder="Confirm new password"
+          placeholder={t('editStudentProfile.field.confirmPasswordPh')}
           value={passwordData.confirmPassword}
           onChangeText={value => { setPasswordData(prev => ({ ...prev, confirmPassword: value })); setPasswordFieldErrors(prev => ({ ...prev, confirmPassword: undefined as any })); }}
           secureTextEntry={!showPassword}
@@ -687,7 +688,7 @@ export default function EditStudentProfileScreen({ navigation: navProp }: any) {
           setShowDiscardModal(false);
           setPendingNavigation(null);
         }}
-        title="⚠️ Unsaved Changes"
+        title={t('editStudentProfile.unsavedChanges')}
         size="sm"
         footer={
           <View style={styles.modalButtons}>
@@ -699,7 +700,7 @@ export default function EditStudentProfileScreen({ navigation: navProp }: any) {
               }}
               style={{ flex: 1 }}
             >
-              Stay
+              {t('misc.stay')}
             </Button>
             <Button
               variant="primary"
@@ -708,20 +709,20 @@ export default function EditStudentProfileScreen({ navigation: navProp }: any) {
               loading={saving}
               style={{ flex: 1 }}
             >
-              Save & Continue
+              {t('misc.saveContinue')}
             </Button>
             <Button
               variant="danger"
               onPress={handleDiscardChanges}
               style={{ flex: 1 }}
             >
-              Discard
+              {t('misc.discard')}
             </Button>
           </View>
         }
       >
         <Text style={[styles.discardText, { color: colors.textSecondary }]}>
-          You have unsaved changes! Choose an option below:
+          {t('misc.unsavedPrompt')}
         </Text>
       </ThemedModal>
     </View>

@@ -5,5 +5,22 @@
   "ACCOUNT_PENDING_VERIFICATION": "errors.auth.accountPendingVerification",
   "SETUP_ALREADY_INITIALIZED": "errors.setup.alreadyInitialized",
   "USER_NOT_FOUND": "errors.user.notFound",
-  "BOOKING_NOT_FOUND": "errors.booking.notFound"
+  "BOOKING_NOT_FOUND": "errors.booking.notFound",
+  "COMPANY_ADMIN_REQUIRED": "errors.company.adminRequired",
+  "COMPANY_ADMIN_ACCOUNT_INACTIVE": "errors.company.adminAccountInactive",
+  "COMPANY_INACTIVE": "errors.company.inactive",
+  "HOST_COMPANY_MISSING": "errors.company.hostMissing",
+  "COMPANY_ADMIN_ALREADY_EXISTS": "errors.company.adminAlreadyExists",
+  "COMPANY_AUTHORITY_REQUIRED": "errors.company.authorityRequired",
+  "INSTRUCTOR_NOT_IN_COMPANY": "errors.company.instructorNotInCompany",
+  "MARKUP_BELOW_BREAK_EVEN": "errors.company.markupBelowBreakEven",
+  "INVITE_NOT_FOUND": "errors.company.inviteNotFound",
+  "INVITE_NOT_OPEN": "errors.company.inviteNotOpen",
+  "INVITE_NOT_FOR_YOU": "errors.company.inviteNotForYou",
+  "INVITE_ALREADY_PENDING": "errors.company.inviteAlreadyPending",
+  "INSTRUCTOR_PROFILE_REQUIRED": "errors.company.instructorProfileRequired",
+  "INSTRUCTOR_REJECTED": "errors.company.instructorRejected",
+  "INSTRUCTOR_ALREADY_IN_COMPANY": "errors.company.instructorAlreadyInCompany",
+  "COMPANY_NOT_FOUND": "errors.company.notFound",
+  "INVALID_EMAIL": "errors.company.invalidEmail"
 }

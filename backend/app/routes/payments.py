@@ -21,7 +21,14 @@ from ..models.payment_session import PaymentSession, PaymentSessionStatus
 from ..models.user import Instructor, Student, User, UserRole
 from ..routes.auth import get_current_user, get_active_role
 from ..schemas.payment import PaymentInitiateRequest, PaymentInitiateResponse
-from ..services.fees import calculate_booking_fee, get_platform_commission_percent
+from ..services.billing_service import record_platform_charge
+from ..services.company_service import get_instructor_company
+from ..services.fees import (
+    resolve_booking_source,
+    calculate_platform_charge,
+    get_platform_commission_percent,
+    resolve_student_price,
+)
 from ..services.gateways import get_payment_gateway
 from ..services.whatsapp_service import whatsapp_service
 
@@ -92,7 +99,12 @@ async def initiate_payment(
     bookings_count = len(request.bookings)
     total_lesson_amount = 0.0
     booking_fee = 0.0
-    commission_percent = get_platform_commission_percent(db)
+    company = get_instructor_company(db, instructor)
+    commission_percent = get_platform_commission_percent(db, company)
+    is_host = bool(company and company.is_platform_host)
+    # Quoted here so the fee the school is told about matches the one the
+    # booking will actually accrue.
+    booking_source = resolve_booking_source(student, company)
 
     for booking_data in request.bookings:
         duration_minutes = booking_data.get("duration_minutes", 60)
@@ -101,12 +113,19 @@ async def initiate_payment(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Lesson duration must be between {_MIN_DURATION} and {_MAX_DURATION} minutes",
             )
-        lesson_amount = instructor.hourly_rate * (duration_minutes / 60)
-        total_lesson_amount += lesson_amount
-        # Hybrid commission: per-booking fee = max(flat fee, lesson * commission%)
-        booking_fee += calculate_booking_fee(instructor, lesson_amount, commission_percent)
+        _base, _markup, student_total = resolve_student_price(instructor, duration_minutes)
+        total_lesson_amount += student_total
+        # The platform's cut, billed to the school — not added to the student's
+        # price, which is already the full amount they pay.
+        booking_fee += calculate_platform_charge(
+            student_total,
+            commission_percent,
+            booking_source=booking_source,
+            is_platform_host=is_host,
+            has_company=company is not None,
+        )
 
-    total_amount = total_lesson_amount + booking_fee
+    total_amount = total_lesson_amount
 
     # Check for available credits from previous cancellations/reschedules
     # Include PENDING credits (from cancellations) — they activate on payment
@@ -366,7 +385,10 @@ async def stripe_webhook(request: Request, db: Session = Depends(get_db)):
             total_credit = 0.0
 
         created_bookings = []
-        commission_percent = get_platform_commission_percent(db)
+        company = get_instructor_company(db, instructor)
+        commission_percent = get_platform_commission_percent(db, company)
+        is_host = bool(company and company.is_platform_host)
+        booking_source = resolve_booking_source(student, company)
 
         for booking_data in bookings_list:
             lesson_date_str = booking_data.get("lesson_date")
@@ -381,12 +403,16 @@ async def stripe_webhook(request: Request, db: Session = Depends(get_db)):
             lesson_datetime = datetime.fromisoformat(
                 lesson_date_str.replace("Z", "+00:00")
             )
-            lesson_amount = instructor.hourly_rate * (duration_minutes / 60)
-            # Hybrid commission: fee = max(instructor flat fee, lesson * commission%)
-            instructor_booking_fee = calculate_booking_fee(
-                instructor, lesson_amount, commission_percent
+            base_amount, markup_amount, student_total = resolve_student_price(
+                instructor, duration_minutes
             )
-            total_booking_amount = lesson_amount + instructor_booking_fee
+            platform_charge = calculate_platform_charge(
+                student_total,
+                commission_percent,
+                booking_source=booking_source,
+                is_platform_host=is_host,
+                has_company=company is not None,
+            )
 
             booking = Booking(
                 booking_reference=f"BK{uuid.uuid4().hex[:8].upper()}",
@@ -398,8 +424,11 @@ async def stripe_webhook(request: Request, db: Session = Depends(get_db)):
                 pickup_latitude=pickup_latitude,
                 pickup_longitude=pickup_longitude,
                 pickup_address=pickup_address,
-                amount=total_booking_amount,
-                booking_fee=instructor_booking_fee,
+                amount=student_total,  # What the student pays, in full
+                instructor_base_amount=base_amount,
+                company_markup_amount=markup_amount,
+                company_id=company.id if company else None,
+                booking_source=booking_source,
                 status=BookingStatus.CONFIRMED,
                 payment_status=PaymentStatus.PAID,
                 payment_method="stripe",
@@ -408,6 +437,15 @@ async def stripe_webhook(request: Request, db: Session = Depends(get_db)):
             )
 
             db.add(booking)
+            db.flush()
+            record_platform_charge(
+                db,
+                company_id=booking.company_id,
+                booking_id=booking.id,
+                basis_amount=student_total,
+                commission_percent=commission_percent,
+                charge_amount=platform_charge,
+            )
             created_bookings.append(booking)
 
         db.commit()
@@ -478,7 +516,7 @@ async def stripe_webhook(request: Request, db: Session = Depends(get_db)):
 
                 # Calculate credit and 24h penalty
                 if old_booking.payment_status == PaymentStatus.PAID:
-                    total_paid = old_booking.amount + (old_booking.booking_fee or 0.0)
+                    total_paid = old_booking.amount
                     south_africa_offset = timedelta(hours=2)
                     if old_booking.lesson_date.tzinfo is None:
                         lesson_date_utc = (
@@ -535,7 +573,7 @@ async def stripe_webhook(request: Request, db: Session = Depends(get_db)):
                     instructor_name=f"{instructor.user.first_name} {instructor.user.last_name}",
                     lesson_date=booking.lesson_date,
                     pickup_address=booking.pickup_address,
-                    amount=booking.amount + booking.booking_fee,
+                    amount=booking.amount,
                     booking_reference=booking.booking_reference,
                     student_notes=booking.student_notes,
                 )
@@ -567,7 +605,7 @@ async def stripe_webhook(request: Request, db: Session = Depends(get_db)):
                         lesson_date=booking.lesson_date,
                         pickup_address=booking.pickup_address,
                         booking_reference=booking.booking_reference,
-                        amount=booking.amount + booking.booking_fee,
+                        amount=booking.amount,
                         student_notes=booking.student_notes,
                     )
                     logger.info(
@@ -783,9 +821,38 @@ async def complete_mock_payment(
             mock_total_credit = 0.0
 
     created_bookings = []
+    # Price each booking from the instructor's current rate and markup rather
+    # than dividing the session total evenly: durations may differ, and the
+    # per-booking split has to be snapshotted on each row.
+    mock_instructor = (
+        db.query(Instructor)
+        .filter(Instructor.id == payment_session.instructor_id)
+        .first()
+    )
+    mock_company = get_instructor_company(db, mock_instructor) if mock_instructor else None
+    mock_commission = get_platform_commission_percent(db, mock_company)
+    mock_is_host = bool(mock_company and mock_company.is_platform_host)
+    mock_source = resolve_booking_source(student, mock_company)
+
     for booking_data in bookings_data:
         # Generate unique booking reference
         booking_ref = f"BK{uuid.uuid4().hex[:8].upper()}"
+
+        if mock_instructor is not None:
+            m_base, m_markup, m_total = resolve_student_price(
+                mock_instructor, booking_data["duration_minutes"]
+            )
+            m_charge = calculate_platform_charge(
+                m_total,
+                mock_commission,
+                booking_source=mock_source,
+                is_platform_host=mock_is_host,
+                has_company=mock_company is not None,
+            )
+        else:  # pragma: no cover — session always carries a valid instructor
+            m_total = payment_session.amount / len(bookings_data)
+            m_charge = payment_session.booking_fee / len(bookings_data)
+            m_base, m_markup = m_total, 0.0
 
         booking = Booking(
             booking_reference=booking_ref,
@@ -802,8 +869,11 @@ async def complete_mock_payment(
             dropoff_address=booking_data.get("dropoff_address"),
             dropoff_latitude=None,
             dropoff_longitude=None,
-            amount=payment_session.amount / len(bookings_data),
-            booking_fee=payment_session.booking_fee / len(bookings_data),
+            amount=m_total,
+            instructor_base_amount=m_base,
+            company_markup_amount=m_markup,
+            company_id=mock_company.id if mock_company else None,
+            booking_source=mock_source,
             status=BookingStatus.PENDING,  # Changed from CONFIRMED to PENDING
             payment_status=PaymentStatus.PAID,
             payment_method="mock",
@@ -811,6 +881,15 @@ async def complete_mock_payment(
             student_notes=booking_data.get("student_notes"),
         )
         db.add(booking)
+        db.flush()
+        record_platform_charge(
+            db,
+            company_id=booking.company_id,
+            booking_id=booking.id,
+            basis_amount=m_total,
+            commission_percent=mock_commission,
+            charge_amount=m_charge,
+        )
         created_bookings.append(booking_data)
 
     db.commit()
@@ -901,7 +980,7 @@ async def complete_mock_payment(
 
             # Calculate credit and 24h penalty
             if old_booking.payment_status == PaymentStatus.PAID:
-                total_paid = old_booking.amount + (old_booking.booking_fee or 0.0)
+                total_paid = old_booking.amount
                 south_africa_offset = timedelta(hours=2)
                 if old_booking.lesson_date.tzinfo is None:
                     lesson_date_utc = (
@@ -981,7 +1060,7 @@ async def complete_mock_payment(
                     instructor_name=f"{instructor_user.first_name} {instructor_user.last_name}",
                     lesson_date=booking.lesson_date,
                     pickup_address=booking.pickup_address or "Not specified",
-                    amount=booking.amount + booking.booking_fee,
+                    amount=booking.amount,
                     booking_reference=booking.booking_reference,
                     student_notes=booking.student_notes,
                 )
@@ -1013,7 +1092,7 @@ async def complete_mock_payment(
                         lesson_date=booking.lesson_date,
                         pickup_address=booking.pickup_address or "Not specified",
                         booking_reference=booking.booking_reference,
-                        amount=booking.amount + booking.booking_fee,
+                        amount=booking.amount,
                         student_notes=booking.student_notes,
                     )
                     if result:

@@ -21,7 +21,7 @@ import {
   View,
 } from 'react-native';
 
-import { useTheme } from '../../theme/ThemeContext';
+import { ThemeColors, useTheme } from '../../theme/ThemeContext';
 import ApiService from '../../services/api';
 
 // ─── Types ─────────────────────────────────────────────────
@@ -86,9 +86,9 @@ function formatDate(iso?: string | null): string {
   return iso;
 }
 
-function expiryBadge(cert: Certification, colors: any) {
+function expiryBadge(cert: Certification, colors: ThemeColors) {
   if (!cert.expiry_date) {
-    return { label: 'No expiry', bg: colors.surface, fg: colors.textSecondary };
+    return { label: 'No expiry', bg: colors.card, fg: colors.textSecondary };
   }
   if (cert.is_expired) {
     return { label: 'Expired', bg: '#fee2e2', fg: '#b91c1c' };
@@ -384,7 +384,7 @@ export default function CertificationsScreen() {
             <View style={styles.modalActions}>
               <Pressable
                 onPress={() => setModalOpen(false)}
-                style={[styles.modalBtn, { backgroundColor: colors.surface }]}
+                style={[styles.modalBtn, { backgroundColor: colors.card }]}
               >
                 <Text style={{ color: colors.text, fontWeight: '600' }}>Cancel</Text>
               </Pressable>
@@ -411,7 +411,7 @@ export default function CertificationsScreen() {
 
 // ─── Styles ────────────────────────────────────────────────
 
-function useStyles(colors: any) {
+function useStyles(colors: ThemeColors) {
   return StyleSheet.create({
     container: {
       flex: 1,
@@ -460,7 +460,7 @@ function useStyles(colors: any) {
     },
     emptySub: { color: colors.textSecondary, marginTop: 4 },
     card: {
-      backgroundColor: colors.surface,
+      backgroundColor: colors.card,
       borderRadius: 10,
       padding: 14,
       marginBottom: 10,
@@ -548,14 +548,14 @@ function useStyles(colors: any) {
       paddingHorizontal: 10,
       paddingVertical: 10,
       color: colors.text,
-      backgroundColor: colors.surface,
+      backgroundColor: colors.card,
     },
     pickerList: {
       borderWidth: 1,
       borderColor: colors.border,
       borderRadius: 8,
       marginTop: 4,
-      backgroundColor: colors.surface,
+      backgroundColor: colors.card,
     },
     pickerItem: {
       paddingHorizontal: 10,

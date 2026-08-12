@@ -1,7 +1,7 @@
 /**
  * API Service for backend communication
  */
-import axios, { AxiosInstance } from 'axios';
+import axios, { AxiosInstance, AxiosResponse } from 'axios';
 import * as SecureStore from 'expo-secure-store';
 import { Platform } from 'react-native';
 import { API_CONFIG } from '../../config';
@@ -124,9 +124,16 @@ class ApiService {
     );
   }
 
-  // Generic API methods
-  async get(url: string, config?: any) {
-    return await this.api.get(url, config);
+  // Generic API methods.
+  //
+  // These return the whole Axios response, so callers read `.data`. The type
+  // parameter describes the payload inside it: without one, `response.data`
+  // was `any` and a screen could treat the response itself as the payload —
+  // which is exactly what broke the public instructor profile, where
+  // `data.rating.toFixed()` threw on every load and the page reported
+  // "Instructor not found" for instructors that existed.
+  async get<T = any>(url: string, config?: any): Promise<AxiosResponse<T>> {
+    return await this.api.get<T>(url, config);
   }
 
   async post(url: string, data?: any, config?: any) {
@@ -200,6 +207,91 @@ class ApiService {
     return response.data;
   }
 
+  /**
+   * Register a driving school and its administrator.
+   *
+   * Unlike registerStudent / registerInstructor this never returns a token:
+   * a new school administrator must verify their email first.
+   */
+  async registerCompany(data: any) {
+    const response = await this.api.post(API_CONFIG.ENDPOINTS.REGISTER_COMPANY, data);
+    return response.data;
+  }
+
+  // ── Company administrator ────────────────────────────────────────────
+  async getCompanyPricing() {
+    const response = await this.api.get('/company/pricing');
+    return response.data;
+  }
+
+  async setInstructorMarkup(
+    instructorId: number,
+    data: { markup_type: 'percent' | 'amount' | 'none'; markup_value: number }
+  ) {
+    const response = await this.api.put(`/company/instructors/${instructorId}/markup`, data);
+    return response.data;
+  }
+
+  async getCompanyInvites() {
+    const response = await this.api.get('/company/invites');
+    return response.data;
+  }
+
+  async createCompanyInvite(data: {
+    email: string;
+    markup_type: 'percent' | 'amount' | 'none';
+    markup_value: number;
+  }) {
+    const response = await this.api.post('/company/invites', data);
+    return response.data;
+  }
+
+  async revokeCompanyInvite(inviteId: number) {
+    const response = await this.api.post(`/company/invites/${inviteId}/revoke`);
+    return response.data;
+  }
+
+  async approveJoinRequest(inviteId: number) {
+    const response = await this.api.post(`/company/invites/${inviteId}/approve`);
+    return response.data;
+  }
+
+  async removeCompanyInstructor(instructorId: number) {
+    const response = await this.api.post(`/company/instructors/${instructorId}/remove`);
+    return response.data;
+  }
+
+  /** Unauthenticated: the recipient may not have an account yet. */
+  async previewInvite(token: string) {
+    const response = await this.api.get(`/instructors/invites/token/${token}`);
+    return response.data;
+  }
+
+  async acceptInvite(token: string) {
+    const response = await this.api.post(`/instructors/invites/token/${token}/accept`);
+    return response.data;
+  }
+
+  async declineInvite(token: string) {
+    const response = await this.api.post(`/instructors/invites/token/${token}/decline`);
+    return response.data;
+  }
+
+  async getCompanyStatement(period?: string) {
+    const response = await this.api.get('/company/statement', {
+      params: period ? { period } : undefined,
+    });
+    return response.data;
+  }
+
+  /** Platform earnings — commission plus subscriptions, not lesson volume. */
+  async getPlatformRevenue(period?: string) {
+    const response = await this.api.get('/admin/platform-revenue', {
+      params: period ? { period } : undefined,
+    });
+    return response.data;
+  }
+
   async getCurrentUser() {
     const response = await this.api.get(API_CONFIG.ENDPOINTS.ME);
     return response.data;
@@ -212,7 +304,7 @@ class ApiService {
     } catch (error) {
       console.warn('Logout endpoint failed, clearing local tokens anyway:', error);
     }
-    
+
     // Clear mobile tokens (web cookies are cleared by server)
     await storage.removeItem('access_token');
     await storage.removeItem('user_role');
@@ -276,7 +368,12 @@ class ApiService {
   }
 
   // Payment methods
-  async initiatePayment(data: { instructor_id: number; bookings: any[]; payment_gateway: string; reschedule_booking_id?: number }) {
+  async initiatePayment(data: {
+    instructor_id: number;
+    bookings: any[];
+    payment_gateway: string;
+    reschedule_booking_id?: number;
+  }) {
     const response = await this.api.post('/payments/initiate', data);
     return response.data;
   }
@@ -341,7 +438,9 @@ class ApiService {
   async adminRejectInstructor(instructorId: number, reason?: string) {
     const params: any = {};
     if (reason) params.reason = reason;
-    const response = await this.api.post(`/admin/instructors/${instructorId}/reject`, null, { params });
+    const response = await this.api.post(`/admin/instructors/${instructorId}/reject`, null, {
+      params,
+    });
     return response.data;
   }
 
@@ -380,16 +479,10 @@ class ApiService {
     return response.data;
   }
 
-  async updateInstructorBookingFee(instructorId: number, bookingFee: number) {
-    const response = await this.api.put(`/admin/instructors/${instructorId}/booking-fee`, null, {
-      params: { booking_fee: bookingFee },
-    });
-    return response.data;
-  }
-
-  async getAllBookingsAdmin(statusFilter?: string, skip = 0, limit = 50) {
+  async getAllBookingsAdmin(statusFilter?: string, skip = 0, limit = 50, search?: string) {
     const params: any = { skip, limit };
     if (statusFilter) params.status_filter = statusFilter;
+    if (search && search.trim()) params.search = search.trim();
     const response = await this.api.get('/admin/bookings', { params });
     return response.data;
   }
@@ -412,11 +505,24 @@ class ApiService {
   }
 
   async createAdmin(data: {
+    // Mirrors backend AdminCreateRequest.
     email: string;
     phone: string;
     password: string;
     first_name: string;
     last_name: string;
+    id_number: string;
+    address?: string;
+    address_latitude?: number;
+    address_longitude?: number;
+    company_name?: string;
+    smtp_email?: string;
+    smtp_password?: string;
+    verification_link_validity_minutes?: number;
+    twilio_sender_phone_number?: string;
+    twilio_account_sid?: string;
+    twilio_auth_token?: string;
+    twilio_phone_number?: string;
   }) {
     const response = await this.api.post('/admin/create', data);
     return response.data;
@@ -434,6 +540,18 @@ class ApiService {
     return response.data;
   }
 
+  /**
+   * Sign up a learner the school brought itself.
+   *
+   * The school is taken from the caller's own company profile on the server,
+   * not sent from here — it decides whether the learner's bookings attract
+   * platform commission, so it must not be client-settable.
+   */
+  async enrolCompanyLearner(data: Record<string, unknown>) {
+    const response = await this.api.post('/company/students', data);
+    return response.data;
+  }
+
   async adminCreateInstructor(data: Record<string, unknown>) {
     const response = await this.api.post('/admin/users/instructor', data);
     return response.data;
@@ -446,7 +564,14 @@ class ApiService {
 
   async updateUserDetails(
     userId: number,
-    data: { first_name?: string; last_name?: string; phone?: string; email?: string; id_number?: string; address?: string }
+    data: {
+      first_name?: string;
+      last_name?: string;
+      phone?: string;
+      email?: string;
+      id_number?: string;
+      address?: string;
+    }
   ) {
     const response = await this.api.put(`/admin/users/${userId}`, null, { params: data });
     return response.data;

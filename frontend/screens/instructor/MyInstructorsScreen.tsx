@@ -197,7 +197,6 @@ export default function MyInstructorsScreen({ navigation }: any) {
           data={instructors}
           renderItem={renderItem}
           keyExtractor={item => item.id.toString()}
-          estimatedItemSize={120}
           contentContainerStyle={styles.list}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
         />

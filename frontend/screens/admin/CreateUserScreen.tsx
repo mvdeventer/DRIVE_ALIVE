@@ -56,12 +56,28 @@ interface FormState {
 }
 
 const EMPTY: FormState = {
-  first_name: '', last_name: '', email: '', phone: '', id_number: '',
-  password: '', confirmPassword: '',
-  address_line1: '', suburb: '', city: '', province: '', postal_code: '',
-  learners_permit_number: '', emergency_contact_name: '', emergency_contact_phone: '',
-  license_number: '', license_types: '', vehicle_registration: '',
-  vehicle_make: '', vehicle_model: '', vehicle_year: '', hourly_rate: '',
+  first_name: '',
+  last_name: '',
+  email: '',
+  phone: '',
+  id_number: '',
+  password: '',
+  confirmPassword: '',
+  address_line1: '',
+  suburb: '',
+  city: '',
+  province: '',
+  postal_code: '',
+  learners_permit_number: '',
+  emergency_contact_name: '',
+  emergency_contact_phone: '',
+  license_number: '',
+  license_types: '',
+  vehicle_registration: '',
+  vehicle_make: '',
+  vehicle_model: '',
+  vehicle_year: '',
+  hourly_rate: '',
   service_radius_km: '20',
   accept_terms: false,
 };
@@ -69,13 +85,31 @@ const EMPTY: FormState = {
 /** Fields required by the backend schema for each role. */
 const REQUIRED: Record<TargetRole, (keyof FormState)[]> = {
   student: [
-    'first_name', 'last_name', 'email', 'phone', 'id_number', 'password',
-    'address_line1', 'postal_code', 'emergency_contact_name', 'emergency_contact_phone',
+    'first_name',
+    'last_name',
+    'email',
+    'phone',
+    'id_number',
+    'password',
+    'address_line1',
+    'postal_code',
+    'emergency_contact_name',
+    'emergency_contact_phone',
   ],
   instructor: [
-    'first_name', 'last_name', 'email', 'phone', 'id_number', 'password',
-    'license_number', 'license_types', 'vehicle_registration', 'vehicle_make',
-    'vehicle_model', 'vehicle_year', 'hourly_rate',
+    'first_name',
+    'last_name',
+    'email',
+    'phone',
+    'id_number',
+    'password',
+    'license_number',
+    'license_types',
+    'vehicle_registration',
+    'vehicle_make',
+    'vehicle_model',
+    'vehicle_year',
+    'hourly_rate',
   ],
 };
 
@@ -112,9 +146,16 @@ const LABEL_KEYS: Record<keyof FormState, string> = {
   accept_terms: 'createUser.consent',
 };
 
-export default function CreateUserScreen({ navigation }: any) {
+export default function CreateUserScreen({ navigation, route }: any) {
   const { colors, radii, fontFamilies } = useTheme();
   const t = useT();
+
+  // A driving school signing up its own learner, rather than the platform
+  // operator creating any account. The school can only ever create learners —
+  // instructors join through an invitation, not by being conjured up — and the
+  // learner is recorded as the school's own, which is what exempts their
+  // bookings from platform commission.
+  const forSchool = route?.params?.scope === 'company';
 
   const [role, setRole] = useState<TargetRole>('student');
   const [form, setForm] = useState<FormState>(EMPTY);
@@ -124,19 +165,17 @@ export default function CreateUserScreen({ navigation }: any) {
   const [successMessage, setSuccessMessage] = useState('');
 
   /** Translated name of the role being created, for interpolated strings. */
-  const roleLabel = t(
-    role === 'student' ? 'createUser.roleStudent' : 'createUser.roleInstructor',
-  );
+  const roleLabel = t(role === 'student' ? 'createUser.roleStudent' : 'createUser.roleInstructor');
 
   const set = (k: keyof FormState, v: string | boolean) => {
-    setForm((prev) => ({ ...prev, [k]: v }));
-    setErrors((prev) => ({ ...prev, [k]: undefined }));
+    setForm(prev => ({ ...prev, [k]: v }));
+    setErrors(prev => ({ ...prev, [k]: undefined }));
     setErrorMessage('');
   };
 
   const missing = useMemo(
-    () => REQUIRED[role].filter((k) => !String(form[k] ?? '').trim()),
-    [role, form],
+    () => REQUIRED[role].filter(k => !String(form[k] ?? '').trim()),
+    [role, form]
   );
   const canSubmit = missing.length === 0 && form.accept_terms && !loading;
 
@@ -146,7 +185,7 @@ export default function CreateUserScreen({ navigation }: any) {
   const validate = (): boolean => {
     const next: Partial<Record<keyof FormState, string>> = {};
 
-    REQUIRED[role].forEach((k) => {
+    REQUIRED[role].forEach(k => {
       if (!String(form[k] ?? '').trim()) {
         next[k] = t('createUser.error.required', { field: labelOf(k) });
       }
@@ -204,29 +243,35 @@ export default function CreateUserScreen({ navigation }: any) {
         suburb: form.suburb || null,
       };
 
-      const result =
-        role === 'student'
-          ? await api.adminCreateStudent({
-              ...shared,
-              id_number: form.id_number.trim(),
-              learners_permit_number: form.learners_permit_number || null,
-              emergency_contact_name: form.emergency_contact_name.trim(),
-              emergency_contact_phone: form.emergency_contact_phone.trim(),
-              address_line1: form.address_line1.trim(),
-              postal_code: form.postal_code.trim(),
-            })
-          : await api.adminCreateInstructor({
-              ...shared,
-              id_number: form.id_number.trim(),
-              license_number: form.license_number.trim(),
-              license_types: form.license_types.trim(),
-              vehicle_registration: form.vehicle_registration.trim(),
-              vehicle_make: form.vehicle_make.trim(),
-              vehicle_model: form.vehicle_model.trim(),
-              vehicle_year: Number(form.vehicle_year),
-              hourly_rate: Number(form.hourly_rate),
-              service_radius_km: Number(form.service_radius_km || 20),
-            });
+      const studentFields = {
+        ...shared,
+        id_number: form.id_number.trim(),
+        learners_permit_number: form.learners_permit_number || null,
+        emergency_contact_name: form.emergency_contact_name.trim(),
+        emergency_contact_phone: form.emergency_contact_phone.trim(),
+        address_line1: form.address_line1.trim(),
+        postal_code: form.postal_code.trim(),
+      };
+
+      let result;
+      if (forSchool) {
+        result = await api.enrolCompanyLearner(studentFields);
+      } else if (role === 'student') {
+        result = await api.adminCreateStudent(studentFields);
+      } else {
+        result = await api.adminCreateInstructor({
+          ...shared,
+          id_number: form.id_number.trim(),
+          license_number: form.license_number.trim(),
+          license_types: form.license_types.trim(),
+          vehicle_registration: form.vehicle_registration.trim(),
+          vehicle_make: form.vehicle_make.trim(),
+          vehicle_model: form.vehicle_model.trim(),
+          vehicle_year: Number(form.vehicle_year),
+          hourly_rate: Number(form.hourly_rate),
+          service_radius_km: Number(form.service_radius_km || 20),
+        });
+      }
 
       setSuccessMessage(result?.message ?? t('createUser.created', { role: roleLabel }));
       setForm(EMPTY);
@@ -236,18 +281,14 @@ export default function CreateUserScreen({ navigation }: any) {
       setErrorMessage(
         typeof detail === 'string'
           ? detail
-          : detail?.message ?? t('createUser.error.createFailed'),
+          : (detail?.message ?? t('createUser.error.createFailed'))
       );
     } finally {
       setLoading(false);
     }
   };
 
-  const field = (
-    k: keyof FormState,
-    required = false,
-    extra: Record<string, unknown> = {},
-  ) => (
+  const field = (k: keyof FormState, required = false, extra: Record<string, unknown> = {}) => (
     <Input
       label={`${labelOf(k)}${required ? ' *' : ''}`}
       value={String(form[k] ?? '')}
@@ -262,7 +303,7 @@ export default function CreateUserScreen({ navigation }: any) {
     <ScreenContainer width="form">
       {Platform.OS === 'web' ? (
         <WebNavigationHeader
-          title={t('createUser.title')}
+          title={t(forSchool ? 'createUser.enrolTitle' : 'createUser.title')}
           onBack={() => navigation.goBack()}
           showBackButton={navigation.canGoBack()}
         />
@@ -270,63 +311,68 @@ export default function CreateUserScreen({ navigation }: any) {
 
       <Card variant="outlined" padding="md" style={styles.section}>
         <Text style={[styles.title, { color: colors.text, fontFamily: fontFamilies.semibold }]}>
-          {t('createUser.title')}
+          {t(forSchool ? 'createUser.enrolTitle' : 'createUser.title')}
         </Text>
         <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
-          {t('createUser.subtitle')}
+          {t(forSchool ? 'createUser.enrolSubtitle' : 'createUser.subtitle')}
         </Text>
 
-        {/* Role selector */}
-        <View style={styles.roleRow} accessibilityRole="radiogroup">
-          {(['student', 'instructor'] as TargetRole[]).map((r) => {
-            const active = role === r;
-            const rLabel = t(
-              r === 'student' ? 'createUser.roleStudent' : 'createUser.roleInstructor',
-            );
-            return (
-              <Pressable
-                key={r}
-                onPress={() => {
-                  setRole(r);
-                  setErrors({});
-                  setErrorMessage('');
-                }}
-                disabled={loading}
-                accessibilityRole="radio"
-                // accessibilityState alone emits no ARIA attribute on RNW 0.21;
-                // the explicit aria-checked is what a screen reader reads.
-                accessibilityState={{ checked: active, disabled: loading }}
-                {...({ 'aria-checked': active } as any)}
-                accessibilityLabel={t('createUser.roleA11y', { role: rLabel })}
-                style={[
-                  styles.rolePill,
-                  {
-                    borderRadius: radii.sm,
-                    borderColor: active ? colors.primary : colors.border,
-                    backgroundColor: active ? colors.primary : colors.card,
-                  },
-                ]}
-              >
-                <Text
-                  style={{
-                    color: active ? '#fff' : colors.text,
-                    fontFamily: fontFamilies.semibold,
-                    fontSize: 14,
+        {/* Role selector. A school creates learners only: instructors join it
+            through an invitation, so there is nothing to choose between. */}
+        {forSchool ? null : (
+          <View style={styles.roleRow} accessibilityRole="radiogroup">
+            {(['student', 'instructor'] as TargetRole[]).map(r => {
+              const active = role === r;
+              const rLabel = t(
+                r === 'student' ? 'createUser.roleStudent' : 'createUser.roleInstructor'
+              );
+              return (
+                <Pressable
+                  key={r}
+                  onPress={() => {
+                    setRole(r);
+                    setErrors({});
+                    setErrorMessage('');
                   }}
+                  disabled={loading}
+                  accessibilityRole="radio"
+                  // accessibilityState alone emits no ARIA attribute on RNW 0.21;
+                  // the explicit aria-checked is what a screen reader reads.
+                  accessibilityState={{ checked: active, disabled: loading }}
+                  {...({ 'aria-checked': active } as any)}
+                  accessibilityLabel={t('createUser.roleA11y', { role: rLabel })}
+                  style={[
+                    styles.rolePill,
+                    {
+                      borderRadius: radii.sm,
+                      borderColor: active ? colors.primary : colors.border,
+                      backgroundColor: active ? colors.primary : colors.card,
+                    },
+                  ]}
                 >
-                  {rLabel}
-                </Text>
-              </Pressable>
-            );
-          })}
-        </View>
+                  <Text
+                    style={{
+                      color: active ? '#fff' : colors.text,
+                      fontFamily: fontFamilies.semibold,
+                      fontSize: 14,
+                    }}
+                  >
+                    {rLabel}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        )}
       </Card>
 
       {errorMessage ? <InlineMessage type="error" message={errorMessage} /> : null}
       {successMessage ? <InlineMessage type="success" message={successMessage} /> : null}
 
       <Card variant="outlined" padding="md" style={styles.section}>
-        <Text style={[styles.sectionTitle, { color: colors.primary }]}>{t('createUser.identity')}</Text>
+        <Text style={[styles.sectionTitle, { color: colors.primary }]}>
+          {t('createUser.identity')}
+        </Text>
         {field('first_name', true)}
         {field('last_name', true)}
         {field('email', true, {
@@ -338,7 +384,9 @@ export default function CreateUserScreen({ navigation }: any) {
       </Card>
 
       <Card variant="outlined" padding="md" style={styles.section}>
-        <Text style={[styles.sectionTitle, { color: colors.primary }]}>{t('createUser.password')}</Text>
+        <Text style={[styles.sectionTitle, { color: colors.primary }]}>
+          {t('createUser.password')}
+        </Text>
         {field('password', true, { secureTextEntry: true })}
         <PasswordStrengthMeter password={form.password} />
         {field('confirmPassword', true, { secureTextEntry: true })}
@@ -346,7 +394,9 @@ export default function CreateUserScreen({ navigation }: any) {
 
       {role === 'student' ? (
         <Card variant="outlined" padding="md" style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: colors.primary }]}>{t('createUser.studentDetails')}</Text>
+          <Text style={[styles.sectionTitle, { color: colors.primary }]}>
+            {t('createUser.studentDetails')}
+          </Text>
           {field('learners_permit_number')}
           {field('emergency_contact_name', true)}
           {field('emergency_contact_phone', true, {
@@ -361,7 +411,9 @@ export default function CreateUserScreen({ navigation }: any) {
       ) : (
         <>
           <Card variant="outlined" padding="md" style={styles.section}>
-            <Text style={[styles.sectionTitle, { color: colors.primary }]}>{t('createUser.licence')}</Text>
+            <Text style={[styles.sectionTitle, { color: colors.primary }]}>
+              {t('createUser.licence')}
+            </Text>
             {field('license_number', true)}
             {field('license_types', true, {
               placeholder: t('createUser.licenceCodesPlaceholder'),
@@ -369,7 +421,9 @@ export default function CreateUserScreen({ navigation }: any) {
           </Card>
 
           <Card variant="outlined" padding="md" style={styles.section}>
-            <Text style={[styles.sectionTitle, { color: colors.primary }]}>{t('createUser.vehicle')}</Text>
+            <Text style={[styles.sectionTitle, { color: colors.primary }]}>
+              {t('createUser.vehicle')}
+            </Text>
             {field('vehicle_registration', true)}
             {field('vehicle_make', true)}
             {field('vehicle_model', true)}
@@ -423,15 +477,13 @@ export default function CreateUserScreen({ navigation }: any) {
       {missing.length > 0 ? (
         <Text style={[styles.missing, { color: colors.textSecondary }]}>
           {t('createUser.stillRequired', {
-            fields: missing.map((k) => labelOf(k)).join(', '),
+            fields: missing.map(k => labelOf(k)).join(', '),
           })}
         </Text>
       ) : null}
 
       <Button
-        label={
-          loading ? t('createUser.creating') : t('createUser.submit', { role: roleLabel })
-        }
+        label={loading ? t('createUser.creating') : t('createUser.submit', { role: roleLabel })}
         onPress={handleSubmit}
         disabled={!canSubmit}
         loading={loading}

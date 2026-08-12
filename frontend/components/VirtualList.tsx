@@ -5,14 +5,14 @@
  * may exceed ~20 items (instructors, bookings, students, schedules).
  *
  * Key differences vs FlatList:
- *   - You MUST provide `estimatedItemSize` (avg row height in px).
+ *   - Row heights are measured automatically (FlashList v2 removed
+ *     `estimatedItemSize`; passing it is now a type error).
  *   - `ItemSeparatorComponent` works; padding inside row is preferred.
  *   - Avoids the long-list scroll jank on web and low-end Android.
  *
  * Drop-in example:
  *   <VirtualList
  *     data={instructors}
- *     estimatedItemSize={96}
  *     renderItem={({ item }) => <InstructorCard instructor={item} />}
  *     keyExtractor={(i) => String(i.id)}
  *   />

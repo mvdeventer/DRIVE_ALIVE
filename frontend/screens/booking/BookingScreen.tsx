@@ -3,6 +3,7 @@
  * Redesigned with step-by-step date and time selection
  */
 import { useFocusEffect, useNavigation, useRoute } from '@react-navigation/native';
+import type { NavigationAction } from '@react-navigation/native';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -24,7 +25,7 @@ import WebNavigationHeader from '../../components/WebNavigationHeader';
 import { Button, Card, ThemedModal } from '../../components/ui';
 import { useTheme } from '../../theme/ThemeContext';
 import ApiService from '../../services/api';
-import { calculateBookingFee, lessonTotalWithFee } from '../../utils/bookingFees';
+import { studentLessonPrice } from '../../utils/bookingFees';
 
 interface Instructor {
   id: number;
@@ -43,8 +44,7 @@ interface Instructor {
   suburb?: string;
   is_available: boolean;
   hourly_rate: number;
-  booking_fee?: number; // Per-instructor booking fee in ZAR
-  platform_commission_percent?: number; // Global commission %; fee = max(flat, lesson * %)
+  display_hourly_rate?: number; // Server-computed price the student pays, markup included
   rating: number;
   total_reviews: number;
   is_verified: boolean;
@@ -68,7 +68,11 @@ interface ExistingBooking {
   id: number;
   instructor_id: number;
   instructor_name: string;
-  scheduled_time: string;
+  // The API calls this lesson_date. Declaring it as scheduled_time meant
+  // every read produced undefined, so `new Date(...)` gave Invalid Date and
+  // the checks below — which stop a learner double-booking themselves —
+  // silently matched nothing.
+  lesson_date: string;
   duration_minutes: number;
   status: string;
   created_at: string;
@@ -81,13 +85,37 @@ export default function BookingScreen({ navigation: navProp }: any) {
   const navigation = navProp || fallbackNavigation;
   const route = useRoute();
   const { colors } = useTheme();
-  const instructor = (route.params as any)?.instructor as Instructor;
+  // Params carry only an id: passing the object put `[object Object]` in the
+  // URL and made the page impossible to refresh or share.
+  const routeInstructorId = Number((route.params as any)?.instructorId);
+  const [loadedInstructor, setLoadedInstructor] = useState<Instructor | null>(
+    ((route.params as any)?.instructor as Instructor) ?? null
+  );
+  const [instructorLoadFailed, setInstructorLoadFailed] = useState(false);
+  // Placeholder until the fetch resolves. Every loader below no-ops while
+  // instructor_id is undefined, so nothing requests /instructor/undefined.
+  const instructor = (loadedInstructor ?? ({} as Instructor)) as Instructor;
 
   // Reschedule mode: pre-populate from existing booking
   const rescheduleBookingId = (route.params as any)?.rescheduleBookingId as number | undefined;
   const reschedulePickupAddress = (route.params as any)?.reschedulePickupAddress as string | undefined;
   const isInstructorReschedule = (route.params as any)?.isInstructorReschedule as boolean | undefined;
   const isRescheduleMode = !!rescheduleBookingId;
+
+  useEffect(() => {
+    if (loadedInstructor || !Number.isFinite(routeInstructorId)) return;
+    let cancelled = false;
+    ApiService.get(`/instructors/${routeInstructorId}`)
+      .then((res: any) => {
+        if (!cancelled) setLoadedInstructor(res.data ?? res);
+      })
+      .catch(() => {
+        if (!cancelled) setInstructorLoadFailed(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [loadedInstructor, routeInstructorId]);
 
   const [formData, setFormData] = useState({
     duration_minutes: '60',
@@ -163,7 +191,7 @@ export default function BookingScreen({ navigation: navProp }: any) {
 
   // Prevent navigation if there are unsaved changes
   useEffect(() => {
-    const unsubscribe = navigation.addListener('beforeRemove', e => {
+    const unsubscribe = navigation.addListener('beforeRemove', (e: { preventDefault: () => void; data: { action: NavigationAction } }) => {
       if (!hasUnsavedChanges || skipNavigationGuardRef.current) {
         return;
       }
@@ -192,6 +220,7 @@ export default function BookingScreen({ navigation: navProp }: any) {
   };
 
   const loadInstructorTimeOff = async () => {
+    if (!instructor?.instructor_id) return;  // still resolving
     try {
       const response = await ApiService.get(
         `/availability/instructor/${instructor.instructor_id}/time-off`
@@ -218,6 +247,7 @@ export default function BookingScreen({ navigation: navProp }: any) {
   };
 
   const loadInstructorSchedule = async () => {
+    if (!instructor?.instructor_id) return;  // still resolving
     try {
       console.log('📋 Loading instructor schedule...');
       const response = await ApiService.get(
@@ -263,6 +293,7 @@ export default function BookingScreen({ navigation: navProp }: any) {
   };
 
   const loadFullyBookedDates = async () => {
+    if (!instructor?.instructor_id) return;  // still resolving
     try {
       // Get the next 60 days of availability to find fully booked dates (backend limit)
       const today = new Date();
@@ -317,6 +348,7 @@ export default function BookingScreen({ navigation: navProp }: any) {
   };
 
   const loadExistingBookings = async () => {
+    if (!instructor?.instructor_id) return;  // still resolving
     try {
       setLoadingExisting(true);
       const response = await ApiService.get('/bookings/my-bookings');
@@ -327,7 +359,7 @@ export default function BookingScreen({ navigation: navProp }: any) {
         (booking: ExistingBooking) =>
           booking.status !== 'cancelled' &&
           booking.status !== 'rescheduled' &&
-          new Date(booking.scheduled_time) > new Date()
+          new Date(booking.lesson_date) > new Date()
       );
 
       setExistingBookings(allFutureBookings);
@@ -349,7 +381,7 @@ export default function BookingScreen({ navigation: navProp }: any) {
     const slotEndTime = new Date(slotEnd);
 
     for (const booking of existingBookings) {
-      const bookingStart = new Date(booking.scheduled_time);
+      const bookingStart = new Date(booking.lesson_date);
       const bookingEnd = new Date(bookingStart.getTime() + booking.duration_minutes * 60000);
 
       // Check for overlap: slots conflict if they don't end before the other starts
@@ -444,7 +476,7 @@ export default function BookingScreen({ navigation: navProp }: any) {
     // Check if there's a conflicting booking with student's own appointment
     if (slot.conflicting_booking) {
       const conflictBooking = slot.conflicting_booking;
-      const conflictDate = new Date(conflictBooking.scheduled_time);
+      const conflictDate = new Date(conflictBooking.lesson_date);
       const conflictTime = conflictDate.toLocaleTimeString('en-ZA', {
         hour: '2-digit',
         minute: '2-digit',
@@ -547,9 +579,10 @@ export default function BookingScreen({ navigation: navProp }: any) {
     let cancelFee = 0;
 
     if (hoursUntilLesson < 6) {
-      // Calculate 50% cancellation fee
-      const hours = booking.duration_minutes / 60;
-      cancelFee = instructor.hourly_rate * hours * 0.5;
+      // 50% of what the student actually paid. instructor.hourly_rate is no
+      // longer sent to students, and using it would understate the fee for a
+      // school that applies a markup.
+      cancelFee = studentLessonPrice(instructor, booking.duration_minutes) * 0.5;
     }
 
     // Show inline confirmation
@@ -674,12 +707,8 @@ export default function BookingScreen({ navigation: navProp }: any) {
   };
 
   const calculatePrice = () => {
-    const hours = parseInt(formData.duration_minutes) / 60;
-    const pricePerBooking = (instructor?.hourly_rate || 0) * hours;
-    const feePerBooking = calculateBookingFee(instructor || {}, pricePerBooking);
-    const lessonTotal = pricePerBooking * selectedBookings.length;
-    const totalBookingFees = feePerBooking * selectedBookings.length;
-    return lessonTotal + totalBookingFees;
+    const perBooking = studentLessonPrice(instructor || {}, parseInt(formData.duration_minutes));
+    return perBooking * selectedBookings.length;
   };
 
   const handleSubmitBooking = async () => {
@@ -702,12 +731,11 @@ export default function BookingScreen({ navigation: navProp }: any) {
 
     console.log('✅ Validation passed, proceeding to payment...');
 
-    // Calculate pricing (fee per booking mirrors backend hybrid commission)
-    const hours = parseInt(formData.duration_minutes) / 60;
-    const lessonPerBooking = instructor.hourly_rate * hours;
-    const lessonAmount = lessonPerBooking * selectedBookings.length;
-    const bookingFee = calculateBookingFee(instructor, lessonPerBooking) * selectedBookings.length;
-    const totalAmount = lessonAmount + bookingFee;
+    // One price, from the server-computed rate. The backend re-derives it at
+    // checkout and is authoritative; this is only what we show and pass on.
+    const totalAmount =
+      studentLessonPrice(instructor, parseInt(formData.duration_minutes)) *
+      selectedBookings.length;
 
     // Instructor reschedule: call backend directly (no payment needed)
     if (isInstructorReschedule && rescheduleBookingId) {
@@ -784,8 +812,6 @@ export default function BookingScreen({ navigation: navProp }: any) {
         instructor,
         bookings: bookingsWithPickup,
         total_amount: totalAmount,
-        booking_fee: bookingFee,
-        lesson_amount: lessonAmount,
         ...(rescheduleBookingId ? { reschedule_booking_id: rescheduleBookingId } : {}),
       } as never
     );
@@ -882,7 +908,7 @@ export default function BookingScreen({ navigation: navProp }: any) {
               ⭐ {instructor.rating.toFixed(1)} ({instructor.total_reviews} reviews)
             </Text>
             <Text style={[styles.instructorDetail, { color: colors.textSecondary }]}>
-              💰 R{lessonTotalWithFee(instructor, 60).toFixed(2)}/hr
+              💰 R{studentLessonPrice(instructor, 60).toFixed(2)}/hr
             </Text>
           </View>
         </Card>
@@ -1179,7 +1205,7 @@ export default function BookingScreen({ navigation: navProp }: any) {
                       </Text>
                       <Text style={[styles.selectedBookingDetails, { color: colors.success }]}>
                         💰 R
-                        {lessonTotalWithFee(instructor, booking.slot.duration_minutes).toFixed(2)}
+                        {studentLessonPrice(instructor, booking.slot.duration_minutes).toFixed(2)}
                       </Text>
                       {booking.pickup_address ? (
                         <Text style={[styles.selectedBookingAddress, { color: colors.textSecondary }]}>
@@ -1236,7 +1262,7 @@ export default function BookingScreen({ navigation: navProp }: any) {
               <Text style={[styles.priceLabel, { color: colors.textSecondary }]}>Price per Lesson:</Text>
               <Text style={[styles.priceValue, { color: colors.text }]}>
                 R
-                {lessonTotalWithFee(instructor, parseInt(formData.duration_minutes)).toFixed(2)}
+                {studentLessonPrice(instructor, parseInt(formData.duration_minutes)).toFixed(2)}
               </Text>
             </View>
           )}
@@ -1364,6 +1390,30 @@ const styles = StyleSheet.create({
   },
   instructorInfo: {
     marginTop: 4,
+  },
+  // Restored after the design-token migration removed them: the references
+  // survived, so these elements were rendering with no styling at all.
+  // Layout and type only — colour comes from the theme at each use site,
+  // and Card supplies its own background, radius and elevation.
+  instructorCard: {
+    marginBottom: 16,
+  },
+  formCard: {
+    marginBottom: 16,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginBottom: 12,
+  },
+  instructorName: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    marginBottom: 4,
+  },
+  instructorDetail: {
+    fontSize: 14,
+    marginBottom: 2,
   },
   pickupFormCard: {
     zIndex: 100,

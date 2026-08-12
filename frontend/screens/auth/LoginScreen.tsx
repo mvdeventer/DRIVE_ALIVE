@@ -673,6 +673,7 @@ export default function LoginScreen({ navigation, onAuthChange }: any) {
 
   const getRoleLabel = (role: string) => {
     if (role === 'admin') return 'Admin Profile';
+    if (role === 'company_admin') return 'Driving School Profile';
     if (role === 'instructor') return 'Instructor Profile';
     if (role === 'student') return 'Student Profile';
     return role;
@@ -748,6 +749,10 @@ export default function LoginScreen({ navigation, onAuthChange }: any) {
       console.log('[LoginScreen] Fetched role from /auth/me:', userRole);
     }
     
+    if (!userRole) {
+      throw new Error('Signed in but no role was returned — cannot choose a workspace.');
+    }
+
     console.log('[LoginScreen] Storing user_role in AsyncStorage:', userRole);
     await storage.setItem('user_role', userRole);
 

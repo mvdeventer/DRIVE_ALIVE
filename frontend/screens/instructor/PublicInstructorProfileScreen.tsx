@@ -8,6 +8,8 @@ import {
   View,
 } from 'react-native';
 
+import { RouteProp, useRoute } from '@react-navigation/native';
+
 import ApiService from '../../services/api';
 
 interface InstructorProfile {
@@ -58,7 +60,19 @@ function resetWebMeta(): void {
   document.title = 'RoadReady';
 }
 
-export default function PublicInstructorProfileScreen({ route }: { route: { params: { instructorId: number } } }) {
+// Reached both by navigating within the app and by opening the public URL
+// /instructors/:instructorId, so the parameter arrives as a number in the
+// first case and as a string in the second. It is only ever interpolated
+// into a request path, so both are fine — but the type has to admit it.
+type PublicProfileRoute = RouteProp<
+  { PublicInstructorProfile: { instructorId: string | number } },
+  'PublicInstructorProfile'
+>;
+
+export default function PublicInstructorProfileScreen() {
+  // Taken from the hook rather than a prop: a hand-written prop type is not
+  // assignable to what the navigator expects of a screen component.
+  const route = useRoute<PublicProfileRoute>();
   const { instructorId } = route.params;
   const [instructor, setInstructor] = useState<InstructorProfile | null>(null);
   const [loading, setLoading] = useState(true);
@@ -66,7 +80,10 @@ export default function PublicInstructorProfileScreen({ route }: { route: { para
 
   useEffect(() => {
     ApiService.get<InstructorProfile>(`/instructors/${instructorId}`)
-      .then((data) => {
+      // The payload is in `.data`; the resolved value is the whole response.
+      // Reading it directly made every field undefined, so building the page
+      // title threw and the catch below reported the instructor as missing.
+      .then(({ data }) => {
         setInstructor(data);
         const name = `${data.first_name} ${data.last_name}`;
         const location = [data.suburb, data.city, data.province].filter(Boolean).join(', ');

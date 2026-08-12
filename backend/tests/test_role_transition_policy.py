@@ -150,6 +150,54 @@ def test_select_runtime_role_rejects_invalid_selection():
     assert exc.value.detail == 'Invalid role selection for this account.'
 
 
+def test_company_admin_profile_yields_the_company_admin_role():
+    """A CompanyAdmin profile row makes the role selectable at login.
+
+    Roles are resolved by profile-row existence, the same way student and
+    instructor are. Without this the role could be stored on the User row but
+    never offered in the multi-role picker.
+    """
+    db = MagicMock()
+    # _get_effective_roles queries Student, Instructor, then CompanyAdmin in
+    # that order; only the third finds a row.
+    db.query.return_value.filter.return_value.first.side_effect = [
+        None,
+        None,
+        SimpleNamespace(id=1, user_id=42, company_id=3),
+    ]
+    user = SimpleNamespace(id=42, role=UserRole.COMPANY_ADMIN)
+
+    available = RoleTransitionPolicy.get_available_runtime_roles(db=db, user=user)
+
+    assert available == {'company_admin'}
+
+
+def test_company_registration_channel_cannot_mint_a_platform_admin():
+    """The public school-registration channel is limited to COMPANY_ADMIN.
+
+    If this ever allows ADMIN, anyone could self-register as the platform
+    operator.
+    """
+    with pytest.raises(HTTPException) as exc:
+        RoleTransitionPolicy.assert_transition_allowed(
+            db=MagicMock(),
+            target_role=UserRole.ADMIN,
+            channel=TransitionChannel.COMPANY_REGISTRATION,
+            existing_user=None,
+        )
+
+    assert exc.value.status_code == 403
+
+
+def test_company_registration_channel_allows_an_unregistered_visitor():
+    RoleTransitionPolicy.assert_transition_allowed(
+        db=MagicMock(),
+        target_role=UserRole.COMPANY_ADMIN,
+        channel=TransitionChannel.COMPANY_REGISTRATION,
+        existing_user=None,
+    )
+
+
 def test_company_owner_maps_to_instructor_runtime_role_only():
     db = MagicMock()
     company_owner_user = SimpleNamespace(

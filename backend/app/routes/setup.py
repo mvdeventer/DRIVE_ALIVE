@@ -21,6 +21,10 @@ from sqlalchemy.orm import Session
 from ..database import get_db
 from ..models.user import User, UserRole, UserStatus
 from ..schemas.admin import AdminCreateRequest
+from ..services.company_service import (
+    ensure_platform_host_company,
+    get_platform_host_company,
+)
 from ..services.role_transition_policy import RoleTransitionPolicy, TransitionChannel
 from ..utils.auth import get_password_hash
 from ..utils.encryption import EncryptionService  # For SMTP password encryption
@@ -54,10 +58,23 @@ def get_setup_status(db: Session = Depends(get_db)):
     Returns whether admin exists and system is ready for use
     """
     admin_exists = db.query(User).filter(User.role == UserRole.ADMIN).first()
-    
+    host_company = get_platform_host_company(db)
+
     return {
         "initialized": admin_exists is not None,
         "requires_setup": admin_exists is None,
+        # Informational. `initialized` deliberately still keys off the admin
+        # user: the host company is auto-created at setup and backfilled at
+        # startup for older deployments, so gating setup on it could strand a
+        # working system in the wizard if that backfill ever failed.
+        "host_company": (
+            {
+                "id": host_company.id,
+                "name": host_company.name,
+            }
+            if host_company
+            else None
+        ),
         "message": (
             "System is initialized and ready"
             if admin_exists
@@ -125,12 +142,21 @@ def create_initial_admin(
 
     new_admin = _build_admin_user(admin_data)
     db.add(new_admin)
+    # Flush to obtain the admin id without committing: the admin and the host
+    # company they own must be created together or not at all.
+    db.flush()
+    host_company = ensure_platform_host_company(
+        db, name=admin_data.company_name, owner_user=new_admin
+    )
     db.commit()
     db.refresh(new_admin)
     _persist_twilio_to_env(admin_data.twilio_account_sid, admin_data.twilio_auth_token)
     return {
         "message": "Admin account created successfully! You can now log in.",
         "user_id": new_admin.id,
+        "host_company": (
+            {"id": host_company.id, "name": host_company.name} if host_company else None
+        ),
         "verification_sent": {"email_sent": False, "whatsapp_sent": False, "expires_in_minutes": 0},
         "note": "Admin account is active immediately. No verification required.",
     }

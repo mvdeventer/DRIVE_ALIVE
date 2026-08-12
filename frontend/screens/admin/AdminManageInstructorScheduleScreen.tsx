@@ -115,7 +115,7 @@ export default function AdminManageInstructorScheduleScreen({ route, navigation:
     const hasTimeOffFormData =
       newTimeOff.start_date.length > 0 ||
       newTimeOff.end_date.length > 0 ||
-      newTimeOff.reason.trim().length > 0;
+      (newTimeOff.reason ?? '').trim().length > 0;
     if (hasTimeOffFormData && !hasUnsavedChanges) {
       setHasUnsavedChanges(true);
     }
@@ -501,9 +501,13 @@ export default function AdminManageInstructorScheduleScreen({ route, navigation:
       {/* Time Picker Modal */}
       {showTimePicker.day && showTimePicker.field && (
         <TimePickerWheel
-          visible={true}
-          onConfirm={handleTimePickerConfirm}
-          onCancel={() => setShowTimePicker({})}
+          value={
+            schedules.find(s => s.day_of_week === showTimePicker.day)?.[
+              showTimePicker.field!
+            ] || '08:00'
+          }
+          onChange={handleTimePickerConfirm}
+          minuteInterval={15}
         />
       )}
 

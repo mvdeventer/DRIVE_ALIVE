@@ -66,6 +66,7 @@ class Booking(Base):
     status = Column(SQLEnum(BookingStatus), default=BookingStatus.PENDING, index=True)
 
     # Payment
+    # The full price the student pays: instructor_base_amount + company_markup_amount.
     amount = Column(Float, nullable=False)  # In ZAR
     payment_status = Column(SQLEnum(PaymentStatus), default=PaymentStatus.PENDING)
     payment_method = Column(String, nullable=True)  # "stripe", "payfast"
@@ -118,8 +119,15 @@ class Booking(Base):
         Boolean, nullable=False, default=False
     )  # Included in daily summary
 
-    # Booking fee (admin configurable per instructor, default R20)
-    booking_fee = Column(Float, nullable=False, default=20.0)
+    # Price breakdown, snapshotted at booking time so that editing an
+    # instructor's markup later cannot silently rewrite historical revenue.
+    instructor_base_amount = Column(Float, nullable=False, default=0.0)
+    company_markup_amount = Column(Float, nullable=False, default=0.0)
+    company_id = Column(Integer, ForeignKey("companies.id"), nullable=True)
+
+    # Who brought this booking. Commission is only charged on bookings the
+    # platform's marketplace generated, never on a school's own students.
+    booking_source = Column(String(20), nullable=False, default="platform", index=True)
 
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())

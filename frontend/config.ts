@@ -65,6 +65,7 @@ export const API_CONFIG = {
     LOGIN: '/auth/login',
     REGISTER_STUDENT: '/auth/register/student',
     REGISTER_INSTRUCTOR: '/auth/register/instructor',
+    REGISTER_COMPANY: '/auth/register/company',
     ME: '/auth/me',
 
     // Instructors

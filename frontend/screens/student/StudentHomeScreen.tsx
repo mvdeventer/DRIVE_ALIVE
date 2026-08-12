@@ -18,6 +18,7 @@ import {
 import CreditBanner from '../../components/CreditBanner';
 import InlineMessage from '../../components/InlineMessage';
 import { Button, Card, StatCard, Badge, ThemedModal } from '../../components/ui';
+import { useT } from '../../i18n';
 import { useTheme } from '../../theme/ThemeContext';
 import ApiService from '../../services/api';
 
@@ -50,6 +51,7 @@ interface StudentProfile {
 
 export default function StudentHomeScreen() {
   const { colors } = useTheme();
+  const t = useT();
   const navigation = useNavigation();
   const scrollViewRef = useRef<ScrollView>(null);
   const [loading, setLoading] = useState(true);
@@ -214,7 +216,7 @@ export default function StudentHomeScreen() {
 
       if (Platform.OS !== 'web') {
         Alert.alert(
-          'Remove Lesson',
+          t('misc.removeLesson'),
           confirmMsg,
           [
             { text: 'No', style: 'cancel' },
@@ -224,7 +226,7 @@ export default function StudentHomeScreen() {
               onPress: () => {
                 setUpcomingBookings(prev => prev.filter(b => b.id !== booking.id));
                 scrollViewRef.current?.scrollTo({ y: 0, animated: true });
-                setMessage({ type: 'success', text: '✅ Lesson removed from list' });
+                setMessage({ type: 'success', text: t('studentHome.msg.lessonRemoved') });
                 setTimeout(() => setMessage(null), 3000);
               },
             },
@@ -234,7 +236,7 @@ export default function StudentHomeScreen() {
       } else if (confirmed) {
         setUpcomingBookings(prev => prev.filter(b => b.id !== booking.id));
         scrollViewRef.current?.scrollTo({ y: 0, animated: true });
-        setMessage({ type: 'success', text: '✅ Lesson removed from list' });
+        setMessage({ type: 'success', text: t('studentHome.msg.lessonRemoved') });
         setTimeout(() => setMessage(null), 3000);
       }
       return;
@@ -247,7 +249,7 @@ export default function StudentHomeScreen() {
     // Check if lesson is in the past
     if (hoursUntilLesson < 0) {
       scrollViewRef.current?.scrollTo({ y: 0, animated: true });
-      setMessage({ type: 'error', text: 'Cannot delete a lesson that has already passed' });
+      setMessage({ type: 'error', text: t('studentHome.msg.cannotDeletePast') });
       setTimeout(() => setMessage(null), 3000);
       return;
     }
@@ -274,7 +276,7 @@ export default function StudentHomeScreen() {
 
     if (Platform.OS !== 'web') {
       Alert.alert(
-        'Delete Booking',
+        t('misc.deleteBooking'),
         confirmMsg,
         [
           { text: 'No', style: 'cancel' },
@@ -314,7 +316,7 @@ export default function StudentHomeScreen() {
       }
 
       scrollViewRef.current?.scrollTo({ y: 0, animated: true });
-      setMessage({ type: 'success', text: '✅ Booking cancelled. Credit is pending and will activate when you pay for your next booking.' });
+      setMessage({ type: 'success', text: t('studentHome.msg.bookingCancelled') });
       setTimeout(() => setMessage(null), 5000);
     } catch (error: any) {
       console.error('Error deleting booking:', error);
@@ -352,7 +354,7 @@ export default function StudentHomeScreen() {
         (navigation as any).navigate('FindTab', {
           screen: 'Booking',
           params: {
-            instructor,
+            instructorId: instructor.instructor_id,
             rescheduleBookingId: booking.id,
             reschedulePickupAddress: booking.pickup_location || '',
           },
@@ -361,7 +363,7 @@ export default function StudentHomeScreen() {
         setRescheduleLoading(false);
         console.error('Error fetching instructor for reschedule:', error);
         scrollViewRef.current?.scrollTo({ y: 0, animated: true });
-        setMessage({ type: 'error', text: 'Failed to load instructor details for reschedule' });
+        setMessage({ type: 'error', text: t('studentHome.msg.rescheduleLoadFailed') });
         setTimeout(() => setMessage(null), 5000);
       }
     };
@@ -518,7 +520,7 @@ export default function StudentHomeScreen() {
     return (
       <View style={[styles.loadingContainer, { backgroundColor: colors.background }]}>
         <ActivityIndicator size="large" color={colors.primary} />
-        <Text style={[styles.loadingText, { color: colors.textSecondary }]}>Loading dashboard...</Text>
+        <Text style={[styles.loadingText, { color: colors.textSecondary }]}>{t('studentHome.loading')}</Text>
       </View>
     );
   }
@@ -534,8 +536,8 @@ export default function StudentHomeScreen() {
       {/* Header */}
       <View style={[styles.header, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
         <View>
-          <Text style={[styles.greeting, { color: colors.textSecondary }]}>Welcome back,</Text>
-          <Text style={[styles.name, { color: colors.text }]}>{profile?.first_name || 'Student'}</Text>
+          <Text style={[styles.greeting, { color: colors.textSecondary }]}>{t('studentHome.welcomeBack')}</Text>
+          <Text style={[styles.name, { color: colors.text }]}>{profile?.first_name || t('studentHome.fallbackName')}</Text>
         </View>
       </View>
 
@@ -544,19 +546,19 @@ export default function StudentHomeScreen() {
         <StatCard
           icon="📅"
           value={upcomingBookings.length}
-          label="Upcoming"
+          label={t('studentHome.stat.upcoming')}
           variant="primary"
         />
         <StatCard
           icon="✅"
           value={pastBookings.length}
-          label="Completed"
+          label={t('studentHome.badge.completed')}
           variant="success"
         />
         <StatCard
           icon="⏱️"
           value={upcomingBookings.reduce((sum, b) => sum + b.duration_minutes, 0)}
-          label="Minutes Booked"
+          label={t('studentHome.stat.minutesBooked')}
           variant="info"
         />
       </View>
@@ -578,15 +580,15 @@ export default function StudentHomeScreen() {
 
       {/* Quick Actions */}
       <View style={styles.section}>
-        <Text style={[styles.sectionTitle, { color: colors.text }]}>Quick Actions</Text>
+        <Text style={[styles.sectionTitle, { color: colors.text }]}>{t('studentHome.quickActions')}</Text>
         <Button
-          label="📚 Book a Lesson"
+          label={t('studentHome.bookLesson')}
           onPress={() => (navigation as any).navigate('FindTab')}
           fullWidth
           style={{ marginBottom: 12 }}
         />
         <Button
-          label="👤 View My Profile"
+          label={t('studentHome.viewProfile')}
           onPress={handleViewProfile}
           variant="secondary"
           fullWidth
@@ -595,12 +597,12 @@ export default function StudentHomeScreen() {
 
       {/* Upcoming Bookings */}
       <View style={styles.section}>
-        <Text style={[styles.sectionTitle, { color: colors.text }]}>Upcoming Lessons</Text>
+        <Text style={[styles.sectionTitle, { color: colors.text }]}>{t('studentHome.upcomingLessons')}</Text>
         {upcomingBookings.length === 0 ? (
           <Card variant="outlined" padding="lg" style={{ alignItems: 'center' }}>
-            <Text style={[styles.emptyStateText, { color: colors.text }]}>No upcoming lessons</Text>
+            <Text style={[styles.emptyStateText, { color: colors.text }]}>{t('studentHome.noUpcoming')}</Text>
             <Text style={[styles.emptyStateSubtext, { color: colors.textSecondary }]}>
-              Book your first lesson to get started!
+              {t('studentHome.bookFirst')}
             </Text>
           </Card>
         ) : (
@@ -610,16 +612,17 @@ export default function StudentHomeScreen() {
                 <View style={styles.bookingHeader}>
                   <Text style={[styles.instructorName, { color: colors.text }]}>{booking.instructor_name}</Text>
                   <Badge
-                    label={booking.status}
                     variant={
                       booking.status.toLowerCase() === 'confirmed'
                         ? 'success'
                         : booking.status.toLowerCase() === 'pending'
                         ? 'warning'
-                        : 'default'
+                        : 'neutral'
                     }
                     size="sm"
-                  />
+                  >
+                    {booking.status}
+                  </Badge>
                 </View>
                 {booking.booking_reference ? (
                   <Text style={[styles.bookingReference, { color: colors.primary }]}>🎫 {booking.booking_reference}</Text>
@@ -641,14 +644,14 @@ export default function StudentHomeScreen() {
                   <Text style={[styles.bookingPrice, { color: colors.success }]}>R{booking.total_price.toFixed(2)}</Text>
                   <View style={{ flexDirection: 'row', gap: 8 }}>
                     <Button
-                      label={rescheduleLoading ? '⏳ Loading...' : '� Reschedule'}
+                      label={rescheduleLoading ? t('studentHome.action.rescheduleLoading') : t('studentHome.action.reschedule')}
                       onPress={() => handleOpenReschedule(booking)}
                       variant="accent"
                       size="sm"
                       disabled={rescheduleLoading}
                     />
                     <Button
-                      label="🗑️ Delete"
+                      label={t('studentHome.action.delete')}
                       onPress={() => handleDeleteBooking(booking)}
                       variant="danger"
                       size="sm"
@@ -665,7 +668,7 @@ export default function StudentHomeScreen() {
       {pastBookings.length > 0 ? (
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <Text style={[styles.sectionTitle, { color: colors.text, marginBottom: 0 }]}>Recent Lessons</Text>
+            <Text style={[styles.sectionTitle, { color: colors.text, marginBottom: 0 }]}>{t('studentHome.recentLessons')}</Text>
             <Pressable
               style={[
                 styles.unhideButton,
@@ -680,7 +683,7 @@ export default function StudentHomeScreen() {
                   { color: hiddenBookingIds.size > 0 ? '#fff' : colors.textTertiary },
                 ]}
               >
-                👁️ Unhide ({hiddenBookingIds.size})
+                {t('studentHome.action.unhide', { count: hiddenBookingIds.size })}
               </Text>
             </Pressable>
           </View>
@@ -692,7 +695,7 @@ export default function StudentHomeScreen() {
                   <Card key={booking.id} variant="elevated" padding="md" style={styles.bookingCardWrap}>
                     <View style={styles.bookingHeader}>
                       <Text style={[styles.instructorName, { color: colors.text }]}>{booking.instructor_name}</Text>
-                      <Badge label="Completed" variant="success" size="sm" />
+                      <Badge variant="success" size="sm">{t('studentHome.badge.completed')}</Badge>
                     </View>
                     {booking.booking_reference ? (
                       <Text style={[styles.bookingReference, { color: colors.primary }]}>🎫 {booking.booking_reference}</Text>
@@ -719,7 +722,7 @@ export default function StudentHomeScreen() {
                         style={[styles.hideButton, { backgroundColor: colors.textTertiary }]}
                         onPress={() => handleHideCompletedLesson(booking)}
                       >
-                        <Text style={styles.hideButtonText}>👁️ Hide</Text>
+                        <Text style={styles.hideButtonText}>{t('studentHome.action.hide')}</Text>
                       </Pressable>
                     </View>
                     <View style={[styles.ratingSection, { borderTopColor: colors.border }]}>
@@ -755,7 +758,7 @@ export default function StudentHomeScreen() {
                         ) : null}
                       </View>
                       {showThankYou[booking.id] ? (
-                        <Text style={[styles.thankYouText, { color: colors.success }]}>✓ Thanks for rating!</Text>
+                        <Text style={[styles.thankYouText, { color: colors.success }]}>{t('studentHome.thanksRating')}</Text>
                       ) : null}
                     </View>
                   </Card>
@@ -763,9 +766,9 @@ export default function StudentHomeScreen() {
             </View>
           ) : (
             <Card variant="outlined" padding="lg" style={{ alignItems: 'center' }}>
-              <Text style={[styles.emptyStateText, { color: colors.text }]}>All recent lessons are hidden</Text>
+              <Text style={[styles.emptyStateText, { color: colors.text }]}>{t('studentHome.allHidden')}</Text>
               <Text style={[styles.emptyStateSubtext, { color: colors.textSecondary }]}>
-                Use the "Unhide Lessons" button above to restore them
+                {t('studentHome.useUnhide')}
               </Text>
             </Card>
           )}
@@ -781,12 +784,12 @@ export default function StudentHomeScreen() {
           setShowUnhideModal(false);
           setSelectedUnhideIds(new Set());
         }}
-        title="Unhide Completed Lessons"
+        title={t('studentHome.action.unhideTitle')}
         size="md"
         footer={
           <View style={styles.modalFooter}>
             <Button
-              label="Cancel"
+              label={t('common.cancel')}
               onPress={() => {
                 setShowUnhideModal(false);
                 setSelectedUnhideIds(new Set());
@@ -795,7 +798,7 @@ export default function StudentHomeScreen() {
               style={{ flex: 1 }}
             />
             <Button
-              label={`Unhide Selected (${selectedUnhideIds.size})`}
+              label={t('studentHome.action.unhideSelected', { count: selectedUnhideIds.size })}
               onPress={handleUnhideLessons}
               disabled={selectedUnhideIds.size === 0}
               style={{ flex: 1 }}
@@ -817,7 +820,7 @@ export default function StudentHomeScreen() {
             {selectedUnhideIds.size === hiddenBookingIds.size &&
               hiddenBookingIds.size > 0 && <Text style={styles.checkboxCheck}>✓</Text>}
           </View>
-          <Text style={[styles.checkboxLabel, { color: colors.text }]}>Select All</Text>
+          <Text style={[styles.checkboxLabel, { color: colors.text }]}>{t('studentHome.selectAll')}</Text>
         </Pressable>
 
         <View style={[styles.divider, { backgroundColor: colors.border }]} />

@@ -30,10 +30,18 @@ from ..schemas.booking import (
     ReviewCreate,
     ReviewResponse,
 )
-from ..services.fees import calculate_booking_fee, get_platform_commission_percent
+from ..services.billing_service import record_platform_charge, void_platform_charge
+from ..services.company_service import get_instructor_company
+from ..services.fees import (
+    resolve_booking_source,
+    calculate_platform_charge,
+    get_platform_commission_percent,
+    resolve_student_price,
+)
 from ..services.whatsapp_service import whatsapp_service
 
 router = APIRouter(prefix="/bookings", tags=["Bookings"])
+
 
 
 def auto_update_past_bookings(db: Session):
@@ -247,12 +255,22 @@ async def create_booking(
             detail="This time slot is already booked. Please select a different time.",
         )
 
-    # Calculate amount (lesson fee only, booking fee stored separately)
-    # Hybrid commission: fee = max(instructor flat fee, lesson * commission%)
-    lesson_amount = instructor.hourly_rate * (booking_data.duration_minutes / 60)
-    commission_percent = get_platform_commission_percent(db)
-    instructor_booking_fee = calculate_booking_fee(
-        instructor, lesson_amount, commission_percent
+    # One price for the student; the split is snapshotted below so a later
+    # markup change cannot rewrite this booking's history.
+    base_amount, markup_amount, student_total = resolve_student_price(
+        instructor, booking_data.duration_minutes
+    )
+    company = get_instructor_company(db, instructor)
+    commission_percent = get_platform_commission_percent(db, company)
+    # Commission is owed only on demand the marketplace generated, which is
+    # decided by where this learner came from — not by who is booking.
+    booking_source = resolve_booking_source(student, company)
+    platform_charge = calculate_platform_charge(
+        student_total,
+        commission_percent,
+        booking_source=booking_source,
+        is_platform_host=bool(company and company.is_platform_host),
+        has_company=company is not None,
     )
 
     # Create booking
@@ -269,14 +287,28 @@ async def create_booking(
         dropoff_latitude=booking_data.dropoff_latitude,
         dropoff_longitude=booking_data.dropoff_longitude,
         dropoff_address=booking_data.dropoff_address,
-        amount=lesson_amount,  # Lesson price only (booking fee stored separately)
-        booking_fee=instructor_booking_fee,
+        amount=student_total,  # What the student pays, in full
+        instructor_base_amount=base_amount,
+        company_markup_amount=markup_amount,
+        company_id=company.id if company else None,
+        booking_source=booking_source,
         student_notes=booking_data.student_notes,
         status=BookingStatus.PENDING,
         payment_status=PaymentStatus.PENDING,
     )
 
     db.add(booking)
+    # Flush so the charge can reference booking.id; both land in one commit,
+    # so a booking can never exist without its accrual.
+    db.flush()
+    record_platform_charge(
+        db,
+        company_id=booking.company_id,
+        booking_id=booking.id,
+        basis_amount=student_total,
+        commission_percent=commission_percent,
+        charge_amount=platform_charge,
+    )
     db.commit()
     db.refresh(booking)
 
@@ -296,7 +328,7 @@ async def create_booking(
         )
 
         # Send total amount (lesson + booking fee) for WhatsApp confirmation
-        total_amount = booking.amount + booking.booking_fee
+        total_amount = booking.amount
         result = whatsapp_service.send_booking_confirmation(
             student_name=f"{current_user.first_name} {current_user.last_name}",
             student_phone=current_user.phone,
@@ -423,7 +455,6 @@ async def create_bulk_bookings(
 
     # Collect all bookings to create
     new_bookings = []
-    commission_percent = get_platform_commission_percent(db)
 
     # Validate each booking and prepare for creation
     for booking_data in bookings_data:
@@ -606,11 +637,19 @@ async def create_bulk_bookings(
                         detail=f"You cannot book multiple lessons at the same time ({lesson_datetime}). Please choose different times.",
                     )
 
-        # Calculate amount (lesson fee only, booking fee stored separately)
-        # Hybrid commission: fee = max(instructor flat fee, lesson * commission%)
-        lesson_amount = instructor.hourly_rate * (booking_data.duration_minutes / 60)
-        instructor_booking_fee = calculate_booking_fee(
-            instructor, lesson_amount, commission_percent
+        # Resolved per instructor: a bulk request can span schools.
+        company = get_instructor_company(db, instructor)
+        commission_percent = get_platform_commission_percent(db, company)
+        base_amount, markup_amount, student_total = resolve_student_price(
+            instructor, booking_data.duration_minutes
+        )
+        booking_source = resolve_booking_source(student, company)
+        platform_charge = calculate_platform_charge(
+            student_total,
+            commission_percent,
+            booking_source=booking_source,
+            is_platform_host=bool(company and company.is_platform_host),
+            has_company=company is not None,
         )
 
         # Prepare booking data
@@ -628,8 +667,15 @@ async def create_bulk_bookings(
                 "dropoff_latitude": booking_data.dropoff_latitude,
                 "dropoff_longitude": booking_data.dropoff_longitude,
                 "dropoff_address": booking_data.dropoff_address,
-                "amount": lesson_amount,  # Lesson price only
-                "booking_fee": instructor_booking_fee,  # Booking fee stored separately
+                "amount": student_total,  # What the student pays, in full
+                "instructor_base_amount": base_amount,
+                "company_markup_amount": markup_amount,
+                "company_id": company.id if company else None,
+                "booking_source": booking_source,
+                # Popped before the Booking is constructed; carried here so the
+                # accrual uses the same figures as the row it belongs to.
+                "_platform_charge": platform_charge,
+                "_commission_percent": commission_percent,
                 "student_notes": booking_data.student_notes,
                 "status": BookingStatus.PENDING,
                 "payment_status": PaymentStatus.PENDING,
@@ -640,8 +686,19 @@ async def create_bulk_bookings(
     created_bookings = []
     try:
         for booking_dict in new_bookings:
+            charge_amount = booking_dict.pop("_platform_charge", 0.0)
+            charge_percent = booking_dict.pop("_commission_percent", 0.0)
             booking = Booking(**booking_dict)
             db.add(booking)
+            db.flush()
+            record_platform_charge(
+                db,
+                company_id=booking.company_id,
+                booking_id=booking.id,
+                basis_amount=booking.amount,
+                commission_percent=charge_percent,
+                charge_amount=charge_amount,
+            )
             created_bookings.append(booking)
 
         db.commit()
@@ -675,7 +732,7 @@ async def create_bulk_bookings(
                     )
 
                     # Send total amount (lesson + booking fee) for WhatsApp confirmation
-                    total_amount = booking.amount + booking.booking_fee
+                    total_amount = booking.amount
                     result = whatsapp_service.send_booking_confirmation(
                         student_name=f"{current_user.first_name} {current_user.last_name}",
                         student_phone=current_user.phone,
@@ -821,7 +878,7 @@ async def get_my_bookings(
                 "status": booking.status.value,
                 "payment_status": booking.payment_status.value,
                 "total_price": float(
-                    booking.amount + (booking.booking_fee or 0.0)
+                    booking.amount
                 ),  # Total price = lesson price + booking fee
                 "pickup_location": booking.pickup_address,
                 "review_rating": review.rating if review else None,
@@ -876,7 +933,7 @@ async def get_my_bookings(
                 "duration_minutes": booking.duration_minutes,
                 "status": booking.status.value,
                 "payment_status": booking.payment_status.value,
-                "total_price": float(booking.amount) + float(booking.booking_fee or 0.0),
+                "total_price": float(booking.amount),  # amount is already the full student price
                 "pickup_location": booking.pickup_address,
                 "student_notes": booking.student_notes,
             }
@@ -1059,7 +1116,7 @@ async def instructor_reschedule_booking(
 
     # Calculate credit — instructor reschedule = 100% credit, no penalty
     credit_amount = 0.0
-    total_paid = old_booking.amount + (old_booking.booking_fee or 0.0)
+    total_paid = old_booking.amount
 
     if old_booking.payment_status == PaymentStatus.PAID:
         credit_percentage = 1.0
@@ -1084,7 +1141,15 @@ async def instructor_reschedule_booking(
         )
         db.add(credit)
 
-    # Create the new booking for the same student
+    # Create the new booking for the same student.
+    #
+    # The price and its breakdown are carried across rather than recalculated:
+    # this is the same lesson moved at the instructor's request, so the
+    # learner pays what they already paid even if the rate has changed since.
+    # Carrying the split with it keeps the stored breakdown adding up to the
+    # amount, and keeps the booking attributed to the school — without this
+    # the new row had an amount but no base, no markup and no company, so it
+    # reconciled against nothing and earned the platform nothing.
     new_booking = Booking(
         booking_reference=f"BK{uuid.uuid4().hex[:8].upper()}",
         student_id=old_booking.student_id,
@@ -1096,7 +1161,10 @@ async def instructor_reschedule_booking(
         pickup_latitude=reschedule_data.pickup_latitude,
         pickup_longitude=reschedule_data.pickup_longitude,
         amount=old_booking.amount,
-        booking_fee=old_booking.booking_fee,
+        instructor_base_amount=old_booking.instructor_base_amount,
+        company_markup_amount=old_booking.company_markup_amount,
+        company_id=old_booking.company_id,
+        booking_source=old_booking.booking_source,
         status=BookingStatus.PENDING,
         payment_status=PaymentStatus.PAID,
         payment_method=old_booking.payment_method or "credit",
@@ -1105,6 +1173,33 @@ async def instructor_reschedule_booking(
     )
     db.add(new_booking)
     db.flush()  # Get the new booking ID
+
+    # The commission follows the lesson. Reversing the old charge and
+    # accruing a new one leaves exactly one charge for one lesson — where
+    # keeping both would bill the school twice for a move it did not ask for.
+    void_platform_charge(
+        db,
+        booking_id=old_booking.id,
+        reason=f"Rescheduled by instructor to {new_booking.booking_reference}",
+    )
+    _instructor = (
+        db.query(Instructor).filter(Instructor.id == old_booking.instructor_id).first()
+    )
+    _company = get_instructor_company(db, _instructor) if _instructor else None
+    record_platform_charge(
+        db,
+        company_id=new_booking.company_id,
+        booking_id=new_booking.id,
+        basis_amount=new_booking.amount,
+        commission_percent=get_platform_commission_percent(db, _company),
+        charge_amount=calculate_platform_charge(
+            new_booking.amount,
+            get_platform_commission_percent(db, _company),
+            booking_source=new_booking.booking_source,
+            is_platform_host=bool(_company and _company.is_platform_host),
+            has_company=_company is not None,
+        ),
+    )
 
     # Link old booking to new booking
     old_booking.rescheduled_to_booking_id = new_booking.id
@@ -1317,6 +1412,17 @@ async def cancel_booking(
     booking.cancelled_by = cancelled_by
     booking.cancellation_reason = cancel_data.cancellation_reason
 
+    # The platform earns commission for producing a lesson. This one is not
+    # happening, so the school does not owe it — and since cancelling issues
+    # a credit rather than a refund, leaving it would bill the school again
+    # when the learner rebooks. Part of this transaction, so it cannot be
+    # withdrawn by a cancellation that then fails.
+    void_platform_charge(
+        db,
+        booking_id=booking.id,
+        reason=f"Booking {booking.booking_reference} cancelled by {cancelled_by}",
+    )
+
     # Calculate credit based on cancellation timing
     south_africa_offset = timedelta(hours=2)
 
@@ -1338,7 +1444,7 @@ async def cancel_booking(
     credit_amount = 0.0
     if booking.payment_status == PaymentStatus.PAID:
         # Total paid = lesson fee + booking/admin fee
-        total_paid = booking.amount + (booking.booking_fee or 0.0)
+        total_paid = booking.amount
 
         if cancelled_by in ("admin", "instructor"):
             credit_percentage = 1.0
@@ -1853,7 +1959,7 @@ async def reschedule_booking(
     # <24 hours before lesson = 50% penalty fee applied (on total paid incl. booking fee)
     cancellation_fee = 0.0
     if booking.payment_status == PaymentStatus.PAID and hours_until_lesson < 24:
-        total_paid = booking.amount + (booking.booking_fee or 0.0)
+        total_paid = booking.amount
         cancellation_fee = total_paid * 0.5
         booking.cancellation_fee = cancellation_fee
 

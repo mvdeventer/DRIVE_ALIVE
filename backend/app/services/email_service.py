@@ -13,6 +13,88 @@ from .notifiers.base import EmailNotifier
 
 logger = logging.getLogger(__name__)
 
+# ─── HTML email building blocks ──────────────────────────────────────────────
+#
+# Everything below is styled inline, and the button is a table rather than a
+# styled <div>. Both are forced by Outlook, which renders with the Word engine:
+#
+#   * it discards <style> blocks wholesale, so a class-based button arrives as
+#     an unstyled default-blue link;
+#   * it ignores padding on a wrapping <div>, so the padding has to sit on the
+#     <a> itself, with the background colour on the <td> behind it.
+#
+# Anything added here must survive both rules.
+
+BRAND_COLOR = "#007AFF"
+TEXT_COLOR = "#333333"
+MUTED_COLOR = "#666666"
+BORDER_COLOR = "#dddddd"
+FONT_STACK = "Arial, Helvetica, sans-serif"
+
+
+def _button_html(url: str, label: str, color: str = BRAND_COLOR) -> str:
+    """A link styled to look like a button, in the one shape Outlook honours.
+
+    A single-cell table carrying ``bgcolor``, with the padding on the anchor.
+    ``border-radius`` is ignored by Outlook, which squares the corners off —
+    a cosmetic degradation rather than a broken button.
+    """
+    return (
+        f'<table role="presentation" border="0" cellpadding="0" cellspacing="0" '
+        f'style="border-collapse:collapse;margin:24px auto;">'
+        f'<tr><td align="center" bgcolor="{color}" style="border-radius:5px;">'
+        f'<a href="{url}" '
+        f'style="display:inline-block;padding:15px 30px;font-family:{FONT_STACK};'
+        f'font-size:16px;font-weight:bold;color:#ffffff;text-decoration:none;'
+        f'border-radius:5px;">{label}</a>'
+        f'</td></tr></table>'
+    )
+
+
+def _raw_link_html(url: str) -> str:
+    """The URL in copyable plain text, always printed under the button.
+
+    Corporate scanners and some clients rewrite, wrap or strip anchors. When
+    the button fails there has to be something the recipient can select and
+    paste, so this is not optional decoration.
+    """
+    return (
+        f'<p style="margin:0 0 8px 0;font-family:{FONT_STACK};font-size:14px;'
+        f'color:{MUTED_COLOR};">Button not working? Copy and paste this link '
+        f'into your browser:</p>'
+        f'<p style="margin:0;padding:10px;background-color:#ffffff;'
+        f'border:1px solid {BORDER_COLOR};font-family:{FONT_STACK};font-size:13px;'
+        f'color:{TEXT_COLOR};word-break:break-all;">{url}</p>'
+    )
+
+
+def _shell_html(heading: str, inner: str) -> str:
+    """Wrap body content in the 600px centred shell, fully inlined."""
+    return f"""<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:0;background-color:#f4f4f4;">
+<table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="border-collapse:collapse;background-color:#f4f4f4;">
+<tr><td align="center" style="padding:20px 10px;">
+<table role="presentation" border="0" cellpadding="0" cellspacing="0" width="600" style="border-collapse:collapse;max-width:600px;width:100%;">
+<tr><td bgcolor="{BRAND_COLOR}" align="center" style="padding:20px;border-radius:5px 5px 0 0;font-family:{FONT_STACK};color:#ffffff;">
+<h1 style="margin:0;font-size:22px;font-weight:bold;color:#ffffff;">{heading}</h1>
+</td></tr>
+<tr><td bgcolor="#f9f9f9" style="padding:30px;border:1px solid {BORDER_COLOR};border-top:none;font-family:{FONT_STACK};font-size:15px;line-height:1.6;color:{TEXT_COLOR};">
+{inner}
+</td></tr>
+<tr><td align="center" style="padding:20px;font-family:{FONT_STACK};font-size:12px;color:{MUTED_COLOR};">
+<p style="margin:0 0 6px 0;">&copy; 2026 RoadReady - Your Trusted Driving School Platform</p>
+<p style="margin:0;">This is an automated message, please do not reply to this email.</p>
+</td></tr>
+</table>
+</td></tr>
+</table>
+</body>
+</html>
+"""
+
+
 
 class EmailService(EmailNotifier):
     """Service for sending emails via SMTP."""
@@ -141,74 +223,42 @@ class EmailService(EmailNotifier):
 
             # Create email content
             subject = "RoadReady - Password Reset Request"
-            html_body = f"""
-<!DOCTYPE html>
-<html>
-<head>
-    <style>
-        body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
-        .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
-        .header {{ background-color: #007bff; color: white; padding: 20px; text-align: center; }}
-        .content {{ background-color: #f9f9f9; padding: 20px; }}
-        .button {{
-            display: inline-block;
-            padding: 12px 30px;
-            background-color: #28a745;
-            color: white;
-            text-decoration: none;
-            border-radius: 5px;
-            margin: 20px 0;
-        }}
-        .footer {{ text-align: center; padding: 20px; font-size: 12px; color: #666; }}
-        .warning {{ color: #dc3545; font-weight: bold; }}
-    </style>
-</head>
-<body>
-    <div class="container">
-        <div class="header">
-            <h1>🚗 RoadReady</h1>
-        </div>
-        <div class="content">
-            <h2>Password Reset Request</h2>
-            <p>Hello {user_name},</p>
-            <p>We received a request to reset your password. Click the button below to set a new password:</p>
-            <p style="text-align: center;">
-                <a href="{reset_link}" class="button">Reset Password</a>
-            </p>
-            <p><strong>Or copy this link:</strong><br>
-            <code>{reset_link}</code></p>
-            <p class="warning">⚠️ This link will expire in 1 hour.</p>
-            <p>If you didn't request this password reset, please ignore this email. Your password will remain unchanged.</p>
-            <p>For security reasons, never share this link with anyone.</p>
-        </div>
-        <div class="footer">
-            <p>RoadReady - Your Trusted Driving School Platform</p>
-            <p>This is an automated email. Please do not reply.</p>
-        </div>
-    </div>
-</body>
-</html>
-            """
 
-            plain_body = f"""
-RoadReady - Password Reset Request
+            inner = f"""
+<h2 style="margin:0 0 16px 0;font-size:20px;color:{TEXT_COLOR};">Password Reset Request</h2>
+<p style="margin:0 0 16px 0;">Hello {user_name},</p>
+<p style="margin:0 0 16px 0;">We received a request to reset your password.
+Use the button below to set a new one:</p>
+{_button_html(reset_link, "Reset Password", "#28a745")}
+{_raw_link_html(reset_link)}
+<p style="margin:24px 0 16px 0;color:#dc3545;font-weight:bold;">
+This link expires in 1 hour.</p>
+<p style="margin:0 0 16px 0;">If you didn't request this password reset, please ignore
+this email. Your password will remain unchanged.</p>
+<p style="margin:0;">For security reasons, never share this link with anyone.</p>
+"""
+
+            html_body = _shell_html("RoadReady", inner)
+
+            plain_body = f"""RoadReady - Password Reset Request
 
 Hello {user_name},
 
-We received a request to reset your password. Click the link below to set a new password:
+We received a request to reset your password. Open this link to set a new one:
 
 {reset_link}
 
-⚠️ This link will expire in 1 hour.
+This link expires in 1 hour.
 
-If you didn't request this password reset, please ignore this email. Your password will remain unchanged.
+If you didn't request this password reset, please ignore this email. Your
+password will remain unchanged.
 
 For security reasons, never share this link with anyone.
 
----
+--
 RoadReady - Your Trusted Driving School Platform
 This is an automated email. Please do not reply.
-            """
+"""
 
             # Create message
             msg = MIMEMultipart("alternative")
@@ -254,64 +304,45 @@ This is an automated email. Please do not reply.
 
         subject = "Verify Your Driving School Account"
 
-        html_body = f"""
-<!DOCTYPE html>
-<html>
-<head>
-    <style>
-        body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
-        .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
-        .header {{ background-color: #007AFF; color: white; padding: 20px; text-align: center; border-radius: 5px 5px 0 0; }}
-        .content {{ background-color: #f9f9f9; padding: 30px; border: 1px solid #ddd; border-top: none; }}
-        .button {{ display: inline-block; padding: 15px 30px; background-color: #007AFF; color: white; text-decoration: none; border-radius: 5px; margin: 20px 0; }}
-        .footer {{ text-align: center; padding: 20px; font-size: 12px; color: #666; }}
-        .warning {{ background-color: #fff3cd; border-left: 4px solid #ffc107; padding: 10px; margin: 20px 0; }}
-    </style>
-</head>
-<body>
-    <div class="container">
-        <div class="header">
-            <h1>🚗 Driving School Account Verification</h1>
-        </div>
-        <div class="content">
-            <h2>Hi {first_name}!</h2>
-            <p>Thank you for registering with our Driving School. To complete your registration, please verify your email address by clicking the button below:</p>
-            
-            <div style="text-align: center;">
-                <a href="{verification_link}" class="button">✓ Verify My Account</a>
-            </div>
-            
-            <p>Or copy and paste this link into your browser:</p>
-            <p style="word-break: break-all; background-color: #fff; padding: 10px; border: 1px solid #ddd;">{verification_link}</p>
-            
-            <div class="warning">
-                <strong>⏰ Important:</strong> This verification link will expire in <strong>{validity_minutes} minutes</strong>. 
-                If you don't verify within this time, your account will be automatically deleted and you'll need to register again.
-            </div>
-            
-            <p>If you didn't create an account with us, please ignore this email. The account will be automatically removed after {validity_minutes} minutes.</p>
-        </div>
-        <div class="footer">
-            <p>&copy; 2026 RoadReady - Your Trusted Driving School Platform</p>
-            <p>This is an automated message, please do not reply to this email.</p>
-        </div>
-    </div>
-</body>
-</html>
+        inner = f"""
+<h2 style="margin:0 0 16px 0;font-size:20px;color:{TEXT_COLOR};">Hi {first_name}!</h2>
+<p style="margin:0 0 16px 0;">Thank you for registering with our Driving School.
+To complete your registration, please verify your email address:</p>
+{_button_html(verification_link, "Verify My Account")}
+{_raw_link_html(verification_link)}
+<table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" \
+style="border-collapse:collapse;margin:24px 0;">
+<tr><td bgcolor="#fff3cd" \
+style="padding:12px;border-left:4px solid #ffc107;font-family:{FONT_STACK};\
+font-size:14px;color:{TEXT_COLOR};">
+<strong>Important:</strong> This verification link expires in
+<strong>{validity_minutes} minutes</strong>. If you do not verify within that time,
+your account is deleted automatically and you will need to register again.
+</td></tr>
+</table>
+<p style="margin:0;">If you didn't create an account with us, please ignore this email.
+The account is removed automatically after {validity_minutes} minutes.</p>
 """
 
-        plain_body = f"""
-Hi {first_name}!
+        html_body = _shell_html("Driving School Account Verification", inner)
 
-Thank you for registering with our Driving School. To complete your registration, please verify your email address.
+        plain_body = f"""Hi {first_name}!
 
-Verification link: {verification_link}
+Thank you for registering with our Driving School. To complete your
+registration, verify your email address by opening this link:
 
-IMPORTANT: This link will expire in {validity_minutes} minutes. If you don't verify within this time, your account will be automatically deleted.
+{verification_link}
 
-If you didn't create an account with us, please ignore this email.
+IMPORTANT: This link expires in {validity_minutes} minutes. If you do not
+verify within that time, your account is deleted automatically and you will
+need to register again.
 
-© 2026 RoadReady
+If you didn't create an account with us, please ignore this email. The account
+is removed automatically after {validity_minutes} minutes.
+
+--
+(c) 2026 RoadReady - Your Trusted Driving School Platform
+This is an automated message, please do not reply to this email.
 """
 
         try:
@@ -394,6 +425,30 @@ If you didn't create an account with us, please ignore this email.
         except Exception as e:
             logger.error("Failed to send test email to %s: %s", to_email, e)
             return False
+
+    @staticmethod
+    def for_admin(db) -> "EmailService":
+        """Build a sender using the platform admin's stored SMTP credentials.
+
+        The module-level ``email_service`` singleton falls back to
+        ``settings.SMTP_*``, which is unset in this deployment — anything using
+        it silently sends nothing. Credentials actually live encrypted on the
+        first admin row, which is what the registration flows already read.
+        """
+        from ..models.user import User, UserRole
+        from ..utils.encryption import EncryptionService
+
+        admin = (
+            db.query(User)
+            .filter(User.role == UserRole.ADMIN)
+            .order_by(User.id.asc())
+            .first()
+        )
+        if admin is None or not admin.smtp_email or not admin.smtp_password:
+            return email_service  # unconfigured; callers check the return value
+        return EmailService(
+            admin.smtp_email, EncryptionService.decrypt(admin.smtp_password)
+        )
 
     def send_simple_email(self, to_email: str, subject: str, body: str) -> bool:
         """

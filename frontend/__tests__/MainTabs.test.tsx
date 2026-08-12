@@ -15,6 +15,13 @@ jest.mock('../navigation/AdminTabs', () => {
   };
 });
 
+jest.mock('../navigation/CompanyAdminTabs', () => {
+  const { Text } = require('react-native');
+  return function CompanyAdminTabsMock() {
+    return <Text testID="company-admin-tabs">Company Admin Tabs</Text>;
+  };
+});
+
 jest.mock('../navigation/InstructorTabs', () => {
   const { Text } = require('react-native');
   return function InstructorTabsMock() {
@@ -45,6 +52,19 @@ describe('MainTabs role guard', () => {
 
     const { getByTestId } = render(<MainTabs />);
     expect(getByTestId('admin-tabs')).toBeTruthy();
+  });
+
+  it('renders company admin tabs for company_admin role', () => {
+    mockedUseAuthActions.mockReturnValue({
+      userRole: 'company_admin',
+      onLogout: jest.fn(),
+      userName: 'School Admin',
+    });
+
+    const { getByTestId, queryByTestId } = render(<MainTabs />);
+    expect(getByTestId('company-admin-tabs')).toBeTruthy();
+    // A school administrator must never land on the platform admin surface.
+    expect(queryByTestId('admin-tabs')).toBeNull();
   });
 
   it('renders student tabs for student role', () => {

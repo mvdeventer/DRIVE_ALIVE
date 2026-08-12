@@ -155,7 +155,10 @@ function scanLine(rel, rawLine, lineNumber, allowlist) {
   const line = stripTranslationCalls(rawLine);
 
   const attrRegex = /\b(title|label|placeholder|accessibilityLabel|accessibilityHint|helperText|subtitle|message|confirmText|cancelText|header|heading|caption|tabBarLabel|emptyText|errorText)\s*[:=]\s*['"]([^'"]+)['"]/g;
-  const textNodeRegex = />\s*([^<>{][^<]*)\s*</g;
+  // `(?<!=)` keeps arrow functions out: `(b) => new Date(b.t) < now` otherwise
+  // reads as a JSX text node, because the `>` of `=>` and the `<` of the
+  // comparison bracket ordinary TypeScript.
+  const textNodeRegex = /(?<!=)>\s*([^<>{][^<]*)\s*</g;
   // A quoted literal passed as a call argument: `field('k', 'First name *')`.
   const callArgRegex = /\b([A-Za-z_$][\w$]*)\s*\(([^)]*)\)/g;
   const literalInArgs = /(['"])((?:\\.|(?!\1)[^\\])*)\1/g;
@@ -194,6 +197,53 @@ function scanLine(rel, rawLine, lineNumber, allowlist) {
   }
 }
 
+/**
+ * Catch copy the line-based pass structurally cannot see.
+ *
+ * Prettier wraps long JSX and long call arguments across lines, which hides
+ * plenty of real user-facing text:
+ *
+ *     <Button>
+ *       No, Keep It          <- plain text, no tag on this line
+ *     </Button>
+ *
+ *     showMessage(
+ *       setSuccess,
+ *       'Booking cancelled successfully',   <- argument alone on its line
+ *     );
+ *
+ * Both were shipping untranslated while the file reported zero findings.
+ */
+function scanMultiline(rel, lines, allowlist) {
+  const codeish = /[<>{}=;()[\]]|=>|\breturn\b|\bimport\b|\bconst\b/;
+
+  for (let i = 0; i < lines.length; i += 1) {
+    const raw = lines[i];
+    const text = raw.trim();
+    if (!text || text.startsWith('//') || text.startsWith('*')) continue;
+
+    // (a) A bare line of JSX text: previous line opens a tag, next line closes one.
+    if (!codeish.test(text) && looksLikeUiCopy(text)) {
+      const prev = (lines[i - 1] ?? '').trimEnd();
+      const next = (lines[i + 1] ?? '').trimStart();
+      if (prev.endsWith('>') && next.startsWith('<')) {
+        recordFinding(rel, i + 1, 'JSX text', text, allowlist);
+        continue;
+      }
+    }
+
+    // (b) A quoted string alone on its line — almost always a wrapped
+    //     call argument or object value.
+    const solo = /^(['"])((?:\\.|(?!\1)[^\\])*)\1,?$/.exec(text);
+    if (solo) {
+      const literal = solo[2].trim();
+      if (looksLikeUiCopy(literal)) {
+        recordFinding(rel, i + 1, 'call argument', literal, allowlist);
+      }
+    }
+  }
+}
+
 function scanFile(filePath, allowlist) {
   const rel = normalize(path.relative(ROOT, filePath));
   const lines = fs.readFileSync(filePath, 'utf8').split(/\r?\n/);
@@ -201,6 +251,7 @@ function scanFile(filePath, allowlist) {
   for (let i = 0; i < lines.length; i += 1) {
     scanLine(rel, lines[i], i + 1, allowlist);
   }
+  scanMultiline(rel, lines, allowlist);
 }
 
 /** `file:line kind literal: "x"` -> file */

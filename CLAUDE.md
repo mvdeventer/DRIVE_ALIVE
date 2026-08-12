@@ -2,6 +2,12 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+> **Read `docs/ARCHITECTURE_MAP.md` first.** It is the living structural map of
+> this codebase — module tree, ER diagram, role matrix, state machines, money
+> flow, the full route table, the screen table, and the known traps. Consult it
+> before searching the code, and update it in the same commit whenever you add a
+> model, route or screen (see its §11 update protocol).
+
 ## Project
 
 Drive Alive (RoadReady) — a South African driving-school booking platform. Instructors register and manage availability; students book lessons with GPS-based pickup/drop-off; payments in ZAR via Stripe/PayFast; WhatsApp reminders via Twilio.
@@ -34,7 +40,7 @@ python scripts/check_error_code_mapping.py
 
 ```bash
 npm --prefix frontend run lint        # eslint 9 flat config + react-native-a11y
-npm --prefix frontend run typecheck   # ~203 pre-existing errors — do not add more
+npm --prefix frontend run typecheck   # 89 pre-existing errors, all in __tests__ — do not add more
 npm --prefix frontend run format      # prettier
 npm --prefix frontend run build:web   # must produce dist/_redirects
 ```
@@ -69,7 +75,7 @@ Uvicorn server on port 8000.
 
 Runs on port 8081 (web) or via Expo tunnel.
 
-- `navigation/MainTabs.tsx` — role dispatcher: reads `userRole` from `AuthContext`, renders `AdminTabs`, `InstructorTabs`, or `StudentTabs`
+- `navigation/MainTabs.tsx` — role dispatcher: reads `userRole` from `AuthContext`, renders `AdminTabs`, `CompanyAdminTabs`, `InstructorTabs`, or `StudentTabs`
 - `services/api/` — Axios client; interceptors add `Authorization: Bearer` header and handle 401/403 logout
 - `i18n/` — custom lightweight i18n provider; `locales/en.ts` is the base (source of truth); af must match all keys
 
@@ -87,7 +93,7 @@ Runs on port 8081 (web) or via Expo tunnel.
 
 ### Role system
 
-Three roles: `student`, `instructor`, `admin`. A single user can hold multiple role profiles simultaneously (one `User` row + optional `Student` + optional `Instructor`).
+Four roles: `student`, `instructor`, `admin`, `company_admin`. A single user can hold multiple role profiles simultaneously (one `User` row + optional `Student` + optional `Instructor` + optional `CompanyAdmin`). `require_admin` means the platform operator and deliberately refuses a `company_admin`; `require_company_admin` is scoped to one school and always takes the company id from `CompanyContext`, never from the request.
 
 **Runtime role selection:** at login, `RoleTransitionPolicy.get_available_runtime_roles()` returns all roles the user can log in as. If multiple, the frontend must present a picker; the selected role is encoded in the JWT and determines which tab navigator loads.
 

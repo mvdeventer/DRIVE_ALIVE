@@ -2,6 +2,7 @@
  * Edit Instructor Profile Screen
  */
 import { useNavigation, useRoute } from '@react-navigation/native';
+import type { NavigationAction } from '@react-navigation/native';
 import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -83,7 +84,7 @@ export default function EditInstructorProfileScreen({ navigation: navProp }: any
   }, []);
 
   useEffect(() => {
-    const unsubscribe = navigation.addListener('beforeRemove', e => {
+    const unsubscribe = navigation.addListener('beforeRemove', (e: { preventDefault: () => void; data: { action: NavigationAction } }) => {
       console.log('🚪 beforeRemove triggered');
       console.log('  hasUnsavedChanges:', hasUnsavedChanges);
       if (!hasUnsavedChanges) {

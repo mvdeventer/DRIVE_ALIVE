@@ -299,6 +299,10 @@ export default function InstructorVerificationScreen({ navigation }: any) {
           <TouchableOpacity
             key={tab.key}
             onPress={() => switchTab(tab.key)}
+            accessibilityRole="tab"
+            accessibilityLabel={tab.label}
+            accessibilityState={{ selected: activeTab === tab.key }}
+            {...({ 'aria-selected': activeTab === tab.key } as any)}
             style={[
               styles.tab,
               activeTab === tab.key && { borderBottomColor: colors.primary, borderBottomWidth: 2 },
@@ -336,7 +340,6 @@ export default function InstructorVerificationScreen({ navigation }: any) {
           data={instructors}
           renderItem={renderItem}
           keyExtractor={item => item.id.toString()}
-          estimatedItemSize={140}
           contentContainerStyle={styles.list}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
         />
