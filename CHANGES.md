@@ -3,6 +3,29 @@
 All code improvements per release, newest first. Generated automatically
 by the release workflow (`s.bat minor` / `s.bat major` / `s.bat release`).
 
+## v9.0.0 — 2026-08-13 (Major Release 9.0.0)
+
+> Drive Alive v9.0.0 — 5 fixs, 2 maintenance updates, 1 other improvement, 1 new feature across 128 files (+15448/-2517 lines). Top highlight: company-paid revenue model, recruitment and solo instructors. Full details in CHANGES.md.
+
+### New Features
+- feat: company-paid revenue model, recruitment and solo instructors
+
+### Bug Fixes
+- fix: stop bootstrap crashing on its own success message
+- fix: solo instructor approval, booking oversight counts, and email rendering
+- fix: require authentication by default, and stop billing cancelled lessons
+- fix: derive backup purge order from the model dependency graph
+- fix: make backups restorable, and restore non-destructive
+
+### Maintenance & Tooling
+- chore: add MapPreview type declaration and ignore agent runtime state
+- chore: commit pre-existing working-tree changes
+
+### Other Improvements
+- merge: company revenue model, recruitment, solo instructors and test-run fixes
+
+**Scope:** 9 commits, 128 files changed, 15448 insertions(+), 2517 deletions(-) — touched: backend: 59, frontend: 57, (root): 5, docs: 4, .claude: 2, scripts: 1
+
 ## v8.1.0 — 2026-08-04 (Minor Release 8.1.0)
 
 > Drive Alive v8.1.0 — 5 new features, 1 fix, 4 maintenance updates, 4 other improvements across 522 files (+67541/-5389 lines). Top highlight: admin-created accounts, en/af locale rework, release-safety tooling. Full details in CHANGES.md.
