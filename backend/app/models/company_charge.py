@@ -84,6 +84,12 @@ class CompanyPlatformCharge(Base):
     settled_at = Column(DateTime(timezone=True), nullable=True)
     settlement_reference = Column(String(100), nullable=True)
 
+    # A cancelled lesson earned the platform nothing, so its commission is
+    # reversed rather than deleted: the row stays as the record that it was
+    # charged and then withdrawn, which is what makes a statement auditable.
+    reversed_at = Column(DateTime(timezone=True), nullable=True)
+    reversal_reason = Column(String(200), nullable=True)
+
     company = relationship("Company", foreign_keys=[company_id])
     booking = relationship("Booking", foreign_keys=[booking_id])
 

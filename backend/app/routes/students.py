@@ -16,6 +16,24 @@ from ..schemas.user import StudentResponse, StudentUpdate
 router = APIRouter(prefix="/students", tags=["Students"])
 
 
+def _assert_may_read(student: StudentModel, current_user: User) -> None:
+    """Only the learner themselves, or an administrator, may read this.
+
+    These responses carry an ID number, a home address and a next-of-kin
+    phone number. Requiring a login is not enough on its own — without this
+    any registered user could read every learner's details by counting
+    upwards through the ids.
+    """
+    if student.user_id == current_user.id:
+        return
+    if current_user.role == UserRole.ADMIN:
+        return
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail="You may only view your own learner profile.",
+    )
+
+
 @router.get("/me", response_model=StudentResponse)
 async def get_student_profile(
     current_user: Annotated[User, Depends(get_current_user)],
@@ -115,7 +133,11 @@ async def update_student_profile(
 
 
 @router.get('/{student_id}', response_model=StudentResponse)
-async def get_student(student_id: int, db: Session = Depends(get_db)):
+async def get_student(
+    student_id: int,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Session = Depends(get_db),
+):
     '''
     Get student by student_id (NOT user_id!)
     '''
@@ -123,6 +145,8 @@ async def get_student(student_id: int, db: Session = Depends(get_db)):
 
     if not student:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='Student not found')
+
+    _assert_may_read(student, current_user)
 
     user = db.query(User).filter(User.id == student.user_id).first()
 
@@ -151,11 +175,21 @@ async def get_student(student_id: int, db: Session = Depends(get_db)):
 
 
 @router.get('/by-user/{user_id}')
-async def get_student_by_user_id(user_id: int, db: Session = Depends(get_db)):
+async def get_student_by_user_id(
+    user_id: int,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Session = Depends(get_db),
+):
     '''
     Get student_id by user_id (for admin looking up students by user record)
     Returns just the student_id for further lookups
     '''
+    if user_id != current_user.id and current_user.role != UserRole.ADMIN:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You may only view your own learner profile.",
+        )
+
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='User not found')

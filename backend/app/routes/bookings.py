@@ -30,7 +30,7 @@ from ..schemas.booking import (
     ReviewCreate,
     ReviewResponse,
 )
-from ..services.billing_service import record_platform_charge
+from ..services.billing_service import record_platform_charge, void_platform_charge
 from ..services.company_service import get_instructor_company
 from ..services.fees import (
     resolve_booking_source,
@@ -1141,7 +1141,15 @@ async def instructor_reschedule_booking(
         )
         db.add(credit)
 
-    # Create the new booking for the same student
+    # Create the new booking for the same student.
+    #
+    # The price and its breakdown are carried across rather than recalculated:
+    # this is the same lesson moved at the instructor's request, so the
+    # learner pays what they already paid even if the rate has changed since.
+    # Carrying the split with it keeps the stored breakdown adding up to the
+    # amount, and keeps the booking attributed to the school — without this
+    # the new row had an amount but no base, no markup and no company, so it
+    # reconciled against nothing and earned the platform nothing.
     new_booking = Booking(
         booking_reference=f"BK{uuid.uuid4().hex[:8].upper()}",
         student_id=old_booking.student_id,
@@ -1153,6 +1161,10 @@ async def instructor_reschedule_booking(
         pickup_latitude=reschedule_data.pickup_latitude,
         pickup_longitude=reschedule_data.pickup_longitude,
         amount=old_booking.amount,
+        instructor_base_amount=old_booking.instructor_base_amount,
+        company_markup_amount=old_booking.company_markup_amount,
+        company_id=old_booking.company_id,
+        booking_source=old_booking.booking_source,
         status=BookingStatus.PENDING,
         payment_status=PaymentStatus.PAID,
         payment_method=old_booking.payment_method or "credit",
@@ -1161,6 +1173,33 @@ async def instructor_reschedule_booking(
     )
     db.add(new_booking)
     db.flush()  # Get the new booking ID
+
+    # The commission follows the lesson. Reversing the old charge and
+    # accruing a new one leaves exactly one charge for one lesson — where
+    # keeping both would bill the school twice for a move it did not ask for.
+    void_platform_charge(
+        db,
+        booking_id=old_booking.id,
+        reason=f"Rescheduled by instructor to {new_booking.booking_reference}",
+    )
+    _instructor = (
+        db.query(Instructor).filter(Instructor.id == old_booking.instructor_id).first()
+    )
+    _company = get_instructor_company(db, _instructor) if _instructor else None
+    record_platform_charge(
+        db,
+        company_id=new_booking.company_id,
+        booking_id=new_booking.id,
+        basis_amount=new_booking.amount,
+        commission_percent=get_platform_commission_percent(db, _company),
+        charge_amount=calculate_platform_charge(
+            new_booking.amount,
+            get_platform_commission_percent(db, _company),
+            booking_source=new_booking.booking_source,
+            is_platform_host=bool(_company and _company.is_platform_host),
+            has_company=_company is not None,
+        ),
+    )
 
     # Link old booking to new booking
     old_booking.rescheduled_to_booking_id = new_booking.id
@@ -1372,6 +1411,17 @@ async def cancel_booking(
     booking.cancelled_at = datetime.now(timezone.utc)
     booking.cancelled_by = cancelled_by
     booking.cancellation_reason = cancel_data.cancellation_reason
+
+    # The platform earns commission for producing a lesson. This one is not
+    # happening, so the school does not owe it — and since cancelling issues
+    # a credit rather than a refund, leaving it would bill the school again
+    # when the learner rebooks. Part of this transaction, so it cannot be
+    # withdrawn by a cancellation that then fails.
+    void_platform_charge(
+        db,
+        booking_id=booking.id,
+        reason=f"Booking {booking.booking_reference} cancelled by {cancelled_by}",
+    )
 
     # Calculate credit based on cancellation timing
     south_africa_offset = timedelta(hours=2)

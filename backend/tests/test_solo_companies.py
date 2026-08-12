@@ -140,13 +140,18 @@ def test_belonging_to_an_actual_school_still_blocks_joining_another(db):
     assert excinfo.value.detail["code"] == "INSTRUCTOR_ALREADY_IN_COMPANY"
 
 
-def test_an_unresolvable_company_fails_closed(db):
-    """Better to refuse a legitimate move than to wave through a forbidden one."""
-    _user, instructor = _instructor(db)
-    instructor.company_id = 4242  # nothing loads for this
+def test_an_unresolvable_company_fails_closed():
+    """Better to refuse a legitimate move than to wave through a forbidden one.
+
+    Built detached rather than by pointing at a missing row: a dangling
+    company_id is not a state the database allows. What does happen is a
+    company_id whose company is not loaded, and that must not read as
+    "no school".
+    """
+    detached = Instructor(company_id=4242)  # never added to a session
 
     with pytest.raises(Exception) as excinfo:
-        assert_instructor_can_join(instructor)
+        assert_instructor_can_join(detached)
     assert excinfo.value.detail["code"] == "INSTRUCTOR_ALREADY_IN_COMPANY"
 
 

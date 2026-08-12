@@ -7,7 +7,9 @@ import os
 import sys
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, Request, status
+from fastapi import Depends, FastAPI, Request, status
+
+from .middleware.authentication_gate import authentication_gate
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -282,6 +284,34 @@ def _apply_incremental_migrations():
                         print(f"⚠️  [MIGRATION] Could not add {col_name}: {col_exc}")
     except Exception as exc:
         print(f"⚠️  [MIGRATION] Instructor markup columns: {exc}")
+
+    # ── Commission reversal (Aug 2026) ───────────────────────────────────────
+    # A cancelled booking earned the platform nothing; the charge is reversed
+    # rather than deleted so the statement still shows what happened.
+    try:
+        existing_charge_cols = [
+            col["name"] for col in inspector.get_columns("company_platform_charges")
+        ]
+        for col_name, col_def in (
+            ("reversed_at", "TIMESTAMP WITH TIME ZONE"),
+            ("reversal_reason", "VARCHAR(200)"),
+        ):
+            if col_name not in existing_charge_cols:
+                with engine.connect() as conn:
+                    try:
+                        conn.execute(
+                            text(
+                                "ALTER TABLE company_platform_charges "
+                                f"ADD COLUMN {col_name} {col_def}"
+                            )
+                        )
+                        conn.commit()
+                        print(f"✅ [MIGRATION] Added {col_name} to company_platform_charges")
+                    except Exception as col_exc:
+                        conn.rollback()
+                        print(f"⚠️  [MIGRATION] Could not add {col_name}: {col_exc}")
+    except Exception as exc:
+        print(f"⚠️  [MIGRATION] Charge reversal columns: {exc}")
 
     # ── Learner origin attribution (Aug 2026) ────────────────────────────────
     # Which school signed a learner up, if any. Drives booking_source, and so
@@ -559,6 +589,11 @@ app = FastAPI(
     description="API for South African driving school booking system",
     version="1.0.0",
     lifespan=lifespan,
+    # Authentication is required unless a route is named in
+    # middleware/public_routes.py. Declared on the application so it covers
+    # every route, including ones added later — an endpoint that forgets its
+    # own guard is refused rather than exposed.
+    dependencies=[Depends(authentication_gate)],
     docs_url=None if _is_production else "/docs",
     redoc_url=None if _is_production else "/redoc",
     openapi_url=None if _is_production else "/openapi.json",

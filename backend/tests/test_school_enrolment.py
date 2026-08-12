@@ -231,7 +231,33 @@ def _charge_for(db, student, company, instructor_rate=400.0, minutes=60):
     from app.services.billing_service import record_platform_charge
     from app.services.fees import calculate_platform_charge, resolve_student_price
 
-    instructor = Instructor(hourly_rate=instructor_rate)
+    # A real row: bookings point at an instructor, and the database is
+    # entitled to insist that the instructor exists.
+    teacher_user = User(
+        email="charged-teacher@example.com",
+        phone="+27600000777",
+        password_hash="x",
+        first_name="Tumi",
+        last_name="Sithole",
+        role=UserRole.INSTRUCTOR,
+        status=UserStatus.ACTIVE,
+    )
+    db.add(teacher_user)
+    db.flush()
+    instructor = Instructor(
+        user_id=teacher_user.id,
+        id_number="8505125800099",
+        license_number="LIC-CHG",
+        license_types="B",
+        vehicle_registration="CA99999",
+        vehicle_make="Toyota",
+        vehicle_model="Corolla",
+        vehicle_year=2021,
+        hourly_rate=instructor_rate,
+        company_id=company.id if company else None,
+    )
+    db.add(instructor)
+    db.flush()
     _base, _markup, student_total = resolve_student_price(instructor, minutes)
 
     source = resolve_booking_source(student, company)
@@ -246,7 +272,7 @@ def _charge_for(db, student, company, instructor_rate=400.0, minutes=60):
     booking = Booking(
         booking_reference="BK-TEST-1",
         student_id=student.id,
-        instructor_id=1,
+        instructor_id=instructor.id,
         lesson_date=datetime.now(timezone.utc) + timedelta(days=1),
         duration_minutes=minutes,
         lesson_type="standard",

@@ -128,6 +128,47 @@ def accrue_subscription(
     return charge
 
 
+def void_platform_charge(
+    db: Session,
+    *,
+    booking_id: int,
+    reason: str,
+) -> Optional[CompanyPlatformCharge]:
+    """Withdraw the commission on a booking that is not going to happen.
+
+    Commission is a share of what a lesson earned. A cancelled lesson earns
+    nothing, so charging for it bills a school for business it never did —
+    and because cancelling issues the learner a credit rather than a refund,
+    the rebooking accrues a second charge. Without this the school pays twice
+    for one lesson, and pays at all when its own instructor called off.
+
+    Reversed, not deleted: the row is the evidence that a charge was raised
+    and withdrawn. Does not commit — the caller owns the cancellation
+    transaction, so the reversal cannot survive a cancellation that fails.
+
+    Returns the charge if one was reversed, None if there was nothing to
+    reverse (no commission, or already reversed).
+    """
+    charge = (
+        db.query(CompanyPlatformCharge)
+        .filter(CompanyPlatformCharge.booking_id == booking_id)
+        .first()
+    )
+    if charge is None or charge.status == ChargeStatus.REVERSED.value:
+        return None
+
+    already_collected = charge.status == ChargeStatus.SETTLED.value
+
+    charge.status = ChargeStatus.REVERSED.value
+    charge.reversed_at = datetime.now(timezone.utc)
+    charge.reversal_reason = (
+        # Flagged in the text rather than silently: the platform has the money
+        # and owes it back, which no automatic process here can do.
+        f"{reason} (already settled — credit owed)" if already_collected else reason
+    )[:200]
+    return charge
+
+
 def company_statement(db: Session, company: Company, *, period: Optional[str] = None) -> dict:
     """What one school owes for a period, and where it came from."""
     period = period or period_key_for()
@@ -137,6 +178,9 @@ def company_statement(db: Session, company: Company, *, period: Optional[str] = 
         .filter(
             CompanyPlatformCharge.company_id == company.id,
             CompanyPlatformCharge.period_key == period,
+            # A withdrawn charge is not owed. It stays in the table as a
+            # record; it must not stay in the total.
+            CompanyPlatformCharge.status != ChargeStatus.REVERSED.value,
         )
         .all()
     )
@@ -187,7 +231,10 @@ def platform_revenue(db: Session, *, period: Optional[str] = None) -> dict:
             CompanyPlatformCharge.company_id,
             func.coalesce(func.sum(CompanyPlatformCharge.charge_amount), 0.0),
         )
-        .filter(CompanyPlatformCharge.period_key == period)
+        .filter(
+            CompanyPlatformCharge.period_key == period,
+            CompanyPlatformCharge.status != ChargeStatus.REVERSED.value,
+        )
         .group_by(CompanyPlatformCharge.company_id)
         .all()
     )

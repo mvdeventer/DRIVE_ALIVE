@@ -12,7 +12,7 @@ from types import SimpleNamespace
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, text
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import object_session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
 # app/routes/__init__.py must settle before app modules are imported directly.
@@ -113,7 +113,22 @@ def _teacher(db, email="teach@example.com", rate=350.0, verification=None, compa
 
 
 def _act_as_school(company):
-    admin = SimpleNamespace(id=999, email="admin@school.com")
+    # A real row, not a stand-in: an invitation records who sent it, so the
+    # sender has to exist for the foreign key to hold.
+    db = object_session(company)
+    admin = db.query(User).filter(User.email == "admin@school.com").first()
+    if admin is None:
+        admin = User(
+            email="admin@school.com",
+            phone="+27600000900",
+            password_hash="x",
+            first_name="School",
+            last_name="Admin",
+            role=UserRole.COMPANY_ADMIN,
+            status=UserStatus.ACTIVE,
+        )
+        db.add(admin)
+        db.commit()
     app.dependency_overrides[require_company_admin] = lambda: CompanyContext(
         user=admin, company_id=company.id, company=company, is_primary=True
     )

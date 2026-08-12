@@ -38,21 +38,41 @@ from ..schemas.user import InstructorLocation, InstructorResponse, InstructorUpd
 router = APIRouter(prefix="/instructors", tags=["Instructors"])
 
 
-#: Fields a student must never receive. ``hourly_rate`` is the instructor's
-#: base: publishing it next to ``display_hourly_rate`` would let anyone
-#: subtract one from the other and read the school's margin. The platform's
-#: cut is withheld for the same reason. Pydantic serialises unset fields with
-#: their defaults, so these must be excluded rather than merely left unset.
-STUDENT_HIDDEN_INSTRUCTOR_FIELDS = {
+#: Fields nobody outside the instructor and the administrators may receive.
+#:
+#: Two separate reasons, both load-bearing:
+#:
+#: *Margin.* ``hourly_rate`` is the instructor's base. Publishing it beside
+#: ``display_hourly_rate`` would let anyone subtract one from the other and
+#: read the school's markup, which the whole pricing design exists to keep
+#: private. The platform's cut is withheld for the same reason.
+#:
+#: *Identity.* An ID number, a driving licence number and a vehicle
+#: registration identify a real person. These endpoints are reachable
+#: without signing in (see middleware/public_routes.py), so anything left in
+#: the response is published to the internet — a South African ID number
+#: encodes date of birth and is used as an identity credential, which makes
+#: this a POPIA matter rather than a preference. The student interface
+#: renders none of them; the make and model of the car stay, because
+#: learners search on those and a car model identifies nobody.
+#:
+#: Pydantic serialises unset fields with their defaults, so these must be
+#: excluded rather than merely left unset.
+PUBLIC_HIDDEN_INSTRUCTOR_FIELDS = {
+    # Margin
     "hourly_rate",
     "platform_commission_percent",
+    # Identity
+    "id_number",
+    "license_number",
+    "vehicle_registration",
 }
 
 
 @router.get(
     "/",
     response_model=List[InstructorResponse],
-    response_model_exclude={"__all__": STUDENT_HIDDEN_INSTRUCTOR_FIELDS},
+    response_model_exclude={"__all__": PUBLIC_HIDDEN_INSTRUCTOR_FIELDS},
 )
 async def get_instructors(
     latitude: Optional[float] = Query(None, ge=-90, le=90),
@@ -366,7 +386,7 @@ async def get_earnings_report(
 @router.get(
     "/{instructor_id}",
     response_model=InstructorResponse,
-    response_model_exclude=STUDENT_HIDDEN_INSTRUCTOR_FIELDS,
+    response_model_exclude=PUBLIC_HIDDEN_INSTRUCTOR_FIELDS,
 )
 async def get_instructor(instructor_id: int, db: Session = Depends(get_db)):
     """
@@ -419,10 +439,24 @@ async def get_instructor(instructor_id: int, db: Session = Depends(get_db)):
 
 
 @router.get("/by-user/{user_id}", response_model=InstructorResponse)
-async def get_instructor_by_user_id(user_id: int, db: Session = Depends(get_db)):
+async def get_instructor_by_user_id(
+    user_id: int,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Session = Depends(get_db),
+):
     """
     Get instructor by user_id (for admin looking up instructors by user record)
+
+    Unlike the public detail route this returns the instructor's own rate and
+    identity documents, so it is limited to the instructor themselves and to
+    administrators.
     """
+    if user_id != current_user.id and current_user.role != UserRole.ADMIN:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You may only view your own instructor profile.",
+        )
+
     # First verify the user exists and is an instructor
     user = db.query(User).filter(User.id == user_id).first()
     if not user:

@@ -33,6 +33,7 @@ from app.services.billing_service import (
     mark_settled,
     platform_revenue,
     record_platform_charge,
+    void_platform_charge,
 )
 
 
@@ -72,6 +73,20 @@ def _school(db, name="Alpha", *, is_host=False, subscription=None):
     return company
 
 
+def _any_instructor(db, company):
+    """One instructor for the school, created on first use.
+
+    Bookings point at an instructor, so one has to exist for the row to be
+    insertable at all.
+    """
+    existing = (
+        db.query(Instructor).filter(Instructor.company_id == company.id).first()
+    )
+    if existing is not None:
+        return existing
+    return _teacher(db, company, f"teacher-{company.id}@example.com")
+
+
 def _booking(db, *, company, amount=420.0, ref="BK1"):
     user = User(
         email=f"{ref}@example.com",
@@ -97,7 +112,7 @@ def _booking(db, *, company, amount=420.0, ref="BK1"):
     booking = Booking(
         booking_reference=ref,
         student_id=student.id,
-        instructor_id=1,
+        instructor_id=_any_instructor(db, company).id,
         lesson_date=datetime.now(timezone.utc),
         duration_minutes=60,
         lesson_type="standard",
@@ -368,3 +383,119 @@ def test_charges_are_scoped_to_their_billing_period(db):
 
     assert company_statement(db, company, period="1999-01")["total_due"] == 0.0
     assert company_statement(db, company)["total_due"] == 33.60
+
+
+# ── Withdrawing a charge ─────────────────────────────────────────────────
+#
+# Commission is a share of what a lesson earned. A lesson that does not
+# happen earns nothing, and because cancelling issues the learner a credit
+# rather than a refund, a charge left standing is billed a second time when
+# they rebook.
+
+
+def _charge_for(db, company, ref="BK1", amount=420.0):
+    booking = _booking(db, company=company, amount=amount, ref=ref)
+    record_platform_charge(
+        db,
+        company_id=company.id,
+        booking_id=booking.id,
+        basis_amount=amount,
+        commission_percent=8.0,
+        charge_amount=round(amount * 0.08, 2),
+    )
+    db.commit()
+    return booking
+
+
+def test_cancelling_withdraws_the_commission(db):
+    company = _school(db)
+    booking = _charge_for(db, company)
+
+    void_platform_charge(db, booking_id=booking.id, reason="cancelled by student")
+    db.commit()
+
+    charge = db.query(CompanyPlatformCharge).one()
+    assert charge.status == ChargeStatus.REVERSED.value
+    assert charge.reversed_at is not None
+    assert "cancelled by student" in charge.reversal_reason
+
+
+def test_a_withdrawn_charge_is_not_owed(db):
+    company = _school(db)
+    booking = _charge_for(db, company)
+    assert company_statement(db, company)["commission"]["total"] == 33.6
+
+    void_platform_charge(db, booking_id=booking.id, reason="cancelled")
+    db.commit()
+
+    assert company_statement(db, company)["commission"]["total"] == 0.0
+
+
+def test_a_withdrawn_charge_is_not_platform_revenue(db):
+    company = _school(db)
+    booking = _charge_for(db, company)
+
+    void_platform_charge(db, booking_id=booking.id, reason="cancelled")
+    db.commit()
+
+    assert platform_revenue(db)["total"] == 0.0
+
+
+def test_the_row_survives_so_the_statement_can_be_audited(db):
+    """Reversed, not deleted: it is the evidence a charge was withdrawn."""
+    company = _school(db)
+    booking = _charge_for(db, company)
+
+    void_platform_charge(db, booking_id=booking.id, reason="cancelled")
+    db.commit()
+
+    assert db.query(CompanyPlatformCharge).count() == 1
+
+
+def test_withdrawing_twice_changes_nothing(db):
+    company = _school(db)
+    booking = _charge_for(db, company)
+    void_platform_charge(db, booking_id=booking.id, reason="first")
+    db.commit()
+
+    assert void_platform_charge(db, booking_id=booking.id, reason="second") is None
+    assert db.query(CompanyPlatformCharge).one().reversal_reason == "first"
+
+
+def test_withdrawing_a_booking_that_was_never_charged_is_harmless(db):
+    """Company-sourced bookings and the host's own never accrue anything."""
+    company = _school(db)
+    booking = _booking(db, company=company, ref="BK-NOCHARGE")
+
+    assert void_platform_charge(db, booking_id=booking.id, reason="cancelled") is None
+
+
+def test_withdrawing_money_already_collected_says_so(db):
+    """The platform has been paid and owes it back; no automatic process
+    here can return it, so the statement has to make that visible."""
+    company = _school(db)
+    booking = _charge_for(db, company)
+    mark_settled(db, db.query(CompanyPlatformCharge).one(), reference="EFT-1")
+    db.commit()
+
+    charge = void_platform_charge(db, booking_id=booking.id, reason="cancelled")
+    db.commit()
+
+    assert "credit owed" in charge.reversal_reason
+
+
+def test_one_lesson_is_billed_once_even_when_it_is_rebooked(db):
+    """The bug this was written for.
+
+    Cancelling hands the learner a credit, and spending it creates a fresh
+    booking with a fresh charge. With the first charge left standing the
+    school paid commission twice for one lesson it was paid for once.
+    """
+    company = _school(db)
+    first = _charge_for(db, company, ref="BK-ORIGINAL")
+
+    void_platform_charge(db, booking_id=first.id, reason="cancelled, credit issued")
+    _charge_for(db, company, ref="BK-REBOOKED")
+
+    assert company_statement(db, company)["commission"]["total"] == 33.6
+    assert company_statement(db, company)["commission"]["booking_count"] == 1
