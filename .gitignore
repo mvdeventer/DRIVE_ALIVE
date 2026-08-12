@@ -158,3 +158,15 @@ mkcert.exe
 # Ruflo runtime metrics (churn on every run)
 .claude-flow/metrics/
 .claude-flow/security/
+
+# Ruflo daemon + adopted-policy runtime state (per-machine, not source)
+.claude-flow/daemon-state.json
+.claude-flow/daemon.pid
+.claude-flow/harness-active-policy.json
+.claude-flow/policy/
+
+# Claude Code per-machine settings and proven-config cache
+.claude/settings.local.json
+.claude/settings.json.bak
+.claude/.proven-config-version
+.claude/proven-config.json
