@@ -319,3 +319,28 @@ def get_company_owner(db: Session, company_id: int) -> Instructor | None:
     if not company or not company.owner_instructor_id:
         return None
     return db.query(Instructor).filter(Instructor.id == company.owner_instructor_id).first()
+
+
+def needs_company_approval(db: Session, instructor) -> bool:
+    """Whether this instructor still needs their school owner to approve them.
+
+    Admin approval is the first of two gates, but the second gate only exists
+    for someone who joined a school they do not run. Two cases must not be
+    sent to it:
+
+    * the owner of the school — nobody is above them to approve;
+    * a solo instructor. ``ensure_solo_company`` gives every independent a
+      one-person company and deliberately leaves ``is_company_owner`` False,
+      so a bare ``company_id is not None and not is_company_owner`` test reads
+      them as a school member and parks them in ``pending_company`` awaiting
+      approval from themselves.
+    """
+    company_id = getattr(instructor, "company_id", None)
+    if company_id is None:
+        return False
+    if getattr(instructor, "is_company_owner", False):
+        return False
+    company = db.query(Company).filter(Company.id == company_id).first()
+    if company is None or company.is_solo:
+        return False
+    return True

@@ -450,7 +450,10 @@ All variables live in `backend/.env`. Copy from `backend/.env.example`.
 | `InstructorVerification` | `instructor_verifications` | Admin approval workflow |
 | `PasswordReset` | `password_resets` | Secure reset tokens |
 
-**Migrations:** Alembic (`backend/migrations/`) + incremental `ALTER TABLE` applied on startup via `_apply_incremental_migrations()`.
+**Migrations:** There is **no Alembic setup in this repo** (no `alembic.ini`, no
+`alembic/` directory) despite the dependency being listed. Schema changes are
+idempotent `ALTER TABLE` statements applied on startup by
+`_apply_incremental_migrations()` in `app/main.py`. Add new ones there.
 
 ---
 

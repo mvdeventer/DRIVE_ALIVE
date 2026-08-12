@@ -1,7 +1,7 @@
 /**
  * API Service for backend communication
  */
-import axios, { AxiosInstance } from 'axios';
+import axios, { AxiosInstance, AxiosResponse } from 'axios';
 import * as SecureStore from 'expo-secure-store';
 import { Platform } from 'react-native';
 import { API_CONFIG } from '../../config';
@@ -124,9 +124,16 @@ class ApiService {
     );
   }
 
-  // Generic API methods
-  async get(url: string, config?: any) {
-    return await this.api.get(url, config);
+  // Generic API methods.
+  //
+  // These return the whole Axios response, so callers read `.data`. The type
+  // parameter describes the payload inside it: without one, `response.data`
+  // was `any` and a screen could treat the response itself as the payload —
+  // which is exactly what broke the public instructor profile, where
+  // `data.rating.toFixed()` threw on every load and the page reported
+  // "Instructor not found" for instructors that existed.
+  async get<T = any>(url: string, config?: any): Promise<AxiosResponse<T>> {
+    return await this.api.get<T>(url, config);
   }
 
   async post(url: string, data?: any, config?: any) {
@@ -472,9 +479,10 @@ class ApiService {
     return response.data;
   }
 
-  async getAllBookingsAdmin(statusFilter?: string, skip = 0, limit = 50) {
+  async getAllBookingsAdmin(statusFilter?: string, skip = 0, limit = 50, search?: string) {
     const params: any = { skip, limit };
     if (statusFilter) params.status_filter = statusFilter;
+    if (search && search.trim()) params.search = search.trim();
     const response = await this.api.get('/admin/bookings', { params });
     return response.data;
   }
@@ -497,11 +505,24 @@ class ApiService {
   }
 
   async createAdmin(data: {
+    // Mirrors backend AdminCreateRequest.
     email: string;
     phone: string;
     password: string;
     first_name: string;
     last_name: string;
+    id_number: string;
+    address?: string;
+    address_latitude?: number;
+    address_longitude?: number;
+    company_name?: string;
+    smtp_email?: string;
+    smtp_password?: string;
+    verification_link_validity_minutes?: number;
+    twilio_sender_phone_number?: string;
+    twilio_account_sid?: string;
+    twilio_auth_token?: string;
+    twilio_phone_number?: string;
   }) {
     const response = await this.api.post('/admin/create', data);
     return response.data;

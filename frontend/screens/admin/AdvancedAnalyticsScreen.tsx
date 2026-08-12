@@ -25,7 +25,7 @@ import {
   View,
 } from 'react-native';
 
-import { useTheme } from '../../theme/ThemeContext';
+import { ThemeColors, useTheme } from '../../theme/ThemeContext';
 import ApiService from '../../services/api';
 
 // ─── Types ─────────────────────────────────────────────────
@@ -157,7 +157,7 @@ export default function AdvancedAnalyticsScreen() {
               style={[
                 styles.rangeBtn,
                 {
-                  backgroundColor: active ? colors.primary : colors.surface,
+                  backgroundColor: active ? colors.primary : colors.card,
                   borderColor: colors.border,
                 },
               ]}
@@ -178,7 +178,7 @@ export default function AdvancedAnalyticsScreen() {
       {/* Totals */}
       {series ? (
         <View style={styles.kpiGrid}>
-          <Kpi label="Bookings" value={String(series.totals.bookings)} color={colors.primary} />
+          <Kpi label="Lessons Scheduled" value={String(series.totals.bookings)} color={colors.primary} />
           <Kpi label="Completed" value={String(series.totals.completed)} color="#16a34a" />
           <Kpi label="Cancelled" value={String(series.totals.cancelled)} color="#dc2626" />
           <Kpi label="Revenue" value={formatZAR(series.totals.revenue)} color="#0ea5e9" />
@@ -250,13 +250,17 @@ export default function AdvancedAnalyticsScreen() {
 
           <View style={styles.card}>
             <Text style={styles.cardTitle}>Growth (Last 30 Days)</Text>
+            {/* These count by *signup / creation* date, whereas the KPIs and
+                charts above count by *lesson* date. Both are legitimate, but
+                shown side by side and labelled "Bookings" vs "New Bookings"
+                they read as a contradiction, so the basis is spelled out. */}
             <KeyValueRow
-              label="New Users"
+              label="New Users Registered"
               value={String(breakdown.new_users_last_30d)}
               colors={colors}
             />
             <KeyValueRow
-              label="New Bookings"
+              label="Bookings Created"
               value={String(breakdown.new_bookings_last_30d)}
               colors={colors}
             />
@@ -281,7 +285,7 @@ function Kpi({ label, value, color }: { label: string; value: string; color: str
       style={{
         flexBasis: '48%',
         flexGrow: 1,
-        backgroundColor: colors.surface,
+        backgroundColor: colors.card,
         borderColor: colors.border,
         borderWidth: 1,
         borderRadius: 10,
@@ -318,7 +322,14 @@ function BarChart({
         {visible.map((p, idx) => {
           const heightPct = max > 0 ? (p.value / max) * 100 : 0;
           return (
-            <View key={idx} style={{ flex: 1, alignItems: 'center' }}>
+            // The wrapper needs an explicit height: the row sets
+            // `alignItems: 'flex-end'`, which does not stretch children, so
+            // without this the wrapper collapses to 0 and the bar's
+            // percentage height resolves against nothing.
+            <View
+              key={idx}
+              style={{ flex: 1, height: '100%', justifyContent: 'flex-end', alignItems: 'center' }}
+            >
               <View
                 style={{
                   width: '80%',
@@ -388,7 +399,7 @@ function titleCase(s: string): string {
 
 // ─── Styles ────────────────────────────────────────────────
 
-function useStyles(colors: any) {
+function useStyles(colors: ThemeColors) {
   return StyleSheet.create({
     container: { flex: 1, backgroundColor: colors.background },
     center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
@@ -409,7 +420,7 @@ function useStyles(colors: any) {
       marginBottom: 8,
     },
     card: {
-      backgroundColor: colors.surface,
+      backgroundColor: colors.card,
       borderColor: colors.border,
       borderWidth: 1,
       borderRadius: 10,

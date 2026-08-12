@@ -645,6 +645,7 @@ export const en = {
   },
   bookingOversight: {
     title: 'Booking Oversight',
+    loadMore: 'Load More',
     loading: 'Loading bookings...',
     searchPlaceholder: 'Search by name, booking reference, student/instructor ID, or date...',
     detailsTitle: 'Booking Details',

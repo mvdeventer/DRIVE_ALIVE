@@ -7,8 +7,8 @@ from datetime import datetime, timezone
 from typing import Annotated, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import func
-from sqlalchemy.orm import Session
+from sqlalchemy import String, func, or_
+from sqlalchemy.orm import Session, aliased
 
 from ..database import get_db
 from ..middleware.admin import require_admin
@@ -19,7 +19,7 @@ from ..models.user import Instructor, Student, User, UserRole, UserStatus
 from ..models.company import Company
 from ..models.company_admin import CompanyAdmin
 from ..services.billing_service import platform_revenue
-from ..services.company_service import get_platform_host_company
+from ..services.company_service import get_platform_host_company, needs_company_approval
 from ..services.fees import DEFAULT_COMMISSION_PERCENT
 from ..schemas.admin import (
     AdminCreateRequest,
@@ -440,10 +440,7 @@ async def verify_instructor(
     if verification_data.is_verified:
         instructor.is_verified = True
         instructor.verified_by_admin_id = current_admin.id
-        is_company_member = (
-            getattr(instructor, "company_id", None) is not None
-            and not getattr(instructor, "is_company_owner", False)
-        )
+        is_company_member = needs_company_approval(db, instructor)
         if is_company_member:
             # Admin approved but still needs company owner
             instructor.verification_status = IVS.PENDING_COMPANY.value
@@ -1096,11 +1093,15 @@ async def get_all_bookings(
     db: Session = Depends(get_db),
     status_filter: Optional[BookingStatus] = Query(None),
     instructor_id: Optional[int] = Query(None),
+    search: Optional[str] = Query(None),
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
 ):
-    """
-    Get overview of all bookings with optional status filter and instructor filter
+    """Overview of bookings, optionally filtered by status, instructor or search.
+
+    ``search`` matches server-side across the whole table. It has to: the
+    response is paged and capped at 100, so a client-side search can only ever
+    look at the page in hand and silently misses the rest.
     """
     # Auto-update past pending bookings to completed
     from ..routes.bookings import auto_update_past_bookings
@@ -1114,6 +1115,39 @@ async def get_all_bookings(
 
     if instructor_id:
         query = query.filter(Booking.instructor_id == instructor_id)
+
+    if search and search.strip():
+        term = f"%{search.strip().lower()}%"
+        student_user = aliased(User)
+        instructor_user = aliased(User)
+        # Names live on User, id numbers on the role profiles, so searching by
+        # person needs all four tables joined.
+        query = (
+            query.join(Student, Student.id == Booking.student_id)
+            .join(student_user, student_user.id == Student.user_id)
+            .join(Instructor, Instructor.id == Booking.instructor_id)
+            .join(instructor_user, instructor_user.id == Instructor.user_id)
+        )
+        full_name = lambda u: func.lower(  # noqa: E731
+            func.concat(u.first_name, " ", u.last_name)
+        )
+        query = query.filter(
+            or_(
+                func.lower(Booking.booking_reference).like(term),
+                func.cast(Booking.id, String).like(term),
+                full_name(student_user).like(term),
+                full_name(instructor_user).like(term),
+                func.lower(Student.id_number).like(term),
+                func.lower(Instructor.id_number).like(term),
+                func.cast(Booking.student_id, String).like(term),
+                func.cast(Booking.instructor_id, String).like(term),
+                # The four date shapes the screen's search box used to accept.
+                func.lower(func.to_char(Booking.lesson_date, "YYYY-MM-DD")).like(term),
+                func.lower(func.to_char(Booking.lesson_date, "FMMM/FMDD/YYYY")).like(term),
+                func.lower(func.to_char(Booking.lesson_date, "YYYY/MM/DD")).like(term),
+                func.lower(func.to_char(Booking.lesson_date, 'FMMonth FMDD, YYYY')).like(term),
+            )
+        )
 
     bookings = (
         query.order_by(Booking.lesson_date.desc()).offset(skip).limit(limit).all()

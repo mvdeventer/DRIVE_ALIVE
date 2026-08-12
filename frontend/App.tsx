@@ -47,6 +47,7 @@ import {
   DefaultTheme as NavDefaultTheme,
   DarkTheme as NavDarkTheme,
 } from '@react-navigation/native';
+import type { LinkingOptions } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import * as SecureStore from 'expo-secure-store';
 import { StatusBar } from 'expo-status-bar';
@@ -114,7 +115,12 @@ import MainTabs from './navigation/MainTabs';
 const Stack = createNativeStackNavigator();
 
 // Deep linking configuration
-const linking = {
+// The root stack has no declared param list, so React Navigation infers every
+// screen as `unknown` and rejects the nested `config.screens` block below.
+// Properly typing this would mean declaring a param list for every navigator
+// in the app — a refactor with no runtime effect. This object was previously
+// untyped (inferred) anyway, so `any` here loses nothing that existed before.
+const linking: LinkingOptions<any> = {
   prefixes: ['http://localhost:3000', 'http://localhost:8081', 'https://roadready.co.za'],
   config: {
     screens: {
@@ -130,6 +136,88 @@ const linking = {
       PaymentMock: 'payment/mock',
       PaymentSuccess: 'payment/success',
       PaymentCancel: 'payment/cancel',
+      // React Navigation *generates* URLs for the nested Main navigator even
+      // without config (that is where /Main/DashboardTab/AdminDashboard comes
+      // from) but it cannot parse them back. So every in-app screen had a URL
+      // that looked bookmarkable and silently resolved to the stack's initial
+      // route instead — a refresh on any sub-screen dumped the user back at
+      // their dashboard. Declaring the nesting makes those URLs round-trip.
+      //
+      // Only one of these tab navigators is mounted at a time (MainTabs
+      // dispatches on role), so the repeated tab names below never collide.
+      Main: {
+        screens: {
+          // --- Admin ---
+          DashboardTab: {
+            screens: {
+              AdminDashboard: 'admin/dashboard',
+              InstructorVerification: 'admin/verify-instructors',
+              RevenueAnalytics: 'admin/revenue',
+              AdvancedAnalytics: 'admin/analytics',
+              InstructorEarningsOverview: 'admin/instructor-earnings',
+              AdminManageInstructorSchedule: 'admin/instructor-schedule',
+              CreateAdmin: 'admin/create-admin',
+              CompanyAdminHome: 'school/dashboard',
+            },
+          },
+          UsersTab: {
+            screens: {
+              UserManagement: 'admin/users',
+              CreateUser: 'admin/users/new',
+              EditStudentProfile: 'admin/users/student/:userId',
+              EditInstructorProfile: 'admin/users/instructor/:userId',
+              EditAdminProfileFromUsers: 'admin/users/admin/:userId',
+            },
+          },
+          BookingsTab: {
+            screens: { BookingOversight: 'admin/bookings' },
+          },
+          SettingsTab: {
+            screens: {
+              AdminSettings: 'admin/settings',
+              EditAdminProfile: 'admin/settings/profile',
+              DatabaseInterface: 'admin/database',
+            },
+          },
+          // --- Instructor / Student ---
+          HomeTab: {
+            screens: {
+              InstructorHome: 'instructor/home',
+              StudentHome: 'student/home',
+            },
+          },
+          ScheduleTab: {
+            screens: { ManageAvailability: 'instructor/availability' },
+          },
+          EarningsTab: {
+            screens: { EarningsReport: 'instructor/earnings' },
+          },
+          FindTab: {
+            screens: {
+              InstructorList: 'student/instructors',
+              Booking: 'student/book',
+            },
+          },
+          ProfileTab: {
+            screens: {
+              Certifications: 'profile/certifications',
+            },
+          },
+          // --- Company admin ---
+          RosterTab: {
+            screens: {
+              CompanyRoster: 'school/roster',
+              EnrolLearner: 'school/roster/enrol',
+            },
+          },
+          PricingTab: {
+            screens: { CompanyPricing: 'school/pricing' },
+          },
+          BillingTab: {
+            screens: { CompanyStatement: 'school/statement' },
+          },
+        },
+      },
     },
   },
 };

@@ -248,6 +248,7 @@ export default function CompanyPricingScreen() {
               onPress={() => setDraftType(option)}
               accessibilityRole="radio"
               accessibilityState={{ selected: draftType === option }}
+              {...({ 'aria-selected': draftType === option } as any)}
               accessibilityLabel={t(`companyPricing.type.${option}`)}
               hitSlop={6}
               style={[

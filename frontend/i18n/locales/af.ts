@@ -648,6 +648,7 @@ export const af: TranslationKeys = {
   },
   bookingOversight: {
     title: 'Besprekingstoesig',
+    loadMore: 'Laai Meer',
     loading: 'Laai besprekings...',
     searchPlaceholder: 'Soek op naam, besprekingsverwysing, student-/instrukteur-ID of datum...',
     detailsTitle: 'Besprekingsbesonderhede',

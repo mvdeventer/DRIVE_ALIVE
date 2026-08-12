@@ -352,6 +352,7 @@ export default function CompanyRosterScreen() {
               onPress={() => setMarkupType(option)}
               accessibilityRole="radio"
               accessibilityState={{ selected: markupType === option }}
+              {...({ 'aria-selected': markupType === option } as any)}
               accessibilityLabel={t(`companyPricing.type.${option}`)}
               hitSlop={6}
               style={[
