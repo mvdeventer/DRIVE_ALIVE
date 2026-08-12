@@ -6,6 +6,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import React from 'react';
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import type { ViewStyle } from 'react-native';
 
 import { useTheme } from '../theme/ThemeContext';
 
@@ -41,14 +42,20 @@ export default function GlobalTopBar({ userName, userRole, onLogout }: GlobalTop
     }
   };
 
-  // Fixed positioning for web
-  const webStyles = {
-    position: 'fixed' as const,
-    top: 0,
-    left: 0,
-    right: 0,
-    zIndex: 1000,
-  };
+  // `position: 'fixed'` is a CSS value react-native-web understands but that
+  // React Native's ViewStyle cannot express, hence the cast. It is applied
+  // only on web, where it means something — it used to be set on every
+  // platform, including native, where it is not a valid position.
+  const webStyles =
+    Platform.OS === 'web'
+      ? ({
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          zIndex: 1000,
+        } as unknown as ViewStyle)
+      : null;
 
   return (
     <View style={[styles.container, { backgroundColor: getRoleColor(userRole) }, webStyles]}>

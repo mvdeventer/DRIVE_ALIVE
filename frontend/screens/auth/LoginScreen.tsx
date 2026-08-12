@@ -749,6 +749,10 @@ export default function LoginScreen({ navigation, onAuthChange }: any) {
       console.log('[LoginScreen] Fetched role from /auth/me:', userRole);
     }
     
+    if (!userRole) {
+      throw new Error('Signed in but no role was returned — cannot choose a workspace.');
+    }
+
     console.log('[LoginScreen] Storing user_role in AsyncStorage:', userRole);
     await storage.setItem('user_role', userRole);
 

@@ -213,9 +213,9 @@ export default function EarningsReportScreen({ navigation }: any) {
 
       summaryData.forEach(([label, value]) => {
         doc.text(label, 20, yPosition);
-        doc.setFont(undefined, 'bold');
+        doc.setFont(doc.getFont().fontName, 'bold');
         doc.text(value, 120, yPosition);
-        doc.setFont(undefined, 'normal');
+        doc.setFont(doc.getFont().fontName, 'normal');
         yPosition += 6;
       });
 
@@ -233,14 +233,14 @@ export default function EarningsReportScreen({ navigation }: any) {
         doc.setFillColor(78, 205, 196);
         doc.rect(15, yPosition - 5, 180, 6, 'F');
         doc.setTextColor(255, 255, 255);
-        doc.setFont(undefined, 'bold');
+        doc.setFont(doc.getFont().fontName, 'bold');
         doc.text('Month', 20, yPosition);
         doc.text('Earnings', 80, yPosition);
         doc.text('Lessons', 130, yPosition);
         doc.text('Avg/Lesson', 160, yPosition);
         yPosition += 8;
 
-        doc.setFont(undefined, 'normal');
+        doc.setFont(doc.getFont().fontName, 'normal');
         doc.setTextColor(0, 0, 0);
         earningsData.earnings_by_month.forEach((month, index) => {
           if (yPosition > 270) {
@@ -282,7 +282,7 @@ export default function EarningsReportScreen({ navigation }: any) {
         doc.setFillColor(78, 205, 196);
         doc.rect(15, yPosition - 4, 180, 5, 'F');
         doc.setTextColor(255, 255, 255);
-        doc.setFont(undefined, 'bold');
+        doc.setFont(doc.getFont().fontName, 'bold');
         doc.text('Student', 17, yPosition);
         doc.text('Date', 70, yPosition);
         doc.text('Time', 100, yPosition);
@@ -291,7 +291,7 @@ export default function EarningsReportScreen({ navigation }: any) {
         doc.text('Status', 165, yPosition);
         yPosition += 6;
 
-        doc.setFont(undefined, 'normal');
+        doc.setFont(doc.getFont().fontName, 'normal');
         doc.setTextColor(0, 0, 0);
 
         // Show all bookings (limit to prevent overflow)
@@ -305,7 +305,7 @@ export default function EarningsReportScreen({ navigation }: any) {
             doc.setFillColor(78, 205, 196);
             doc.rect(15, yPosition - 4, 180, 5, 'F');
             doc.setTextColor(255, 255, 255);
-            doc.setFont(undefined, 'bold');
+            doc.setFont(doc.getFont().fontName, 'bold');
             doc.text('Student', 17, yPosition);
             doc.text('Date', 70, yPosition);
             doc.text('Time', 100, yPosition);
@@ -313,7 +313,7 @@ export default function EarningsReportScreen({ navigation }: any) {
             doc.text('Amount', 135, yPosition);
             doc.text('Status', 165, yPosition);
             yPosition += 6;
-            doc.setFont(undefined, 'normal');
+            doc.setFont(doc.getFont().fontName, 'normal');
             doc.setTextColor(0, 0, 0);
           }
 

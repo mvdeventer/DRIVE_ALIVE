@@ -28,6 +28,9 @@ interface LocationSelectorProps {
   showSuburbs?: boolean;
 }
 
+/** The three drill-down levels of the picker. */
+type LocationTab = 'province' | 'city' | 'suburb';
+
 export default function LocationSelector({
   label = 'Location',
   tooltip,
@@ -45,7 +48,7 @@ export default function LocationSelector({
   const [showSelector, setShowSelector] = useState(false);
   const [showTooltip, setShowTooltip] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [activeTab, setActiveTab] = useState<'province' | 'city' | 'suburb'>('province');
+  const [activeTab, setActiveTab] = useState<LocationTab>('province');
 
   const [provinces] = useState<string[]>(getProvinces());
   const [cities, setCities] = useState<string[]>([]);
@@ -262,7 +265,12 @@ export default function LocationSelector({
 
             {!searchQuery && (
               <View style={{ flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: colors.divider, paddingHorizontal: 16 }}>
-                {(['province', 'city', ...(showSuburbs ? ['suburb'] : [])] as const).map(tab => {
+                {/* Typed explicitly: spreading a conditional widens the
+                    members back to string, so `as const` could not keep the
+                    union that setActiveTab expects. */}
+                {((showSuburbs
+                  ? ['province', 'city', 'suburb']
+                  : ['province', 'city']) as LocationTab[]).map(tab => {
                   const isActive = activeTab === tab;
                   const isDisabled = (tab === 'city' && !selectedProvince) || (tab === 'suburb' && !selectedCity);
                   return (

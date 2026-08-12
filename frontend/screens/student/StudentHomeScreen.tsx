@@ -612,16 +612,17 @@ export default function StudentHomeScreen() {
                 <View style={styles.bookingHeader}>
                   <Text style={[styles.instructorName, { color: colors.text }]}>{booking.instructor_name}</Text>
                   <Badge
-                    label={booking.status}
                     variant={
                       booking.status.toLowerCase() === 'confirmed'
                         ? 'success'
                         : booking.status.toLowerCase() === 'pending'
                         ? 'warning'
-                        : 'default'
+                        : 'neutral'
                     }
                     size="sm"
-                  />
+                  >
+                    {booking.status}
+                  </Badge>
                 </View>
                 {booking.booking_reference ? (
                   <Text style={[styles.bookingReference, { color: colors.primary }]}>🎫 {booking.booking_reference}</Text>
@@ -694,7 +695,7 @@ export default function StudentHomeScreen() {
                   <Card key={booking.id} variant="elevated" padding="md" style={styles.bookingCardWrap}>
                     <View style={styles.bookingHeader}>
                       <Text style={[styles.instructorName, { color: colors.text }]}>{booking.instructor_name}</Text>
-                      <Badge label={t('studentHome.badge.completed')} variant="success" size="sm" />
+                      <Badge variant="success" size="sm">{t('studentHome.badge.completed')}</Badge>
                     </View>
                     {booking.booking_reference ? (
                       <Text style={[styles.bookingReference, { color: colors.primary }]}>🎫 {booking.booking_reference}</Text>

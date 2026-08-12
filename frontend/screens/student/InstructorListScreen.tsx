@@ -302,7 +302,7 @@ ${studentName}`;
       } else {
         console.log('📱 Opening WhatsApp Mobile App...');
         const { Linking } = require('react-native');
-        Linking.openURL(whatsappUrl).catch(error => {
+        Linking.openURL(whatsappUrl).catch((error: unknown) => {
           console.error('❌ Error opening WhatsApp:', error);
           Alert.alert(
             t('misc.whatsappError'),
@@ -384,7 +384,7 @@ ${studentName}`;
                   {item.first_name} {item.last_name} {item.is_verified && '✅'}
                 </Text>
                 {item.is_self && (
-                  <Badge variant="default" size="sm">{t('instructorList.yourProfile')}</Badge>
+                  <Badge variant="neutral" size="sm">{t('instructorList.yourProfile')}</Badge>
                 )}
               </View>
               <Badge

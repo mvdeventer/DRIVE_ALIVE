@@ -168,8 +168,8 @@ export default function RegisterInstructorScreen({ navigation, route }: any) {
   useEffect(() => {
     if (step === 3 && companies.length === 0 && !companiesLoading) {
       setCompaniesLoading(true);
-      (ApiService.get('/companies') as Promise<CompanyOption[]>)
-        .then((data) => setCompanies(data))
+      ApiService.get<CompanyOption[]>('/companies')
+        .then(({ data }) => setCompanies(data))
         .catch(() => setCompanies([]))
         .finally(() => setCompaniesLoading(false));
     }

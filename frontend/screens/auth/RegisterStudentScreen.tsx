@@ -201,9 +201,14 @@ export default function RegisterStudentScreen({ navigation }: any) {
     }
   };
 
-  const updateField = (field: string, value: string) => {
-    // Auto-format phone numbers
-    if (field === 'phone' || field === 'emergency_contact_phone') {
+  // The consent rows hold booleans, so this takes more than text. Phone
+  // formatting is guarded on the type rather than only on the field name,
+  // which keeps it honest if a boolean field is ever named like one.
+  const updateField = (field: string, value: string | boolean) => {
+    if (
+      typeof value === 'string' &&
+      (field === 'phone' || field === 'emergency_contact_phone')
+    ) {
       value = formatPhoneNumber(value);
     }
     setFormData({ ...formData, [field]: value });
@@ -283,7 +288,7 @@ export default function RegisterStudentScreen({ navigation }: any) {
           placeholder="Enter your first name"
           value={formData.first_name}
           onChangeText={value => updateField('first_name', value)}
-          tip="Your legal first name as it appears on your ID"
+          tooltip="Your legal first name as it appears on your ID"
           returnKeyType="next"
           onSubmitEditing={() => lastNameRef.current?.focus()}
           blurOnSubmit={false}
@@ -295,7 +300,7 @@ export default function RegisterStudentScreen({ navigation }: any) {
           placeholder="Enter your last name"
           value={formData.last_name}
           onChangeText={value => updateField('last_name', value)}
-          tip="Your legal last name as it appears on your ID"
+          tooltip="Your legal last name as it appears on your ID"
           returnKeyType="next"
           onSubmitEditing={() => emailRef.current?.focus()}
           blurOnSubmit={false}
@@ -309,7 +314,7 @@ export default function RegisterStudentScreen({ navigation }: any) {
           onChangeText={value => updateField('email', value)}
           keyboardType="email-address"
           autoCapitalize="none"
-          tip="We'll use this to send booking confirmations and updates"
+          tooltip="We'll use this to send booking confirmations and updates"
           returnKeyType="next"
           onSubmitEditing={() => phoneRef.current?.focus()}
           blurOnSubmit={false}
@@ -322,7 +327,7 @@ export default function RegisterStudentScreen({ navigation }: any) {
           value={formData.phone}
           onChangeText={value => updateField('phone', value)}
           keyboardType="phone-pad"
-          tip="South African format: +27 followed by 9 digits"
+          tooltip="South African format: +27 followed by 9 digits"
           maxLength={12}
           returnKeyType="next"
           onSubmitEditing={() => idNumberRef.current?.focus()}
@@ -336,7 +341,7 @@ export default function RegisterStudentScreen({ navigation }: any) {
           onChangeText={value => updateField('id_number', value)}
           keyboardType="numeric"
           maxLength={13}
-          tip="Your 13-digit South African ID number for verification"
+          tooltip="Your 13-digit South African ID number for verification"
           returnKeyType="next"
           onSubmitEditing={() => learnersPermitRef.current?.focus()}
           blurOnSubmit={false}
@@ -347,7 +352,7 @@ export default function RegisterStudentScreen({ navigation }: any) {
           placeholder="Enter permit number if available"
           value={formData.learners_permit_number}
           onChangeText={value => updateField('learners_permit_number', value)}
-          tip="Optional - Provide if you already have a learner's permit"
+          tooltip="Optional - Provide if you already have a learner's permit"
           returnKeyType="next"
           onSubmitEditing={() => emergencyNameRef.current?.focus()}
           blurOnSubmit={false}
@@ -363,7 +368,7 @@ export default function RegisterStudentScreen({ navigation }: any) {
           placeholder="Full name"
           value={formData.emergency_contact_name}
           onChangeText={value => updateField('emergency_contact_name', value)}
-          tip="Person to contact in case of emergency during lessons"
+          tooltip="Person to contact in case of emergency during lessons"
           returnKeyType="next"
           onSubmitEditing={() => emergencyPhoneRef.current?.focus()}
           blurOnSubmit={false}
@@ -375,7 +380,7 @@ export default function RegisterStudentScreen({ navigation }: any) {
           value={formData.emergency_contact_phone}
           onChangeText={value => updateField('emergency_contact_phone', value)}
           keyboardType="phone-pad"
-          tip="South African format: +27 followed by 9 digits"
+          tooltip="South African format: +27 followed by 9 digits"
           maxLength={12}
           returnKeyType="next"
           onSubmitEditing={() => passwordRef.current?.focus()}
@@ -409,7 +414,7 @@ export default function RegisterStudentScreen({ navigation }: any) {
           value={formData.password}
           onChangeText={value => updateField('password', value)}
           secureTextEntry={!showPassword}
-          tip="Create a strong password (minimum 8 characters, mixed case, digit, symbol)"
+          tooltip="Create a strong password (minimum 8 characters, mixed case, digit, symbol)"
           returnKeyType="next"
           onSubmitEditing={() => confirmPasswordRef.current?.focus()}
           blurOnSubmit={false}
@@ -424,7 +429,7 @@ export default function RegisterStudentScreen({ navigation }: any) {
           value={formData.confirmPassword}
           onChangeText={value => updateField('confirmPassword', value)}
           secureTextEntry={!showPassword}
-          tip="Re-enter your password to confirm"
+          tooltip="Re-enter your password to confirm"
           returnKeyType="done"
           onSubmitEditing={handleRegister}
           error={fieldErrors.confirmPassword}

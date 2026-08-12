@@ -2,6 +2,7 @@
  * Payment Screen - Displays payment summary, credits, cancellation policy and redirects to Stripe
  */
 import { useNavigation, useRoute } from '@react-navigation/native';
+import type { NavigationProp } from '@react-navigation/native';
 import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
@@ -27,7 +28,7 @@ interface RouteParams {
 }
 
 export default function PaymentScreen() {
-  const navigation = useNavigation();
+  const navigation = useNavigation<NavigationProp<Record<string, object | undefined>>>();
   const route = useRoute();
   const { colors } = useTheme();
   const params = route.params as RouteParams;
@@ -89,8 +90,8 @@ export default function PaymentScreen() {
 
         if (response.payment_url.includes('/payment/mock')) {
           navigation.navigate(
-            'PaymentMock' as never,
-            { session_id: response.payment_session_id } as never
+            'PaymentMock',
+            { session_id: response.payment_session_id }
           );
         } else {
           window.location.href = response.payment_url;
@@ -98,10 +99,10 @@ export default function PaymentScreen() {
       } else {
         await Linking.openURL(response.payment_url);
         navigation.navigate(
-          'PaymentSuccess' as never,
+            'PaymentSuccess',
           {
             payment_session_id: response.payment_session_id,
-          } as never
+          }
         );
       }
     } catch (error: any) {

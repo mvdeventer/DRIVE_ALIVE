@@ -2,6 +2,7 @@
  * Mock Payment Screen - Simulates payment for development
  */
 import { useNavigation, useRoute } from '@react-navigation/native';
+import type { NavigationProp } from '@react-navigation/native';
 import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
@@ -17,7 +18,7 @@ import WebNavigationHeader from '../../components/WebNavigationHeader';
 import ApiService from '../../services/api';
 
 export default function MockPaymentScreen() {
-  const navigation = useNavigation();
+  const navigation = useNavigation<NavigationProp<Record<string, object | undefined>>>();
   const route = useRoute();
   const { colors } = useTheme();
   const params = route.params as any;
@@ -49,12 +50,12 @@ export default function MockPaymentScreen() {
         setMessage('✅ Payment successful! Redirecting...');
 
         setTimeout(() => {
-          navigation.navigate('PaymentSuccess' as never, { session_id: sessionId } as never);
+          navigation.navigate('PaymentSuccess', { session_id: sessionId });
         }, 1500);
       } else {
         setMessage('❌ Payment cancelled');
         setTimeout(() => {
-          navigation.navigate('PaymentCancel' as never);
+          navigation.navigate('PaymentCancel');
         }, 1500);
       }
     } catch (error: any) {
@@ -72,7 +73,7 @@ export default function MockPaymentScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      {Platform.OS === 'web' && <WebNavigationHeader />}
+      {Platform.OS === 'web' && <WebNavigationHeader title="Payment" />}
 
       <ScrollView contentContainerStyle={styles.content}>
         <Card variant="elevated" style={styles.card}>

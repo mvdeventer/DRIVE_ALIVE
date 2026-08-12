@@ -3,6 +3,7 @@
  * Redesigned with step-by-step date and time selection
  */
 import { useFocusEffect, useNavigation, useRoute } from '@react-navigation/native';
+import type { NavigationAction } from '@react-navigation/native';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -67,7 +68,11 @@ interface ExistingBooking {
   id: number;
   instructor_id: number;
   instructor_name: string;
-  scheduled_time: string;
+  // The API calls this lesson_date. Declaring it as scheduled_time meant
+  // every read produced undefined, so `new Date(...)` gave Invalid Date and
+  // the checks below — which stop a learner double-booking themselves —
+  // silently matched nothing.
+  lesson_date: string;
   duration_minutes: number;
   status: string;
   created_at: string;
@@ -186,7 +191,7 @@ export default function BookingScreen({ navigation: navProp }: any) {
 
   // Prevent navigation if there are unsaved changes
   useEffect(() => {
-    const unsubscribe = navigation.addListener('beforeRemove', e => {
+    const unsubscribe = navigation.addListener('beforeRemove', (e: { preventDefault: () => void; data: { action: NavigationAction } }) => {
       if (!hasUnsavedChanges || skipNavigationGuardRef.current) {
         return;
       }
@@ -354,7 +359,7 @@ export default function BookingScreen({ navigation: navProp }: any) {
         (booking: ExistingBooking) =>
           booking.status !== 'cancelled' &&
           booking.status !== 'rescheduled' &&
-          new Date(booking.scheduled_time) > new Date()
+          new Date(booking.lesson_date) > new Date()
       );
 
       setExistingBookings(allFutureBookings);
@@ -376,7 +381,7 @@ export default function BookingScreen({ navigation: navProp }: any) {
     const slotEndTime = new Date(slotEnd);
 
     for (const booking of existingBookings) {
-      const bookingStart = new Date(booking.scheduled_time);
+      const bookingStart = new Date(booking.lesson_date);
       const bookingEnd = new Date(bookingStart.getTime() + booking.duration_minutes * 60000);
 
       // Check for overlap: slots conflict if they don't end before the other starts
@@ -471,7 +476,7 @@ export default function BookingScreen({ navigation: navProp }: any) {
     // Check if there's a conflicting booking with student's own appointment
     if (slot.conflicting_booking) {
       const conflictBooking = slot.conflicting_booking;
-      const conflictDate = new Date(conflictBooking.scheduled_time);
+      const conflictDate = new Date(conflictBooking.lesson_date);
       const conflictTime = conflictDate.toLocaleTimeString('en-ZA', {
         hour: '2-digit',
         minute: '2-digit',
@@ -1385,6 +1390,30 @@ const styles = StyleSheet.create({
   },
   instructorInfo: {
     marginTop: 4,
+  },
+  // Restored after the design-token migration removed them: the references
+  // survived, so these elements were rendering with no styling at all.
+  // Layout and type only — colour comes from the theme at each use site,
+  // and Card supplies its own background, radius and elevation.
+  instructorCard: {
+    marginBottom: 16,
+  },
+  formCard: {
+    marginBottom: 16,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginBottom: 12,
+  },
+  instructorName: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    marginBottom: 4,
+  },
+  instructorDetail: {
+    fontSize: 14,
+    marginBottom: 2,
   },
   pickupFormCard: {
     zIndex: 100,

@@ -986,13 +986,13 @@ const DatabaseInterfaceScreen = ({ navigation }: any) => {
 
       // Headers
       doc.setFontSize(8);
-      doc.setFont(undefined, 'bold');
+      doc.setFont(doc.getFont().fontName, 'bold');
       headers.forEach((header, index) => {
         doc.text(header, 14 + (index * 35), yPosition);
       });
 
       // Data rows
-      doc.setFont(undefined, 'normal');
+      doc.setFont(doc.getFont().fontName, 'normal');
       currentData.forEach((row: any, rowIndex) => {
         yPosition += 7;
         if (yPosition > 280) {

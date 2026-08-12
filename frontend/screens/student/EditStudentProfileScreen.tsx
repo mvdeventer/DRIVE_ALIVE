@@ -2,6 +2,7 @@
  * Edit Student Profile Screen
  */
 import { useNavigation, useRoute } from '@react-navigation/native';
+import type { NavigationAction } from '@react-navigation/native';
 import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
@@ -75,7 +76,7 @@ export default function EditStudentProfileScreen({ navigation: navProp }: any) {
   }, []);
 
   useEffect(() => {
-    const unsubscribe = navigation.addListener('beforeRemove', e => {
+    const unsubscribe = navigation.addListener('beforeRemove', (e: { preventDefault: () => void; data: { action: NavigationAction } }) => {
       if (!hasUnsavedChanges) {
         return;
       }

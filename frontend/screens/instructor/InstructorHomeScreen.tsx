@@ -724,14 +724,14 @@ export default function InstructorHomeScreen() {
                           <Text style={[styles.lessonDuration, { color: colors.textSecondary }]}>
                             ⏱️ {lesson.duration_minutes} minutes
                           </Text>
-                          {lesson.rebooking_count > 0 && (
+                          {(lesson.rebooking_count ?? 0) > 0 && (
                             <Text style={[styles.rebookingBadge, { color: colors.warning }]}>
                               🔄 Rescheduled {lesson.rebooking_count}x
                             </Text>
                           )}
-                          {lesson.cancellation_fee > 0 && (
+                          {(lesson.cancellation_fee ?? 0) > 0 && (
                             <Text style={[styles.cancellationFee, { color: colors.danger }]}>
-                              ⚠️ Fee: R{lesson.cancellation_fee.toFixed(2)}
+                              ⚠️ Fee: R{(lesson.cancellation_fee ?? 0).toFixed(2)}
                             </Text>
                           )}
                         </View>
@@ -739,7 +739,7 @@ export default function InstructorHomeScreen() {
                           lesson.status.toLowerCase() === 'confirmed' ? 'success' :
                           lesson.status.toLowerCase() === 'pending' ? 'warning' :
                           lesson.status.toLowerCase() === 'cancelled' ? 'danger' :
-                          lesson.status.toLowerCase() === 'completed' ? 'info' : 'default'
+                          lesson.status.toLowerCase() === 'completed' ? 'info' : 'neutral'
                         } size="sm">
                           {lesson.status}
                         </Badge>
@@ -1117,6 +1117,56 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 6,
     alignItems: 'center',
+  },
+  // These were referenced but never defined — the design-token migration
+  // removed the ones that existed, and the hourly-rate pill in the header
+  // never had any. Both cases render with no styling at all.
+  //
+  // Layout and type only: every colour at these use sites is already
+  // supplied inline from the theme, and Card brings its own surface.
+  headerRate: {
+    alignItems: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    marginTop: 8,
+  },
+  headerRateLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  headerRateAmount: {
+    fontSize: 20,
+    fontWeight: 'bold',
+  },
+  availabilityCard: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginHorizontal: 16,
+    marginTop: 16,
+  },
+  bookingFeeCard: {
+    marginHorizontal: 16,
+    marginTop: 16,
+  },
+  bookingFeeLabel: {
+    fontSize: 16,
+    fontWeight: '700',
+    marginBottom: 8,
+  },
+  bookingFeeValue: {
+    fontSize: 32,
+    fontWeight: 'bold',
+    marginBottom: 8,
+  },
+  bookingFeeNote: {
+    fontSize: 13,
+    fontStyle: 'italic',
+    marginBottom: 8,
+  },
+  earningsButton: {
+    padding: 20,
   },
   earningsButtonContent: {
     flexDirection: 'row',
