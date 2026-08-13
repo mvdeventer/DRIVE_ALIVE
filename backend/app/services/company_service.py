@@ -32,9 +32,31 @@ def _unique_slug(db: Session, base_slug: str) -> str:
     return slug
 
 
-def get_all_active_companies(db: Session) -> list[Company]:
-    """Return all active companies (for dropdown)."""
-    return db.query(Company).filter(Company.is_active.is_(True)).order_by(Company.name).all()
+def get_joinable_schools(db: Session) -> list[Company]:
+    """Schools an instructor may ask to join, for the public registration picker.
+
+    Deliberately narrower than "all active companies":
+
+    * **Solo companies are excluded.** ``ensure_solo_company`` gives every
+      independent instructor a one-person company named after *them*, so they
+      appear in the list as a person's name. Worse, ``needs_company_approval``
+      treats solo membership as needing no approval, so picking one from a
+      public dropdown would attach a stranger to someone's one-person business
+      with nobody asked. The sanctioned route in is an invitation, which calls
+      ``promote_solo_to_school`` first.
+    * **The platform host is excluded.** It operates the platform; it is not a
+      driving school anyone joins.
+    """
+    return (
+        db.query(Company)
+        .filter(
+            Company.is_active.is_(True),
+            Company.is_solo.isnot(True),
+            Company.is_platform_host.isnot(True),
+        )
+        .order_by(Company.name)
+        .all()
+    )
 
 
 def get_company_by_id(db: Session, company_id: int) -> Company | None:

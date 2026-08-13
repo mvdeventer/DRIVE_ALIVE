@@ -13,6 +13,7 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from 'react-native';
 import AddressAutocomplete from '../../components/AddressAutocomplete';
@@ -146,6 +147,7 @@ export default function RegisterInstructorScreen({ navigation, route }: any) {
         ? Number(presetCompanyId)
         : null
   );
+  const [companyQuery, setCompanyQuery] = useState('');
   const [newCompanyName, setNewCompanyName] = useState(
     typeof presetCompanyName === 'string' ? presetCompanyName : ''
   );
@@ -174,6 +176,21 @@ export default function RegisterInstructorScreen({ navigation, route }: any) {
         .finally(() => setCompaniesLoading(false));
     }
   }, [step, companies.length, companiesLoading]);
+
+  // The picker is a plain list, so filter it here rather than round-tripping:
+  // `/companies` returns every school unpaged, and there is no search parameter
+  // to send.
+  const companyFilter = companyQuery.trim().toLowerCase();
+  const filteredCompanies = companyFilter
+    ? companies.filter(c => c.name.toLowerCase().includes(companyFilter))
+    : companies;
+  // A school chosen before typing would otherwise vanish from view while still
+  // being the answer submitted, so keep it on screen at the top.
+  const selectedCompany = companies.find(c => c.id === selectedCompanyId) ?? null;
+  const visibleCompanies =
+    selectedCompany && !filteredCompanies.some(c => c.id === selectedCompany.id)
+      ? [selectedCompany, ...filteredCompanies]
+      : filteredCompanies;
 
   const updateFormData = (field: string, value: string) => {
     const v = field === 'phone' ? formatPhoneNumber(value) : value;
@@ -645,14 +662,66 @@ export default function RegisterInstructorScreen({ navigation, route }: any) {
               No registered schools found. You can create a new one instead.
             </Text>
           ) : (
+            <>
+              <View
+                style={[
+                  styles.companySearchRow,
+                  { borderColor: colors.border, backgroundColor: colors.card },
+                ]}
+              >
+                <Text style={styles.companySearchIcon} accessibilityElementsHidden importantForAccessibility="no">
+                  🔍
+                </Text>
+                <TextInput
+                  value={companyQuery}
+                  onChangeText={setCompanyQuery}
+                  placeholder="Search by school name"
+                  placeholderTextColor={colors.textTertiary}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  returnKeyType="search"
+                  accessibilityLabel="Search driving schools by name"
+                  style={[styles.companySearchInput, { color: colors.text }]}
+                />
+                {companyQuery.length > 0 && (
+                  <Pressable
+                    onPress={() => setCompanyQuery('')}
+                    hitSlop={12}
+                    accessibilityRole="button"
+                    accessibilityLabel="Clear school search"
+                    style={styles.companySearchClear}
+                  >
+                    <Text style={{ color: colors.textSecondary, fontSize: 16 }}>✕</Text>
+                  </Pressable>
+                )}
+              </View>
+
+              {/* Keyed off the *matches*, not what is on screen: a pinned
+                  selection would otherwise suppress the no-match message. */}
+              {filteredCompanies.length === 0 ? (
+                <Text style={[styles.noCompaniesText, { color: colors.textSecondary }]}>
+                  No schools match “{companyQuery.trim()}”. Check the spelling, or start a
+                  new school instead.
+                </Text>
+              ) : (
+                <Text style={[styles.companyCount, { color: colors.textSecondary }]}>
+                  {companyFilter
+                    ? `${filteredCompanies.length} of ${companies.length} schools`
+                    : `${companies.length} schools`}
+                </Text>
+              )}
+
             <View style={styles.companyList}>
-              {companies.map(c => (
+              {visibleCompanies.map(c => (
                 <Pressable
                   key={c.id}
                   onPress={() => {
                     setSelectedCompanyId(c.id);
                     setFieldErrors({});
                   }}
+                  accessibilityRole="button"
+                  accessibilityLabel={c.name}
+                  accessibilityState={{ selected: selectedCompanyId === c.id }}
                   style={[
                     styles.companyItem,
                     {
@@ -675,6 +744,7 @@ export default function RegisterInstructorScreen({ navigation, route }: any) {
                 </Pressable>
               ))}
             </View>
+            </>
           )}
           {fieldErrors.company ? (
             <Text style={[styles.errorText, { color: colors.danger }]}>{fieldErrors.company}</Text>
@@ -966,6 +1036,25 @@ const styles = StyleSheet.create({
   companyPickerSection: { marginTop: 12 },
   pickerLabel: { fontSize: 14, fontWeight: '600', marginBottom: 8 },
   noCompaniesText: { fontSize: 13, lineHeight: 18, marginTop: 8 },
+  companySearchRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    marginBottom: 8,
+    gap: 8,
+  },
+  companySearchIcon: { fontSize: 14 },
+  companySearchInput: {
+    flex: 1,
+    fontSize: 14,
+    paddingVertical: Platform.OS === 'web' ? 10 : 8,
+    // Web focus ring is drawn by the row's border, not the input's own outline.
+    ...(Platform.OS === 'web' ? { outlineStyle: 'none' as any } : null),
+  },
+  companySearchClear: { padding: 4 },
+  companyCount: { fontSize: 12, marginBottom: 8 },
   companyList: { gap: 8 },
   companyItem: {
     flexDirection: 'row',

@@ -197,6 +197,14 @@ stateDiagram-v2
     VERIFIED --> [*]: can now log in as instructor
 ```
 
+The public `/companies` list is **not** every company. `get_joinable_schools()`
+drops solo one-person companies and the platform host: a solo company is named
+after its instructor, so it shows up as a person's name in a "choose your
+school" list, and `needs_company_approval` treats solo membership as needing no
+approval — so picking one from a public dropdown would attach a stranger to
+someone's one-person business with nobody asked. The way into a solo company is
+an invitation, which calls `promote_solo_to_school` first.
+
 **`verification_status` names the gate still open, not the step already done.**
 Both links go out at registration, so the two gates can be cleared in either
 order and the *second* one produces `VERIFIED`. What records that a gate is
@@ -295,7 +303,7 @@ Reporting one as the other is the easiest way to be wrong here.
 | `availability.py` | `/availability` | `schedule` CRUD + `bulk`, `time-off` CRUD, `custom` CRUD, `overview`, and **public** `instructor/{id}/slots` | mixed |
 | `instructor_setup.py` | `/instructors/setup` | pre-auth schedule setup via one-time `setup_token` | token |
 | `company.py` | `/company` | `pricing`, `instructors/{id}/markup`, `invites` CRUD, `students` (enrol), `statement` | co-admin |
-| `companies.py` | `/companies` | list + `{id}` — **no POST** | public |
+| `companies.py` | `/companies` | list (**joinable schools only** — solo and platform-host rows excluded) + `{id}` — **no POST** | public |
 | `payments.py` | `/payments` | `initiate`, `webhook` (**public**, signature-verified), `session/{id}`, `mock-complete` | mixed |
 | `students.py` | `/students` | `me` (GET/PUT), `{id}`, `by-user/{id}` | auth |
 | `certifications.py` | `/certifications` | `me` CRUD, `user/{id}` | auth |

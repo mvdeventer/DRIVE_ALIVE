@@ -1051,3 +1051,76 @@ zero in app code.
 > **Local note:** run Jest through Windows node (`cmd.exe /c "cd /d
 > C:\Projects\DRIVE_ALIVE\frontend && npx jest"`). Under WSL node it dies at
 > `Preset react-native not found relative to rootDir`.
+
+---
+
+## Register as Instructor — school picker: search added, and D-24
+
+**Requested:** a search box above **Select Driving School** on step 3 of the
+instructor registration wizard.
+
+The list is fetched once from `/companies`, unpaged and with no search
+parameter, so the filter is client-side — same call the screen already makes,
+no round trip per keystroke and therefore no debounce needed. Matching is
+case-insensitive and substring, so "wheels" finds *Durban Wheels Driving
+School*. Above the list is a live count (`1 of 10 schools`), and a no-match
+state that points at the "Start a New School" option rather than dead-ending.
+
+One deliberate detail: **a school already chosen stays visible even when it
+does not match the current query.** Filtering it out of view while it remains
+the answer that gets submitted is how people end up registering against the
+wrong school. It is pinned to the top of the results, and the no-match message
+is keyed off the number of *matches*, not off what is on screen, so it still
+appears alongside the pinned choice.
+
+The picker rows also gained `accessibilityRole="button"` and
+`accessibilityState={{ selected }}`, which they never had — a screen reader
+previously announced ten unlabelled generic elements with no indication of which
+one was chosen.
+
+### D-24 — the school picker listed people, not just schools
+
+The screenshot that came with the request showed **"Emma Adams"** among the
+driving schools. `/companies` returned every active company row:
+
+| | |
+|---|---|
+| Rows returned | **23** |
+| Actual schools | 10 |
+| Solo one-person companies | **12** (people's names — two of them identical, "Emma Adams" twice) |
+| Platform host | **1** ("RoadReady") |
+
+More than half the list was noise, but the real problem is what selecting one
+did. `ensure_solo_company` gives every independent instructor a private
+one-person company, and `needs_company_approval` returns `False` for a solo
+company — so joining one from the public dropdown **skips the school approval
+gate entirely**. A stranger could attach themselves to an independent
+instructor's business, and that instructor would never be asked. The sanctioned
+route in is an invitation, which calls `promote_solo_to_school` first.
+
+`get_all_active_companies` became `get_joinable_schools`, excluding
+`is_solo` and `is_platform_host` (both non-nullable and indexed, so the filter
+is free). It had exactly one caller — this dropdown.
+
+### Verification
+
+Drove the wizard in a real browser through all three steps, filling the form by
+hand (debug prefill was off):
+
+| Check | Result |
+|---|---|
+| Schools listed | **10** — was 23 |
+| "Emma Adams" (solo) in list | gone |
+| "RoadReady" (host) in list | gone (the one hit on the page is the brand wordmark on the login screen) |
+| Search box present | yes |
+| Count line, no query | `10 schools` |
+| Typed `durban` | `1 of 10 schools`, Durban shown, Bloemfontein filtered out |
+| Selection pinned while filtered out | yes — Cape Town stayed visible and stayed selected |
+| `SOWETO` (case) | matches *Soweto Motion Driving School* |
+| `wheels` (mid-word) | matches *Durban Wheels Driving School* |
+| `zzz` | no-match message shown, pinned selection still visible |
+| Clear button | restores all 10, selection survives |
+| Console errors | none from this screen |
+
+`GET /companies` verified directly against the database: 23 rows before, 10
+after, and the 10 are the seeded schools.

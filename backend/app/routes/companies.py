@@ -9,8 +9,8 @@ from sqlalchemy.orm import Session
 from ..database import get_db
 from ..schemas.company import CompanyListItem, CompanyOut
 from ..services.company_service import (
-    get_all_active_companies,
     get_company_by_id,
+    get_joinable_schools,
 )
 
 router = APIRouter(prefix="/companies", tags=["companies"])
@@ -19,11 +19,12 @@ router = APIRouter(prefix="/companies", tags=["companies"])
 @router.get("", response_model=List[CompanyListItem])
 async def list_companies(db: Session = Depends(get_db)):
     """
-    Return all active companies (used in registration dropdown).
+    Return the driving schools an instructor can ask to join (registration
+    dropdown). Solo one-person companies and the platform host are not schools
+    and are left out — see ``get_joinable_schools``.
     Public — no auth required.
     """
-    companies = get_all_active_companies(db)
-    return companies
+    return get_joinable_schools(db)
 
 
 @router.get("/{company_id}", response_model=CompanyOut)
