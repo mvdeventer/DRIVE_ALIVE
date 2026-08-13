@@ -171,6 +171,9 @@ const DatabaseInterfaceScreen = ({ navigation }: any) => {
   const platformDetection = useWindowsDetection();
   const isDeletableTab = (tab: TabType): tab is DeletableTab => tab !== 'reviews' && tab !== 'schedules';
   const searchDebounceTimer = useRef<NodeJS.Timeout | null>(null);
+  // Latest fetchers, for the debounced search callback — see handleSearchChange.
+  type SearchFetcher = (page?: number, searchOverride?: string) => void;
+  const searchFetchersRef = useRef<Record<string, SearchFetcher>>({});
 
   const getColumnDefinitions = (tab: TabType) => COLUMN_DEFINITIONS[tab];
 
@@ -319,23 +322,31 @@ const DatabaseInterfaceScreen = ({ navigation }: any) => {
       setBookingsTable((prev) => ({ ...prev, search: text }));
     }
 
-    // Debounce the actual API call
+    // Debounce the actual API call.
+    //
+    // Two traps here, both of which silently broke search until a test caught
+    // them. This callback is `useCallback([])`, so it is pinned to the first
+    // render and the fetchers it closes over read the *initial* table state —
+    // hence the ref, refreshed every render. And even the current fetcher would
+    // read `search` from state that React has not committed yet, so the text is
+    // passed explicitly rather than re-read.
     searchDebounceTimer.current = setTimeout(() => {
+      const fetchers = searchFetchersRef.current;
       switch (table) {
         case 'users':
-          fetchUsers(1);
+          fetchers.users(1, text);
           break;
         case 'admins':
-          fetchAdmins(1);
+          fetchers.admins(1, text);
           break;
         case 'instructors':
-          fetchInstructors(1);
+          fetchers.instructors(1, text);
           break;
         case 'students':
-          fetchStudents(1);
+          fetchers.students(1, text);
           break;
         case 'bookings':
-          fetchBookings(1);
+          fetchers.bookings(1, text);
           break;
       }
     }, 300);
@@ -344,13 +355,13 @@ const DatabaseInterfaceScreen = ({ navigation }: any) => {
   // Similar for students, bookings, reviews, schedules...
 
   // Fetch users
-  const fetchUsers = async (page = 1) => {
+  const fetchUsers = async (page = 1, searchOverride?: string) => {
     setUsersTable((prev) => ({ ...prev, loading: true, error: null }));
     try {
       const response = await getDatabaseUsers(
         page,
         usersTable.pageSize,
-        usersTable.search,
+        searchOverride ?? usersTable.search,
         userRoleFilter === 'ALL' ? undefined : userRoleFilter,
         userStatusFilter === 'ALL' ? undefined : userStatusFilter,
         usersTable.sort
@@ -421,13 +432,13 @@ const DatabaseInterfaceScreen = ({ navigation }: any) => {
   };
 
   // Fetch admins (users API pinned to role=admin)
-  const fetchAdmins = async (page = 1) => {
+  const fetchAdmins = async (page = 1, searchOverride?: string) => {
     setAdminsTable((prev) => ({ ...prev, loading: true, error: null }));
     try {
       const response = await getDatabaseUsers(
         page,
         adminsTable.pageSize,
-        adminsTable.search,
+        searchOverride ?? adminsTable.search,
         'ADMIN',
         undefined,
         adminsTable.sort
@@ -453,7 +464,7 @@ const DatabaseInterfaceScreen = ({ navigation }: any) => {
   };
 
   // Fetch instructors
-  const fetchInstructors = async (page = 1) => {
+  const fetchInstructors = async (page = 1, searchOverride?: string) => {
     setInstructorsTable((prev) => ({ ...prev, loading: true, error: null }));
     try {
       const verifiedFilter = instructorVerifiedFilter === 'ALL'
@@ -462,7 +473,7 @@ const DatabaseInterfaceScreen = ({ navigation }: any) => {
       const response = await getDatabaseInstructors(
         page,
         instructorsTable.pageSize,
-        instructorsTable.search,
+        searchOverride ?? instructorsTable.search,
         verifiedFilter,
         instructorsTable.sort
       );
@@ -486,10 +497,10 @@ const DatabaseInterfaceScreen = ({ navigation }: any) => {
     }
   };
 
-  const fetchStudents = async (page = 1) => {
+  const fetchStudents = async (page = 1, searchOverride?: string) => {
     setStudentsTable((prev) => ({ ...prev, loading: true, error: null }));
     try {
-      const response = await getDatabaseStudents(page, studentsTable.pageSize, studentsTable.search);
+      const response = await getDatabaseStudents(page, studentsTable.pageSize, searchOverride ?? studentsTable.search);
       setStudentsTable((prev) => ({
         ...prev,
         data: response.data,
@@ -510,13 +521,13 @@ const DatabaseInterfaceScreen = ({ navigation }: any) => {
     }
   };
 
-  const fetchBookings = async (page = 1) => {
+  const fetchBookings = async (page = 1, searchOverride?: string) => {
     setBookingsTable((prev) => ({ ...prev, loading: true, error: null }));
     try {
       const response = await getDatabaseBookings(
         page,
         bookingsTable.pageSize,
-        bookingsTable.search,
+        searchOverride ?? bookingsTable.search,
         bookingStatusFilter === 'ALL' ? undefined : bookingStatusFilter,
         bookingPaymentFilter === 'ALL' ? undefined : bookingPaymentFilter,
         bookingStartDate || undefined,
@@ -555,6 +566,14 @@ const DatabaseInterfaceScreen = ({ navigation }: any) => {
     activeTab === 'students' ? studentsTable :
     activeTab === 'bookings' ? bookingsTable :
     activeTab === 'reviews' ? reviewsTable : schedulesTable;
+
+  searchFetchersRef.current = {
+    users: fetchUsers,
+    admins: fetchAdmins,
+    instructors: fetchInstructors,
+    students: fetchStudents,
+    bookings: fetchBookings,
+  };
 
   const fetchActiveTable = (page = 1) => {
     switch (activeTab) {

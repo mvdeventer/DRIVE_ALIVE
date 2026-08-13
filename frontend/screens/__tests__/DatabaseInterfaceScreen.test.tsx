@@ -8,17 +8,28 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react-nativ
 import { NavigationContainer } from '@react-navigation/native';
 import DatabaseInterfaceScreen from '../admin/DatabaseInterfaceScreen';
 import * as databaseInterface from '../../services/database-interface';
+import { ThemeProvider } from '../../theme/ThemeContext';
+import { I18nProvider } from '../../i18n';
 
 // Mock the service
 jest.mock('../../services/database-interface');
+
+// One shared mock the tests can re-point. jest.mock() is hoisted above the
+// test bodies, so calling it *inside* a test does nothing at all.
+const mockWindowsDetection = jest.fn();
 jest.mock('../../hooks/useWindowsDetection', () => ({
   __esModule: true,
-  default: () => ({
-    isWindowsPC: true,
-    isPlatformAllowed: true,
-    platformWarning: null,
-  }),
+  default: () => mockWindowsDetection(),
 }));
+
+const ALLOWED = {
+  isWindowsPC: true,
+  isPlatformAllowed: true,
+  platformWarning: null,
+  isWindows: true,
+  isMobile: false,
+  isTablet: false,
+};
 
 const mockNavigation = {
   navigate: jest.fn(),
@@ -28,30 +39,42 @@ const mockNavigation = {
 describe('DatabaseInterfaceScreen', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockWindowsDetection.mockReturnValue(ALLOWED);
+    // The screen surfaces load failures through handleApiError; under the
+    // automock it returns undefined and no banner renders.
+    (databaseInterface.handleApiError as jest.Mock).mockImplementation(
+      (error: any) => error?.message ?? 'Request failed',
+    );
   });
 
+  // The screen reads colours from ThemeProvider and every label through
+  // I18nProvider, and throws at render time without either.
   const renderScreen = () => {
     return render(
-      <NavigationContainer>
-        <DatabaseInterfaceScreen navigation={mockNavigation} />
-      </NavigationContainer>
+      <ThemeProvider>
+        <I18nProvider>
+          <NavigationContainer>
+            <DatabaseInterfaceScreen navigation={mockNavigation} />
+          </NavigationContainer>
+        </I18nProvider>
+      </ThemeProvider>
     );
   };
 
   describe('Platform Detection', () => {
     it('should show access denied when not on Windows PC', () => {
-      jest.mock('../../hooks/useWindowsDetection', () => ({
-        __esModule: true,
-        default: () => ({
-          isWindowsPC: false,
-          isPlatformAllowed: false,
-          platformWarning: 'This feature is only available on Windows PC',
-        }),
-      }));
+      mockWindowsDetection.mockReturnValue({
+        ...ALLOWED,
+        isWindowsPC: false,
+        isWindows: false,
+        isPlatformAllowed: false,
+        platformWarning: 'This feature is only available on Windows PC',
+      });
 
       renderScreen();
 
-      expect(screen.getByText(/Access Restricted/i)).toBeTruthy();
+      expect(screen.getByText(/Access Denied/i)).toBeTruthy();
+      expect(screen.getByText(/only available on Windows PC/i)).toBeTruthy();
     });
   });
 
@@ -126,7 +149,7 @@ describe('DatabaseInterfaceScreen', () => {
       renderScreen();
 
       await waitFor(() => {
-        expect(screen.getByText(/error/i)).toBeTruthy();
+        expect(screen.getByText('Network error')).toBeTruthy();
       });
     });
   });
@@ -145,14 +168,17 @@ describe('DatabaseInterfaceScreen', () => {
       const searchInput = screen.getByPlaceholderText(/Search/i);
       fireEvent.changeText(searchInput, 'john');
 
-      await waitFor(
-        () => {
-          expect(databaseInterface.getDatabaseUsers).toHaveBeenCalledWith(
-            expect.objectContaining({ search: 'john' })
-          );
-        },
-        { timeout: 500 }
-      );
+      // Positional signature: (page, pageSize, search, filterRole, filterStatus, sort)
+      await waitFor(() => {
+        expect(databaseInterface.getDatabaseUsers).toHaveBeenCalledWith(
+          1,
+          expect.any(Number),
+          'john',
+          undefined,
+          undefined,
+          expect.any(String),
+        );
+      });
     });
   });
 
@@ -167,14 +193,23 @@ describe('DatabaseInterfaceScreen', () => {
 
       renderScreen();
 
-      await waitFor(() => {
-        const nextButton = screen.getByText(/Next/i);
-        fireEvent.press(nextButton);
-      });
+      // Wait for the first page to land: until it does totalPages is 0 and the
+      // button is disabled, so the press would be a no-op.
+      await screen.findByText('John Doe');
+
+      // Grab the Pressable by its accessible name — getByText would return the
+      // inner <Text>, which carries neither the handler nor the a11y state.
+      const nextButton = screen.getByLabelText('Go to next page');
+      fireEvent.press(nextButton);
 
       await waitFor(() => {
         expect(databaseInterface.getDatabaseUsers).toHaveBeenCalledWith(
-          expect.objectContaining({ page: 2 })
+          2,
+          expect.any(Number),
+          expect.any(String),
+          undefined,
+          undefined,
+          expect.any(String),
         );
       });
     });
@@ -189,10 +224,8 @@ describe('DatabaseInterfaceScreen', () => {
 
       renderScreen();
 
-      await waitFor(() => {
-        const nextButton = screen.getByText(/Next/i);
-        expect(nextButton.props.accessibilityState.disabled).toBe(true);
-      });
+      const nextButton = await screen.findByLabelText('Go to next page');
+      expect(nextButton.props.accessibilityState.disabled).toBe(true);
     });
   });
 
@@ -210,14 +243,13 @@ describe('DatabaseInterfaceScreen', () => {
 
       renderScreen();
 
-      await waitFor(() => {
-        const checkboxes = screen.getAllByRole('checkbox');
-        fireEvent.press(checkboxes[0]);
-      });
+      await waitFor(() => expect(screen.getAllByRole('checkbox').length).toBeGreaterThan(1));
 
-      // Should show bulk actions
+      // [0] is the header select-all; [1] is the first data row.
+      fireEvent.press(screen.getAllByRole('checkbox')[1]);
+
       await waitFor(() => {
-        expect(screen.getByText(/1 selected/i)).toBeTruthy();
+        expect(screen.getByText(/1 row selected/i)).toBeTruthy();
       });
     });
   });

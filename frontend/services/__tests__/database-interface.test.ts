@@ -1,9 +1,15 @@
 /**
- * Jest Unit Tests for Database Interface API Service
- * Tests all API methods for CRUD operations
+ * Unit tests for the Database Interface API service.
+ *
+ * These functions are thin wrappers over `services/api` — they build the URL,
+ * the query string and the conditional-request headers, and hand back
+ * `response.data`. So `./api` is the mock boundary: mocking `axios` instead
+ * would exercise the shared client's interceptors, which belong to that
+ * module's own tests, and would break at import time because `axios.create()`
+ * is called while `services/api/index.ts` is still being evaluated.
  */
 
-import axios from 'axios';
+import apiService from '../api';
 import {
   getDatabaseUsers,
   getDatabaseInstructors,
@@ -13,241 +19,240 @@ import {
   updateUser,
   deleteUser,
   bulkUpdateRecords,
+  handleApiError,
 } from '../database-interface';
 
-// Mock axios
-jest.mock('axios');
-const mockedAxios = axios as jest.Mocked<typeof axios>;
+jest.mock('../api', () => ({
+  __esModule: true,
+  default: {
+    get: jest.fn(),
+    post: jest.fn(),
+    put: jest.fn(),
+    delete: jest.fn(),
+  },
+}));
 
-// Mock AsyncStorage (React Native storage)
-const mockStorage = {
-  getItem: jest.fn(() => Promise.resolve('mock-token')),
-  setItem: jest.fn(() => Promise.resolve()),
-  removeItem: jest.fn(() => Promise.resolve()),
-};
+const mockedApi = apiService as jest.Mocked<typeof apiService>;
 
-jest.mock('@react-native-async-storage/async-storage', () => mockStorage);
+/** Every endpoint returns the envelope under `response.data`. */
+const list = (data: any[] = [], total = data.length) => ({
+  data: { data, meta: { total, page: 1, page_size: 20, total_pages: 1 } },
+});
 
-describe('Database Interface API Service', () => {
+describe('Database Interface API service', () => {
   beforeEach(() => {
     jest.clearAllMocks();
   });
 
-  describe('getDatabaseUsers', () => {
-    it('should fetch users with pagination', async () => {
-      const mockResponse = {
-        data: {
-          data: [
-            { id: 1, first_name: 'John', last_name: 'Doe', email: 'john@example.com', role: 'STUDENT' },
-            { id: 2, first_name: 'Jane', last_name: 'Smith', email: 'jane@example.com', role: 'INSTRUCTOR' },
-          ],
-          meta: { total: 2, page: 1, page_size: 20, total_pages: 1 },
-        },
-      };
+  describe('list endpoints', () => {
+    it('sends page and page_size, and unwraps the envelope', async () => {
+      const users = [
+        { id: 1, first_name: 'John', last_name: 'Doe', email: 'john@example.com' },
+        { id: 2, first_name: 'Jane', last_name: 'Smith', email: 'jane@example.com' },
+      ];
+      mockedApi.get.mockResolvedValueOnce(list(users, 2) as any);
 
-      mockedAxios.get.mockResolvedValueOnce(mockResponse);
+      const result = await getDatabaseUsers(1, 20);
 
-      const result = await getDatabaseUsers({ page: 1, page_size: 20 });
-
-      expect(mockedAxios.get).toHaveBeenCalledWith(
-        expect.stringContaining('/admin/database-interface/users'),
-        expect.objectContaining({
-          params: { page: 1, page_size: 20 },
-          headers: expect.objectContaining({
-            Authorization: 'Bearer mock-token',
-          }),
-        })
+      expect(mockedApi.get).toHaveBeenCalledWith(
+        '/admin/database-interface/users?page=1&page_size=20',
       );
       expect(result.data).toHaveLength(2);
       expect(result.meta.total).toBe(2);
     });
 
-    it('should handle search parameter', async () => {
-      const mockResponse = {
-        data: { data: [], meta: { total: 0, page: 1, page_size: 20, total_pages: 0 } },
-      };
+    it('appends search only when one is given', async () => {
+      mockedApi.get.mockResolvedValue(list() as any);
 
-      mockedAxios.get.mockResolvedValueOnce(mockResponse);
+      await getDatabaseUsers(1, 20, 'john');
+      expect(mockedApi.get).toHaveBeenLastCalledWith(
+        expect.stringContaining('search=john'),
+      );
 
-      await getDatabaseUsers({ page: 1, page_size: 20, search: 'john' });
-
-      expect(mockedAxios.get).toHaveBeenCalledWith(
-        expect.anything(),
-        expect.objectContaining({
-          params: expect.objectContaining({ search: 'john' }),
-        })
+      await getDatabaseUsers(1, 20);
+      expect(mockedApi.get).toHaveBeenLastCalledWith(
+        expect.not.stringContaining('search='),
       );
     });
 
-    it('should handle role filter', async () => {
-      const mockResponse = {
-        data: { data: [], meta: { total: 0, page: 1, page_size: 20, total_pages: 0 } },
-      };
+    it('appends the role and status filters', async () => {
+      mockedApi.get.mockResolvedValueOnce(list() as any);
 
-      mockedAxios.get.mockResolvedValueOnce(mockResponse);
+      await getDatabaseUsers(2, 50, undefined, 'instructor', 'active');
 
-      await getDatabaseUsers({ page: 1, page_size: 20, role: 'INSTRUCTOR' });
+      const url = mockedApi.get.mock.calls[0][0];
+      expect(url).toContain('page=2');
+      expect(url).toContain('page_size=50');
+      expect(url).toContain('filter_role=instructor');
+      expect(url).toContain('filter_status=active');
+    });
 
-      expect(mockedAxios.get).toHaveBeenCalledWith(
-        expect.anything(),
-        expect.objectContaining({
-          params: expect.objectContaining({ role: 'INSTRUCTOR' }),
-        })
+    it('each table hits its own path', async () => {
+      mockedApi.get.mockResolvedValue(list() as any);
+
+      await getDatabaseInstructors();
+      expect(mockedApi.get).toHaveBeenLastCalledWith(
+        expect.stringContaining('/admin/database-interface/instructors'),
+      );
+
+      await getDatabaseStudents();
+      expect(mockedApi.get).toHaveBeenLastCalledWith(
+        expect.stringContaining('/admin/database-interface/students'),
+      );
+
+      await getDatabaseBookings();
+      expect(mockedApi.get).toHaveBeenLastCalledWith(
+        expect.stringContaining('/admin/database-interface/bookings'),
       );
     });
   });
 
   describe('getUserDetail', () => {
-    it('should fetch user detail with ETag', async () => {
-      const mockResponse = {
-        data: { id: 1, first_name: 'John', last_name: 'Doe', email: 'john@example.com' },
-        headers: { etag: '"abc123"' },
-      };
+    it('fetches one record by id', async () => {
+      mockedApi.get.mockResolvedValueOnce({
+        data: { data: { id: 7 }, meta: { etag: 'W/"abc"', last_modified: 'now' } },
+      } as any);
 
-      mockedAxios.get.mockResolvedValueOnce(mockResponse);
+      const result = await getUserDetail(7);
 
-      const result = await getUserDetail(1);
-
-      expect(mockedAxios.get).toHaveBeenCalledWith(
-        expect.stringContaining('/admin/database-interface/users/1'),
-        expect.any(Object)
-      );
-      expect(result.data.id).toBe(1);
-      expect(result.etag).toBe('"abc123"');
+      expect(mockedApi.get).toHaveBeenCalledWith('/admin/database-interface/users/7');
+      expect(result.meta.etag).toBe('W/"abc"');
     });
 
-    it('should handle 404 error', async () => {
-      mockedAxios.get.mockRejectedValueOnce({
-        response: { status: 404, data: { detail: 'User not found' } },
-      });
+    it('propagates a rejection rather than swallowing it', async () => {
+      mockedApi.get.mockRejectedValueOnce({ response: { status: 404 } });
 
-      await expect(getUserDetail(999)).rejects.toThrow();
+      await expect(getUserDetail(999)).rejects.toMatchObject({
+        response: { status: 404 },
+      });
     });
   });
 
   describe('updateUser', () => {
-    it('should update user with ETag header', async () => {
-      const updateData = { first_name: 'John', last_name: 'Updated' };
-      const mockResponse = {
-        data: { id: 1, ...updateData, email: 'john@example.com' },
-      };
+    it('sends If-Match when an ETag is supplied', async () => {
+      mockedApi.put.mockResolvedValueOnce({
+        data: { data: { id: 1 }, meta: { message: 'ok' } },
+      } as any);
 
-      mockedAxios.put.mockResolvedValueOnce(mockResponse);
+      await updateUser(1, { first_name: 'Updated' }, 'W/"v1"');
 
-      const result = await updateUser(1, updateData, '"etag-value"');
-
-      expect(mockedAxios.put).toHaveBeenCalledWith(
-        expect.stringContaining('/admin/database-interface/users/1'),
-        updateData,
-        expect.objectContaining({
-          headers: expect.objectContaining({
-            'If-Match': '"etag-value"',
-          }),
-        })
+      expect(mockedApi.put).toHaveBeenCalledWith(
+        '/admin/database-interface/users/1',
+        { first_name: 'Updated' },
+        { headers: { 'Content-Type': 'application/json', 'If-Match': 'W/"v1"' } },
       );
-      expect(result.first_name).toBe('John');
     });
 
-    it('should handle 409 conflict error', async () => {
-      mockedAxios.put.mockRejectedValueOnce({
-        response: { status: 409, data: { detail: 'Resource modified by another user' } },
-      });
+    it('omits If-Match when no ETag is supplied', async () => {
+      mockedApi.put.mockResolvedValueOnce({ data: { data: {}, meta: {} } } as any);
 
-      await expect(
-        updateUser(1, { first_name: 'Test' }, '"old-etag"')
-      ).rejects.toMatchObject({
+      await updateUser(1, { first_name: 'Updated' });
+
+      const [, , config] = mockedApi.put.mock.calls[0];
+      expect((config as any).headers).not.toHaveProperty('If-Match');
+    });
+
+    it('propagates a 409 conflict', async () => {
+      mockedApi.put.mockRejectedValueOnce({ response: { status: 409 } });
+
+      await expect(updateUser(1, {}, 'W/"stale"')).rejects.toMatchObject({
         response: { status: 409 },
       });
     });
   });
 
   describe('deleteUser', () => {
-    it('should delete user with ETag', async () => {
-      mockedAxios.delete.mockResolvedValueOnce({ status: 204 });
+    it('sends If-Match and the role_type query when given', async () => {
+      mockedApi.delete.mockResolvedValueOnce({
+        data: { data: {}, meta: { message: 'deleted' } },
+      } as any);
 
-      await deleteUser(1, '"etag"');
+      await deleteUser(5, 'W/"v2"', 'student_profile');
 
-      expect(mockedAxios.delete).toHaveBeenCalledWith(
-        expect.stringContaining('/admin/database-interface/users/1'),
-        expect.objectContaining({
-          headers: expect.objectContaining({
-            'If-Match': '"etag"',
-          }),
-        })
+      expect(mockedApi.delete).toHaveBeenCalledWith(
+        '/admin/database-interface/users/5?role_type=student_profile',
+        { headers: { 'If-Match': 'W/"v2"' } },
+      );
+    });
+
+    it('leaves the URL bare when no role_type is given', async () => {
+      mockedApi.delete.mockResolvedValueOnce({ data: { data: {}, meta: {} } } as any);
+
+      await deleteUser(5);
+
+      expect(mockedApi.delete).toHaveBeenCalledWith(
+        '/admin/database-interface/users/5',
+        { headers: {} },
       );
     });
   });
 
   describe('bulkUpdateRecords', () => {
-    it('should bulk update users status', async () => {
-      const mockResponse = {
-        data: {
-          updated_count: 5,
-          failed_ids: [],
-          message: 'Successfully updated 5 record(s)',
-        },
-      };
+    it('posts the request body unchanged', async () => {
+      mockedApi.post.mockResolvedValueOnce({
+        data: { updated_count: 3, failed_ids: [], message: 'Updated 3 records' },
+      } as any);
 
-      mockedAxios.post.mockResolvedValueOnce(mockResponse);
-
-      const result = await bulkUpdateRecords({
-        table: 'users',
-        ids: [1, 2, 3, 4, 5],
+      const request = {
+        table: 'users' as const,
+        ids: [1, 2, 3],
         field: 'status',
-        value: 'ACTIVE',
-      });
+        value: 'active',
+      };
+      const result = await bulkUpdateRecords(request);
 
-      expect(mockedAxios.post).toHaveBeenCalledWith(
-        expect.stringContaining('/admin/database-interface/bulk-update'),
-        { table: 'users', ids: [1, 2, 3, 4, 5], field: 'status', value: 'ACTIVE' },
-        expect.any(Object)
+      expect(mockedApi.post).toHaveBeenCalledWith(
+        '/admin/database-interface/bulk-update',
+        request,
       );
-      expect(result.updated_count).toBe(5);
+      expect(result.updated_count).toBe(3);
     });
 
-    it('should handle validation error for >100 records', async () => {
-      mockedAxios.post.mockRejectedValueOnce({
-        response: {
-          status: 400,
-          data: { detail: 'Cannot update more than 100 records at once' },
-        },
+    it('propagates the server-side cap on batch size', async () => {
+      mockedApi.post.mockRejectedValueOnce({
+        response: { status: 422, data: { detail: 'Maximum 100 records per request' } },
       });
-
-      const largeIds = Array.from({ length: 150 }, (_, i) => i + 1);
 
       await expect(
-        bulkUpdateRecords({ table: 'users', ids: largeIds, field: 'status', value: 'ACTIVE' })
-      ).rejects.toMatchObject({
-        response: { status: 400 },
-      });
+        bulkUpdateRecords({
+          table: 'users',
+          ids: Array.from({ length: 101 }, (_, i) => i + 1),
+          field: 'status',
+          value: 'active',
+        }),
+      ).rejects.toMatchObject({ response: { status: 422 } });
     });
   });
 
-  describe('Error Handling', () => {
-    it('should handle network errors', async () => {
-      mockedAxios.get.mockRejectedValueOnce(new Error('Network Error'));
-
-      await expect(getDatabaseUsers({ page: 1, page_size: 20 })).rejects.toThrow('Network Error');
+  describe('handleApiError', () => {
+    it('names the connection when there is no response', () => {
+      expect(handleApiError({} as any)).toMatch(/network error/i);
     });
 
-    it('should handle 401 unauthorized', async () => {
-      mockedAxios.get.mockRejectedValueOnce({
-        response: { status: 401, data: { detail: 'Unauthorized' } },
-      });
+    it('prefers RFC 7807 title and detail', () => {
+      const message = handleApiError({
+        response: { status: 400, data: { title: 'Bad Request', detail: 'id is required' } },
+      } as any);
 
-      await expect(getDatabaseUsers({ page: 1, page_size: 20 })).rejects.toMatchObject({
-        response: { status: 401 },
-      });
+      expect(message).toBe('Bad Request: id is required');
     });
 
-    it('should handle 403 forbidden', async () => {
-      mockedAxios.get.mockRejectedValueOnce({
-        response: { status: 403, data: { detail: 'Forbidden' } },
-      });
+    it('maps the statuses the screen can actually provoke', () => {
+      const at = (status: number, data: any = {}) =>
+        handleApiError({ response: { status, data }, message: 'x' } as any);
 
-      await expect(getDatabaseUsers({ page: 1, page_size: 20 })).rejects.toMatchObject({
-        response: { status: 403 },
-      });
+      expect(at(401)).toMatch(/log in again/i);
+      expect(at(403)).toMatch(/permission/i);
+      expect(at(404)).toMatch(/not found/i);
+      expect(at(409)).toMatch(/modified by another user/i);
+      expect(at(429)).toMatch(/too many requests/i);
+      expect(at(503)).toMatch(/unavailable/i);
+    });
+
+    it('falls back to the server detail where one is given', () => {
+      expect(handleApiError({
+        response: { status: 500, data: { detail: 'Disk full' } },
+      } as any)).toBe('Disk full');
     });
   });
 });

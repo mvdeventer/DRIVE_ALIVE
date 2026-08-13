@@ -1000,3 +1000,54 @@ with all four notification senders stubbed and the probe rows deleted afterwards
 | **D** admin rejects | `REJECTED`, rejection mail sent |
 
 24 of 24 assertions passed.
+
+---
+
+## D-23 — Database Interface search never searched
+
+Found by repairing CI rather than by driving the UI: the two `DatabaseInterface`
+suites had not run since they were written, and making them run surfaced this.
+
+`handleSearchChange` is `useCallback(..., [])`, so it is pinned to the first
+render and the `fetchUsers` / `fetchAdmins` / … it closes over read the table
+state as it was at mount. Its debounced timer therefore called
+`fetchUsers(1)`, which re-read `usersTable.search` from that first-render
+closure — permanently `''`. **Typing in the search box updated the input and
+issued a request, and the request always carried an empty search term.** The
+same applied to all five searchable tabs. Nothing else refetches on `search`
+(the filter effects watch `userRoleFilter` / `userStatusFilter` / … only), so
+there was no path by which a typed query reached the server.
+
+The test that caught it asserted the call arguments, and got three calls all
+reading `1, 20, "", undefined, undefined, "-created_at"` after typing `john`.
+
+Fixed on two levels, because either alone would still be wrong:
+
+* the five list fetchers take an optional `searchOverride`, so the debounce can
+  pass the text it was given instead of re-reading state React has not committed;
+* a `searchFetchersRef` refreshed every render, so the pinned callback calls the
+  *current* fetchers and keeps the active role/status filters, page size and sort
+  instead of resetting them to their mount values.
+
+### CI, and what running the suites was worth
+
+GitHub Actions had been red on every push to `main` since v8.1.0 (2026-08-04).
+ESLint: 9 `no-duplicate-imports` errors, each a value import beside an
+`import type` from the same module — merged with inline `type` specifiers, no
+rule relaxed. Jest: every `expo-*` import died in `expo-modules-core` under the
+bare `react-native` preset, taking out both suites before a single assertion
+ran; `jest.setup.js` now mocks the four expo modules this app imports.
+
+With the suites actually executing, both turned out to be stale as well:
+
+| Suite | State |
+|---|---|
+| `services/__tests__/database-interface.test.ts` | Asserted `axios.get` with an object argument (`{ page, page_size }`) and hand-built auth headers. The real functions take positional arguments and go through `apiService`, which adds auth in an interceptor. Every assertion was unreachable. Rewritten against the real surface — 17 tests. |
+| `screens/__tests__/DatabaseInterfaceScreen.test.tsx` | Rendered without `ThemeProvider` or `I18nProvider`, so the screen threw on `useTheme`. Called `jest.mock` inside a test body, where hoisting makes it a no-op. Asserted object-shaped API arguments, and read `accessibilityState` off a `<Text>` rather than its `Pressable`. All 11 repaired. |
+
+**6 suites, 70 tests, all passing.** Typecheck baseline improved 89 → 85, still
+zero in app code.
+
+> **Local note:** run Jest through Windows node (`cmd.exe /c "cd /d
+> C:\Projects\DRIVE_ALIVE\frontend && npx jest"`). Under WSL node it dies at
+> `Preset react-native not found relative to rootDir`.
