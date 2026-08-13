@@ -16,6 +16,7 @@ import { Button, Card, ScreenContainer } from '../../components/ui';
 import { useT } from '../../i18n';
 import ApiService from '../../services/api';
 import { useTheme } from '../../theme/ThemeContext';
+import { useExitToLogin } from '../../utils/exitToLogin';
 
 interface Offer {
   company_id: number;
@@ -27,6 +28,8 @@ interface Offer {
 }
 
 export default function InstructorInviteScreen({ navigation }: any) {
+  // `Login` is not mounted while a session is live — see utils/exitToLogin.
+  const goToLogin = useExitToLogin(navigation);
   const { colors, spacing, typography } = useTheme();
   const t = useT();
   const route = useRoute();
@@ -162,7 +165,7 @@ export default function InstructorInviteScreen({ navigation }: any) {
       )}
 
       <View style={{ marginTop: spacing.lg, gap: spacing.sm }}>
-        <Button variant="secondary" onPress={() => navigation.navigate('Login')} fullWidth>
+        <Button variant="secondary" onPress={goToLogin} fullWidth>
           {t('instructorInvite.signIn')}
         </Button>
         <Button

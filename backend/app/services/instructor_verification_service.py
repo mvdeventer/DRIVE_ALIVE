@@ -311,6 +311,21 @@ You can also verify from the admin dashboard.
             instructor.verification_status = InstructorVerificationStatus.PENDING_ADMIN.value
             instructor.company_verification_token = None  # invalidate
 
+            # Record *that* the school approved, not just that the status moved.
+            # Without this stamp `needs_company_approval` still reads the
+            # instructor as a school member awaiting their owner, and the admin
+            # approval that follows sends them straight back to
+            # `pending_company` — a loop they can never leave.
+            from ..models.company import Company
+
+            company = (
+                db.query(Company).filter(Company.id == instructor.company_id).first()
+                if instructor.company_id
+                else None
+            )
+            if company and company.owner_instructor_id:
+                instructor.verified_by_instructor_id = company.owner_instructor_id
+
             # Create admin token and notify admins
             admin_token_value = secrets.token_urlsafe(32)
             expires_at = datetime.now(timezone.utc) + timedelta(hours=72)

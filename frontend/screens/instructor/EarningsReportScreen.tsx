@@ -1231,25 +1231,23 @@ const styles = StyleSheet.create({
   },
   detailRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    alignItems: 'flex-start',
+    gap: 8,
     paddingVertical: 8,
   },
   detailLabel: {
     fontSize: 14,
     fontFamily: 'Inter_600SemiBold',
-    flex: 1,
+    minWidth: 96,
   },
   detailValue: {
     fontSize: 14,
     fontFamily: 'Inter_400Regular',
-    flex: 1,
-    textAlign: 'right',
+    flexShrink: 1,
   },
   detailValueHighlight: {
     fontSize: 16,
     fontFamily: 'Inter_700Bold',
-    flex: 1,
-    textAlign: 'right',
+    flexShrink: 1,
   },
 });

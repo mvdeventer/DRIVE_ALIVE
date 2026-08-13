@@ -644,3 +644,271 @@ The choice persisted across navigation and reverted cleanly to English.
 
 This covers two screens; the full Phase 6 sweep across all screens is still
 outstanding.
+
+### UI change (user-requested) — label/value rows sat too far apart
+
+On wide desktop widths every detail row used
+`flexDirection: 'row'` + `justifyContent: 'space-between'`, which pins the label
+to the left edge of the card and throws its value to the right edge. On a
+1440px-wide card the eye has to track ~1400px to pair "ID No.:" with
+`9000000500014`. Replaced with a left-packed row — a fixed minimum label width,
+a small gap, and a shrinking value — so the value sits immediately after its
+label and the values still line up in a column.
+
+| Screen | Style | Change |
+|---|---|---|
+| `screens/admin/InstructorVerificationScreen.tsx` | `detailRow` / `detailLabel` / `detailValue` | `space-between` → `gap: 6`, label `minWidth: 56`, value `flexShrink: 1` |
+| `screens/admin/BookingOversightScreen.tsx` | `detailRow` / `detailLabel` / `detailValue` | `space-between` → `gap: 8`, label `minWidth: 64`, value `flexShrink: 1` |
+| `screens/instructor/EarningsReportScreen.tsx` | `detailRow` / `detailLabel` / `detailValue` / `detailValueHighlight` | dropped `flex: 1` + `textAlign: 'right'`, label `minWidth: 96`, value `flexShrink: 1` |
+
+`minWidth` is a floor, not a fixed width, so a longer Afrikaans label pushes its
+own value across rather than truncating — the column alignment degrades
+gracefully instead of breaking.
+
+**Deliberately left alone.** Two independent scans of every screen and component
+found the remaining `space-between` rows are not label/value pairs and should
+stay stretched:
+
+* money statements where right-aligned amounts form a column —
+  `CompanyPricingScreen.row`, `CompanyStatementScreen.totalRow`,
+  `PaymentScreen.summaryRow/creditRow/totalRow`, `BookingScreen.priceRow`
+* rows holding two independent facts, not a label and its value —
+  `UserManagementScreen.userHeader/bookingHeader`,
+  `EarningsReportScreen.earningHeader/monthHeader`,
+  `InstructorEarningsOverviewScreen.earningHeader/cardStats`,
+  `InstructorListScreen.infoRow`, `AdminDashboardScreen.backupItem`
+* controls with a trailing icon — `ManageAvailabilityScreen` date/time pickers,
+  `LocationSelector` list rows
+
+Gates after the change: all three merge gates pass; typecheck still 89 errors,
+all in `__tests__`, none in app code.
+
+**Not browser-verified.** Screenshotting these screens needs an admin login, and
+`POST /auth/login` returned 409 with the "Already Logged In" modal — the only way
+through is Force Login, which would have ended the live admin session in your
+own Chrome. The Expo dev server hot-reloads, so the open tab shows the new
+layout already.
+
+### Feature (user-requested) — search, status filter and card grid on the admin list screens
+
+The Users screen already had a search box, a status dropdown and a multi-column
+card grid. The other admin list screens did not. Brought them into line.
+
+#### `InstructorVerificationScreen` — rewritten
+
+| Added | Detail |
+|---|---|
+| Search | Name, email, phone, SA ID, licence number, instructor id and user id. `#14` and `14` both find id 14. Debounced 350 ms. |
+| Status filter | The existing tab strip **is** the status filter, now labelled `Filter by Status:` and given an active-tab fill. No second dropdown was added — a status dropdown beside status tabs is two controls for one job, and they drift out of sync. |
+| Card grid | 1 / 2 / 3 columns at `xs` / `md` / `lg` via `useBreakpoint`, matching `BookingOversightScreen`. |
+| Card chrome | `Instructor ID: #n` + `User ID: #n` chip and an `SA ID:` line, like the Users card, so the number an admin is about to search for is visible on the card. `ID No.` left the detail block to avoid printing it twice. |
+| i18n | Screen fully migrated to `t(...)`; **removed from `hardcoded-allowlist.json`** (59 → 58 paths, 1300 → 1272 suppressed findings). |
+
+Search is **server-side**: `GET /admin/instructors` caps at `limit` (default
+100, max 200), so filtering the loaded page in the screen would silently hide
+every match past the cap — the same defect fixed earlier for booking search.
+Added `search` to that endpoint (`backend/app/routes/admin.py`).
+
+#### `InstructorEarningsOverviewScreen`
+
+| Added | Detail |
+|---|---|
+| Search | Name, email, phone, instructor id, user id — client-side. |
+| Status filter | `All / Verified / Unverified / Available / Unavailable` picker. |
+| Card grid | Same 1 / 2 / 3 column breakpoints. |
+| Card chrome | ID chip plus email and phone lines. |
+| Header + export | The count, the revenue total and **Export All** now follow the active filter, so the workbook matches what is on screen. |
+
+Filtering here is deliberately **client-side**: `/admin/instructors/earnings-summary`
+is unpaged and returns every instructor, so there is no page beyond the loaded
+rows for a server query to reach, and a local filter answers instantly.
+
+Only the list chrome on this screen was migrated to `t(...)`; the detail modal
+and the PDF/Excel export strings are still hardcoded, so the file stays on the
+allowlist.
+
+#### Verified in a browser at 1440×950
+
+| Check | Result |
+|---|---|
+| Verification grid, no filter | 50 cards, 3 per row, 336 px each |
+| Search `john` | 4 cards — John Johnson, Sarah Johnson, John Cele ×2 |
+| Search `9000000500016` (SA ID) | 1 card, Sipho Patel, still 336 px wide |
+| Search `DL000024` (licence) | 1 row |
+| Search `#14` | 3 rows — instructor 14, user 14, and `+inst014@` by email |
+| Search `zzz-no-such` | `No instructors match "zzz-no-such".` |
+| Earnings, no filter | 50 cards, `50 instructor(s) • Total Revenue: R415262.30` |
+| Earnings search `nandi` | 4 cards, header recomputed to `R41486.00` |
+| Earnings search `#25` | 2 cards — instructor 25 and instructor 24 (user id 25) |
+| Earnings status `Unverified` | 3 cards, `R0.00` (unverified instructors have no completed lessons) |
+| Console errors | none |
+
+Every count was cross-checked against the same query run directly through
+SQLAlchemy against PostgreSQL: `john` → 4, SA ID → 1, licence → 1, `#14` → 3.
+
+#### Card width cap
+
+`flexGrow: 1` with no `maxWidth` made a single search result stretch to the full
+1038 px row. Capped at the per-breakpoint card width (`32%` at `lg`), so one
+match renders the same size as a card in a full row.
+
+#### Two environment findings, both cost time
+
+* **uvicorn `--reload` does not see edits made from WSL to files on `/mnt/c`.**
+  The backend had been running since 07:30 and never picked up the new `search`
+  parameter; `/openapi.json` still listed the old signature while the file on
+  disk was correct. Touching the file from Windows did not help either. A
+  restart was required.
+* **`s.bat start -b` stops both servers, then starts only the backend.** Same for
+  `-f` in reverse. Restarting one server therefore takes the other down — a bare
+  `s.bat start` is the only way back to both. Both servers were left running.
+
+A temporary admin (`qa-temp-admin@example.invalid`) was created directly in the
+database to drive these checks without force-ending the live admin session, and
+**deleted afterwards**; `users` is back to a single admin, id 1.
+
+Gates after the change: all three merge gates pass; typecheck still 89 errors,
+all in `__tests__`, none in app code; eslint reports no new errors in either
+screen.
+
+#### D-15 — "Resend link" dragged an instructor back to Pending Admin — HIGH — FIXED
+
+**Reported by Martin.** Approve an instructor on the Pending Admin tab — they
+correctly move to Pending Company. Click **Resend link** on that card and they
+reappear under Pending Admin, the approval silently undone.
+
+**Cause.** `POST /admin/instructors/{id}/resend-verification` did the same three
+things no matter where the instructor stood:
+
+```python
+instructor.admin_verification_token = new_token
+instructor.verification_status = IVS.PENDING_ADMIN.value
+instructor.is_verified = False
+```
+
+It only ever regenerated the **admin** link and mailed the admins. For someone at
+`pending_company` the outstanding approval belongs to the school owner, so the
+one link that mattered was never reissued and the approval that had just been
+granted was thrown away.
+
+The same code path was reachable from **Verified** cards, where the UI also
+offered "📧 Resend link". Clicking it un-verified a working instructor and locked
+them out of their own account — `RoleTransitionPolicy.assert_runtime_role_ready()`
+refuses instructor login unless the status is `verified`.
+
+**Fix.** The endpoint now branches on the current stage:
+
+| Stage | Behaviour |
+|---|---|
+| `pending_company` | reissues `company_verification_token`, sends to the school owner, **leaves the status alone** |
+| `pending_admin` / `rejected` / legacy null | reissues `admin_verification_token`, notifies admins, enters the admin queue — unchanged |
+| `verified` | refused, `400 INSTRUCTOR_ALREADY_VERIFIED` |
+
+If the owner cannot be reached the endpoint now returns
+`400 COMPANY_OWNER_UNREACHABLE` instead of reporting a send that never happened.
+The admin branch also stopped hardcoding `https://roadready.co.za` as the link
+base and uses `settings.FRONTEND_URL`, so a link resent in dev is clickable in dev.
+
+Frontend (`InstructorVerificationScreen`): the action now names its recipient —
+`🏢 Resend to school owner` at `pending_company`, and Verified cards show
+`Fully verified — nothing to resend.` with no button at all. The confirmation
+modal and success banner name the school rather than saying "link resent".
+
+#### D-16 — admin and school approval could never both complete — HIGH — FIXED
+
+Found while fixing D-15. Two defects in one workflow:
+
+1. **The school's approval was never recorded.** `verify_company_token()` moved
+   the instructor to `pending_admin` and cleared the token, but wrote nothing to
+   `verified_by_instructor_id` — a column that exists on `Instructor`, is created
+   by the migration in `main.py`, and was read by nothing. So after the owner
+   approved, `needs_company_approval()` still answered "yes, they are a school
+   member awaiting their owner", and the admin approval that followed sent them
+   **back to `pending_company`**. Owner approves → admin approves → pending
+   company → owner approves → … The instructor can never reach `verified`.
+2. **Admin approval into `pending_company` notified nobody.** `verify_instructor`
+   set the status and stopped — no company token was minted and
+   `send_company_verification` was never called. The school owner had no idea
+   anyone was waiting on them. This is why reaching for "Resend link" was the
+   natural thing to do, and D-15 punished it.
+
+**Fix.** `verify_company_token` stamps `verified_by_instructor_id` with the
+approving owner; `needs_company_approval()` treats that stamp as the school gate
+being closed; and `verify_instructor` mints a company token when one is missing
+and sends the owner their link, fire-and-forget so a failed notification cannot
+roll back an approval that already happened.
+
+`docs/ARCHITECTURE_MAP.md` §5 was corrected — it claimed
+`PENDING_COMPANY --> VERIFIED: school owner approves`, which is not what the code
+does. The two gates can be cleared in **either order**; the status names the gate
+still open and the *stamps* record which are closed.
+
+**Verified** by driving the real endpoint functions against PostgreSQL with all
+notification sends stubbed, then restoring every touched column:
+
+| Step | Result |
+|---|---|
+| pending_admin → admin approves | `pending_company`, company token minted, owner notified |
+| resend at pending_company | still `pending_company`, token reissued, `sent_to: company_owner` |
+| school approved → admin approves | `verified` — no longer loops |
+| resend on verified | `400 INSTRUCTOR_ALREADY_VERIFIED`, status untouched |
+| resend on rejected | `pending_admin`, `sent_to: admins` — unchanged |
+
+In the browser, each tab now offers the right action: Pending Admin → Approve /
+Reject, Pending Company → Resend to school owner, Verified → no button.
+
+No live email or WhatsApp was sent during these checks — every send was stubbed,
+because the seeded school owners' address and phone are Martin's own.
+
+#### D-17 — "Done" on the school approval page did nothing — MEDIUM — FIXED
+
+**Reported by Martin,** with the console output that names the cause:
+
+```
+The action 'REPLACE' with payload {"name":"Login"} was not handled by any navigator.
+Do you have a screen named 'Login'?
+```
+
+**Cause.** `App.tsx` renders the signed-out group (`Login`, `Register*`, …) **or**
+the signed-in group (`Main`, payment screens) — never both — while the
+deep-linked screens sit in a third group that is always mounted. Martin opened
+the school approval link in a tab where he was signed in as admin, so `Login` was
+not in the tree and `goHome`'s `navigation.replace('Login')` resolved to nothing.
+`canGoBack()` was false too (fresh tab from an email link), so the button was
+simply dead.
+
+**Fix.** New `frontend/utils/exitToLogin.ts`:
+
+* `useExitToLogin(navigation)` — ends the session when one exists (`onLogout`
+  clears tokens and, on web, reloads to `/`, which resolves to `Login`), and
+  otherwise `reset`s to `Login`. Ending the session is the only thing that
+  actually puts the login screen on screen, because the navigator swaps groups.
+* `useSignedIn()` — `userRole || userName` from `AuthActionsContext`.
+* `useExitToLoginRef(navigation)` — a stable handle for timers. `onLogout` is
+  rebuilt on every render of `App`, so a countdown that depends on it directly
+  restarts forever.
+
+`InstructorCompanyVerifyScreen` now also **auto-returns after 5 seconds** with a
+visible `Returning to sign in in Ns…` countdown, so the redirect is expected
+rather than startling, and the screen was migrated to `t(...)` and **removed from
+`hardcoded-allowlist.json`** (58 → 57 paths).
+
+**The same defect was latent on three sibling screens**, all in the
+always-mounted group, and all fixed with the same helper:
+
+| Screen | Was |
+|---|---|
+| `VerifyAccountScreen` | `replace('Login')` on its 3-second redirect and on "resend" — dead for a signed-in visitor |
+| `InstructorInviteScreen` | `navigate('Login')` on its sign-in button — same |
+| `InstructorVerifyScreen` | the mirror image: `replace('Main')` for a visitor who is **not** signed in, which is the normal case for a link opened from email |
+
+**Verified in a browser**, with the approve POST stubbed at the network layer so
+nothing was written and no admin was emailed:
+
+| Scenario | Result |
+|---|---|
+| Signed in, press **Done** | lands on `/Login` |
+| Signed in, wait out the countdown | lands on `/Login` |
+| Signed out, press **Done** | lands on `/Login` |
+| Countdown | renders and ticks 5 → 4 → 2 |
+| `was not handled by any navigator` warnings | **none** |

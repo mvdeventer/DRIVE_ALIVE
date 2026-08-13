@@ -699,16 +699,19 @@ const styles = StyleSheet.create({
   },
   detailRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    gap: 8,
     marginBottom: Platform.OS === 'web' ? 5 : 4,
   },
   detailLabel: {
     fontSize: Platform.OS === 'web' ? 12 : 11,
     fontFamily: 'Inter_400Regular',
+    minWidth: 64,
   },
   detailValue: {
     fontSize: Platform.OS === 'web' ? 12 : 11,
     fontFamily: 'Inter_500Medium',
+    flexShrink: 1,
   },
   amountText: {
     fontSize: Platform.OS === 'web' ? 12 : 11,

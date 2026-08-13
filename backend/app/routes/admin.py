@@ -362,17 +362,41 @@ async def get_all_instructors_admin(
     current_admin: Annotated[User, Depends(require_admin)],
     db: Session = Depends(get_db),
     verification_status: Optional[str] = Query(None),
+    search: Optional[str] = Query(None),
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=200),
 ):
     """
     Get list of all instructors with optional verification_status filter.
     Replaces the old pending-only endpoint with a filterable view.
+
+    ``search`` matches name, email, phone, SA ID, licence number, instructor id
+    and user id. It runs in SQL rather than in the screen because this endpoint
+    caps at ``limit`` rows — filtering the loaded page client-side would silently
+    hide every match beyond the cap.
     """
     query = db.query(Instructor)
     if verification_status:
         query = query.filter(
             Instructor.verification_status == verification_status
+        )
+
+    if search and search.strip():
+        # "#42" and "42" should both find id 42.
+        raw = search.strip().lstrip("#")
+        term = f"%{raw.lower()}%"
+        query = query.join(User, User.id == Instructor.user_id).filter(
+            or_(
+                func.lower(
+                    func.concat(User.first_name, " ", User.last_name)
+                ).like(term),
+                func.lower(User.email).like(term),
+                func.lower(User.phone).like(term),
+                func.lower(Instructor.id_number).like(term),
+                func.lower(Instructor.license_number).like(term),
+                func.cast(Instructor.id, String).like(term),
+                func.cast(User.id, String).like(term),
+            )
         )
 
     instructors = query.offset(skip).limit(limit).all()
@@ -442,8 +466,14 @@ async def verify_instructor(
         instructor.verified_by_admin_id = current_admin.id
         is_company_member = needs_company_approval(db, instructor)
         if is_company_member:
-            # Admin approved but still needs company owner
+            # Admin approved but still needs company owner. The owner has to be
+            # given something to click, or the instructor sits in
+            # `pending_company` with nobody aware they are waiting.
             instructor.verification_status = IVS.PENDING_COMPANY.value
+            if not instructor.company_verification_token:
+                import secrets
+
+                instructor.company_verification_token = secrets.token_urlsafe(32)
         else:
             instructor.verification_status = IVS.VERIFIED.value
             user.status = UserStatus.ACTIVE
@@ -463,6 +493,20 @@ async def verify_instructor(
         IVSvc, db, instructor,
         approved=verification_data.is_verified and instructor.verification_status == IVS.VERIFIED.value,
     )
+
+    # Hand the baton to the school owner. Fire-and-forget: a notification that
+    # fails must not roll back an approval that already happened — the admin can
+    # resend from the Pending Company tab.
+    if instructor.verification_status == IVS.PENDING_COMPANY.value:
+        try:
+            from ..config import settings
+
+            IVSvc.send_company_verification(
+                db=db, instructor=instructor, frontend_url=settings.FRONTEND_URL
+            )
+        except Exception:
+            pass
+
     return _build_instructor_verification_response(instructor, user, db)
 
 
@@ -504,11 +548,27 @@ async def resend_instructor_verification(
     db: Session = Depends(get_db),
 ):
     """
-    Regenerate verification tokens and resend all relevant verification links.
+    Regenerate and resend the link this instructor is actually waiting on.
+
+    Which link that is depends on where they stand in the workflow, and getting
+    it wrong is destructive: resending the *admin* link to someone already past
+    the admin step drops them back into ``pending_admin`` and silently undoes the
+    approval that moved them on.
+
+    * ``pending_company`` — the admin has approved; the outstanding approval
+      belongs to the school owner, so their token is reissued and the status is
+      left alone.
+    * ``pending_admin`` / ``rejected`` — the admin queue is the right place, so
+      the admin token is reissued and the instructor (re-)enters it.
+    * ``verified`` — the workflow is finished. There is no link to resend, and
+      quietly demoting a working instructor would lock them out of their own
+      account, so this is refused.
     """
     import secrets
     from datetime import timedelta
+    from ..config import settings
     from ..models.user import InstructorVerificationStatus as IVS
+    from ..services.instructor_verification_service import InstructorVerificationService
 
     instructor = db.query(Instructor).filter(Instructor.id == instructor_id).first()
     if not instructor:
@@ -518,24 +578,74 @@ async def resend_instructor_verification(
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
 
-    new_token = secrets.token_urlsafe(32)
-    instructor.admin_verification_token = new_token
-    instructor.verification_token_expires = datetime.now(timezone.utc) + timedelta(hours=72)
+    current_status = instructor.verification_status or IVS.PENDING_ADMIN.value
+    expires_at = datetime.now(timezone.utc) + timedelta(hours=72)
+
+    if current_status == IVS.VERIFIED.value:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                "code": "INSTRUCTOR_ALREADY_VERIFIED",
+                "message": (
+                    "This instructor is already fully verified — there is no "
+                    "outstanding link to resend."
+                ),
+            },
+        )
+
+    if current_status == IVS.PENDING_COMPANY.value:
+        instructor.company_verification_token = secrets.token_urlsafe(32)
+        instructor.verification_token_expires = expires_at
+        db.commit()
+
+        result = InstructorVerificationService.send_company_verification(
+            db=db,
+            instructor=instructor,
+            frontend_url=settings.FRONTEND_URL,
+        )
+        if not result.get("sent"):
+            # The token was reissued but nobody could be reached — say so rather
+            # than report a send that did not happen.
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail={
+                    "code": "COMPANY_OWNER_UNREACHABLE",
+                    "message": (
+                        "Could not reach the school owner. Check that the school "
+                        "still has an owner with a valid email and phone number."
+                    ),
+                },
+            )
+        return {
+            "status": "resent",
+            "sent_to": "company_owner",
+            "instructor_id": instructor_id,
+            "new_token_expires_in_hours": 72,
+        }
+
+    # pending_admin, rejected, or a legacy row with no status at all.
+    instructor.admin_verification_token = secrets.token_urlsafe(32)
+    instructor.verification_token_expires = expires_at
     instructor.verification_status = IVS.PENDING_ADMIN.value
     instructor.is_verified = False
     db.commit()
 
     # Re-send notification to all admins
     try:
-        from ..services.instructor_verification_service import InstructorVerificationService
         from ..models.user import UserRole as UR
         admins = db.query(User).filter(User.role == UR.ADMIN, User.status == UserStatus.ACTIVE).all()
-        base_url = "https://roadready.co.za"
-        InstructorVerificationService.send_admin_verification_links(db, instructor, admins, base_url)
+        InstructorVerificationService.send_admin_verification_links(
+            db, instructor, admins, settings.FRONTEND_URL
+        )
     except Exception:
         pass  # Don't fail the endpoint if notifications error
 
-    return {"status": "resent", "instructor_id": instructor_id, "new_token_expires_in_hours": 72}
+    return {
+        "status": "resent",
+        "sent_to": "admins",
+        "instructor_id": instructor_id,
+        "new_token_expires_in_hours": 72,
+    }
 
 
 # ==================== User Management ====================

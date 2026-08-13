@@ -186,14 +186,24 @@ are **ACTIVE immediately and never email-verified**.
 
 ```mermaid
 stateDiagram-v2
-    [*] --> PENDING_ADMIN: instructor registers
-    PENDING_ADMIN --> PENDING_COMPANY: admin approves a school member
-    PENDING_ADMIN --> VERIFIED: admin approves an independent
-    PENDING_COMPANY --> VERIFIED: school owner approves
+    [*] --> PENDING_ADMIN: registers independently, or on a school invitation
+    [*] --> PENDING_COMPANY: registers by joining an existing school
+    PENDING_ADMIN --> VERIFIED: admin approves; school gate closed or not needed
+    PENDING_ADMIN --> PENDING_COMPANY: admin approves a school member the school has not cleared
+    PENDING_COMPANY --> PENDING_ADMIN: school owner approves
     PENDING_ADMIN --> REJECTED: admin rejects
     PENDING_COMPANY --> REJECTED: school owner rejects
     VERIFIED --> [*]: can now log in as instructor
 ```
+
+**`verification_status` names the gate still open, not the step already done.**
+Both links go out at registration, so the two gates can be cleared in either
+order and the *second* one produces `VERIFIED`. What records that a gate is
+closed is not the status but the stamp: `verified_by_admin_id` for the admin
+gate, `verified_by_instructor_id` for the school gate.
+`company_service.needs_company_approval()` is the single reader of the school
+gate — never re-derive it from `company_id` and `is_company_owner`, which reads
+solo instructors and already-approved members as still waiting.
 
 Two separate 72-hour tokens: `admin_verification_token` and
 `company_verification_token`. An instructor therefore has **two independent
@@ -288,7 +298,9 @@ Reporting one as the other is the easiest way to be wrong here.
 | `GET /admin/platform-revenue?period=YYYY-MM` | **net** platform take, by school |
 | `GET /admin/revenue/by-instructor/{id}` | one instructor |
 | `GET /admin/instructors/{id}/earnings-report` | detailed earnings |
-| `GET /admin/instructors/earnings-summary` | all instructors |
+| `GET /admin/instructors/earnings-summary` | all instructors, unpaged |
+| `GET /admin/instructors?verification_status=&search=&skip=&limit=` | verification list; `search` covers name, email, phone, SA ID, licence, instructor id and user id |
+| `GET /admin/bookings?status_filter=&search=&skip=&limit=` | booking list; `search` covers reference, ids, names, SA IDs and lesson date |
 
 ---
 
@@ -374,6 +386,26 @@ These have each cost real debugging time.
     `--yes` explicitly keeps both.
 12. **The dev database is PostgreSQL on port 5433**, not the default 5432. The
     `*.db` SQLite files in the repo root are dead legacy artifacts.
+13. **Admin list search must match how the endpoint pages.** `/admin/bookings`
+    and `/admin/instructors` both cap their result set, so their screens send
+    `search` to the server (debounced 350 ms) — a local filter would only ever
+    see the loaded page. `/admin/instructors/earnings-summary` is unpaged and
+    returns every row, so that screen filters locally with no round trip. Check
+    which kind an endpoint is before adding a search box to its screen.
+14. **`s.bat start -b` and `start -f` stop *both* servers first.** The flag only
+    chooses what gets started again, so `start -f` leaves the backend down. Use a
+    bare `s.bat start` to bring the pair back up.
+15. **`Login` and `Main` are conditionally mounted; the deep-linked screens are
+    not.** `App.tsx` renders the signed-out group (`Login`, `Register*`, …) or
+    the signed-in group (`Main`, payment screens) — never both — while
+    `VerifyAccount`, `InstructorVerify`, `InstructorCompanyVerify`,
+    `InstructorInvite`, `ResetPassword` and `PublicInstructorProfile` are always
+    mounted. So `navigation.replace('Login')` from a deep-linked screen is a
+    **silent no-op for a signed-in visitor** (and `replace('Main')` is one for a
+    signed-out visitor): React Navigation logs *"was not handled by any
+    navigator"* and the button looks dead. Route these exits through
+    `utils/exitToLogin.ts`, which ends the session when one exists — that is what
+    actually swaps the group and puts the login screen on screen.
 
 ---
 

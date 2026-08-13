@@ -334,11 +334,19 @@ def needs_company_approval(db: Session, instructor) -> bool:
       so a bare ``company_id is not None and not is_company_owner`` test reads
       them as a school member and parks them in ``pending_company`` awaiting
       approval from themselves.
+    * someone whose school has **already** approved them. The two gates can be
+      cleared in either order — a school owner can act on their link before any
+      admin does — so this asks whether the school gate is still open, not
+      whether the instructor is a school member. Without it, admin approval
+      keeps returning an already-approved instructor to ``pending_company``,
+      and the pair loop forever.
     """
     company_id = getattr(instructor, "company_id", None)
     if company_id is None:
         return False
     if getattr(instructor, "is_company_owner", False):
+        return False
+    if getattr(instructor, "verified_by_instructor_id", None) is not None:
         return False
     company = db.query(Company).filter(Company.id == company_id).first()
     if company is None or company.is_solo:

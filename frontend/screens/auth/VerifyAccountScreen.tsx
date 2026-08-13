@@ -4,11 +4,16 @@ import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Button, Card } from '../../components/ui';
 import apiService from '../../services/api';
 import { useTheme } from '../../theme/ThemeContext';
+import { useExitToLogin, useExitToLoginRef } from '../../utils/exitToLogin';
 
 type Props = NativeStackScreenProps<any, 'VerifyAccount'>;
 
 export default function VerifyAccountScreen({ route, navigation }: Props) {
   const { colors } = useTheme();
+  // `Login` is not mounted while a session is live, so a plain replace() there
+  // is a silent no-op. See utils/exitToLogin.
+  const goToLogin = useExitToLogin(navigation);
+  const exitRef = useExitToLoginRef(navigation);
   const [verifying, setVerifying] = useState(true);
   const [success, setSuccess] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
@@ -47,7 +52,7 @@ export default function VerifyAccountScreen({ route, navigation }: Props) {
       
       // Redirect to login after 3 seconds
       setTimeout(() => {
-        navigation.replace('Login');
+        exitRef.current();
       }, 3000);
     } catch (error: any) {
       const errorMsg = error.response?.data?.detail || 'Verification failed. Please try again.';
@@ -59,7 +64,7 @@ export default function VerifyAccountScreen({ route, navigation }: Props) {
   };
 
   const handleResendVerification = () => {
-    navigation.replace('Login');
+    goToLogin();
     // User can use "Forgot Password" flow to resend verification
   };
 

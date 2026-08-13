@@ -2,21 +2,25 @@
  * Instructor Earnings Overview Screen (Admin)
  * Comprehensive view of all instructor earnings with detailed reports
  */
+import { Picker } from '@react-native-picker/picker';
 import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
+  FlatList,
   Platform,
   Pressable,
   RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from 'react-native';
 import { Button, Card, ThemedModal } from '../../components';
-import VirtualList from '../../components/VirtualList';
 import InlineMessage from '../../components/InlineMessage';
 import WebNavigationHeader from '../../components/WebNavigationHeader';
+import { useT } from '../../i18n';
+import { useBreakpoint } from '../../hooks/useBreakpoint';
 import { useTheme } from '../../theme/ThemeContext';
 import ApiService from '../../services/api';
 import { showMessage } from '../../utils/messageConfig';
@@ -63,11 +67,27 @@ interface DetailedEarnings {
   }[];
 }
 
+type StatusFilter = '' | 'verified' | 'unverified' | 'available' | 'unavailable';
+
 export default function InstructorEarningsOverviewScreen({ navigation }: any) {
   const { colors } = useTheme();
+  const t = useT();
+  // Grid density is viewport-derived and must be read during render — a value
+  // baked into StyleSheet.create freezes the layout at the load width.
+  const { select } = useBreakpoint();
+  const columns = select({ xs: 1, md: 2, lg: 3 }) ?? 1;
+  const cardWidthStyle = {
+    flexBasis: select({ xs: '100%', md: '48%', lg: '30%' }),
+    // Without a cap a lone search result grows to fill the whole row; the cap
+    // keeps a single match the same width as a card in a full row.
+    maxWidth: select({ xs: '100%', md: '48%', lg: '32%' }),
+    minWidth: columns === 1 ? '100%' : Platform.OS === 'web' ? 280 : 200,
+  } as const;
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [instructors, setInstructors] = useState<InstructorSummary[]>([]);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('');
   const [selectedInstructor, setSelectedInstructor] = useState<DetailedEarnings | null>(null);
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [loadingDetail, setLoadingDetail] = useState(false);
@@ -97,6 +117,40 @@ export default function InstructorEarningsOverviewScreen({ navigation }: any) {
       setRefreshing(false);
     }
   };
+
+  /**
+   * Filtering is local because `/admin/instructors/earnings-summary` returns
+   * every instructor in one unpaged response — there is no page beyond the
+   * loaded rows for a server-side search to reach.
+   */
+  const normalizePhone = (phone: string) => phone.replace(/[\s-]/g, '').replace(/^\+27/, '0');
+
+  const filteredInstructors = instructors.filter(instructor => {
+    const statusMatch =
+      !statusFilter ||
+      (statusFilter === 'verified' && instructor.is_verified) ||
+      (statusFilter === 'unverified' && !instructor.is_verified) ||
+      (statusFilter === 'available' && instructor.is_available) ||
+      (statusFilter === 'unavailable' && !instructor.is_available);
+
+    if (!searchQuery.trim()) { return statusMatch; }
+
+    const query = searchQuery.trim().toLowerCase();
+    // "#42" and "42" should both find id 42.
+    const idQuery = searchQuery.trim().replace(/^#/, '');
+    const phoneQuery = normalizePhone(searchQuery.trim());
+
+    const searchMatch =
+      instructor.instructor_name.toLowerCase().includes(query) ||
+      instructor.email.toLowerCase().includes(query) ||
+      normalizePhone(instructor.phone || '').includes(phoneQuery) ||
+      instructor.instructor_id.toString().includes(idQuery) ||
+      instructor.user_id.toString().includes(idQuery);
+
+    return statusMatch && searchMatch;
+  });
+
+  const filteredRevenue = filteredInstructors.reduce((sum, i) => sum + i.total_earnings, 0);
 
   const loadDetailedReport = async (instructorId: number) => {
     try {
@@ -336,9 +390,10 @@ export default function InstructorEarningsOverviewScreen({ navigation }: any) {
         'success'
       );
 
-      // Fetch detailed reports for all instructors
+      // Export what is on screen: with a search or status filter active, the
+      // header counts the filtered set, so the workbook must match it.
       const detailedReports = await Promise.all(
-        instructors.map(async instructor => {
+        filteredInstructors.map(async instructor => {
           try {
             const response = await ApiService.get(
               `/admin/instructors/${instructor.instructor_id}/earnings-report`
@@ -647,12 +702,24 @@ export default function InstructorEarningsOverviewScreen({ navigation }: any) {
   const renderInstructorCard = ({ item }: { item: InstructorSummary }) => (
     <Card
       variant="elevated"
-      style={{ margin: 10 }}
+      style={[styles.card, cardWidthStyle]}
       onPress={() => loadDetailedReport(item.instructor_id)}
     >
+      {/* Both searchable ids live on the chip, so an admin can read off the
+          number they are about to type into the search box. */}
+      <View style={[styles.idBadge, { backgroundColor: colors.primaryLight }]}>
+        <Text style={[styles.idBadgeText, { color: colors.primary }]}>
+          {t('instructorEarnings.card.instructorId', { id: item.instructor_id })}
+        </Text>
+        <Text style={[styles.idBadgeText, { color: colors.primary }]}>
+          {t('instructorEarnings.card.userId', { id: item.user_id })}
+        </Text>
+      </View>
       <View style={styles.cardHeader}>
         <View style={styles.instructorInfo}>
           <Text style={[styles.instructorName, { color: colors.text, fontFamily: 'Inter_600SemiBold' }]}>{item.instructor_name}</Text>
+          <Text style={[styles.instructorContact, { color: colors.textSecondary, fontFamily: 'Inter_400Regular' }]}>{item.email}</Text>
+          <Text style={[styles.instructorContact, { color: colors.textSecondary, fontFamily: 'Inter_400Regular' }]}>{item.phone}</Text>
           <View style={styles.badgeContainer}>
             {item.is_verified && (
               <View style={[styles.verifiedBadge, { backgroundColor: colors.success }]}>
@@ -709,29 +776,91 @@ export default function InstructorEarningsOverviewScreen({ navigation }: any) {
       {successMessage ? <InlineMessage type="success" message={successMessage} /> : null}
       {errorMessage ? <InlineMessage type="error" message={errorMessage} /> : null}
 
-      <VirtualList
-        data={instructors}
+      {/* Search */}
+      <View style={[styles.searchContainer, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
+        <TextInput
+          style={[
+            styles.searchInput,
+            { borderColor: colors.border, backgroundColor: colors.backgroundSecondary, color: colors.text },
+          ]}
+          placeholder={t('instructorEarnings.searchPlaceholder')}
+          placeholderTextColor={colors.textTertiary}
+          value={searchQuery}
+          onChangeText={setSearchQuery}
+          accessibilityLabel={t('instructorEarnings.searchA11y')}
+        />
+        {searchQuery.length > 0 && (
+          <Pressable
+            style={[styles.clearSearchButton, { backgroundColor: colors.buttonDanger }]}
+            onPress={() => setSearchQuery('')}
+            accessibilityRole="button"
+            accessibilityLabel={t('instructorEarnings.clearSearch')}
+            hitSlop={8}
+          >
+            <Text
+              style={styles.clearSearchText}
+              accessibilityElementsHidden
+              importantForAccessibility="no"
+            >
+              {'\u2715'}
+            </Text>
+          </Pressable>
+        )}
+      </View>
+
+      {/* Status filter */}
+      <View style={[styles.filters, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
+        <Text style={[styles.filterLabel, { color: colors.text, fontFamily: 'Inter_600SemiBold' }]}>
+          {t('instructorEarnings.filterByStatus')}
+        </Text>
+        <View style={[styles.pickerContainer, { borderColor: colors.border, backgroundColor: colors.card }]}>
+          <Picker
+            selectedValue={statusFilter}
+            onValueChange={value => setStatusFilter(value as StatusFilter)}
+            style={[styles.picker, { color: colors.text }]}
+            accessibilityLabel={t('instructorEarnings.filterByStatus')}
+          >
+            <Picker.Item label={t('instructorEarnings.status.all')} value="" />
+            <Picker.Item label={t('instructorEarnings.status.verified')} value="verified" />
+            <Picker.Item label={t('instructorEarnings.status.unverified')} value="unverified" />
+            <Picker.Item label={t('instructorEarnings.status.available')} value="available" />
+            <Picker.Item label={t('instructorEarnings.status.unavailable')} value="unavailable" />
+          </Picker>
+        </View>
+      </View>
+
+      <FlatList
+        data={filteredInstructors}
         renderItem={renderInstructorCard}
         keyExtractor={item => item.instructor_id.toString()}
+        numColumns={columns}
+        // FlatList cannot change numColumns in place — remounting via key is
+        // the documented workaround.
+        key={`grid-${columns}`}
+        columnWrapperStyle={columns > 1 ? styles.row : undefined}
+        contentContainerStyle={styles.listContainer}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
         ListHeaderComponent={
           <View style={[styles.header, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
             <View style={styles.headerTop}>
               <View style={{ flex: 1 }}>
+                {/* Counts and revenue describe what is on screen, so they
+                    follow the filter rather than the whole table. */}
                 <Text style={[styles.headerSubtitle, { color: colors.textSecondary, fontFamily: 'Inter_400Regular' }]}>
-                  {instructors.length} instructor{instructors.length !== 1 ? 's' : ''} {'\u2022'} Total
-                  Revenue:{' '}
-                  {formatCurrency(instructors.reduce((sum, i) => sum + i.total_earnings, 0))}
+                  {t('instructorEarnings.summary', {
+                    count: filteredInstructors.length,
+                    total: formatCurrency(filteredRevenue),
+                  })}
                 </Text>
               </View>
-              {instructors.length > 0 && (
+              {filteredInstructors.length > 0 && (
                 <Button
                   variant="primary"
                   size="sm"
                   style={{ backgroundColor: colors.success }}
                   onPress={exportAllInstructorsReport}
                 >
-                  Export All
+                  {t('instructorEarnings.exportAll')}
                 </Button>
               )}
             </View>
@@ -739,7 +868,11 @@ export default function InstructorEarningsOverviewScreen({ navigation }: any) {
         }
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
-            <Text style={[styles.emptyText, { color: colors.textTertiary, fontFamily: 'Inter_400Regular' }]}>No instructors found</Text>
+            <Text style={[styles.emptyText, { color: colors.textTertiary, fontFamily: 'Inter_400Regular' }]}>
+              {searchQuery || statusFilter
+                ? t('instructorEarnings.noMatch')
+                : t('instructorEarnings.noInstructors')}
+            </Text>
           </View>
         }
       />
@@ -864,6 +997,81 @@ export default function InstructorEarningsOverviewScreen({ navigation }: any) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+  },
+  listContainer: {
+    padding: Platform.OS === 'web' ? 10 : 6,
+  },
+  row: {
+    justifyContent: 'flex-start',
+    paddingHorizontal: Platform.OS === 'web' ? 5 : 2,
+  },
+  card: {
+    // maxWidth / flexBasis are viewport-derived and supplied at render time.
+    margin: Platform.OS === 'web' ? 6 : 4,
+    flexGrow: 1,
+  },
+  idBadge: {
+    borderRadius: 4,
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    marginBottom: 8,
+    alignSelf: 'flex-start',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  idBadgeText: {
+    fontSize: 11,
+    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+  },
+  instructorContact: {
+    fontSize: 12,
+    marginBottom: 2,
+  },
+  searchContainer: {
+    padding: Platform.OS === 'web' ? 12 : 10,
+    borderBottomWidth: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  searchInput: {
+    flex: 1,
+    height: Platform.OS === 'web' ? 40 : 36,
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: Platform.OS === 'web' ? 15 : 10,
+    fontSize: Platform.OS === 'web' ? 14 : 13,
+    fontFamily: 'Inter_400Regular',
+  },
+  clearSearchButton: {
+    marginLeft: 8,
+    width: 28,
+    height: 28,
+    borderRadius: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  clearSearchText: {
+    color: '#FFF',
+    fontSize: 14,
+    fontFamily: 'Inter_700Bold',
+  },
+  filters: {
+    padding: 10,
+    borderBottomWidth: 1,
+  },
+  filterLabel: {
+    fontSize: 12,
+    marginBottom: 4,
+  },
+  pickerContainer: {
+    borderWidth: 1,
+    borderRadius: 8,
+    overflow: 'hidden',
+  },
+  picker: {
+    height: 50,
+    width: '100%',
   },
   loadingContainer: {
     flex: 1,

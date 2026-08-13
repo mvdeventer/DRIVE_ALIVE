@@ -16,6 +16,7 @@ import {
 } from 'react-native';
 import ApiService from '../../services/api';
 import { useTheme } from '../../theme/ThemeContext';
+import { useExitToLogin, useSignedIn } from '../../utils/exitToLogin';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -242,8 +243,22 @@ export default function InstructorVerifyScreen({ route, navigation }: any) {
   // Token is passed via deep-link route params
   const token: string | null = route?.params?.token ?? null;
 
-  const goToDashboard = () =>
-    navigation.canGoBack() ? navigation.goBack() : navigation.replace('Main');
+  // The mirror of the `Login` problem: this screen is reached from an emailed
+  // link, so `Main` is just as likely to be absent as `Login` is on the company
+  // screen. Signed out, there is no dashboard to go to — offer the sign-in page.
+  const goToLogin = useExitToLogin(navigation);
+  const signedIn = useSignedIn();
+  const goToDashboard = () => {
+    if (navigation.canGoBack()) {
+      navigation.goBack();
+      return;
+    }
+    if (signedIn) {
+      navigation.replace('Main');
+      return;
+    }
+    goToLogin();
+  };
 
   const handleDecision = async (approve: boolean) => {
     setScreenState('loading');

@@ -428,9 +428,15 @@ class ApiService {
     return response.data;
   }
 
-  async getAllInstructorsAdmin(verificationStatus?: string, skip = 0, limit = 100) {
+  async getAllInstructorsAdmin(
+    verificationStatus?: string,
+    skip = 0,
+    limit = 100,
+    search?: string,
+  ) {
     const params: any = { skip, limit };
     if (verificationStatus) params.verification_status = verificationStatus;
+    if (search && search.trim()) params.search = search.trim();
     const response = await this.api.get('/admin/instructors', { params });
     return response.data;
   }

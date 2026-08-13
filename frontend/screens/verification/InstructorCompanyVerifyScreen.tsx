@@ -3,7 +3,7 @@
  * Accessed by a driving school owner via a deep link sent by the backend.
  * Lets the owner approve or reject a new instructor's membership request.
  */
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Platform,
@@ -13,20 +13,28 @@ import {
   View,
 } from 'react-native';
 import { Button } from '../../components/ui';
+import { useT } from '../../i18n';
 import { useTheme } from '../../theme/ThemeContext';
 import ApiService from '../../services/api';
+import { useExitToLoginRef } from '../../utils/exitToLogin';
+
+// The owner is finished with the app once they have answered; hold the outcome
+// on screen long enough to read, then hand them the login screen.
+const AUTO_EXIT_SECONDS = 5;
 
 export default function InstructorCompanyVerifyScreen({ route, navigation }: any) {
   const { colors } = useTheme();
+  const t = useT();
   const token: string | null = route?.params?.token ?? null;
 
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<'approved' | 'rejected' | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [secondsLeft, setSecondsLeft] = useState(AUTO_EXIT_SECONDS);
 
   const handleDecision = async (approve: boolean) => {
     if (!token) {
-      setErrorMsg('Invalid link — no verification token provided.');
+      setErrorMsg(t('companyVerify.noToken'));
       return;
     }
     setLoading(true);
@@ -35,20 +43,30 @@ export default function InstructorCompanyVerifyScreen({ route, navigation }: any
       await ApiService.post('/verify/instructor/company', { token, approve });
       setResult(approve ? 'approved' : 'rejected');
     } catch (err: any) {
-      const detail = err.response?.data?.detail ?? err.message ?? 'An error occurred.';
+      const detail = err.response?.data?.detail ?? err.message ?? t('common.error');
       setErrorMsg(detail);
     } finally {
       setLoading(false);
     }
   };
 
-  const goHome = () => {
-    if (navigation.canGoBack()) {
-      navigation.goBack();
-    } else {
-      navigation.replace('Login');
-    }
-  };
+  const exitRef = useExitToLoginRef(navigation);
+
+  // Count down out loud, so the redirect is expected rather than startling.
+  useEffect(() => {
+    if (!result) { return; }
+    setSecondsLeft(AUTO_EXIT_SECONDS);
+    const tick = setInterval(() => setSecondsLeft(n => Math.max(0, n - 1)), 1000);
+    const exit = setTimeout(() => exitRef.current(), AUTO_EXIT_SECONDS * 1000);
+    return () => {
+      clearInterval(tick);
+      clearTimeout(exit);
+    };
+    // `exitRef` is a ref and `AUTO_EXIT_SECONDS` a constant, so the outcome is
+    // the only thing that should ever restart the countdown.
+  }, [result]);
+
+  const goToLogin = () => exitRef.current();
 
   // ── No token ──────────────────────────────────────────────
   if (!token) {
@@ -56,11 +74,18 @@ export default function InstructorCompanyVerifyScreen({ route, navigation }: any
       <View style={[styles.container, { backgroundColor: colors.background }]}>
         <View style={styles.content}>
           <Text style={styles.icon}>❌</Text>
-          <Text style={[styles.title, { color: colors.danger }]}>Invalid Link</Text>
-          <Text style={[styles.body, { color: colors.textSecondary }]}>
-            This verification link is missing a token. Please use the exact link sent to you.
+          <Text style={[styles.title, { color: colors.danger }]}>
+            {t('companyVerify.invalidTitle')}
           </Text>
-          <Button label="Go to Login" onPress={goHome} variant="outline" style={{ marginTop: 24 }} />
+          <Text style={[styles.body, { color: colors.textSecondary }]}>
+            {t('companyVerify.invalidBody')}
+          </Text>
+          <Button
+            label={t('companyVerify.goToLogin')}
+            onPress={goToLogin}
+            variant="outline"
+            style={{ marginTop: 24 }}
+          />
         </View>
       </View>
     );
@@ -74,14 +99,20 @@ export default function InstructorCompanyVerifyScreen({ route, navigation }: any
         <View style={styles.content}>
           <Text style={styles.icon}>{approved ? '✅' : '❌'}</Text>
           <Text style={[styles.title, { color: approved ? colors.success : colors.danger }]}>
-            {approved ? 'Instructor Approved' : 'Instructor Rejected'}
+            {approved ? t('companyVerify.approvedTitle') : t('companyVerify.rejectedTitle')}
           </Text>
           <Text style={[styles.body, { color: colors.textSecondary }]}>
-            {approved
-              ? 'The instructor has been approved to join your school. They will now go through final admin verification before they can accept bookings.'
-              : 'The instructor has been declined. They have been notified.'}
+            {approved ? t('companyVerify.approvedBody') : t('companyVerify.rejectedBody')}
           </Text>
-          <Button label="Done" onPress={goHome} variant="primary" style={{ marginTop: 24 }} />
+          <Button
+            label={t('misc.done')}
+            onPress={goToLogin}
+            variant="primary"
+            style={{ marginTop: 24 }}
+          />
+          <Text style={[styles.countdown, { color: colors.textTertiary }]}>
+            {t('companyVerify.returningIn', { seconds: secondsLeft })}
+          </Text>
         </View>
       </View>
     );
@@ -93,10 +124,11 @@ export default function InstructorCompanyVerifyScreen({ route, navigation }: any
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         <View style={styles.content}>
           <Text style={styles.icon}>🏫</Text>
-          <Text style={[styles.title, { color: colors.text }]}>New Instructor Request</Text>
+          <Text style={[styles.title, { color: colors.text }]}>
+            {t('companyVerify.requestTitle')}
+          </Text>
           <Text style={[styles.body, { color: colors.textSecondary }]}>
-            An instructor has applied to join your driving school. Please review and approve or
-            reject their membership request.
+            {t('companyVerify.requestBody')}
           </Text>
 
           {errorMsg && (
@@ -119,7 +151,7 @@ export default function InstructorCompanyVerifyScreen({ route, navigation }: any
           ) : (
             <View style={styles.buttons}>
               <Button
-                label="✅ Approve"
+                label={t('companyVerify.approve')}
                 onPress={() => handleDecision(true)}
                 variant="primary"
                 size="lg"
@@ -127,7 +159,7 @@ export default function InstructorCompanyVerifyScreen({ route, navigation }: any
                 style={{ marginBottom: 12 }}
               />
               <Button
-                label="❌ Reject"
+                label={t('companyVerify.reject')}
                 onPress={() => handleDecision(false)}
                 variant="danger"
                 size="lg"
@@ -175,5 +207,6 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   errorText: { fontSize: 14, textAlign: 'center' },
+  countdown: { fontSize: 13, marginTop: 14, textAlign: 'center' },
   buttons: { marginTop: 32, width: '100%' },
 });

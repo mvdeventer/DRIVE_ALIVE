@@ -22,5 +22,7 @@
   "INSTRUCTOR_REJECTED": "errors.company.instructorRejected",
   "INSTRUCTOR_ALREADY_IN_COMPANY": "errors.company.instructorAlreadyInCompany",
   "COMPANY_NOT_FOUND": "errors.company.notFound",
-  "INVALID_EMAIL": "errors.company.invalidEmail"
+  "INVALID_EMAIL": "errors.company.invalidEmail",
+  "INSTRUCTOR_ALREADY_VERIFIED": "errors.instructorVerify.alreadyVerified",
+  "COMPANY_OWNER_UNREACHABLE": "errors.instructorVerify.companyOwnerUnreachable"
 }

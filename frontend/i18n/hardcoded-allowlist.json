@@ -40,7 +40,6 @@
     "^screens/admin/DatabaseInterfaceScreen\\.tsx$",
     "^screens/admin/EditAdminProfileScreen\\.tsx$",
     "^screens/admin/InstructorEarningsOverviewScreen\\.tsx$",
-    "^screens/admin/InstructorVerificationScreen\\.tsx$",
     "^screens/admin/RevenueAnalyticsScreen\\.tsx$",
     "^screens/auth/ForgotPasswordScreen\\.tsx$",
     "^screens/auth/InstructorScheduleSetupScreen\\.tsx$",
@@ -65,7 +64,6 @@
     "^screens/payment/PaymentScreen\\.tsx$",
     "^screens/payment/PaymentSuccessScreen\\.tsx$",
     "^screens/profile/CertificationsScreen\\.tsx$",
-    "^screens/verification/InstructorCompanyVerifyScreen\\.tsx$",
     "^screens/verification/InstructorVerifyScreen\\.tsx$"
   ],
   "ignoreLiteralRegexes": [
