@@ -3,6 +3,19 @@
 All code improvements per release, newest first. Generated automatically
 by the release workflow (`s.bat minor` / `s.bat major` / `s.bat release`).
 
+## v10.0.1 — 2026-08-13 (Patch Release 10.0.1)
+
+> Drive Alive v10.0.1 — 2 fixs, 1 maintenance update across 22 files (+554/-264 lines). Top highlight: make the Database Interface search actually search, and run its tests. Full details in CHANGES.md.
+
+### Bug Fixes
+- fix: make the Database Interface search actually search, and run its tests
+- fix: close the remaining gaps in the instructor verification workflow
+
+### Maintenance & Tooling
+- ci: get the GitHub Actions run green again
+
+**Scope:** 3 commits, 22 files changed, 554 insertions(+), 264 deletions(-) — touched: frontend: 15, backend: 3, docs: 2, scripts: 2
+
 ## v10.0.0 — 2026-08-13 (Major Release 10.0.0)
 
 > Drive Alive v10.0.0 — 1 fix across 20 files (+1375/-164 lines). Top highlight: repair instructor verification workflow and admin dashboard usability. Full details in CHANGES.md.
