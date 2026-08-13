@@ -274,6 +274,9 @@ function AppContent() {
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [userRole, setUserRole] = useState<string | null>(null);
   const [userName, setUserName] = useState<string>('');
+  // A company administrator acts for one school, and which school that is has
+  // to be visible on every screen — not just the dashboard they landed on.
+  const [companyName, setCompanyName] = useState<string | null>(null);
   const [requiresSetup, setRequiresSetup] = useState<boolean>(false);
   const [inactivityTimeout, setInactivityTimeout] = useState<number>(15); // Default 15 minutes
   const navigationRef = useRef<any>(null);
@@ -331,10 +334,15 @@ function AppContent() {
         const role = response.data.role;
         const firstName = response.data.first_name || '';
         const lastName = response.data.last_name || '';
-        const roleName = role ? role.charAt(0).toUpperCase() + role.slice(1) : 'User';
+        const roleName = role
+          ? role === 'company_admin'
+            ? 'Driving School'
+            : role.charAt(0).toUpperCase() + role.slice(1)
+          : 'User';
         setIsAuthenticated(true);
         setUserRole(role);
         setUserName(`${firstName} ${lastName} (${roleName})`);
+        setCompanyName(response.data.company_name ?? null);
         setAccountLocale(response.data.preferred_language);
         return;
       }
@@ -381,6 +389,7 @@ function AppContent() {
             ? 'Driving School'
             : role.charAt(0).toUpperCase() + role.slice(1);
         setUserName(`${firstName} ${lastName} (${roleName})`);
+        setCompanyName(response.data.company_name ?? null);
         setAccountLocale(response.data.preferred_language);
       }
     } catch (error) {
@@ -453,6 +462,7 @@ function AppContent() {
       setIsAuthenticated(false);
       setUserRole(null);
       setUserName('');
+      setCompanyName(null);
       clearAccountLocale();
 
       // Web: Redirect to root (login page) to clear all state
@@ -475,10 +485,15 @@ function AppContent() {
   handleLogoutRef.current = handleLogout;
 
   return (
-    <AuthActionsContext.Provider value={{ onLogout: handleLogout, userName, userRole }}>
+    <AuthActionsContext.Provider value={{ onLogout: handleLogout, userName, userRole, companyName }}>
       <StatusBar style="auto" />
       {isAuthenticated && Platform.OS === 'web' && (
-        <GlobalTopBar userName={userName} userRole={userRole} onLogout={handleLogout} />
+        <GlobalTopBar
+          userName={userName}
+          userRole={userRole}
+          companyName={companyName}
+          onLogout={handleLogout}
+        />
       )}
       <View style={isAuthenticated && Platform.OS === 'web' ? styles.navigationWithTopBar : styles.navigationFull}>
       <NavigationContainer

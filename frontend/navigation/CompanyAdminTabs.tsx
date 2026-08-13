@@ -11,7 +11,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import React from 'react';
-import { Platform, Pressable, Text } from 'react-native';
+import { Platform, Pressable, Text, View } from 'react-native';
 
 import { useResponsiveTabBar } from '../hooks/useResponsiveTabBar';
 import { useT } from '../i18n';
@@ -36,13 +36,45 @@ const BillingStack = createNativeStackNavigator();
 function useHeaderOptions() {
   const { colors } = useTheme();
   const t = useT();
-  const { onLogout, userName } = useAuthActions();
+  const { onLogout, userName, companyName } = useAuthActions();
 
   return ({ navigation }: any) => ({
     headerStyle: { backgroundColor: colors.headerBackground },
     headerTintColor: colors.headerText,
     headerTitleStyle: { fontWeight: 'bold' as const, fontFamily: 'Inter_700Bold' },
     headerBackTitle: 'Back',
+    // Native has no persistent top bar, and `headerLeft` gives way to the back
+    // button on nested screens — so the school goes under the title, where it
+    // survives every push.
+    // Native only: on web the fixed GlobalTopBar already names the school on
+    // every screen, and a second copy under the title just repeats itself.
+    headerTitle: companyName && Platform.OS !== 'web'
+      ? ({ children }: any) => (
+          <View style={{ alignItems: 'center' }}>
+            <Text
+              style={{
+                color: colors.headerText,
+                fontFamily: 'Inter_700Bold',
+                fontSize: 17,
+              }}
+              numberOfLines={1}
+            >
+              {children}
+            </Text>
+            <Text
+              style={{
+                color: colors.headerText,
+                fontFamily: 'Inter_400Regular',
+                fontSize: 12,
+                opacity: 0.9,
+              }}
+              numberOfLines={1}
+            >
+              {companyName}
+            </Text>
+          </View>
+        )
+      : undefined,
     headerLeft: navigation.canGoBack()
       ? undefined
       : Platform.OS !== 'web' && userName
@@ -57,7 +89,7 @@ function useHeaderOptions() {
               }}
               numberOfLines={1}
             >
-              {userName}
+              {companyName || userName}
             </Text>
           )
         : undefined,

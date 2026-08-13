@@ -1317,3 +1317,56 @@ All probe rows deleted afterwards — 251 users, 200 students, as before.
 > change, so the payload had no `status` field at all and `undefined !==
 > 'active'` read as unverified for everyone. WSL writes to `/mnt/c` never reach
 > uvicorn's reloader — see gotcha in the map.
+
+---
+
+## Company name on every school-administrator screen
+
+**Requested:** a company admin should see the company name at the top of every
+screen.
+
+Every action a school administrator takes is scoped to one school — pricing,
+roster, learners, billing — and nothing on screen said *which* school. The
+person's own name was there; the business they were acting for was not.
+
+`GET /auth/me` already returned `company_name` for a company admin, so no
+backend change was needed. The name now flows through `AuthActionsContext`
+alongside `userName`/`userRole`, is set in both auth paths (`checkAuth` on web,
+`fetchUserProfile` on native), and is cleared on logout.
+
+* **Web** — `GlobalTopBar` is fixed above the navigator on every screen, so the
+  school leads there and the person drops to the second line. Nothing else had
+  to change to cover "every screen".
+* **Native** — there is no persistent bar, and `headerLeft` gives way to the
+  back button on nested screens, so the school goes *under* the title as a
+  subtitle in `CompanyAdminTabs`. Gated to native: the first cut rendered it on
+  web too, where it repeated the top bar directly beneath itself.
+
+Two things fixed in passing:
+
+* **`getRoleColor` had no `company_admin` case**, so the bar fell through to
+  `colors.textSecondary` — a *text* token used as a full-bleed background, which
+  the design-token contract exists to prevent. Added `roleCompany`
+  (`blue600`, **5.17:1** against the white text it sits behind, meeting the 4.5:1
+  the other three role colours document).
+* **Web called the role `Company_admin`** while native called it
+  `Driving School`. Web now matches native.
+
+### Verified
+
+In a browser as a throwaway school administrator (deleted afterwards):
+
+| Screen | Top bar |
+|---|---|
+| Dashboard | `Cape Town Driving Academy` / `PROBE SCHOOL (DRIVING SCHOOL)` |
+| Instructors | same |
+| Learners | same |
+| Pricing | same |
+| Billing | same |
+
+Bar colour `rgb(37, 99, 235)` = `blue600`, and no duplicate under the screen
+title after gating the native subtitle.
+
+**Regression check** — a platform admin still renders `Probe Admin (Admin)` /
+`ADMIN` on `rgb(220, 38, 38)` = `red600`, unchanged. `/auth/me` only returns
+`company_name` under the company-admin branch, so no other role can pick one up.

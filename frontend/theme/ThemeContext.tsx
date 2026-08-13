@@ -126,6 +126,7 @@ export type ThemeColors = {
   roleAdmin: string;
   roleInstructor: string;
   roleStudent: string;
+  roleCompany: string;
 
   // Header / Navigation
   headerBackground: string;
@@ -192,10 +193,13 @@ export const lightColors: ThemeColors = {
 
   // Role colours are used as full-bleed backgrounds behind white text in
   // GlobalTopBar, so they must clear 4.5:1 against #FFF.
-  // red500 3.76 -> red600 4.83 · teal600 3.74 -> teal700 5.47
+  // red500 3.76 -> red600 4.83 · teal600 3.74 -> teal700 5.47 · blue600 5.17
   roleAdmin: palette.red600,
   roleInstructor: palette.teal700,
   roleStudent: palette.sky700,
+  // Company admins previously fell through to `textSecondary` — a *text* token
+  // used as a background, which is both a token misuse and unreadable-adjacent.
+  roleCompany: palette.blue600,
 
   headerBackground: palette.teal600,
   headerText: palette.white,
@@ -258,6 +262,7 @@ export const darkColors: ThemeColors = {
   roleAdmin: palette.red600,
   roleInstructor: palette.teal700,
   roleStudent: palette.sky700,
+  roleCompany: palette.blue600,
 
   headerBackground: palette.gray900,
   headerText: palette.gray50,

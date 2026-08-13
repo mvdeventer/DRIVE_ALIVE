@@ -12,10 +12,17 @@ import { useTheme } from '../theme/ThemeContext';
 interface GlobalTopBarProps {
   userName: string;
   userRole: string | null;
+  /** The school a company administrator acts for; null for every other role. */
+  companyName?: string | null;
   onLogout: () => void;
 }
 
-export default function GlobalTopBar({ userName, userRole, onLogout }: GlobalTopBarProps) {
+export default function GlobalTopBar({
+  userName,
+  userRole,
+  companyName,
+  onLogout,
+}: GlobalTopBarProps) {
   const { colors, isDark, toggle } = useTheme();
 
   // Only show on web
@@ -36,6 +43,8 @@ export default function GlobalTopBar({ userName, userRole, onLogout }: GlobalTop
         return colors.roleInstructor;
       case 'student':
         return colors.roleStudent;
+      case 'company_admin':
+        return colors.roleCompany;
       default:
         return colors.textSecondary;
     }
@@ -58,11 +67,27 @@ export default function GlobalTopBar({ userName, userRole, onLogout }: GlobalTop
 
   return (
     <View style={[styles.container, { backgroundColor: getRoleColor(userRole) }, webStyles]}>
-      {/* Left: user info */}
+      {/* Left: who you are and, for a school administrator, which school you
+          are acting for. The school leads, because every action on every screen
+          is scoped to it and there is otherwise nothing on screen that says
+          which one. */}
       <View style={styles.userInfo}>
         <View style={styles.userDetails}>
-          <Text style={styles.userName}>{userName}</Text>
-          <Text style={styles.userRole}>{getRoleDisplay(userRole)}</Text>
+          {companyName ? (
+            <>
+              <Text style={styles.userName} numberOfLines={1}>
+                {companyName}
+              </Text>
+              <Text style={styles.userRole} numberOfLines={1}>
+                {userName}
+              </Text>
+            </>
+          ) : (
+            <>
+              <Text style={styles.userName}>{userName}</Text>
+              <Text style={styles.userRole}>{getRoleDisplay(userRole)}</Text>
+            </>
+          )}
         </View>
       </View>
 
