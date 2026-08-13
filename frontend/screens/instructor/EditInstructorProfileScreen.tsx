@@ -1,8 +1,7 @@
 /**
  * Edit Instructor Profile Screen
  */
-import { useNavigation, useRoute } from '@react-navigation/native';
-import type { NavigationAction } from '@react-navigation/native';
+import { useNavigation, useRoute, type NavigationAction } from '@react-navigation/native';
 import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,

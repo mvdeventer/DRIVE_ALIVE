@@ -238,16 +238,18 @@ def _resolve_current_version() -> tuple[str, int]:
 
 
 def _bump_version(current_version: str, bump_type: str) -> str:
-    major, minor, _patch = _parse_semver(current_version, "resolved version")
+    major, minor, patch = _parse_semver(current_version, "resolved version")
     if bump_type == "major":
         return f"{major + 1}.0.0"
     if bump_type == "minor":
         return f"{major}.{minor + 1}.0"
+    if bump_type == "patch":
+        return f"{major}.{minor}.{patch + 1}"
     raise ReleaseError(f"Unsupported bump type '{bump_type}'.")
 
 
 def _release_codename(bump_type: str, version: str) -> str:
-    label = "Major" if bump_type == "major" else "Minor"
+    label = {"major": "Major", "minor": "Minor", "patch": "Patch"}.get(bump_type, "Minor")
     return f"{label} Release {version}"
 
 

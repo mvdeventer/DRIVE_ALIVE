@@ -46,8 +46,8 @@ import {
   NavigationContainer,
   DefaultTheme as NavDefaultTheme,
   DarkTheme as NavDarkTheme,
+  type LinkingOptions
 } from '@react-navigation/native';
-import type { LinkingOptions } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import * as SecureStore from 'expo-secure-store';
 import { StatusBar } from 'expo-status-bar';

@@ -1,8 +1,7 @@
 /**
  * Payment Screen - Displays payment summary, credits, cancellation policy and redirects to Stripe
  */
-import { useNavigation, useRoute } from '@react-navigation/native';
-import type { NavigationProp } from '@react-navigation/native';
+import { useNavigation, useRoute, type NavigationProp } from '@react-navigation/native';
 import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,

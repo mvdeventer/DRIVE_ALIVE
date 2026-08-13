@@ -1278,6 +1278,7 @@ EXAMPLES
     s.bat minor                          Commit everything, bump 7.1.0 -> 7.2.0,
                                          tag and publish a GitHub release
     s.bat major                          Same, but 7.x.x -> 8.0.0
+    s.bat patch                          Same, but 7.1.0 -> 7.1.1 (fixes only)
     s.bat minor --dry-run                Preview the minor release, change nothing
     s.bat minor -m "feat: new screens"   Use a custom message for the pre-release commit
     s.bat release --minor                Release WITHOUT auto-committing first
@@ -1478,9 +1479,9 @@ def main() -> None:
     raw_argv = sys.argv[1:]
     command_names = {
         "start", "stop", "restart", "webtest", "install", "uninstall",
-        "env", "status", "release", "minor", "major", "help",
+        "env", "status", "release", "minor", "major", "patch", "help",
     }
-    has_release_flag = any(flag in raw_argv for flag in ("--major", "--minor"))
+    has_release_flag = any(flag in raw_argv for flag in ("--major", "--minor", "--patch"))
     parsed_argv = raw_argv
     if raw_argv and raw_argv[0] not in command_names and has_release_flag:
         parsed_argv = ["release"] + raw_argv
@@ -1549,12 +1550,14 @@ def main() -> None:
     bump_group = p_release.add_mutually_exclusive_group(required=True)
     bump_group.add_argument("--minor", action="store_true", help="Bump minor version and publish a release")
     bump_group.add_argument("--major", action="store_true", help="Bump major version and publish a release")
+    bump_group.add_argument("--patch", action="store_true", help="Bump patch version and publish a release")
     p_release.add_argument("--dry-run", action="store_true", help="Preview release changes without writing, tagging, or publishing")
 
     # minor / major — one-command ship: commit + bump + tag + publish
     for bump_name, bump_help in (
         ("minor", "Commit ALL pending changes, bump minor version (x.Y.0), tag and publish a GitHub release"),
         ("major", "Commit ALL pending changes, bump major version (X.0.0), tag and publish a GitHub release"),
+        ("patch", "Commit ALL pending changes, bump patch version (x.y.Z), tag and publish a GitHub release"),
     ):
         p_bump = sub.add_parser(bump_name, help=bump_help)
         p_bump.add_argument("-m", "--message", help="Commit message for the pending changes (default: auto-generated)")
@@ -1640,10 +1643,10 @@ def main() -> None:
         cmd_status()
 
     elif args.command == "release":
-        bump_type = "major" if args.major else "minor"
+        bump_type = "major" if args.major else "patch" if args.patch else "minor"
         cmd_release(bump_type=bump_type, dry_run=args.dry_run)
 
-    elif args.command in ("minor", "major"):
+    elif args.command in ("minor", "major", "patch"):
         cmd_ship(bump_type=args.command, message=args.message, dry_run=args.dry_run)
 
     elif args.command == "help":

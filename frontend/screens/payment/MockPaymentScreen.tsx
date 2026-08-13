@@ -1,8 +1,7 @@
 /**
  * Mock Payment Screen - Simulates payment for development
  */
-import { useNavigation, useRoute } from '@react-navigation/native';
-import type { NavigationProp } from '@react-navigation/native';
+import { useNavigation, useRoute, type NavigationProp } from '@react-navigation/native';
 import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,

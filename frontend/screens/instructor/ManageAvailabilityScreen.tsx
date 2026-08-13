@@ -2,8 +2,7 @@
  * Instructor Availability Management Screen
  * Allows instructors to set up their weekly schedule and manage availability
  */
-import { useFocusEffect, useNavigation } from '@react-navigation/native';
-import type { NavigationAction } from '@react-navigation/native';
+import { useFocusEffect, useNavigation, type NavigationAction } from '@react-navigation/native';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,

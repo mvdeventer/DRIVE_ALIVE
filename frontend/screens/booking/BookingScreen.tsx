@@ -2,8 +2,7 @@
  * Booking Screen - Book a driving lesson with selected instructor
  * Redesigned with step-by-step date and time selection
  */
-import { useFocusEffect, useNavigation, useRoute } from '@react-navigation/native';
-import type { NavigationAction } from '@react-navigation/native';
+import { useFocusEffect, useNavigation, useRoute, type NavigationAction } from '@react-navigation/native';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,

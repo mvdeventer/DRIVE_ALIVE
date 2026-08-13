@@ -1,10 +1,9 @@
-// KNOWN GAP: this uses the bare `react-native` preset, not `jest-expo`. Any
-// suite that transitively imports an expo-modules-core module (expo-secure-store,
-// expo-haptics, …) dies with "Cannot read properties of undefined (reading
-// 'EventEmitter')". That is why screens/__tests__/DatabaseInterfaceScreen.test.tsx
-// and services/__tests__/database-interface.test.ts do not run.
-// Fixing it needs jest-expo, which currently peer-conflicts with jest 30.
-// Track before relying on component-level test coverage.
+// KNOWN GAP: this uses the bare `react-native` preset, not `jest-expo`, so any
+// suite that transitively imports an expo-modules-core module dies at import
+// time with "Cannot read properties of undefined (reading 'EventEmitter')".
+// jest.setup.js mocks the expo-* modules this app actually imports, which is
+// enough to keep suites running; a new expo-* import needs a mock adding there.
+// The real fix is jest-expo, which currently peer-conflicts with jest 30.
 module.exports = {
   preset: 'react-native',
   transformIgnorePatterns: [
