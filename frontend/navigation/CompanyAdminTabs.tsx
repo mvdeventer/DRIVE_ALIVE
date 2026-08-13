@@ -20,6 +20,7 @@ import { useAuthActions } from './AuthContext';
 
 import CreateUserScreen from '../screens/admin/CreateUserScreen';
 import CompanyAdminHomeScreen from '../screens/company/CompanyAdminHomeScreen';
+import CompanyLearnersScreen from '../screens/company/CompanyLearnersScreen';
 import CompanyPricingScreen from '../screens/company/CompanyPricingScreen';
 import CompanyRosterScreen from '../screens/company/CompanyRosterScreen';
 import CompanyStatementScreen from '../screens/company/CompanyStatementScreen';
@@ -137,6 +138,13 @@ function RosterStackScreen() {
       {/* Signing up a learner the school brought itself. The same form the
           platform operator uses, scoped so it can only create learners and
           only for this school. */}
+      {/* The learners this school signed up, and the fallback for one who never
+          received their verification link. */}
+      <RosterStack.Screen
+        name="CompanyLearners"
+        component={CompanyLearnersScreen}
+        options={{ title: t('nav.learners') }}
+      />
       <RosterStack.Screen
         name="EnrolLearner"
         component={CreateUserScreen}

@@ -544,9 +544,99 @@ async def list_own_learners(
                 "name": f"{user.first_name} {user.last_name}",
                 "email": user.email,
                 "phone": user.phone,
+                # The school needs to see who never confirmed their address,
+                # because they are the ones who will phone the school about it.
+                "status": user.status.value if hasattr(user.status, "value") else user.status,
             }
             for student, user in rows
         ]
+    }
+
+
+@router.post("/students/{student_id}/resend-verification")
+async def resend_learner_verification(
+    student_id: int,
+    ctx: Annotated[CompanyContext, Depends(require_company_admin)],
+    db: Session = Depends(get_db),
+):
+    """Send a learner their account verification link again.
+
+    A fallback, nothing more. A learner who signed up at the counter and never
+    received the email would otherwise have to reach the platform operator; the
+    school that enrolled them can now send it again themselves.
+
+    Deliberately **not** an override: this re-sends the link, it never marks the
+    account verified. An address nobody has confirmed must not become an active
+    account just because a school says so.
+
+    Scoped to learners this school enrolled itself — `origin_company_id` comes
+    from the caller's own company context, never from the request.
+    """
+    row = (
+        db.query(Student, User)
+        .join(User, Student.user_id == User.id)
+        .filter(
+            Student.id == student_id,
+            Student.origin_company_id == ctx.company_id,
+        )
+        .first()
+    )
+    if row is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={
+                "code": "LEARNER_NOT_IN_SCHOOL",
+                "message": "That learner is not one this school enrolled.",
+            },
+        )
+
+    _, user = row
+    user_status = user.status.value if hasattr(user.status, "value") else user.status
+    if user_status == "active":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                "code": "LEARNER_ALREADY_VERIFIED",
+                "message": "That learner has already verified their account.",
+            },
+        )
+
+    from ..routes.verification import _get_admin_email_config_or_503
+    from ..services.verification_service import VerificationService
+
+    admin, smtp_password = _get_admin_email_config_or_503(db)
+    token = VerificationService.create_verification_token(
+        db=db,
+        user_id=user.id,
+        token_type="email",
+        validity_minutes=admin.verification_link_validity_minutes or 30,
+    )
+    result = VerificationService.send_verification_messages(
+        db=db,
+        user=user,
+        verification_token=token,
+        frontend_url=settings.FRONTEND_URL,
+        admin_smtp_email=admin.smtp_email,
+        admin_smtp_password=smtp_password,
+    )
+
+    if not result.get("email_sent") and not result.get("whatsapp_sent"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                "code": "LEARNER_UNREACHABLE",
+                "message": (
+                    "Could not reach that learner. Check the email address and "
+                    "phone number on their account."
+                ),
+            },
+        )
+
+    return {
+        "message": f"Verification link resent to {user.first_name} {user.last_name}.",
+        "email_sent": result.get("email_sent", False),
+        "whatsapp_sent": result.get("whatsapp_sent", False),
+        "expires_in_minutes": result.get("expires_in_minutes"),
     }
 
 

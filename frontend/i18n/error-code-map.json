@@ -24,5 +24,8 @@
   "COMPANY_NOT_FOUND": "errors.company.notFound",
   "INVALID_EMAIL": "errors.company.invalidEmail",
   "INSTRUCTOR_ALREADY_VERIFIED": "errors.instructorVerify.alreadyVerified",
-  "COMPANY_OWNER_UNREACHABLE": "errors.instructorVerify.companyOwnerUnreachable"
+  "COMPANY_OWNER_UNREACHABLE": "errors.instructorVerify.companyOwnerUnreachable",
+  "LEARNER_NOT_IN_SCHOOL": "errors.companyLearners.notInSchool",
+  "LEARNER_ALREADY_VERIFIED": "errors.companyLearners.alreadyVerified",
+  "LEARNER_UNREACHABLE": "errors.companyLearners.unreachable"
 }

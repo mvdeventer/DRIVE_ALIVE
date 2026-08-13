@@ -245,13 +245,20 @@ export default function CompanyRosterScreen() {
         >
           {t('companyRoster.ownLearnersHint')}
         </Text>
-        <View style={{ marginTop: spacing.sm }}>
+        <View style={{ marginTop: spacing.sm, gap: spacing.sm }}>
           <Button
             variant="secondary"
             onPress={() => (navigation as any).navigate('EnrolLearner')}
             fullWidth
           >
             {t('companyRoster.enrolLearner')}
+          </Button>
+          <Button
+            variant="secondary"
+            onPress={() => (navigation as any).navigate('CompanyLearners')}
+            fullWidth
+          >
+            {t('companyRoster.viewLearners')}
           </Button>
         </View>
 

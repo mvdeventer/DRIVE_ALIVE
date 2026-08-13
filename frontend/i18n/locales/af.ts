@@ -47,6 +47,11 @@ export const af: TranslationKeys = {
       forbidden: 'Jy het nie toestemming om hierdie aksie uit te voer nie.',
       accountPendingVerification: 'Jou rekening wag op verifikasie. Verifieer asseblief en probeer weer.',
     },
+    companyLearners: {
+      notInSchool: 'Daardie leerling is nie een wat hierdie skool ingeskryf het nie.',
+      alreadyVerified: 'Daardie leerling het reeds hul rekening geverifieer.',
+      unreachable: 'Kon nie daardie leerling bereik nie. Gaan die e-posadres en foonnommer op hul rekening na.',
+    },
     setup: {
       alreadyInitialized: 'Stelselopstelling is reeds voltooi.',
     },
@@ -118,6 +123,21 @@ export const af: TranslationKeys = {
     settlementNote: 'Word van jou uitbetaling afgetrek. Niks om afsonderlik te betaal nie.',
     loadFailed: 'Kon nie jou rekening laai nie.',
   },
+  companyLearners: {
+    title: 'Ons leerlinge',
+    unverifiedHint: '{{count}} leerling(e) het nog nie hul rekening bevestig nie.',
+    allVerified: 'Elke leerling het hul rekening bevestig.',
+    searchPlaceholder: 'Soek leerlinge op naam, e-pos of foon…',
+    none: 'Geen leerlinge pas by daardie soektog nie.',
+    resend: 'Stuur verifikasieskakel weer',
+    resent: 'Verifikasieskakel weer aan {{name}} gestuur.',
+    resendFailed: 'Kon nie die verifikasieskakel weer stuur nie.',
+    loadFailed: 'Kon nie jou leerlinge laai nie.',
+    badge: {
+      verified: 'Geverifieer',
+      unverified: 'Nie geverifieer nie',
+    },
+  },
   companyRoster: {
     title: 'Jou Instrukteurs',
     instructors: 'Instrukteurs',
@@ -128,6 +148,7 @@ export const af: TranslationKeys = {
     ownLearnersHint:
       'Leerlinge wat jy self ingeskryf het. Hul lesse is jou eie besigheid, so geen platformkommissie word daarop gehef nie.',
     enrolLearner: 'Skryf ’n leerling in',
+    viewLearners: 'Bekyk ons leerlinge',
     invite: 'Nooi \'n instrukteur',
     inviteHint: 'Hulle benodig nog nie \'n rekening nie — die skakel lei hulle deur registrasie.',
     emailLabel: 'Instrukteur se e-posadres',
@@ -186,6 +207,7 @@ export const af: TranslationKeys = {
   nav: {
     home: 'Tuis',
     instructors: 'Instrukteurs',
+    learners: 'Leerlinge',
     bookings: 'Besprekings',
     schedule: 'Skedule',
     earnings: 'Verdienste',

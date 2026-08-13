@@ -302,7 +302,7 @@ Reporting one as the other is the easiest way to be wrong here.
 | `instructors.py` | `/instructors` | list + `{id}` (**public**), `me`, `me/location`, `my-bookings`, `earnings-report`, `availability`, verify / unverify, company roster + approve / reject, invite accept / decline, `me/company-requests`, `me/leave-company` | mixed |
 | `availability.py` | `/availability` | `schedule` CRUD + `bulk`, `time-off` CRUD, `custom` CRUD, `overview`, and **public** `instructor/{id}/slots` | mixed |
 | `instructor_setup.py` | `/instructors/setup` | pre-auth schedule setup via one-time `setup_token` | token |
-| `company.py` | `/company` | `pricing`, `instructors/{id}/markup`, `invites` CRUD, `students` (enrol), `statement` | co-admin |
+| `company.py` | `/company` | `pricing`, `instructors/{id}/markup`, `invites` CRUD, `students` (enrol + list), `students/{id}/resend-verification`, `statement` | co-admin |
 | `companies.py` | `/companies` | list (**joinable schools only** — solo and platform-host rows excluded) + `{id}` — **no POST** | public |
 | `payments.py` | `/payments` | `initiate`, `webhook` (**public**, signature-verified), `session/{id}`, `mock-complete` | mixed |
 | `students.py` | `/students` | `me` (GET/PUT), `{id}`, `by-user/{id}` | auth |

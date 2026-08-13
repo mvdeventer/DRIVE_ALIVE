@@ -1255,3 +1255,65 @@ appears twice on All Users, once per role. That is deliberate — the All tab
 returns one card per role a user holds, which is why the first screenshot showed
 `COMPANY_ADMIN` badges on people whose emails look like instructors. Their
 instructor cards are further down the same list.
+
+---
+
+## Learner verification fallback for schools
+
+**Requested:** a school should be able to verify a learner, but only as a
+fallback for a learner who never received their registration verification link.
+Confirmed with the user: **resend the link only, students only** — no override
+that marks an account verified.
+
+That distinction is the whole design. A learner enrolled at the counter who
+never got the email previously had to reach the platform operator; the school
+that signed them up can now send it again themselves. What the school still
+cannot do is *declare* the account verified, because an address nobody has
+confirmed must not become an active account on a school's say-so.
+
+* `POST /company/students/{student_id}/resend-verification` — company-admin
+  scoped, and scoped again to learners this school enrolled: the match is on
+  `Student.origin_company_id == ctx.company_id`, taken from the caller's own
+  company context and never from the request. Mints a fresh token through
+  `VerificationService` and sends by the normal channels.
+* `GET /company/students` now returns each learner's `status`, so the school can
+  see who has not confirmed.
+* New `CompanyLearnersScreen` under the Instructors tab, reached from **View our
+  learners** on the roster. Verified/Not verified badge per learner, a resend
+  button on the unverified ones only, a search box, and a count of who is
+  outstanding.
+* Three error codes added and mapped: `LEARNER_NOT_IN_SCHOOL`,
+  `LEARNER_ALREADY_VERIFIED`, `LEARNER_UNREACHABLE` (backend codes 20 → 23).
+
+### Verification
+
+**Endpoint,** against PostgreSQL with the outbound send stubbed, using throwaway
+learners at two different schools:
+
+| Case | Result |
+|---|---|
+| School resends to its own unverified learner | 200, link sent, and **the account was not activated** (`INACTIVE` after the call) |
+| Another school's learner | 404 `LEARNER_NOT_IN_SCHOOL`, nothing sent |
+| Learner who is already verified | 400 `LEARNER_ALREADY_VERIFIED`, nothing sent |
+| Learner that does not exist | 404 |
+
+**Screen,** in a browser as a throwaway school administrator, with the resend
+POST stubbed at the network layer so no verification email left the machine:
+
+| Check | Result |
+|---|---|
+| "View our learners" on the roster | present, navigates |
+| Header | `Our learners` · `1 learner(s) have not confirmed their account yet.` |
+| Badges | `Verified` and `Not verified` both render |
+| Resend buttons | **1** — only on the unconfirmed learner |
+| Pressing it | POST fired once, success message shown |
+| Search | filters to one learner; `zzzz` shows the empty state |
+| Console errors | none beyond the login 401/409 the probe caused |
+
+All probe rows deleted afterwards — 251 users, 200 students, as before.
+
+> **Trap worth remembering:** the first run showed all 14 learners as
+> unverified. The backend had not been restarted after the `/company/students`
+> change, so the payload had no `status` field at all and `undefined !==
+> 'active'` read as unverified for everyone. WSL writes to `/mnt/c` never reach
+> uvicorn's reloader — see gotcha in the map.

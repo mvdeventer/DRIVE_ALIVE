@@ -45,6 +45,11 @@ export const en = {
       forbidden: 'You do not have permission to perform this action.',
       accountPendingVerification: 'Your account is pending verification. Please verify and try again.',
     },
+    companyLearners: {
+      notInSchool: 'That learner is not one this school enrolled.',
+      alreadyVerified: 'That learner has already verified their account.',
+      unreachable: 'Could not reach that learner. Check the email address and phone number on their account.',
+    },
     setup: {
       alreadyInitialized: 'System setup is already completed.',
     },
@@ -116,6 +121,21 @@ export const en = {
     settlementNote: 'Deducted from your payout. Nothing to pay separately.',
     loadFailed: 'Could not load your statement.',
   },
+  companyLearners: {
+    title: 'Our learners',
+    unverifiedHint: '{{count}} learner(s) have not confirmed their account yet.',
+    allVerified: 'Every learner has confirmed their account.',
+    searchPlaceholder: 'Search learners by name, email or phone…',
+    none: 'No learners match that search.',
+    resend: 'Resend verification link',
+    resent: 'Verification link resent to {{name}}.',
+    resendFailed: 'Could not resend the verification link.',
+    loadFailed: 'Could not load your learners.',
+    badge: {
+      verified: 'Verified',
+      unverified: 'Not verified',
+    },
+  },
   companyRoster: {
     title: 'Your Instructors',
     instructors: 'Instructors',
@@ -126,6 +146,7 @@ export const en = {
     ownLearnersHint:
       'Learners you signed up yourself. Their lessons are your own trade, so no platform commission is charged on them.',
     enrolLearner: 'Enrol a learner',
+    viewLearners: 'View our learners',
     invite: 'Invite an instructor',
     inviteHint: 'They do not need an account yet — the link will walk them through signing up.',
     emailLabel: 'Instructor email address',
@@ -184,6 +205,7 @@ export const en = {
   nav: {
     home: 'Home',
     instructors: 'Instructors',
+    learners: 'Learners',
     bookings: 'Bookings',
     schedule: 'Schedule',
     earnings: 'Earnings',
