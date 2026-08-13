@@ -1188,3 +1188,70 @@ afterwards (`admins now: [(1, 'mvdeventer123@gmail.com')]`).
 | Actions offered | Approve · Reject · Resend to school owner |
 | Pending Admin tab | still empty, as it should be |
 | Console errors | none beyond the login 401/409 the probe itself caused |
+
+---
+
+## D-26 — "All Users" showed no students
+
+**Asked:** why does the All Users tab not contain the students?
+
+Because the screen only ever had 50 of the 251 users, and the 50 it got were an
+arbitrary 50 that happened to contain no students at all.
+
+Three faults compounded:
+
+1. **`GET /admin/users` had no `ORDER BY`.** An `OFFSET/LIMIT` without one
+   returns whatever order the rows come back in. Measured against the live
+   database, page 1 was user ids **20–51** — not 1–50 — and the lowest student
+   user id is **52**. So page 1 could not contain a student.
+2. **The screen fetched one page and never offered another.**
+   `getAllUsers(roleFilter, statusFilter)` took the default `limit = 50`, there
+   was no pagination control, no total, and nothing to say 200 more users
+   existed. The Students tab had the same ceiling: 50 of 200.
+3. **Search was client-side over that page.** Searching for a learner who was
+   not among the 50 returned nothing, with no indication the search had only
+   looked at a slice. The list was then sorted alphabetically before display,
+   which made a 20% slice look like a complete A-Z list — the most misleading
+   presentation available.
+
+This is the same class of bug as D-23 (Database Interface search) and gotcha 13
+in the architecture map: a filter applied to a page rather than to the table.
+
+### Fixed
+
+* `GET /admin/users` orders by `first_name, last_name, id` — deterministic, so
+  pages neither repeat nor skip users — and takes a `search` parameter applied
+  in SQL across name, email, phone, ID number and user id.
+* New `GET /admin/users/counts` for the per-tab totals, declared above
+  `/users/{user_id}` so the literal segment is matched first.
+* The tabs carry their counts, the list header reads **Showing 50 of 252
+  users**, and a **Load more users** button pages through the rest. Search is
+  debounced 350 ms and runs on the server; a pending debounce is cleared on tab
+  change so it cannot fire against the tab being left.
+* Phone matching stays client-side over the fetched page, because the stored
+  format varies (`+27…` vs `0…`) and normalising it in SQL would need a
+  functional index to stay cheap.
+
+### Verified
+
+In a browser as a throwaway admin, deleted afterwards
+(`admins now: [(1, 'mvdeventer123@gmail.com')]`):
+
+| Check | Result |
+|---|---|
+| Tab bar | `All Users (252) · Admins (2) · Schools (23) · Instructors (51) · Students (200)` |
+| All Users, page 1 | **40 student cards** — was 0 |
+| Count line | `Showing 50 of 252 users` |
+| Students tab | `Showing 50 of 200 users` |
+| Load more | `Showing 100 of 200 users`, 100 cards |
+| Search `Sipho` | **18 matches** from across the whole table |
+| Console errors | none beyond the login 401/409 the probe caused |
+
+*(Admins reads 2 because the throwaway admin still existed during the run; it is
+1 again now.)*
+
+One thing that is **not** a bug: an instructor who also administers a school
+appears twice on All Users, once per role. That is deliberate — the All tab
+returns one card per role a user holds, which is why the first screenshot showed
+`COMPANY_ADMIN` badges on people whose emails look like instructors. Their
+instructor cards are further down the same list.

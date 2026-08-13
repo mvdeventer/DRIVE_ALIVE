@@ -590,7 +590,10 @@ export const af: TranslationKeys = {
       company_admin: 'Skole',
       instructor: 'Instrukteurs',
       student: 'Studente',
+      withCount: '{{label}} ({{count}})',
     },
+    showingCount: 'Wys {{shown}} van {{total}} gebruikers',
+    loadMore: 'Laai meer gebruikers',
     search: {
       all: 'Soek gebruikers op naam, ID, telefoon of e-pos...',
       admin: 'Soek admins op naam, ID, telefoon of e-pos...',

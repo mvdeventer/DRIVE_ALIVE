@@ -4,7 +4,7 @@
  */
 import { Picker } from '@react-native-picker/picker';
 import { useFocusEffect } from '@react-navigation/native';
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -84,17 +84,56 @@ export default function UserManagementScreen({ navigation }: any) {
   const [loadingSchedule, setLoadingSchedule] = useState(false);
   const [confirmResetCredit, setConfirmResetCredit] = useState<User | null>(null);
   const [resetCreditLoading, setResetCreditLoading] = useState(false);
+  const [counts, setCounts] = useState<Record<string, number> | null>(null);
+  // How many *users* have been requested so far. One user can produce several
+  // cards on the All tab (one per role they hold), so the card count is not a
+  // page count and cannot drive "load more".
+  const [loadedUsers, setLoadedUsers] = useState(0);
+  const [loadingMore, setLoadingMore] = useState(false);
 
-  const loadUsers = async () => {
+  const PAGE_SIZE = 50;
+
+  const loadUsers = async (
+    search = searchQuery,
+    role = roleFilter,
+    stat = statusFilter,
+  ) => {
     try {
       setError('');
-      const data = await apiService.getAllUsers(roleFilter, statusFilter);
+      const data = await apiService.getAllUsers(role, stat, 0, PAGE_SIZE, search);
       setUsers(data);
+      setLoadedUsers(PAGE_SIZE);
     } catch (err: any) {
       setError(err.response?.data?.detail || t('userMgmt.msg.loadFailed'));
     } finally {
       setLoading(false);
       setRefreshing(false);
+    }
+  };
+
+  // The list is a page of a much longer table, so without this the other 200
+  // users simply do not exist as far as the screen is concerned.
+  const loadMoreUsers = async () => {
+    if (loadingMore) { return; }
+    setLoadingMore(true);
+    try {
+      const data = await apiService.getAllUsers(
+        roleFilter, statusFilter, loadedUsers, PAGE_SIZE, searchQuery,
+      );
+      setUsers(prev => [...prev, ...data]);
+      setLoadedUsers(n => n + PAGE_SIZE);
+    } catch (err: any) {
+      setError(err.response?.data?.detail || t('userMgmt.msg.loadFailed'));
+    } finally {
+      setLoadingMore(false);
+    }
+  };
+
+  const loadCounts = async () => {
+    try {
+      setCounts(await apiService.getUserRoleCounts());
+    } catch {
+      // Counts are decoration; losing them must not blank the list.
     }
   };
 
@@ -111,8 +150,28 @@ export default function UserManagementScreen({ navigation }: any) {
     useCallback(() => {
       loadCurrentUser();
       loadUsers();
+      loadCounts();
     }, [roleFilter, statusFilter])
   );
+
+  // Search runs on the server — see loadUsers. Debounced so typing is not one
+  // request per keystroke.
+  const searchDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const firstSearchRun = useRef(true);
+  useEffect(() => {
+    if (firstSearchRun.current) {
+      firstSearchRun.current = false;
+      return;
+    }
+    if (searchDebounce.current) { clearTimeout(searchDebounce.current); }
+    searchDebounce.current = setTimeout(() => {
+      setLoading(true);
+      loadUsers(searchQuery);
+    }, 350);
+    return () => {
+      if (searchDebounce.current) { clearTimeout(searchDebounce.current); }
+    };
+  }, [searchQuery]);
 
   const onRefresh = () => {
     setRefreshing(true);
@@ -125,6 +184,7 @@ export default function UserManagementScreen({ navigation }: any) {
   };
 
   const handleTabChange = (tab: 'all' | 'admin' | 'company_admin' | 'instructor' | 'student') => {
+    if (searchDebounce.current) { clearTimeout(searchDebounce.current); }
     setActiveTab(tab);
     setRoleFilter(tab === 'all' ? '' : tab);
     setSearchQuery('');
@@ -135,28 +195,22 @@ export default function UserManagementScreen({ navigation }: any) {
     return phone.replace(/[\s-]/g, '').replace(/^\+27/, '0');
   };
 
+  // Search and status are applied by the server, over the whole table rather
+  // than over the page — filtering here as well would only re-filter what the
+  // server already narrowed, and previously meant nobody past the first page
+  // could be found at all. Phone stays local because the stored format varies.
   const filteredUsers = users
     .filter(user => {
-      const statusMatch = !statusFilter || user.status === statusFilter;
-
-      if (!searchQuery) return statusMatch;
-
-      const query = searchQuery.toLowerCase();
+      if (!searchQuery.trim()) { return true; }
       const normalizedQuery = normalizePhone(searchQuery);
-      const userPhone = normalizePhone(user.phone);
-      
-      // Remove # prefix if present for ID search (e.g., "#1" or "#2")
-      const idSearchQuery = searchQuery.replace(/^#/, '');
-
-      const searchMatch =
-        user.id.toString() === idSearchQuery || // Exact ID match (e.g., "1" or "#1")
-        user.id.toString().includes(searchQuery) || // Partial ID match
-        user.full_name.toLowerCase().includes(query) ||
-        user.email.toLowerCase().includes(query) ||
-        userPhone.includes(normalizedQuery) ||
-        (user.id_number && user.id_number.includes(searchQuery));
-
-      return statusMatch && searchMatch;
+      if (normalizedQuery.length < 3) { return true; }
+      return (
+        normalizePhone(user.phone).includes(normalizedQuery) ||
+        user.full_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        user.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        user.id.toString().startsWith(searchQuery.replace(/^#/, '')) ||
+        Boolean(user.id_number && user.id_number.includes(searchQuery))
+      );
     })
     .sort((a, b) => {
       // Special sorting: original admin first, then by role group, then alphabetical
@@ -788,7 +842,12 @@ export default function UserManagementScreen({ navigation }: any) {
             onPress={() => handleTabChange(tab)}
           >
             <Text style={[styles.tabText, { color: colors.textSecondary, fontFamily: 'Inter_600SemiBold' }, activeTab === tab && { color: colors.primary, fontFamily: 'Inter_700Bold' }]}>
-              {t(`userMgmt.tab.${tab}`)}
+              {counts
+                ? t('userMgmt.tab.withCount', {
+                    label: t(`userMgmt.tab.${tab}`),
+                    count: counts[tab],
+                  })
+                : t(`userMgmt.tab.${tab}`)}
             </Text>
           </Pressable>
         ))}
@@ -833,6 +892,15 @@ export default function UserManagementScreen({ navigation }: any) {
         contentContainerStyle={styles.listContainer}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       >
+        {counts ? (
+          <Text style={[styles.resultCount, { color: colors.textSecondary }]}>
+            {t('userMgmt.showingCount', {
+              shown: Math.min(loadedUsers, counts[activeTab] ?? 0),
+              total: counts[activeTab] ?? 0,
+            })}
+          </Text>
+        ) : null}
+
         <View style={styles.gridContainer}>
           {filteredUsers.map(item => (
             <View key={`${item.id}-${item.role}`} style={styles.cardWrapper}>
@@ -840,6 +908,14 @@ export default function UserManagementScreen({ navigation }: any) {
             </View>
           ))}
         </View>
+
+        {counts && loadedUsers < (counts[activeTab] ?? 0) ? (
+          <View style={{ padding: 16, alignItems: 'center' }}>
+            <Button variant="secondary" onPress={loadMoreUsers} disabled={loadingMore}>
+              {loadingMore ? t('common.loading') : t('userMgmt.loadMore')}
+            </Button>
+          </View>
+        ) : null}
       </ScrollView>
 
       {/* Reset Password Modal */}
@@ -1274,6 +1350,7 @@ const styles = StyleSheet.create({
   listContainer: {
     padding: 8,
   },
+  resultCount: { fontSize: 13, paddingHorizontal: 16, paddingTop: 12 },
   gridContainer: {
     flexDirection: 'row',
     flexWrap: 'wrap',

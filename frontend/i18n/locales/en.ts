@@ -587,7 +587,10 @@ export const en = {
       company_admin: 'Schools',
       instructor: 'Instructors',
       student: 'Students',
+      withCount: '{{label}} ({{count}})',
     },
+    showingCount: 'Showing {{shown}} of {{total}} users',
+    loadMore: 'Load more users',
     search: {
       all: 'Search users by name, ID, phone, or email...',
       admin: 'Search admins by name, ID, phone, or email...',

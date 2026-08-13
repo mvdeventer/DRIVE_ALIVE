@@ -481,11 +481,23 @@ class ApiService {
     return response.data;
   }
 
-  async getAllUsers(role?: string, status?: string, skip = 0, limit = 50) {
+  async getAllUsers(role?: string, status?: string, skip = 0, limit = 50, search?: string) {
     const params: any = { skip, limit };
     if (role) params.role = role;
     if (status) params.status = status;
+    if (search && search.trim()) params.search = search.trim();
     const response = await this.api.get('/admin/users', { params });
+    return response.data;
+  }
+
+  async getUserRoleCounts(): Promise<{
+    all: number;
+    admin: number;
+    company_admin: number;
+    instructor: number;
+    student: number;
+  }> {
+    const response = await this.api.get('/admin/users/counts');
     return response.data;
   }
 

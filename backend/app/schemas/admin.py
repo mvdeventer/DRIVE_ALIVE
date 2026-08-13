@@ -211,6 +211,16 @@ class InstructorVerificationResponse(BaseModel):
 # ==================== User Management Schemas ====================
 
 
+class UserRoleCounts(BaseModel):
+    """How many users hold each role, for the user-management tabs."""
+
+    all: int
+    admin: int
+    company_admin: int
+    instructor: int
+    student: int
+
+
 class UserManagementResponse(BaseModel):
     """Schema for user management list"""
 

@@ -32,6 +32,7 @@ from ..schemas.admin import (
     InstructorVerificationResponse,
     RevenueStats,
     UserManagementResponse,
+    UserRoleCounts,
 )
 from ..schemas.availability import (
     InstructorScheduleCreate,
@@ -720,6 +721,27 @@ async def resend_instructor_verification(
 # ==================== User Management ====================
 
 
+@router.get("/users/counts", response_model=UserRoleCounts)
+async def get_user_role_counts(
+    current_admin: Annotated[User, Depends(require_admin)],
+    db: Session = Depends(get_db),
+):
+    """How many users sit behind each tab of the user-management screen.
+
+    The list endpoint returns one page, so the screen cannot otherwise tell
+    "there are no students" from "no students on this page".
+
+    Declared above `/users/{user_id}` so the literal segment is matched first.
+    """
+    return UserRoleCounts(
+        all=db.query(User).count(),
+        admin=db.query(User).filter(User.role == UserRole.ADMIN).count(),
+        company_admin=db.query(User).join(CompanyAdmin, CompanyAdmin.user_id == User.id).count(),
+        instructor=db.query(User).join(Instructor, Instructor.user_id == User.id).count(),
+        student=db.query(User).join(Student, Student.user_id == User.id).count(),
+    )
+
+
 @router.get("/users", response_model=List[UserManagementResponse])
 async def get_all_users(
     current_admin: Annotated[User, Depends(require_admin)],
@@ -728,15 +750,20 @@ async def get_all_users(
     status: Optional[UserStatus] = Query(None),
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
+    search: Optional[str] = Query(None),
 ):
     """
     Get list of all users with filtering options
-    
+
     Multi-role system: Users can have multiple profiles (Student, Instructor, Admin)
     When filtering by role, we check for the existence of the corresponding profile:
     - STUDENT: users with student profiles
     - INSTRUCTOR: users with instructor profiles  
     - ADMIN: users with role=ADMIN (admin is role-based, not profile-based)
+
+    `search` is applied in SQL, not by the caller. The page is a slice of the
+    whole table, so a client-side filter can only ever search the slice — with
+    250 users and a 50-row page that means most people are unfindable.
     """
     query = db.query(User)
 
@@ -757,7 +784,30 @@ async def get_all_users(
     if status:
         query = query.filter(User.status == status)
 
-    users = query.offset(skip).limit(limit).all()
+    if search and search.strip():
+        term = search.strip().lstrip("#")
+        like = f"%{term}%"
+        query = query.filter(
+            or_(
+                (User.first_name + " " + User.last_name).ilike(like),
+                User.first_name.ilike(like),
+                User.last_name.ilike(like),
+                User.email.ilike(like),
+                User.phone.ilike(like),
+                User.id_number.ilike(like),
+                func.cast(User.id, String).ilike(f"{term}%"),
+            )
+        )
+
+    # Without an ORDER BY the slice is whatever order the rows happen to come
+    # back in, so a page can repeat or skip users between requests — and here it
+    # returned ids 20-51 out of 251, which contained no students at all.
+    users = (
+        query.order_by(User.first_name, User.last_name, User.id)
+        .offset(skip)
+        .limit(limit)
+        .all()
+    )
 
     result = []
 
