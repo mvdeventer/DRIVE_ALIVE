@@ -37,6 +37,8 @@ interface AdminStats {
   total_students: number;
   verified_instructors: number;
   pending_verification: number;
+  pending_admin_verification: number;
+  pending_company_verification: number;
   total_bookings: number;
   pending_bookings: number;
   completed_bookings: number;
@@ -407,11 +409,23 @@ export default function AdminDashboardScreen({ navigation }: any) {
                   </Text>
                   <Text style={[styles.statLabel, { color: colors.textSecondary }]}>{t('adminDashboard.verified')}</Text>
                 </View>
+                {/* One "Pending" number sent admins to a queue that can be
+                    empty while the wait is on the school, so name the gate. */}
                 <View style={[styles.statCard, { backgroundColor: colors.backgroundSecondary }]}>
                   <Text style={[styles.statValue, { color: colors.warning }]}>
-                    {stats.pending_verification}
+                    {stats.pending_admin_verification ?? 0}
                   </Text>
-                  <Text style={[styles.statLabel, { color: colors.textSecondary }]}>{t('adminDashboard.pending')}</Text>
+                  <Text style={[styles.statLabel, { color: colors.textSecondary }]}>
+                    {t('adminDashboard.pendingAdmin')}
+                  </Text>
+                </View>
+                <View style={[styles.statCard, { backgroundColor: colors.backgroundSecondary }]}>
+                  <Text style={[styles.statValue, { color: colors.info }]}>
+                    {stats.pending_company_verification ?? 0}
+                  </Text>
+                  <Text style={[styles.statLabel, { color: colors.textSecondary }]}>
+                    {t('adminDashboard.pendingSchool')}
+                  </Text>
                 </View>
               </View>
             </Card>

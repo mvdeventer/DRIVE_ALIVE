@@ -131,14 +131,30 @@ function InstructorCardActions({
     );
   }
   if (status === 'pending_company') {
-    // The outstanding approval belongs to the school owner, so say so — the
-    // generic "Resend link" read as "resend the admin link" and the backend
-    // obliged by dragging the instructor back into the admin queue.
+    // The two gates clear in either order. `is_verified` is what records that
+    // the admin gate is already shut, so while it is still open the admin can
+    // act now rather than waiting on the school — the status only names the
+    // gate that is still outstanding.
     return (
-      <View style={styles.actions}>
-        <Button variant="secondary" style={{ flex: 1 }} onPress={onResend}>
-          {t('instructorVerify.action.resendCompany')}
-        </Button>
+      <View style={{ gap: 8 }}>
+        {!item.is_verified && (
+          <View style={styles.actions}>
+            <Button style={{ flex: 1, backgroundColor: colors.success }} onPress={onApprove}>
+              {t('instructorVerify.action.approve')}
+            </Button>
+            <Button variant="danger" style={{ flex: 1 }} onPress={onReject}>
+              {t('instructorVerify.action.reject')}
+            </Button>
+          </View>
+        )}
+        {/* The outstanding approval belongs to the school owner, so say so — the
+            generic "Resend link" read as "resend the admin link" and the backend
+            obliged by dragging the instructor back into the admin queue. */}
+        <View style={styles.actions}>
+          <Button variant="secondary" style={{ flex: 1 }} onPress={onResend}>
+            {t('instructorVerify.action.resendCompany')}
+          </Button>
+        </View>
       </View>
     );
   }
@@ -250,6 +266,10 @@ export default function InstructorVerificationScreen({ navigation }: any) {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [activeTab, setActiveTab] = useState<FilterTab>('pending_admin');
+  const [counts, setCounts] = useState<Record<FilterTab, number> | null>(null);
+  // Only the first load may move the admin off the default tab; after that the
+  // tab is their choice and must not be yanked away by a refresh.
+  const pickedInitialTab = useRef(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
@@ -277,9 +297,40 @@ export default function InstructorVerificationScreen({ navigation }: any) {
     }
   };
 
+  // Counts for every tab, not just the one on screen. Without them the screen
+  // cannot tell an empty queue from work waiting behind another filter, which
+  // is what a dashboard badge reading "1" above an empty list looks like.
+  const loadCounts = async () => {
+    try {
+      const c = await apiService.getInstructorVerificationCounts();
+      setCounts({
+        all: c.all,
+        pending_admin: c.pending_admin,
+        pending_company: c.pending_company,
+        verified: c.verified,
+        rejected: c.rejected,
+      });
+      return c;
+    } catch {
+      // A missing count must not blank the list; the tabs just lose their numbers.
+      return null;
+    }
+  };
+
   useFocusEffect(
     useCallback(() => {
       loadInstructors();
+      loadCounts().then(c => {
+        // Land where the work is. Arriving on an empty Pending Admin queue while
+        // someone waits in Pending Company is the whole complaint.
+        if (!c || pickedInitialTab.current) { return; }
+        pickedInitialTab.current = true;
+        if (c.pending_admin === 0 && c.pending_company > 0) {
+          setActiveTab('pending_company');
+          setLoading(true);
+          loadInstructors('pending_company', searchQuery);
+        }
+      });
     }, [activeTab])
   );
 
@@ -324,8 +375,17 @@ export default function InstructorVerificationScreen({ navigation }: any) {
     setConfirmAction(null);
     try {
       if (action === 'approve') {
-        await apiService.verifyInstructor(instructor.id, true);
-        setSuccess(t('instructorVerify.msg.approved', { name: instructor.full_name }));
+        const updated = await apiService.verifyInstructor(instructor.id, true);
+        // Approving a school member closes the admin gate but leaves the
+        // school's open, so do not report it as finished.
+        setSuccess(
+          updated?.verification_status === 'pending_company'
+            ? t('instructorVerify.msg.approvedAwaitingCompany', {
+                name: instructor.full_name,
+                company: instructor.company_name || '',
+              })
+            : t('instructorVerify.msg.approved', { name: instructor.full_name })
+        );
       } else if (action === 'reject') {
         await apiService.adminRejectInstructor(instructor.id);
         setSuccess(t('instructorVerify.msg.rejected', { name: instructor.full_name }));
@@ -342,6 +402,7 @@ export default function InstructorVerificationScreen({ navigation }: any) {
       }
       setTimeout(() => setSuccess(''), 5000);
       loadInstructors();
+      loadCounts();
     } catch (err: any) {
       setError(err.response?.data?.detail || t('instructorVerify.msg.actionFailed'));
     }
@@ -417,7 +478,14 @@ export default function InstructorVerificationScreen({ navigation }: any) {
               key={key}
               onPress={() => switchTab(key)}
               accessibilityRole="tab"
-              accessibilityLabel={t(`instructorVerify.tab.${key}`)}
+              accessibilityLabel={
+                counts
+                  ? t('instructorVerify.tab.withCount', {
+                      label: t(`instructorVerify.tab.${key}`),
+                      count: counts[key],
+                    })
+                  : t(`instructorVerify.tab.${key}`)
+              }
               accessibilityState={{ selected: activeTab === key }}
               {...({ 'aria-selected': activeTab === key } as any)}
               style={[
@@ -435,7 +503,12 @@ export default function InstructorVerificationScreen({ navigation }: any) {
                   { color: activeTab === key ? colors.primary : colors.textSecondary },
                 ]}
               >
-                {t(`instructorVerify.tab.${key}`)}
+                {counts
+                  ? t('instructorVerify.tab.withCount', {
+                      label: t(`instructorVerify.tab.${key}`),
+                      count: counts[key],
+                    })
+                  : t(`instructorVerify.tab.${key}`)}
               </Text>
             </TouchableOpacity>
           ))}

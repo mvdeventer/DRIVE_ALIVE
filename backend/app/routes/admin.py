@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 from typing import Annotated, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import String, func, or_
+from sqlalchemy import String, and_, func, or_
 from sqlalchemy.orm import Session, aliased
 
 from ..database import get_db
@@ -27,6 +27,7 @@ from ..schemas.admin import (
     AdminSettingsUpdate,
     AdminStats,
     BookingOverview,
+    InstructorVerificationCounts,
     InstructorVerificationRequest,
     InstructorVerificationResponse,
     RevenueStats,
@@ -257,13 +258,30 @@ async def get_admin_stats(
     total_instructors = db.query(User).filter(User.role == UserRole.INSTRUCTOR).count()
     total_students = db.query(User).filter(User.role == UserRole.STUDENT).count()
 
-    # Instructor verification stats
-    verified_instructors = (
-        db.query(Instructor).filter(Instructor.is_verified == True).count()
-    )
-    pending_verification = (
-        db.query(Instructor).filter(Instructor.is_verified == False).count()
-    )
+    # Instructor verification stats.
+    #
+    # Count on `verification_status`, not `is_verified`. An instructor whose
+    # admin gate is closed while the school gate is still open carries
+    # `is_verified = True` and cannot log in — counting them as verified
+    # overstates the first number and hides them from the second.
+    from ..models.user import InstructorVerificationStatus as _IVS
+
+    def _count_status(value: str) -> int:
+        return db.query(Instructor).filter(Instructor.verification_status == value).count()
+
+    verified_instructors = db.query(Instructor).filter(
+        or_(
+            Instructor.verification_status == _IVS.VERIFIED.value,
+            # Rows predating the status column carry only the boolean.
+            and_(
+                Instructor.verification_status.is_(None),
+                Instructor.is_verified.is_(True),
+            ),
+        )
+    ).count()
+    pending_admin_verification = _count_status(_IVS.PENDING_ADMIN.value)
+    pending_company_verification = _count_status(_IVS.PENDING_COMPANY.value)
+    pending_verification = pending_admin_verification + pending_company_verification
 
     # Booking stats
     total_bookings = db.query(Booking).count()
@@ -297,6 +315,8 @@ async def get_admin_stats(
         total_students=total_students,
         verified_instructors=verified_instructors,
         pending_verification=pending_verification,
+        pending_admin_verification=pending_admin_verification,
+        pending_company_verification=pending_company_verification,
         total_bookings=total_bookings,
         pending_bookings=pending_bookings,
         completed_bookings=completed_bookings,
@@ -435,6 +455,42 @@ async def get_pending_instructors(
         if user:
             result.append(_build_instructor_verification_response(instructor, user, db))
     return result
+
+
+@router.get(
+    "/instructors/verification-counts", response_model=InstructorVerificationCounts
+)
+async def get_instructor_verification_counts(
+    current_admin: Annotated[User, Depends(require_admin)],
+    db: Session = Depends(get_db),
+):
+    """How many instructors sit behind each filter on the verification screen.
+
+    The screen fetches one filter at a time, so without this it cannot tell an
+    empty queue from work waiting in a tab the admin is not looking at — which
+    is exactly what a dashboard badge reading "1" over an empty list looks like.
+
+    Declared above `/instructors/{instructor_id}/...` so the literal segment is
+    matched first.
+    """
+    from ..models.user import InstructorVerificationStatus as _IVS
+
+    rows = (
+        db.query(Instructor.verification_status, func.count(Instructor.id))
+        .group_by(Instructor.verification_status)
+        .all()
+    )
+    by_status = {status: count for status, count in rows}
+    legacy_verified = by_status.pop(None, 0)
+
+    return InstructorVerificationCounts(
+        all=sum(by_status.values()) + legacy_verified,
+        pending_admin=by_status.get(_IVS.PENDING_ADMIN.value, 0),
+        pending_company=by_status.get(_IVS.PENDING_COMPANY.value, 0),
+        # Rows predating the status column are verified or they are nothing.
+        verified=by_status.get(_IVS.VERIFIED.value, 0) + legacy_verified,
+        rejected=by_status.get(_IVS.REJECTED.value, 0),
+    )
 
 
 @router.post(

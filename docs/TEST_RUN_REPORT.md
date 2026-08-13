@@ -1124,3 +1124,67 @@ hand (debug prefill was off):
 
 `GET /companies` verified directly against the database: 23 rows before, 10
 after, and the 10 are the seeded schools.
+
+---
+
+## D-25 — dashboard badge said 1, the queue said "Nothing here"
+
+**Reported:** after registering a new instructor who joined a school, the admin
+dashboard showed **Pending 1** and a red **1** on Verify Instructors, but the
+screen opened on *Pending Admin* and rendered "✓ Nothing here".
+
+Nothing was lost. The instructor (#54, joined Cape Town Driving Academy) was in
+**`pending_company`** — self-registering into an existing school opens the
+school's gate first — while the screen defaults to the *Pending Admin* tab. The
+badge counted every unverified instructor without saying which queue they were
+in, so a correct badge pointed at a correctly-empty list.
+
+Three things were wrong underneath it:
+
+1. **The screen could not see past its own filter.** It fetches one status at a
+   time, so it had no way to say "0 here, 1 next door".
+2. **The counts were computed from `is_verified`, not `verification_status`.**
+   An instructor whose admin gate is shut while the school's is still open
+   carries `is_verified = True` and cannot log in — they were counted as
+   *Verified* and vanished from *Pending* entirely. Nobody was in that state
+   yet, but it is exactly the state the v10.0.1 workflow now produces.
+3. **An admin could not act on a `pending_company` instructor at all.** The card
+   offered only "Resend to school owner". The backend has always handled admin
+   approval at that stage correctly — it closes the admin gate and re-notifies
+   the school — but the UI never offered it, so the documented "either order"
+   was really "school first, then admin".
+
+### Fixed
+
+* New `GET /admin/instructors/verification-counts` — one grouped query, counts
+  for all five filters. Declared above `/instructors/{instructor_id}/...` so the
+  literal segment is matched first.
+* `/admin/stats` counts on `verification_status`, and splits pending into
+  `pending_admin_verification` and `pending_company_verification`.
+* The tabs carry their counts — `All (51) · Pending Admin (0) · Pending Company
+  (1) · Verified (50) · Rejected (0)` — in the visible label and the accessible
+  name. On first load only, the screen lands on Pending Company when Pending
+  Admin is empty and work is waiting there; after that the tab is the admin's
+  choice and a refresh will not move it.
+* The dashboard's single **Pending** tile became **Awaiting you** /
+  **Awaiting school**.
+* A `pending_company` instructor whose admin gate is still open (`is_verified`
+  false) now offers **Approve** and **Reject** as well as the resend, and the
+  success message says "Approved: X. Now waiting for Y to approve." rather than
+  implying the workflow is finished.
+
+### Verified
+
+In a browser as a throwaway admin, with approve/reject/resend stubbed at the
+network layer so no school owner was emailed; the temp admin row was deleted
+afterwards (`admins now: [(1, 'mvdeventer123@gmail.com')]`).
+
+| Check | Result |
+|---|---|
+| Dashboard tiles | Verified **50** · Awaiting you **0** · Awaiting school **1** |
+| Tab counts | `All (51) · Pending Admin (0) · Pending Company (1) · Verified (50) · Rejected (0)` |
+| Landed on | **Pending Company (1)** — not the empty default |
+| Card shown | instructor #54, Cape Town Driving Academy |
+| Actions offered | Approve · Reject · Resend to school owner |
+| Pending Admin tab | still empty, as it should be |
+| Console errors | none beyond the login 401/409 the probe itself caused |

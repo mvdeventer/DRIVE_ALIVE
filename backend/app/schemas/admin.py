@@ -148,7 +148,12 @@ class AdminStats(BaseModel):
     total_instructors: int
     total_students: int
     verified_instructors: int
+    # Total still waiting, plus which gate each one is waiting on. A single
+    # "pending" number sends admins to a queue that can legitimately be empty
+    # while work is outstanding in the other one.
     pending_verification: int
+    pending_admin_verification: int = 0
+    pending_company_verification: int = 0
     total_bookings: int
     pending_bookings: int
     completed_bookings: int
@@ -158,6 +163,16 @@ class AdminStats(BaseModel):
 
 
 # ==================== Instructor Verification Schemas ====================
+
+
+class InstructorVerificationCounts(BaseModel):
+    """How many instructors sit behind each filter on the verification screen."""
+
+    all: int
+    pending_admin: int
+    pending_company: int
+    verified: int
+    rejected: int
 
 
 class InstructorVerificationRequest(BaseModel):

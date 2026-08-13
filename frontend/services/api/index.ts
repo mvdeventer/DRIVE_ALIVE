@@ -413,6 +413,17 @@ class ApiService {
     return response.data;
   }
 
+  async getInstructorVerificationCounts(): Promise<{
+    all: number;
+    pending_admin: number;
+    pending_company: number;
+    verified: number;
+    rejected: number;
+  }> {
+    const response = await this.api.get('/admin/instructors/verification-counts');
+    return response.data;
+  }
+
   async getPendingInstructors(skip = 0, limit = 50) {
     const response = await this.api.get('/admin/instructors/pending-verification', {
       params: { skip, limit },
