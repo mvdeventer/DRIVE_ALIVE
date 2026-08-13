@@ -60,6 +60,7 @@ export const af: TranslationKeys = {
     },
     booking: {
       notFound: 'Bespreking nie gevind nie.',
+      instructorNotVerified: 'Daardie instrukteur is nog nie geverifieer nie en kan nie besprekings neem nie.',
     },
     company: {
       adminRequired: 'Jy administreer geen bestuurskool nie.',

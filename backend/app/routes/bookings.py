@@ -123,6 +123,22 @@ async def create_booking(
             detail="You cannot book a lesson with yourself. Please select a different instructor.",
         )
 
+    # The public list hides unverified instructors, but a list is not a gate:
+    # `/instructors/{id}` serves anyone by id, so a deep link to the booking
+    # screen would otherwise create a real lesson with someone whose licence and
+    # vehicle the platform has never checked.
+    if not instructor.is_verified:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                "code": "INSTRUCTOR_NOT_VERIFIED",
+                "message": (
+                    "That instructor is not verified yet and cannot take "
+                    "bookings."
+                ),
+            },
+        )
+
     if not instructor.is_available:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,

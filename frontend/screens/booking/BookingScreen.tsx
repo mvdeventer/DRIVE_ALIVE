@@ -819,11 +819,54 @@ export default function BookingScreen({ navigation: navProp }: any) {
     setHasUnsavedChanges(false);
   };
 
-  if (!instructor) {
+  // `instructor` is `loadedInstructor ?? {}`, and `{}` is truthy — so the old
+  // `if (!instructor)` guard here could never fire. The whole form then rendered
+  // against an empty object on the first paint, and `instructor.rating.toFixed(1)`
+  // threw before the fetch could resolve. An uncaught error in render unmounts
+  // the tree, which is why choosing an instructor showed a blank page rather
+  // than any error at all. Guard on what actually loads instead.
+  const isLoadingInstructor =
+    !loadedInstructor && !instructorLoadFailed && Number.isFinite(routeInstructorId);
+
+  if (isLoadingInstructor) {
     return (
       <View style={[styles.container, { backgroundColor: colors.background }]}>
         <View style={styles.errorContainer}>
-          <Text style={[styles.errorText, { color: colors.danger }]}>No instructor selected</Text>
+          <ActivityIndicator size="large" color={colors.primary} />
+          <Text style={[styles.instructorDetail, { color: colors.textSecondary, marginTop: 12 }]}>
+            Loading instructor…
+          </Text>
+        </View>
+      </View>
+    );
+  }
+
+  // Same reason the server refuses it: the public list hides unverified
+  // instructors, but a deep link reaches this screen directly.
+  if (loadedInstructor && loadedInstructor.is_verified === false) {
+    return (
+      <View style={[styles.container, { backgroundColor: colors.background }]}>
+        <View style={styles.errorContainer}>
+          <Text style={[styles.errorText, { color: colors.danger }]}>
+            This instructor is not verified yet and cannot take bookings.
+          </Text>
+          <Button variant="primary" onPress={() => navigation.goBack()}>
+            ← Go Back
+          </Button>
+        </View>
+      </View>
+    );
+  }
+
+  if (!loadedInstructor) {
+    return (
+      <View style={[styles.container, { backgroundColor: colors.background }]}>
+        <View style={styles.errorContainer}>
+          <Text style={[styles.errorText, { color: colors.danger }]}>
+            {instructorLoadFailed
+              ? 'Could not load that instructor. Please try again.'
+              : 'No instructor selected'}
+          </Text>
           <Button variant="primary" onPress={() => navigation.goBack()}>
             ← Go Back
           </Button>
@@ -904,7 +947,7 @@ export default function BookingScreen({ navigation: navProp }: any) {
               {[instructor.province, instructor.city, instructor.suburb].filter(Boolean).join(', ')}
             </Text>
             <Text style={[styles.instructorDetail, { color: colors.textSecondary }]}>
-              ⭐ {instructor.rating.toFixed(1)} ({instructor.total_reviews} reviews)
+              ⭐ {(instructor.rating ?? 0).toFixed(1)} ({instructor.total_reviews ?? 0} reviews)
             </Text>
             <Text style={[styles.instructorDetail, { color: colors.textSecondary }]}>
               💰 R{studentLessonPrice(instructor, 60).toFixed(2)}/hr

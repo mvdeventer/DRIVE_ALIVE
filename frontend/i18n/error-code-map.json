@@ -27,5 +27,6 @@
   "COMPANY_OWNER_UNREACHABLE": "errors.instructorVerify.companyOwnerUnreachable",
   "LEARNER_NOT_IN_SCHOOL": "errors.companyLearners.notInSchool",
   "LEARNER_ALREADY_VERIFIED": "errors.companyLearners.alreadyVerified",
-  "LEARNER_UNREACHABLE": "errors.companyLearners.unreachable"
+  "LEARNER_UNREACHABLE": "errors.companyLearners.unreachable",
+  "INSTRUCTOR_NOT_VERIFIED": "errors.booking.instructorNotVerified"
 }

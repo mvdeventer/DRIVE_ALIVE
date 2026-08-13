@@ -1370,3 +1370,76 @@ title after gating the native subtitle.
 **Regression check** — a platform admin still renders `Probe Admin (Admin)` /
 `ADMIN` on `rgb(220, 38, 38)` = `red600`, unchanged. `/auth/me` only returns
 `company_name` under the company-admin branch, so no other role can pick one up.
+
+---
+
+## D-27 — choosing an instructor gave a student a blank page
+
+**Reported:** a student cannot choose an instructor; the page goes blank.
+
+Reproduced first time, as a seeded student, from the Instructors tab:
+
+```
+AFTER click, URL: http://localhost:8081/student/book?instructorId=54
+body length: 0
+PAGEERROR: Cannot read properties of undefined (reading 'toFixed')
+TypeError: ... at BookingScreen
+```
+
+`BookingScreen` renders the price line as `instructor.rating.toFixed(1)`. An
+uncaught throw during render unmounts the whole React tree, which is why the
+result is a blank page and not an error message — nothing was left to draw one.
+
+### Why the existing guard did not catch it
+
+The screen holds:
+
+```tsx
+const instructor = (loadedInstructor ?? ({} as Instructor)) as Instructor;
+…
+if (!instructor) { return <No instructor selected /> }
+```
+
+`{}` is truthy, so **that guard can never fire.** It was written when the
+instructor arrived whole in the route params and could genuinely be undefined.
+When the params were changed to carry only an id — a good fix, `[object Object]`
+in the URL made the page impossible to refresh or share — the empty-object
+placeholder went in and the guard silently stopped guarding. The form then
+rendered against `{}` on the first paint, before the fetch could resolve.
+
+`instructorLoadFailed` was set on error and **never read**, so a failed fetch
+showed nothing either.
+
+Only one caller was affected: `InstructorListScreen` passes `{ instructorId }`
+alone, so `loadedInstructor` starts null and the crash is certain.
+`InstructorHomeScreen` passes the instructor object, so its own reschedule flow
+never hit it — which is why this looked like "students specifically".
+
+**Fixed:** a real loading state while the fetch is in flight, a real error state
+for a failed load or a missing id, and `(instructor.rating ?? 0).toFixed(1)` so
+one null can never take the screen down again.
+
+## D-28 — a deep link could book an unverified instructor
+
+Found while confirming the fix. The public list filters on
+`is_verified == True`, but a list is not a gate: `/instructors/{id}` serves any
+instructor by id, and `create_booking` checked existence, self-booking and
+`is_available` — **not verification**. A student who reached
+`/student/book?instructorId=N` for an unverified instructor could create a real
+lesson with someone whose licence and vehicle the platform had never checked.
+
+* `create_booking` now refuses with `400 INSTRUCTOR_NOT_VERIFIED`.
+* `BookingScreen` says so up front rather than at submit.
+
+### Verification
+
+| Check | Result |
+|---|---|
+| Student → Instructors → Book Lesson | renders the booking form; `body length` 2682, was **0** |
+| Uncaught render errors | none |
+| Booking an unverified instructor (instructor 54 flipped to `is_verified=False`, booking attempted through the real route function) | `400 {'code': 'INSTRUCTOR_NOT_VERIFIED'}` |
+| Bookings created during the probe | **0**; `is_verified` restored to `True` |
+
+> Seeded logins use the password `Koolkop1@`, not the `ScalePass123!` in
+> `seed_scale_data.py` — the students were re-hashed at some point. Worth
+> knowing before assuming a login is broken.

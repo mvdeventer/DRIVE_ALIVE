@@ -58,6 +58,7 @@ export const en = {
     },
     booking: {
       notFound: 'Booking not found.',
+      instructorNotVerified: 'That instructor is not verified yet and cannot take bookings.',
     },
     company: {
       adminRequired: 'You do not administer a driving school.',
