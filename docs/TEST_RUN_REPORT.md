@@ -912,3 +912,91 @@ nothing was written and no admin was emailed:
 | Signed out, press **Done** | lands on `/Login` |
 | Countdown | renders and ticks 5 → 4 → 2 |
 | `was not handled by any navigator` warnings | **none** |
+
+---
+
+## D-18 … D-22 — verification workflow, second pass (post-v10.0.0 cloud review)
+
+A multi-agent cloud review of the v10.0.0 diff found five further defects, four
+of them in the same verification workflow. All five were confirmed by reading
+the code, then fixed and re-verified against PostgreSQL. **v10.0.0 ships
+without these fixes** — they land on top of the tag.
+
+| # | Severity | Defect |
+|---|---|---|
+| D-18 | normal | Admin approval into `pending_company` sent the instructor a **rejection** notification |
+| D-19 | normal | School owner's approval reopened the admin gate even when the admin had already closed it |
+| D-20 | normal | A freshly-minted company token inherited the **registration** expiry, so it could be born expired |
+| D-21 | normal | Invite-accepted instructors were bounced back to the school that invited them |
+| D-22 | nit | A search debounce surviving a tab switch could show one tab's rows under another's header |
+
+### D-18 — approval that reads as a rejection
+
+`verify_instructor` computed `approved = is_verified and status == VERIFIED`.
+The branch above had just set `PENDING_COMPANY`, so this collapsed to `False`
+and routed to `send_rejection_notification` — *"Unfortunately, we were unable to
+approve your registration at this time."* — while the same request asked the
+school owner to approve that very instructor. Latent before v10.0.0 only
+because the admin-first path was a dead end (D-16); repairing D-16 made it fire
+on **every** admin-first approval of a school member.
+
+Now branches on the resulting status, and stays deliberately silent on
+`PENDING_COMPANY`.
+
+### D-19 — the second gate did not finish the job
+
+`verify_company_token`'s approve branch unconditionally set `PENDING_ADMIN`,
+minted an admin token and emailed **and WhatsApped every admin** — with no check
+on `verified_by_admin_id`. In the admin-first order (now the default trajectory,
+since D-16 mails the owner straight after admin approval) the owner's approval
+therefore did not produce `VERIFIED`: it spammed every admin about someone they
+had already approved and held the instructor out of their account until an admin
+clicked Approve a second time. This contradicted §5 of the architecture map,
+which the same release rewrote. The school-first order was fine — that side got
+its check in D-16 — and the mirror case was never tested.
+
+Now: admin gate already closed → straight to `VERIFIED`, activate the user, send
+the approval notification, no admin blast.
+
+### D-20 — a link that is dead on arrival
+
+`verification_token_expires` is one column shared by both tokens, written once at
+registration as `now + 72h`. The company token minted during admin approval left
+it untouched, so an admin approving more than 72 hours after registration — a
+queue that sat over a weekend — handed the owner a link that had already expired,
+in an email claiming 72 hours of validity. The resend path already refreshed the
+expiry; the mint did not.
+
+### D-21 — the school asked to approve its own invitation
+
+`auth.register_instructor` carries the comment *"The invitation IS the school's
+approval, so only the admin credential check remains."* It sets the status but
+never stamped `verified_by_instructor_id`, and v10.0.0 made that stamp the thing
+`needs_company_approval` actually reads. Every invited instructor therefore took
+admin click → owner click → admin click. Fixed by stamping
+`company.owner_instructor_id` at acceptance. (Use the company's owner, not
+`invite.instructor_id` — that column holds the *accepting* instructor.)
+
+### D-22 — debounced search races a tab switch
+
+The debounce effect depends only on `[searchQuery]` and captures `activeTab` in
+its timer; `switchTab` did not clear the pending timer. Type a character and
+switch tabs within 350 ms and the stale request lands ~250 ms after the fresh
+one, so last-write-wins puts the old tab's rows under the new tab's header.
+`switchTab` now clears the timer.
+
+### Verification
+
+Exercised against the live PostgreSQL database via a throwaway instructor row
+attached to a real school, calling the real route function and the real service,
+with all four notification senders stubbed and the probe rows deleted afterwards
+(`probe rows remaining = 0`). No email or WhatsApp left the machine.
+
+| Order | Result |
+|---|---|
+| **A** admin → school | `pending_company` (no rejection mail; owner notified; minted expiry in the future) → `VERIFIED`, user `ACTIVE`, approval mail, **admins not re-notified** |
+| **B** school → admin | `pending_admin`, admins notified, school stamp recorded → `VERIFIED`, user `ACTIVE`, approval mail, no rejection |
+| **C** invited (school gate pre-stamped) | `needs_company_approval` False → one admin click → `VERIFIED`, owner not re-asked |
+| **D** admin rejects | `REJECTED`, rejection mail sent |
+
+24 of 24 assertions passed.

@@ -190,7 +190,8 @@ stateDiagram-v2
     [*] --> PENDING_COMPANY: registers by joining an existing school
     PENDING_ADMIN --> VERIFIED: admin approves; school gate closed or not needed
     PENDING_ADMIN --> PENDING_COMPANY: admin approves a school member the school has not cleared
-    PENDING_COMPANY --> PENDING_ADMIN: school owner approves
+    PENDING_COMPANY --> PENDING_ADMIN: school owner approves; admin gate still open
+    PENDING_COMPANY --> VERIFIED: school owner approves; admin gate already closed
     PENDING_ADMIN --> REJECTED: admin rejects
     PENDING_COMPANY --> REJECTED: school owner rejects
     VERIFIED --> [*]: can now log in as instructor
@@ -204,6 +205,21 @@ gate, `verified_by_instructor_id` for the school gate.
 `company_service.needs_company_approval()` is the single reader of the school
 gate — never re-derive it from `company_id` and `is_company_owner`, which reads
 solo instructors and already-approved members as still waiting.
+
+Two consequences that are easy to get wrong:
+
+- **Whoever closes the second gate finishes the workflow**, so both closers must
+  check the other stamp. `verify_instructor` does that through
+  `needs_company_approval`; `verify_company_token` checks `verified_by_admin_id`
+  directly. Skipping either check reopens a queue that has already been worked.
+- **An invitation is the school's approval.** `auth.register_instructor` stamps
+  `verified_by_instructor_id` with the inviting school's owner at acceptance, so
+  an invited instructor needs one admin click, not a round trip back to the
+  school that invited them.
+
+Notify on the **resulting status**, never on the caller's `is_verified` flag: an
+approval that lands in `PENDING_COMPANY` is not a rejection, and the instructor
+must not be told otherwise while their school is being asked to approve them.
 
 Two separate 72-hour tokens: `admin_verification_token` and
 `company_verification_token`. An instructor therefore has **two independent

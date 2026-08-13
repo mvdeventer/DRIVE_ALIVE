@@ -6,7 +6,7 @@ Handles instructor verification, token generation, and admin/company notificatio
 import secrets
 from datetime import datetime, timezone, timedelta
 from sqlalchemy.orm import Session
-from ..models.user import User, UserRole, Instructor, InstructorVerificationStatus
+from ..models.user import User, UserRole, UserStatus, Instructor, InstructorVerificationStatus
 from ..models.instructor_verification import InstructorVerificationToken
 from ..services.email_service import EmailService
 from ..services.whatsapp_service import whatsapp_service
@@ -306,9 +306,6 @@ You can also verify from the admin dashboard.
                 return False, "This verification link has expired"
 
         if approve:
-            # Company approval done — still needs admin verification
-            # Move to pending_admin
-            instructor.verification_status = InstructorVerificationStatus.PENDING_ADMIN.value
             instructor.company_verification_token = None  # invalidate
 
             # Record *that* the school approved, not just that the status moved.
@@ -325,6 +322,32 @@ You can also verify from the admin dashboard.
             )
             if company and company.owner_instructor_id:
                 instructor.verified_by_instructor_id = company.owner_instructor_id
+
+            # The two gates clear in either order, and whichever closes second
+            # finishes the workflow. If the admin already approved, reopening the
+            # admin queue would mail and WhatsApp every admin about someone they
+            # have already worked through, and hold the instructor out of their
+            # account until one of them clicks Approve a second time.
+            if instructor.verified_by_admin_id is not None:
+                instructor.verification_status = (
+                    InstructorVerificationStatus.VERIFIED.value
+                )
+                user = db.query(User).filter(User.id == instructor.user_id).first()
+                if user:
+                    user.status = UserStatus.ACTIVE
+                db.commit()
+                try:
+                    InstructorVerificationService.send_approval_notification(
+                        db=db, instructor=instructor
+                    )
+                except Exception as exc:
+                    logger.error(
+                        "Failed to notify instructor after company approval: %s", exc
+                    )
+                return True, "Instructor approved. Verification complete."
+
+            # Company approval done — still needs admin verification
+            instructor.verification_status = InstructorVerificationStatus.PENDING_ADMIN.value
 
             # Create admin token and notify admins
             admin_token_value = secrets.token_urlsafe(32)

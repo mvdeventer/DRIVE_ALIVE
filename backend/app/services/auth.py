@@ -272,9 +272,15 @@ class AuthService:
 
                 # The invitation IS the school's approval, so only the admin
                 # credential check remains — no second company approval step.
+                # `needs_company_approval` reads that from the stamp, not from
+                # the status, so record the owner here or admin approval will
+                # bounce the instructor back to the very school that invited
+                # them.
                 instructor.verification_status = (
                     InstructorVerificationStatus.PENDING_ADMIN.value
                 )
+                if company.owner_instructor_id:
+                    instructor.verified_by_instructor_id = company.owner_instructor_id
 
                 invite.status = "accepted"
                 invite.instructor_id = instructor.id

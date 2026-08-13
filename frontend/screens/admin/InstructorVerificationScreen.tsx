@@ -303,6 +303,10 @@ export default function InstructorVerificationScreen({ navigation }: any) {
 
   const switchTab = (tab: FilterTab) => {
     if (tab === activeTab) { return; }
+    // A search debounce still in flight was scheduled against the tab we are
+    // leaving; letting it fire would land the old tab's rows under the new
+    // tab's header.
+    if (searchDebounce.current) { clearTimeout(searchDebounce.current); }
     setActiveTab(tab);
     setLoading(true);
     loadInstructors(tab);

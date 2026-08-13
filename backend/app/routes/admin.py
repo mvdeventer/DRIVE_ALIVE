@@ -472,8 +472,16 @@ async def verify_instructor(
             instructor.verification_status = IVS.PENDING_COMPANY.value
             if not instructor.company_verification_token:
                 import secrets
+                from datetime import timedelta
 
                 instructor.company_verification_token = secrets.token_urlsafe(32)
+                # The expiry column is shared with the registration token and was
+                # last written 72h after *registration*. A queue that sat over a
+                # weekend would otherwise hand the owner a link that is already
+                # dead the moment it is sent.
+                instructor.verification_token_expires = datetime.now(timezone.utc) + timedelta(
+                    hours=72
+                )
         else:
             instructor.verification_status = IVS.VERIFIED.value
             user.status = UserStatus.ACTIVE
@@ -489,10 +497,15 @@ async def verify_instructor(
     db.refresh(user)
     # Notify instructor of admin decision
     from ..services.instructor_verification_service import InstructorVerificationService as IVSvc
-    _notify_after_admin_decision(
-        IVSvc, db, instructor,
-        approved=verification_data.is_verified and instructor.verification_status == IVS.VERIFIED.value,
-    )
+    # Branch on the resulting status, not on `is_verified`. An approval that
+    # lands in `pending_company` is not a rejection, and telling the instructor
+    # "we were unable to approve your registration" while asking their school to
+    # approve them is a contradiction they will read as a rejection. Stay silent
+    # until the school gate closes.
+    if instructor.verification_status == IVS.VERIFIED.value:
+        _notify_after_admin_decision(IVSvc, db, instructor, approved=True)
+    elif instructor.verification_status == IVS.REJECTED.value:
+        _notify_after_admin_decision(IVSvc, db, instructor, approved=False)
 
     # Hand the baton to the school owner. Fire-and-forget: a notification that
     # fails must not roll back an approval that already happened — the admin can
