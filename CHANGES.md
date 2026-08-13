@@ -3,6 +3,15 @@
 All code improvements per release, newest first. Generated automatically
 by the release workflow (`s.bat minor` / `s.bat major` / `s.bat release`).
 
+## v10.0.0 — 2026-08-13 (Major Release 10.0.0)
+
+> Drive Alive v10.0.0 — 1 fix across 20 files (+1375/-164 lines). Top highlight: repair instructor verification workflow and admin dashboard usability. Full details in CHANGES.md.
+
+### Bug Fixes
+- fix: repair instructor verification workflow and admin dashboard usability
+
+**Scope:** 1 commits, 20 files changed, 1375 insertions(+), 164 deletions(-) — touched: frontend: 14, backend: 3, docs: 2, (root): 1
+
 ## v9.0.0 — 2026-08-13 (Major Release 9.0.0)
 
 > Drive Alive v9.0.0 — 5 fixs, 2 maintenance updates, 1 other improvement, 1 new feature across 128 files (+15448/-2517 lines). Top highlight: company-paid revenue model, recruitment and solo instructors. Full details in CHANGES.md.

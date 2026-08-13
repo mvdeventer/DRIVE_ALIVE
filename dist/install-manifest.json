@@ -1,11 +1,11 @@
 {
-  "version": "9.0.0",
-  "build": "17",
+  "version": "10.0.0",
+  "build": "18",
   "release_date": "2026-08-13",
-  "codename": "Major Release 9.0.0",
+  "codename": "Major Release 10.0.0",
   "install_guide": "docs/INSTALL_WINDOWS.md",
   "update_guide": "docs/UPDATE_WINDOWS.md",
-  "release_notes": "docs/releases/v9.0.0.md",
+  "release_notes": "docs/releases/v10.0.0.md",
   "installer_definition": "scripts/installer.iss",
-  "installer_asset": "dist/DriveAlive-Setup-9.0.0.exe"
+  "installer_asset": "dist/DriveAlive-Setup-10.0.0.exe"
 }
