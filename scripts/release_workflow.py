@@ -474,7 +474,8 @@ def _build_summary(plan_tag: str, sections: dict[str, list[str]], stats: dict[st
     }
     for name, items in sections.items():
         label = short_labels.get(name, name.lower())
-        counts.append(f"{len(items)} {label}{'s' if len(items) != 1 else ''}")
+        plural_label = "fixes" if label == "fix" else f"{label}s"
+        counts.append(f"{len(items)} {label if len(items) == 1 else plural_label}")
     counts_text = ", ".join(counts) if counts else "version maintenance only"
 
     highlight = ""

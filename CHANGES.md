@@ -3,6 +3,23 @@
 All code improvements per release, newest first. Generated automatically
 by the release workflow (`s.bat minor` / `s.bat major` / `s.bat release`).
 
+## v10.0.2 — 2026-08-15 (Patch Release 10.0.2)
+
+> Drive Alive v10.0.2 — 4 fixes, 3 new features across 41 files (+2529/-1917 lines). Top highlight: name the school on every company-administrator screen. Full details in CHANGES.md.
+
+### New Features
+- feat: name the school on every company-administrator screen
+- feat: let a school resend a learner's verification link
+- feat: search the driving school picker, and stop it listing people
+
+### Bug Fixes
+- fix: stabilize payments and WSL setup
+- fix: blank page when a student chooses an instructor
+- fix: All Users showed 50 arbitrary users and none of the 200 students
+- fix: say which verification queue the pending instructor is in
+
+**Scope:** 7 commits, 41 files changed, 2529 insertions(+), 1917 deletions(-) — touched: frontend: 24, backend: 11, docs: 2, .githooks: 1, .github: 1, (root): 1, scripts: 1
+
 ## v10.0.1 — 2026-08-13 (Patch Release 10.0.1)
 
 > Drive Alive v10.0.1 — 2 fixs, 1 maintenance update across 22 files (+554/-264 lines). Top highlight: make the Database Interface search actually search, and run its tests. Full details in CHANGES.md.

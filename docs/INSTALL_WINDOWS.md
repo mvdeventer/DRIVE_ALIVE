@@ -1,6 +1,6 @@
 # Install Drive Alive On A New Windows PC
 
-This guide installs Drive Alive 10.0.1 from the repository on a fresh Windows machine.
+This guide installs Drive Alive 10.0.2 from the repository on a fresh Windows machine.
 
 ## Prerequisites
 
