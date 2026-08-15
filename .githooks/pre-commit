@@ -11,11 +11,13 @@
 
 set -e
 
-# Prefer the project venv, fall back to whatever python is on PATH.
-if [ -x "backend/venv/Scripts/python.exe" ]; then
-  PY="backend/venv/Scripts/python.exe"
+# Prefer the active platform's project venv, then fall back to Python on PATH.
+if [ -x "backend/.venv/bin/python" ]; then
+  PY="backend/.venv/bin/python"
 elif [ -x "backend/venv/bin/python" ]; then
   PY="backend/venv/bin/python"
+elif [ -x "backend/venv/Scripts/python.exe" ]; then
+  PY="backend/venv/Scripts/python.exe"
 elif command -v python >/dev/null 2>&1; then
   PY="python"
 elif command -v python3 >/dev/null 2>&1; then

@@ -18,6 +18,7 @@ import { useTheme } from '../../theme/ThemeContext';
 import InlineMessage from '../../components/InlineMessage';
 import WebNavigationHeader from '../../components/WebNavigationHeader';
 import ApiService from '../../services/api';
+import { storePaymentSessionId } from '../../utils/paymentSession';
 
 interface RouteParams {
   instructor: any;
@@ -85,7 +86,7 @@ export default function PaymentScreen() {
       });
 
       if (Platform.OS === 'web') {
-        localStorage.setItem('payment_session_id', response.payment_session_id);
+        storePaymentSessionId(response.payment_session_id);
 
         if (response.payment_url.includes('/payment/mock')) {
           navigation.navigate(

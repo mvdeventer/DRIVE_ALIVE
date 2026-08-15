@@ -67,7 +67,6 @@
     "expo-secure-store": "~15.0.8",
     "expo-splash-screen": "~31.0.13",
     "expo-status-bar": "~3.0.9",
-    "firebase": "^11.1.0",
     "jspdf": "^4.1.0",
     "react": "19.1.0",
     "react-dom": "19.1.0",
@@ -121,5 +120,10 @@
     "@babel/plugin-proposal-async-generator-functions": "@babel/plugin-transform-async-generator-functions",
     "@babel/plugin-proposal-logical-assignment-operators": "@babel/plugin-transform-logical-assignment-operators"
   },
-  "private": true
+  "private": true,
+  "allowScripts": {
+    "core-js@3.49.0": true,
+    "cypress@15.20.1": true,
+    "unrs-resolver@1.12.2": true
+  }
 }

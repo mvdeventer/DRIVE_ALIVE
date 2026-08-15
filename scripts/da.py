@@ -19,6 +19,8 @@ import webbrowser
 import os
 import re
 import shutil
+import shlex
+import signal
 import socket
 import subprocess
 import sys
@@ -42,13 +44,29 @@ for _stream in (sys.stdout, sys.stderr):
 
 # ── Constants ──────────────────────────────────────────────────────────────────
 
-ROOT = Path(__file__).resolve().parent.parent       # repo root
+# abspath, not resolve(): resolve() rewrites a mapped network drive back to its
+# UNC target, and cmd.exe refuses a UNC working directory — which is exactly how
+# the repo is reached when it lives in the WSL filesystem (see ./s).
+ROOT = Path(os.path.abspath(__file__)).parent.parent       # repo root
 BACKEND_DIR = ROOT / "backend"
 FRONTEND_DIR = ROOT / "frontend"
-VENV_DIR = BACKEND_DIR / "venv"
-VENV_PYTHON = VENV_DIR / "Scripts" / "python.exe"
-VENV_PIP = VENV_DIR / "Scripts" / "pip.exe"
-VENV_ACTIVATE = VENV_DIR / "Scripts" / "activate.bat"
+IS_WINDOWS = os.name == "nt"
+
+# The two venvs coexist: a repo checked out on a shared filesystem may be driven
+# from Windows and from WSL, and their binaries are not interchangeable.
+if IS_WINDOWS:
+    VENV_DIR = BACKEND_DIR / "venv"
+    VENV_BIN = VENV_DIR / "Scripts"
+    VENV_PYTHON = VENV_BIN / "python.exe"
+    VENV_PIP = VENV_BIN / "pip.exe"
+    VENV_ACTIVATE = VENV_BIN / "activate.bat"
+else:
+    VENV_DIR = BACKEND_DIR / ".venv"
+    VENV_BIN = VENV_DIR / "bin"
+    VENV_PYTHON = VENV_BIN / "python"
+    VENV_PIP = VENV_BIN / "pip"
+    VENV_ACTIVATE = VENV_BIN / "activate"
+LOG_DIR = ROOT / "logs"
 REQUIREMENTS = BACKEND_DIR / "requirements.txt"
 ENV_FILE = BACKEND_DIR / ".env"
 ENV_EXAMPLE = BACKEND_DIR / ".env.example"
@@ -125,15 +143,42 @@ def run_silent(cmd: list[str], cwd: Path | None = None) -> bool:
         return False
 
 
+def _slug(title: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "-", title.lower()).strip("-")
+
+
 def open_new_window(title: str, cmd_str: str, cwd: Path) -> int | None:
     """
     Open a new Command Prompt window with *title* running *cmd_str*.
     Returns the PID of the new cmd.exe process.
+
+    On POSIX there is no console to open, so the command runs detached in its
+    own process group with output redirected to logs/<title>.log.
     """
+    if not IS_WINDOWS:
+        LOG_DIR.mkdir(parents=True, exist_ok=True)
+        log_path = LOG_DIR / f"{_slug(title)}.log"
+        log = open(log_path, "w", encoding="utf-8")
+        # login shell so nvm/pyenv shims on PATH behave as they do interactively
+        proc = subprocess.Popen(
+            ["bash", "-lc", cmd_str],
+            cwd=cwd, stdout=log, stderr=subprocess.STDOUT,
+            stdin=subprocess.DEVNULL, start_new_session=True,
+        )
+        info(f"  Log: {log_path}")
+        return proc.pid
+
+    work_dir = str(cwd)
+    if work_dir.startswith("\\\\"):
+        # cmd.exe cannot start in a UNC directory; pushd maps it to a drive
+        # letter for the lifetime of the window instead.
+        cmd_str = f'pushd "{work_dir}" && {cmd_str}'
+        work_dir = os.environ.get("SystemRoot", "C:\\Windows")
+
     ps = (
         f"$p = Start-Process cmd "
         f"-ArgumentList '/k','title {title} && {cmd_str}' "
-        f"-WorkingDirectory '{cwd}' "
+        f"-WorkingDirectory '{work_dir}' "
         f"-WindowStyle Normal -PassThru; "
         f"Write-Output $p.Id"
     )
@@ -151,6 +196,8 @@ def open_new_window(title: str, cmd_str: str, cwd: Path) -> int | None:
 
 def _find_pg_service() -> str | None:
     """Return the name of the first postgres* Windows service, or None."""
+    if not IS_WINDOWS:
+        return None
     ps = (
         "$svc = Get-Service | Where-Object {$_.Name -like '*postgres*'} "
         "| Select-Object -First 1 -ExpandProperty Name; "
@@ -167,9 +214,30 @@ def _find_pg_service() -> str | None:
         return None
 
 
+def _pg_reachable(host: str, port: int) -> bool:
+    with socket.socket() as s:
+        s.settimeout(2)
+        return s.connect_ex((host, port)) == 0
+
+
 def ensure_postgres_running() -> None:
     """Start the PostgreSQL Windows service if it exists and is stopped."""
     header("PostgreSQL")
+
+    if not IS_WINDOWS:
+        # Postgres is not managed from here on Linux — it is either a system
+        # service or, under WSL, running on the Windows host. Only report.
+        url = read_env().get("DATABASE_URL", "")
+        m = re.search(r"@([^:/]+):(\d+)/", url)
+        host, port = (m.group(1), int(m.group(2))) if m else ("localhost", 5432)
+        if _pg_reachable(host, port):
+            ok(f"PostgreSQL reachable at {host}:{port}.")
+        else:
+            warn(f"PostgreSQL NOT reachable at {host}:{port}.")
+            warn("Under WSL this usually means mirrored networking is off — set")
+            warn("networkingMode=mirrored in %USERPROFILE%\\.wslconfig, then: wsl --shutdown")
+        return
+
     svc = _find_pg_service()
     if not svc:
         info("No PostgreSQL Windows service found – assuming it is already running or managed externally.")
@@ -205,6 +273,8 @@ def _find_psql() -> Path | None:
     """Find psql.exe in PATH or common install locations."""
     if shutil.which("psql"):
         return Path(shutil.which("psql"))  # type: ignore[arg-type]
+    if not IS_WINDOWS:
+        return None
     for v in range(17, 12, -1):
         p = Path(f"C:/Program Files/PostgreSQL/{v}/bin/psql.exe")
         if p.exists():
@@ -214,6 +284,9 @@ def _find_psql() -> Path | None:
 
 def _detect_pg_port() -> str:
     """Read the port PostgreSQL is actually listening on from postgresql.conf."""
+    if not IS_WINDOWS:
+        m = re.search(r"@[^:/]+:(\d+)/", read_env().get("DATABASE_URL", ""))
+        return m.group(1) if m else "5432"
     for v in range(17, 12, -1):
         conf = Path(f"C:/Program Files/PostgreSQL/{v}/data/postgresql.conf")
         if conf.exists():
@@ -378,10 +451,16 @@ def _create_venv() -> None:
     if result.returncode == 0 and _venv_is_healthy():
         return
 
-    # Built-in venv failed (common on Python 3.14 on Windows).
-    warn("Built-in venv failed – installing 'virtualenv' as fallback …")
+    # Built-in venv failed (common on Python 3.14 on Windows, and on Debian-style
+    # distros that ship python3 without ensurepip).
+    warn("Built-in venv failed – trying a fallback …")
     if VENV_DIR.exists():
         shutil.rmtree(VENV_DIR, ignore_errors=True)
+
+    uv = shutil.which("uv") or str(Path.home() / ".local" / "bin" / "uv")
+    if Path(uv).exists():
+        subprocess.run([uv, "venv", str(VENV_DIR)], check=True)
+        return
 
     subprocess.run(
         [sys.executable, "-m", "pip", "install", "--quiet", "virtualenv"],
@@ -462,7 +541,7 @@ def ensure_node_modules() -> None:
 
     info("Running npm install (this may take a minute) …")
     # npm/npx are .cmd wrappers on Windows – require shell=True
-    run(["npm", "install", "--legacy-peer-deps"], cwd=FRONTEND_DIR, shell=True)
+    run(["npm", "install", "--legacy-peer-deps"], cwd=FRONTEND_DIR, shell=IS_WINDOWS)
     ok("Frontend dependencies installed.")
 
 
@@ -696,6 +775,19 @@ def _read_pid(pid_file: Path) -> int | None:
 
 
 def _kill_pid(pid: int) -> bool:
+    if not IS_WINDOWS:
+        # open_new_window puts each server in its own process group, so the
+        # whole tree (bash -> npx -> node) goes down with one signal.
+        for sig in (signal.SIGTERM, signal.SIGKILL):
+            try:
+                os.killpg(os.getpgid(pid), sig)
+            except (ProcessLookupError, PermissionError):
+                try:
+                    os.kill(pid, sig)
+                except (ProcessLookupError, PermissionError):
+                    return True
+            time.sleep(0.5)
+        return True
     try:
         subprocess.run(
             ["taskkill", "/T", "/PID", str(pid)],
@@ -714,6 +806,23 @@ def _kill_pid(pid: int) -> bool:
 def _port_in_use(port: int) -> list[int]:
     """Return list of PIDs listening on port."""
     pids: list[int] = []
+    if not IS_WINDOWS:
+        try:
+            r = subprocess.run(
+                ["ss", "-lptnH", f"sport = :{port}"],
+                capture_output=True, text=True
+            )
+            pids = [int(m) for m in re.findall(r"pid=(\d+)", r.stdout)]
+        except FileNotFoundError:
+            try:
+                r = subprocess.run(
+                    ["lsof", "-ti", f"tcp:{port}", "-sTCP:LISTEN"],
+                    capture_output=True, text=True
+                )
+                pids = [int(x) for x in r.stdout.split()]
+            except FileNotFoundError:
+                pass
+        return sorted(set(pids))
     try:
         r = subprocess.run(
             ["netstat", "-ano"],
@@ -814,13 +923,21 @@ def cmd_start(
     # ── Backend ────────────────────────────────────────────────────────────────
     if not frontend_only:
         uvicorn_log_level = "debug" if debug_mode else "info"
-        debug_env = 'set "DEBUG=True" && set "LOG_LEVEL=debug" && ' if debug_mode else ""
-        backend_cmd = (
-            f"{debug_env}"
-            f"call venv\\Scripts\\activate.bat && "
-            f"python -m uvicorn app.main:app --reload --log-level {uvicorn_log_level}"
-            f" --host 0.0.0.0 --port {BACKEND_PORT}"
-        )
+        if IS_WINDOWS:
+            debug_env = 'set "DEBUG=True" && set "LOG_LEVEL=debug" && ' if debug_mode else ""
+            backend_cmd = (
+                f"{debug_env}"
+                f"call venv\\Scripts\\activate.bat && "
+                f"python -m uvicorn app.main:app --reload --log-level {uvicorn_log_level}"
+                f" --host 0.0.0.0 --port {BACKEND_PORT}"
+            )
+        else:
+            debug_env = 'DEBUG=True LOG_LEVEL=debug ' if debug_mode else ""
+            backend_cmd = (
+                f"{debug_env}exec {shlex.quote(str(VENV_PYTHON))} -m uvicorn app.main:app"
+                f" --reload --log-level {uvicorn_log_level}"
+                f" --host 0.0.0.0 --port {BACKEND_PORT}"
+            )
         pid = open_new_window("Drive Alive - Backend", backend_cmd, BACKEND_DIR)
         if pid:
             _write_pid(BACKEND_PID_FILE, pid)
@@ -841,11 +958,11 @@ def cmd_start(
         # EXPO_OFFLINE must be "1" not "true" – Expo uses getenv.boolish().
         # In dev mode set BROWSER=none so Expo doesn't auto-open; we open
         # Chrome with DevTools ourselves instead.
-        expo_env = 'set "EXPO_OFFLINE=1" && '
+        expo_env = 'set "EXPO_OFFLINE=1" && ' if IS_WINDOWS else "EXPO_OFFLINE=1 "
         if debug_mode:
-            expo_env += 'set "EXPO_PUBLIC_DEBUG_MODE=true" && '
+            expo_env += 'set "EXPO_PUBLIC_DEBUG_MODE=true" && ' if IS_WINDOWS else "EXPO_PUBLIC_DEBUG_MODE=true "
         if dev_mode:
-            expo_env += 'set "BROWSER=none" && '
+            expo_env += 'set "BROWSER=none" && ' if IS_WINDOWS else "BROWSER=none "
         frontend_cmd = (
             f"{expo_env}npx expo start --web {expo_flag}"
         )
@@ -865,7 +982,8 @@ def cmd_start(
             _open_with_devtools(f"http://localhost:{FRONTEND_PORT}")
 
     print()
-    print(_c("green", "  Servers are starting in separate windows."))
+    print(_c("green", "  Servers are starting in separate windows."
+                      if IS_WINDOWS else f"  Servers are starting; output goes to {LOG_DIR}/"))
     print(_c("cyan",  f"  Frontend : http://localhost:{FRONTEND_PORT}"))
     print(_c("cyan",  f"  Backend  : http://localhost:{BACKEND_PORT}"))
     print(_c("cyan",  f"  API docs : http://localhost:{BACKEND_PORT}/docs"))
@@ -1341,7 +1459,7 @@ def cmd_webtest(
             ok("Removed frontend/node_modules")
 
         info("Creating backend virtual environment …")
-        run([sys.executable, "-m", "venv", "venv"], cwd=BACKEND_DIR)
+        run([sys.executable, "-m", "venv", VENV_DIR.name], cwd=BACKEND_DIR)
         ok("Backend venv created")
 
         info("Installing backend dependencies …")

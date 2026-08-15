@@ -194,7 +194,6 @@ export default function CalendarPicker({
     let fontFamily = 'Inter_400Regular';
 
     if (disabled) {
-      opacity = 0.3;
       textColor = colors.textTertiary;
     }
     if (today && !fullyBooked) {
@@ -213,7 +212,6 @@ export default function CalendarPicker({
       borderColor = colors.textTertiary;
       textColor = colors.textTertiary;
       fontFamily = 'Inter_700Bold';
-      opacity = 1;
     }
     if (inTimeOff) {
       bg = colors.warningBg;
@@ -221,7 +219,6 @@ export default function CalendarPicker({
       borderColor = colors.warning;
       textColor = colors.warning;
       fontFamily = 'Inter_700Bold';
-      opacity = 1;
     }
     if (fullyBooked) {
       bg = colors.danger;
@@ -230,6 +227,15 @@ export default function CalendarPicker({
       textColor = colors.textInverse;
       fontFamily = 'Inter_700Bold';
       opacity = 1;
+    }
+
+    // Dim last, after the status colours are chosen. Each status block used to
+    // reset opacity to 1, so a blocked day rendered as a crisp bordered chip
+    // while a genuinely open day has no chip at all — the affordance was
+    // inverted. An instructor with no schedule then produced a calendar where
+    // every date looked like the one you were meant to pick.
+    if (disabled) {
+      opacity = 0.4;
     }
 
     return { bg, textColor, borderColor, borderWidth, opacity, disabled, fontFamily };

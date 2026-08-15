@@ -3,9 +3,10 @@
  */
 import { useNavigation } from '@react-navigation/native';
 import React from 'react';
-import { Platform, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import { Button, Card } from '../../components/ui';
 import { useTheme } from '../../theme/ThemeContext';
+import { clearPaymentSessionId } from '../../utils/paymentSession';
 
 export default function PaymentCancelScreen() {
   const navigation = useNavigation();
@@ -21,10 +22,7 @@ export default function PaymentCancelScreen() {
   };
 
   React.useEffect(() => {
-    // Clean up payment session ID
-    if (Platform.OS === 'web') {
-      localStorage.removeItem('payment_session_id');
-    }
+    clearPaymentSessionId();
   }, []);
 
   return (

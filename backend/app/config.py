@@ -133,17 +133,18 @@ class Settings(BaseSettings):
 # Load settings
 from pathlib import Path
 
-# Try multiple paths for .env file
-possible_env_paths = [
-    Path(__file__).parent.parent / ".env",  # backend/.env
+# Both .env files are read, lowest priority first, so a key set in
+# backend/.env wins over the same key in the repo root. This used to stop at
+# the first file that existed, which meant anything written to the root .env
+# was silently ignored whenever backend/.env was present.
+env_paths_low_to_high = [
     Path(__file__).parent.parent.parent / ".env",  # root/.env
+    Path(__file__).parent.parent / ".env",  # backend/.env
 ]
 
-settings = None
-for env_path in possible_env_paths:
-    if env_path.exists():
-        settings = Settings(_env_file=str(env_path))
-        break
+existing_env_paths = [str(p) for p in env_paths_low_to_high if p.exists()]
 
-if settings is None:
+if existing_env_paths:
+    settings = Settings(_env_file=tuple(existing_env_paths))
+else:
     settings = Settings()  # Will use environment variables

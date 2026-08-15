@@ -8,6 +8,7 @@ import logging
 import uuid
 from typing import Optional
 
+from ...config import settings
 from .base import CheckoutSession, PaymentGateway, WebhookEvent
 
 logger = logging.getLogger(__name__)
@@ -31,15 +32,18 @@ class MockPaymentGateway(PaymentGateway):
         idempotency_key: Optional[str] = None,
     ) -> CheckoutSession:
         fake_id = f"mock_{uuid.uuid4().hex[:8]}"
-        # The caller (route) is responsible for building the local mock URL,
-        # but we still return a usable id for storage.
+        # Point at the in-app mock checkout screen. This used to echo
+        # success_url straight back, which handed the browser Stripe's
+        # unsubstituted "?session_id={CHECKOUT_SESSION_ID}" template whenever a
+        # caller took the real-provider branch with this gateway installed.
+        url = f"{settings.FRONTEND_URL}/payment/mock?session_id={reference}"
         logger.info(
             "MockPaymentGateway: created checkout (ref=%s amount=%s %s)",
             reference,
             amount_cents,
             currency,
         )
-        return CheckoutSession(id=fake_id, url=success_url, raw={"mock": True})
+        return CheckoutSession(id=fake_id, url=url, raw={"mock": True})
 
     def verify_webhook(
         self,

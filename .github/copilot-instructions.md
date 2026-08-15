@@ -19,7 +19,7 @@ Canonical shared multi-agent execution contract: see `AGENTS.md` at repository r
 
 - **Backend**: `backend/app/` — FastAPI. Entry: [backend/app/main.py](backend/app/main.py). Routes in `backend/app/routes/`, models in `backend/app/models/`, services in `backend/app/services/`.
 - **Frontend**: `frontend/` — React Native (Expo) + TypeScript + NativeWind. Screens in `frontend/screens/`, components in `frontend/components/`, navigation in `frontend/navigation/`, API client in `frontend/services/api.ts`.
-- **Python venv**: `backend/venv/Scripts/python.exe` (Windows).
+- **Python venv**: `backend/venv/Scripts/python.exe` (Windows) · `backend/.venv/bin/python` (Linux/WSL).
 - **DB**: SQLite at `frontend/drive_alive.db` and `backend/` (dev). Migrations in `backend/migrations/`.
 - **Tasks**: VS Code tasks already defined (`Start Backend Server`, `Start Expo Dev Server`, `Run Backend Tests`). Use `run_task` instead of crafting terminal commands.
 

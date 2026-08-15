@@ -37,15 +37,31 @@ logger = logging.getLogger(__name__)
 
 # Mock mode requires explicit opt-in via ALLOW_MOCK_PAYMENTS=true.
 # In production without Stripe keys this raises at startup (via validate_production_secrets).
-MOCK_PAYMENT_MODE = settings.ALLOW_MOCK_PAYMENTS and not settings.STRIPE_SECRET_KEY
-if not MOCK_PAYMENT_MODE:
-    if settings.STRIPE_SECRET_KEY:
-        stripe.api_key = settings.STRIPE_SECRET_KEY
-    elif settings.ENVIRONMENT == "production":
-        raise RuntimeError(
-            "STRIPE_SECRET_KEY not set and ALLOW_MOCK_PAYMENTS is false. "
-            "Configure Stripe or set ALLOW_MOCK_PAYMENTS=true explicitly."
-        )
+if settings.STRIPE_SECRET_KEY:
+    stripe.api_key = settings.STRIPE_SECRET_KEY
+elif not settings.ALLOW_MOCK_PAYMENTS and settings.ENVIRONMENT == "production":
+    raise RuntimeError(
+        "STRIPE_SECRET_KEY not set and ALLOW_MOCK_PAYMENTS is false. "
+        "Configure Stripe or set ALLOW_MOCK_PAYMENTS=true explicitly."
+    )
+
+
+def is_mock_payment_mode() -> bool:
+    """Whether checkout should use the local mock flow.
+
+    Read from the gateway, never re-derived from settings: this used to be a
+    module-level flag computed from ALLOW_MOCK_PAYMENTS while the gateway
+    factory made its own choice from STRIPE_SECRET_KEY. When the two disagreed
+    the route took the Stripe branch, MockPaymentGateway echoed the success_url
+    straight back, and the student landed on
+    /payment/success?session_id={CHECKOUT_SESSION_ID} with no booking created.
+    """
+    try:
+        return get_payment_gateway().name == "mock"
+    except RuntimeError:
+        # No provider configured at all — definitely not mock. /initiate turns
+        # this into a 503 below; other callers just see mock mode as off.
+        return False
 
 
 @router.post("/initiate", response_model=PaymentInitiateResponse)
@@ -199,10 +215,12 @@ async def initiate_payment(
         db.commit()
         db.refresh(payment_session)
 
+    mock_mode = is_mock_payment_mode()
+
     # Print to console for debugging
     print("\n" + "=" * 80)
     print(
-        "💳 PAYMENT INITIATION" + (" (MOCK MODE)" if MOCK_PAYMENT_MODE else " (STRIPE)")
+        "💳 PAYMENT INITIATION" + (" (MOCK MODE)" if mock_mode else " (STRIPE)")
     )
     print("=" * 80)
     print(f"Payment Session ID: {payment_session_id}")
@@ -216,7 +234,7 @@ async def initiate_payment(
     print("=" * 80)
 
     # MOCK PAYMENT MODE (for development without Stripe keys)
-    if MOCK_PAYMENT_MODE:
+    if mock_mode:
         base_url = settings.FRONTEND_URL
         mock_payment_url = f"{base_url}/payment/mock?session_id={payment_session_id}"
 
@@ -242,13 +260,26 @@ async def initiate_payment(
     # Generate Stripe Checkout Session via provider-agnostic gateway.
     try:
         gateway = get_payment_gateway()
+    except RuntimeError as e:
+        # Misconfiguration, not a student error: surface it as unavailable
+        # rather than redirecting the browser to a URL nothing can honour.
+        logger.error("Payment gateway unavailable: %s", e)
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Payments are not available right now. Please try again later.",
+        )
+
+    try:
         checkout_session = gateway.create_checkout_session(
             amount_cents=int(final_amount * 100),
             currency="zar",
             reference=payment_session_id,
+            # Stripe substitutes its own checkout id into {CHECKOUT_SESSION_ID};
+            # `ref` carries ours, which is the one /payments/session/{id} keys on.
             success_url=(
                 f"{settings.FRONTEND_URL}/payment/success"
                 "?session_id={CHECKOUT_SESSION_ID}"
+                f"&ref={payment_session_id}"
             ),
             cancel_url=f"{settings.FRONTEND_URL}/payment/cancel",
             item_name=item_name,
@@ -718,12 +749,20 @@ async def get_payment_session(
     if payment_session.user_id != current_user.id:
         raise HTTPException(status_code=403, detail="Not authorized")
 
+    # bookings_data holds either a bare list or {"bookings": [...], ...} once
+    # credits are applied, so the count is derived here rather than leaving the
+    # success screen to guess at the shape.
+    stored_bookings = payment_session.bookings_list
+    if isinstance(stored_bookings, dict):
+        stored_bookings = stored_bookings.get("bookings", [])
+
     return {
         "payment_session_id": payment_session.payment_session_id,
         "status": payment_session.status,
         "amount": payment_session.amount,
         "booking_fee": payment_session.booking_fee,
         "total_amount": payment_session.total_amount,
+        "bookings_count": len(stored_bookings) if isinstance(stored_bookings, list) else 0,
         "payment_gateway": payment_session.payment_gateway,
         "created_at": payment_session.created_at,
         "completed_at": payment_session.completed_at,
@@ -746,10 +785,13 @@ async def complete_mock_payment(
     logger = logging.getLogger(__name__)
     logger.info("🔵 MOCK PAYMENT ENDPOINT CALLED - Starting payment processing")
 
-    if not MOCK_PAYMENT_MODE:
+    if not is_mock_payment_mode():
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Mock payment mode is disabled. Set STRIPE_SECRET_KEY to empty to enable.",
+            detail=(
+                "Mock payment mode is disabled. Clear STRIPE_SECRET_KEY and set "
+                "ALLOW_MOCK_PAYMENTS=true to enable."
+            ),
         )
 
     body = await request.json()

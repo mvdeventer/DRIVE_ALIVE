@@ -1,22 +1,17 @@
 /**
  * Payment Success Screen - Shows after successful PayFast payment
  */
-import { CommonActions, useNavigation } from '@react-navigation/native';
+import { CommonActions, useNavigation, useRoute } from '@react-navigation/native';
 import React, { useEffect, useState } from 'react';
-import {
-  ActivityIndicator,
-  Platform,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
+import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Button } from '../../components/ui';
 import { useTheme } from '../../theme/ThemeContext';
 import ApiService from '../../services/api';
+import { clearPaymentSessionId, resolvePaymentSessionId } from '../../utils/paymentSession';
 
 export default function PaymentSuccessScreen() {
   const navigation = useNavigation();
+  const route = useRoute();
   const { colors } = useTheme();
   const [loading, setLoading] = useState(true);
   const [status, setStatus] = useState<'checking' | 'success' | 'failed'>('checking');
@@ -28,9 +23,10 @@ export default function PaymentSuccessScreen() {
 
   const checkPaymentStatus = async () => {
     try {
-      // Get payment session ID from storage
-      const paymentSessionId =
-        Platform.OS === 'web' ? sessionStorage.getItem('payment_session_id') : null; // Changed from localStorage
+      // Navigation params first, then the query string, then storage — see
+      // utils/paymentSession. Reading storage alone stranded every native
+      // caller and, once the read and the write drifted apart, every web one.
+      const paymentSessionId = resolvePaymentSessionId(route.params as Record<string, unknown>);
 
       if (!paymentSessionId) {
         setStatus('failed');
@@ -48,13 +44,9 @@ export default function PaymentSuccessScreen() {
 
           if (response.status === 'completed') {
             setStatus('success');
-            setBookingsCount(JSON.parse(response.bookings_data || '[]').length);
+            setBookingsCount(response.bookings_count ?? 0);
             setLoading(false);
-
-            // Clear payment session ID
-            if (Platform.OS === 'web') {
-              localStorage.removeItem('payment_session_id');
-            }
+            clearPaymentSessionId();
           } else if (attempts >= maxAttempts) {
             // Timeout - payment may still be processing
             setStatus('failed');

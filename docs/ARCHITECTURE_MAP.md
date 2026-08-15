@@ -430,6 +430,37 @@ These have each cost real debugging time.
     navigator"* and the button looks dead. Route these exits through
     `utils/exitToLogin.ts`, which ends the session when one exists — that is what
     actually swaps the group and puts the login screen on screen.
+16. **Mock payment mode is whatever `get_payment_gateway().name` says**, never a
+    second flag derived from settings. `payments.py` used to compute its own
+    `MOCK_PAYMENT_MODE` from `ALLOW_MOCK_PAYMENTS` while the gateway factory
+    chose independently from `STRIPE_SECRET_KEY`. When the two disagreed the
+    route took the Stripe branch, `MockPaymentGateway.create_checkout_session`
+    echoed `success_url` back verbatim, and the student was redirected to
+    `/payment/success?session_id={CHECKOUT_SESSION_ID}` — the literal Stripe
+    placeholder — with no booking created. Ask the gateway; do not re-derive.
+17. **Both `.env` files load: root first, then `backend/.env`, which wins.**
+    `config.py` used to stop at the first file that existed, so every key in the
+    repo-root `.env` was silently ignored whenever `backend/.env` was present.
+    App settings belong in `backend/.env`; if a setting looks like it is not
+    taking effect, check it is not being shadowed there by an empty value.
+18. **The payment session reference is resolved by `utils/paymentSession.ts`,
+    not by reading storage inline.** `PaymentScreen` writes the reference,
+    `PaymentSuccessScreen` reads it back to poll `/payments/session/{id}`. The
+    two drifted onto different Web Storage areas (`localStorage` write,
+    `sessionStorage` read), so the success screen always rendered *"Payment
+    Status Unknown"* — and because the read was web-only, native never had a
+    reference at all. Resolution order is navigation params → `?ref=` →
+    `?session_id=` → storage. Stripe substitutes its own `cs_…` checkout id
+    into `success_url`, which `/payments/session/{id}` cannot look up, so our
+    reference rides along as `ref` and `cs_`-prefixed values are rejected.
+19. **Only one instructor in the dev database has a weekly schedule.** 50 of 51
+    are verified, `is_available`, and listed to students, but have zero
+    `instructor_schedules` rows — so `/availability/instructor/{id}/schedule`
+    returns `[]`, `BookingScreen` marks all 90 days "no schedule", and their
+    calendar is entirely unbookable. Seeded instructors never got hours; only
+    the account that set them by hand in **Manage Availability** has any. A
+    fully blocked calendar is almost always this, not a calendar bug. Check
+    `SELECT DISTINCT instructor_id FROM instructor_schedules` first.
 
 ---
 
