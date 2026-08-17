@@ -3,6 +3,16 @@
 All code improvements per release, newest first. Generated automatically
 by the release workflow (`s.bat minor` / `s.bat major` / `s.bat release`).
 
+## v10.0.3 — 2026-08-17 (Patch Release 10.0.3)
+
+> Drive Alive v10.0.3 — 2 fixes across 23 files (+3622/-2373 lines). Top highlight: align fresh-install packaging with current runtime. Full details in CHANGES.md.
+
+### Bug Fixes
+- fix: align fresh-install packaging with current runtime
+- fix: restore WSL debug terminals and fix instructor scheduling/filters
+
+**Scope:** 2 commits, 23 files changed, 3622 insertions(+), 2373 deletions(-) — touched: backend: 7, frontend: 6, scripts: 5, (root): 2, docs: 2, dist: 1
+
 ## v10.0.2 — 2026-08-15 (Patch Release 10.0.2)
 
 > Drive Alive v10.0.2 — 4 fixes, 3 new features across 41 files (+2529/-1917 lines). Top highlight: name the school on every company-administrator screen. Full details in CHANGES.md.

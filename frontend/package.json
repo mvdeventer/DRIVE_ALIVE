@@ -1,6 +1,6 @@
 {
   "name": "driving-school-app",
-  "version": "10.0.2",
+  "version": "10.0.3",
   "main": "node_modules/expo/AppEntry.js",
   "scripts": {
     "start": "expo start --tunnel --https",

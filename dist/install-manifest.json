@@ -1,8 +1,8 @@
 {
-  "version": "10.0.2",
-  "build": "20",
-  "release_date": "2026-08-15",
-  "codename": "Patch Release 10.0.2",
+  "version": "10.0.3",
+  "build": "21",
+  "release_date": "2026-08-17",
+  "codename": "Patch Release 10.0.3",
   "components": {
     "runtime_versions": {
       "python": "3.12.10",
@@ -26,7 +26,7 @@
   },
   "install_guide": "docs/INSTALL_WINDOWS.md",
   "update_guide": "docs/UPDATE_WINDOWS.md",
-  "release_notes": "docs/releases/v10.0.2.md",
+  "release_notes": "docs/releases/v10.0.3.md",
   "installer_definition": "scripts/installer.iss",
-  "installer_asset": "dist/DriveAlive-Setup-10.0.2.exe"
+  "installer_asset": "dist/DriveAlive-Setup-10.0.3.exe"
 }
