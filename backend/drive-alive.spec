@@ -6,7 +6,7 @@ Builds a standalone executable with all dependencies
 
 import os
 import sys
-from PyInstaller.utils.hooks import collect_data_files, collect_submodules
+from PyInstaller.utils.hooks import collect_submodules
 
 block_cipher = None
 
@@ -28,9 +28,6 @@ datas = [
     ('app', 'app'),
 ]
 
-# Add alembic migrations
-datas.extend(collect_data_files('alembic'))
-
 # Hidden imports
 hiddenimports = [
     'uvicorn.logging',
@@ -49,6 +46,18 @@ hiddenimports = [
     'passlib.handlers.bcrypt',
     'jose',
     'stripe',
+    'sentry_sdk.integrations.fastapi',
+    'sentry_sdk.integrations.sqlalchemy',
+    'firebase_admin',
+    'geopy.distance',
+    'twilio.rest',
+    'twilio.request_validator',
+    'redis',
+    'requests',
+    'email_validator',
+    'multipart',
+    'psycopg',
+    'psycopg2',
 ] + app_modules
 
 a = Analysis(

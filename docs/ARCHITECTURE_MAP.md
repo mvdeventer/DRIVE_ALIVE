@@ -64,6 +64,11 @@ flowchart TB
     STRIPE -->|"webhook (public route)"| ROUTERS
 ```
 
+**Packaged web app.** Development serves Expo Web on `:8081`. The Windows
+installer places the exported web distribution beside the backend executable;
+FastAPI then serves it from `/` with SPA fallback, while registered API routes
+retain priority and their existing authentication requirements.
+
 **Auth model.** JWT HS256 carrying a `jti`. On login the `jti` is written to
 `users.active_session_token`; every later request checks it matches. A login
 elsewhere overwrites it and silently kills the first session — this is

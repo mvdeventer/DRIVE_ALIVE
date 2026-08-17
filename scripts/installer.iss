@@ -57,8 +57,14 @@ Name: "autostart"; Description: "Start Drive Alive API automatically"; GroupDesc
 ; Backend executable
 Source: "..\backend\dist\drive-alive-api.exe"; DestDir: "{app}\backend"; Flags: ignoreversion
 
+; Backend source and runtime configuration used by bootstrap database setup
+Source: "..\backend\app\*"; DestDir: "{app}\backend\app"; Excludes: "__pycache__\*,*.pyc"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "..\backend\backup_config.json"; DestDir: "{app}\backend"; Flags: ignoreversion
+
 ; Frontend web build
 Source: "..\frontend\dist\*"; DestDir: "{app}\frontend"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "..\frontend\package.json"; DestDir: "{app}\frontend"; Flags: ignoreversion
+Source: "..\frontend\package-lock.json"; DestDir: "{app}\frontend"; Flags: ignoreversion
 
 ; Configuration files
 Source: "..\VERSION"; DestDir: "{app}"; Flags: ignoreversion
@@ -92,20 +98,27 @@ Name: "{app}\frontend\static"; Permissions: users-full
 Name: "{app}\vendor"; Permissions: users-full
 
 [Icons]
-Name: "{group}\{#MyAppName}"; Filename: "{app}\backend\{#MyAppExeName}"
+Name: "{group}\{#MyAppName}"; Filename: "http://localhost:8000"; IconFilename: "{app}\backend\{#MyAppExeName}"
+Name: "{group}\{#MyAppName} API"; Filename: "{app}\backend\{#MyAppExeName}"
 Name: "{group}\{cm:UninstallProgram,{#MyAppName}}"; Filename: "{uninstallexe}"
-Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\backend\{#MyAppExeName}"; Tasks: desktopicon
-Name: "{commonstartmenu}\Programs\{#MyAppName}"; Filename: "{app}\backend\{#MyAppExeName}"; Tasks: startmenuicon
+Name: "{autodesktop}\{#MyAppName}"; Filename: "http://localhost:8000"; IconFilename: "{app}\backend\{#MyAppExeName}"; Tasks: desktopicon
+Name: "{commonstartmenu}\Programs\{#MyAppName}"; Filename: "http://localhost:8000"; IconFilename: "{app}\backend\{#MyAppExeName}"; Tasks: startmenuicon
 
 [Run]
+; Bootstrap itself needs Python on a truly fresh Windows machine.
+Filename: "{app}\vendor\installers\python-installer.exe"; Parameters: "/quiet InstallAllUsers=0 TargetDir=""{app}\python"" PrependPath=0 Include_test=0 Include_launcher=0"; Description: "Install Python runtime"; Flags: waituntilterminated skipifsilent; Check: FileExists(ExpandConstant('{app}\vendor\installers\python-installer.exe'))
+
 ; Run bootstrap for first-time setup (installs dependencies, creates DB)
-Filename: "python"; Parameters: """{app}\bootstrap.py"" --offline"; WorkingDir: "{app}"; Description: "Setup application (install dependencies, create database)"; Flags: postinstall runascurrentuser skipifsilent
+Filename: "{app}\python\python.exe"; Parameters: """{app}\bootstrap.py"" --offline"; WorkingDir: "{app}"; Description: "Setup application (install dependencies, create database)"; Flags: postinstall runascurrentuser skipifsilent
 
 ; Open README after installation
 Filename: "{app}\README.md"; Description: "View README"; Flags: postinstall shellexec skipifsilent unchecked
 
 ; Optionally start the API server
 Filename: "{app}\backend\{#MyAppExeName}"; Description: "Start Drive Alive API Server"; Flags: postinstall nowait skipifsilent
+
+; Open the installed application after the API has started
+Filename: "http://localhost:8000"; Description: "Open Drive Alive"; Flags: postinstall shellexec skipifsilent
 
 [Registry]
 ; Auto-start registry entry (optional)

@@ -49,7 +49,9 @@ for _stream in (sys.stdout, sys.stderr):
 ROOT_DIR = Path(__file__).parent.resolve()
 BACKEND_DIR = ROOT_DIR / "backend"
 FRONTEND_DIR = ROOT_DIR / "frontend"
-VENV_DIR = BACKEND_DIR / "venv"
+IS_WINDOWS = platform.system() == "Windows"
+IS_WSL = not IS_WINDOWS and bool(os.environ.get("WSL_DISTRO_NAME"))
+VENV_DIR = BACKEND_DIR / ("venv" if IS_WINDOWS else ".venv")
 VENDOR_DIR = ROOT_DIR / "vendor"
 BACKEND_VENDOR = VENDOR_DIR / "python"
 FRONTEND_VENDOR = VENDOR_DIR / "node"
@@ -58,8 +60,10 @@ MARKER_FILE = ROOT_DIR / ".installed"
 ENV_FILE = BACKEND_DIR / ".env"
 ENV_EXAMPLE = BACKEND_DIR / ".env.example"
 REQUIREMENTS_FILE = BACKEND_DIR / "requirements.txt"
+VERSION_METADATA = json.loads((ROOT_DIR / "version.json").read_text(encoding="utf-8"))
+RUNTIME_VERSIONS = VERSION_METADATA["runtimes"]
 
-if platform.system() == "Windows":
+if IS_WINDOWS:
     VENV_PYTHON = VENV_DIR / "Scripts" / "python.exe"
     VENV_PIP = VENV_DIR / "Scripts" / "pip.exe"
 else:
@@ -74,12 +78,16 @@ DB_DEFAULT_PORT = "5432"
 
 MIN_PYTHON_VERSION = (3, 9)
 MIN_NODE_VERSION = 18
+BUNDLED_PYTHON_VERSION = RUNTIME_VERSIONS["python"]
+BUNDLED_NODE_VERSION = RUNTIME_VERSIONS["node"]
+BUNDLED_POSTGRESQL_VERSION = RUNTIME_VERSIONS["postgresql"]
 
 # Critical Python packages that must be importable for the app to run
 CRITICAL_PACKAGES = [
-    "fastapi", "uvicorn", "sqlalchemy", "psycopg2", "jose",
-    "passlib", "pydantic_settings", "dotenv", "stripe", "twilio",
-    "geopy", "slowapi", "cryptography", "bcrypt",
+    "fastapi", "uvicorn", "sqlalchemy", "psycopg", "psycopg2", "jose",
+    "passlib", "pydantic", "pydantic_settings", "dotenv", "stripe", "twilio",
+    "geopy", "slowapi", "cryptography", "bcrypt", "sentry_sdk",
+    "firebase_admin", "email_validator", "redis", "requests", "multipart",
 ]
 
 
@@ -822,13 +830,15 @@ def bundle_packages():
 
     # Bundle Python packages
     log_step(1, 3, "Downloading Python packages to vendor/python/")
+    if BACKEND_VENDOR.exists():
+        shutil.rmtree(BACKEND_VENDOR)
     BACKEND_VENDOR.mkdir(parents=True, exist_ok=True)
     result = run_cmd(
         [sys.executable, "-m", "pip", "download",
          "-r", str(REQUIREMENTS_FILE),
          "-d", str(BACKEND_VENDOR),
          "--platform", "win_amd64",
-         "--python-version", f"{sys.version_info.major}.{sys.version_info.minor}",
+         "--python-version", ".".join(BUNDLED_PYTHON_VERSION.split(".")[:2]),
          "--only-binary=:all:"],
         check=False, capture=False, timeout=600,
     )
@@ -836,15 +846,10 @@ def bundle_packages():
         count = len(list(BACKEND_VENDOR.glob("*.whl"))) + len(list(BACKEND_VENDOR.glob("*.tar.gz")))
         log_ok(f"Downloaded {count} Python packages to vendor/python/")
     else:
-        log_warn("Some Python packages may not have been downloaded")
-        # Retry without platform restriction for source packages
-        log("  Retrying without binary-only restriction...", Colors.CYAN)
-        run_cmd(
-            [sys.executable, "-m", "pip", "download",
-             "-r", str(REQUIREMENTS_FILE),
-             "-d", str(BACKEND_VENDOR)],
-            check=False, capture=False, timeout=600,
+        log_err(
+            f"Could not build a complete Windows Python {BUNDLED_PYTHON_VERSION} wheel bundle"
         )
+        return False
 
     # Bundle Node.js packages
     log_step(2, 3, "Creating frontend node_modules archive")
@@ -869,11 +874,18 @@ def bundle_packages():
     INSTALLER_VENDOR.mkdir(parents=True, exist_ok=True)
 
     installers = {
+        "python-installer.exe": (
+            f"https://www.python.org/ftp/python/{BUNDLED_PYTHON_VERSION}/"
+            f"python-{BUNDLED_PYTHON_VERSION}-amd64.exe"
+        ),
         "postgresql-installer.exe": (
             "https://get.enterprisedb.com/postgresql/"
-            "postgresql-16.6-1-windows-x64.exe"
+            f"postgresql-{BUNDLED_POSTGRESQL_VERSION}-windows-x64.exe"
         ),
-        "node-installer.msi": "https://nodejs.org/dist/v20.11.1/node-v20.11.1-x64.msi",
+        "node-installer.msi": (
+            f"https://nodejs.org/dist/v{BUNDLED_NODE_VERSION}/"
+            f"node-v{BUNDLED_NODE_VERSION}-x64.msi"
+        ),
     }
 
     for filename, url in installers.items():
@@ -891,6 +903,7 @@ def bundle_packages():
             log_ok(f"{filename} downloaded ({size_mb:.0f} MB)")
         except Exception as exc:
             log_err(f"Failed to download {filename}: {exc}")
+            return False
 
     log("\n" + "=" * 70, Colors.BOLD)
     log("  BUNDLE COMPLETE", Colors.GREEN)
@@ -900,6 +913,7 @@ def bundle_packages():
     log(f"  Total vendor/ size: {vendor_size / (1024 * 1024):.0f} MB", Colors.CYAN)
     log("  Copy the vendor/ directory to the target machine for offline install", Colors.CYAN)
     log("=" * 70, Colors.BOLD)
+    return True
 
 
 # ============================================================================
@@ -1071,7 +1085,7 @@ if __name__ == "__main__":
     offline = "--offline" in args
 
     if "--bundle" in args:
-        bundle_packages()
+        sys.exit(0 if bundle_packages() else 1)
     else:
         success = bootstrap(force=force, offline=offline)
         sys.exit(0 if success else 1)

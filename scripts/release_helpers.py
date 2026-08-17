@@ -61,6 +61,12 @@ def _find_inno_compiler() -> Path:
     raise RuntimeError("Inno Setup compiler (ISCC.exe) was not found. Install Inno Setup 6 or set ISCC_PATH.")
 
 
+def _require_artifacts(paths: list[Path], *, stage: str) -> None:
+    missing = [str(path) for path in paths if not path.exists()]
+    if missing:
+        raise RuntimeError(f"{stage} is incomplete; missing: {', '.join(missing)}")
+
+
 def stage_paths(root: Path, paths: list[Path]) -> None:
     normal_paths: list[str] = []
     forced_paths: list[str] = []
@@ -100,11 +106,45 @@ def build_release_installer(
     info: Callable[[str], None],
     ok: Callable[[str], None],
 ) -> Path:
+    _require_artifacts(
+        [
+            root / "VERSION",
+            root / "version.json",
+            backend_dir / "requirements.txt",
+            backend_dir / ".env.example",
+            backend_dir / "backup_config.json",
+            backend_dir / "app" / "main.py",
+            frontend_dir / "package.json",
+            frontend_dir / "package-lock.json",
+            installer_file,
+        ],
+        stage="Installer inputs",
+    )
+
     info("Building offline dependency bundle (vendor/)...")
     _run(["python", "bootstrap.py", "--bundle"], cwd=root, capture_output=False)
+    _require_artifacts(
+        [
+            root / "vendor" / "node" / "node_modules.tar.gz",
+            root / "vendor" / "installers" / "python-installer.exe",
+            root / "vendor" / "installers" / "postgresql-installer.exe",
+            root / "vendor" / "installers" / "node-installer.msi",
+        ],
+        stage="Offline dependency bundle",
+    )
+    if not any((root / "vendor" / "python").glob("*")):
+        raise RuntimeError("Offline dependency bundle is incomplete; vendor/python is empty.")
 
     info("Building frontend web distribution...")
     _run([*_npm_command(), "--prefix", str(frontend_dir), "run", "build:web"], cwd=root, capture_output=False)
+    _require_artifacts(
+        [
+            frontend_dir / "dist" / "index.html",
+            frontend_dir / "dist" / "_redirects",
+            frontend_dir / "dist" / "service-worker.js",
+        ],
+        stage="Frontend web distribution",
+    )
 
     backend_python = backend_dir / "venv" / "Scripts" / "python.exe"
     if not backend_python.exists():
@@ -117,6 +157,10 @@ def build_release_installer(
         [str(backend_python), "-m", "PyInstaller", "drive-alive.spec", "--clean"],
         cwd=backend_dir,
         capture_output=False,
+    )
+    _require_artifacts(
+        [backend_dir / "dist" / "drive-alive-api.exe"],
+        stage="Backend executable",
     )
 
     iscc = _find_inno_compiler()

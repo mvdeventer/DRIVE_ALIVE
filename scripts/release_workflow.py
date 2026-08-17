@@ -598,6 +598,7 @@ def _release_notes(
 
 def _write_release_artifacts(plan: ReleasePlan) -> list[Path]:
     changed: list[Path] = []
+    runtime_versions = _read_json(VERSION_JSON_FILE).get("runtimes", {})
     RELEASES_DIR.mkdir(parents=True, exist_ok=True)
     _write_text(plan.release_notes_file, plan.release_notes)
     changed.append(plan.release_notes_file)
@@ -611,6 +612,23 @@ def _write_release_artifacts(plan: ReleasePlan) -> list[Path]:
         "build": str(plan.build_number),
         "release_date": plan.release_date,
         "codename": plan.codename,
+        "components": {
+            "runtime_versions": runtime_versions,
+            "backend_executable": "backend/drive-alive-api.exe",
+            "backend_source": "backend/app",
+            "frontend_web": "frontend/index.html",
+            "bootstrap": "bootstrap.py",
+            "python_requirements": "backend/requirements.txt",
+            "frontend_manifest": "frontend/package.json",
+            "frontend_lockfile": "frontend/package-lock.json",
+            "offline_python_packages": "vendor/python",
+            "offline_node_modules": "vendor/node/node_modules.tar.gz",
+            "system_installers": [
+                "vendor/installers/python-installer.exe",
+                "vendor/installers/postgresql-installer.exe",
+                "vendor/installers/node-installer.msi",
+            ],
+        },
         "install_guide": str(INSTALL_GUIDE_FILE.relative_to(ROOT)).replace("\\", "/"),
         "update_guide": str(UPDATE_GUIDE_FILE.relative_to(ROOT)).replace("\\", "/"),
         "release_notes": str(plan.release_notes_file.relative_to(ROOT)).replace("\\", "/"),

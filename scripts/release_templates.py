@@ -19,6 +19,10 @@ def install_guide(version: str) -> str:
         - PostgreSQL 13+
         - GitHub CLI (`gh`) if you also plan to publish releases from this machine
 
+        The packaged `DriveAlive-Setup-<version>.exe` includes offline Python,
+        Node.js, and PostgreSQL installers. Those runtime prerequisites are only
+        required in advance when installing directly from the repository.
+
         ## Repository Setup
 
         ```powershell
@@ -68,18 +72,18 @@ def install_guide(version: str) -> str:
 
         - Ensure PostgreSQL is installed and running.
         - Confirm `DATABASE_URL` in `backend/.env` points at your local PostgreSQL instance.
-        - Run migrations if needed:
+        - Start the backend to apply its idempotent inline schema migrations:
 
         ```powershell
         cd backend
-        .\\venv\\Scripts\\python.exe -m alembic upgrade head
+        .\\venv\\Scripts\\python.exe -m uvicorn app.main:app --host 0.0.0.0 --port 8000
         ```
 
         ## Installer Assets
 
         The Windows installer definition lives in `scripts/installer.iss`. Each release rebuilds the full installer pipeline automatically:
 
-        - offline dependency bundle via `python bootstrap.py --bundle` (vendor packages)
+        - offline dependency bundle via `python bootstrap.py --bundle` (Python wheels, Node modules, and system runtime installers)
         - frontend export via `npm --prefix frontend run build:web`
         - backend executable via `backend\\venv\\Scripts\\python.exe -m PyInstaller drive-alive.spec --clean`
         - installer compilation via `ISCC scripts\\installer.iss`

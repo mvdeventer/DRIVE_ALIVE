@@ -34,11 +34,6 @@ setup(
     include_package_data=True,
     install_requires=get_requirements(),
     python_requires=">=3.9",
-    entry_points={
-        "console_scripts": [
-            "drive-alive-api=app.main:main",
-        ],
-    },
     classifiers=[
         "Development Status :: 4 - Beta",
         "Intended Audience :: Developers",

@@ -3,6 +3,27 @@
   "build": "20",
   "release_date": "2026-08-15",
   "codename": "Patch Release 10.0.2",
+  "components": {
+    "runtime_versions": {
+      "python": "3.12.10",
+      "node": "24.19.0",
+      "postgresql": "17.6-1"
+    },
+    "backend_executable": "backend/drive-alive-api.exe",
+    "backend_source": "backend/app",
+    "frontend_web": "frontend/index.html",
+    "bootstrap": "bootstrap.py",
+    "python_requirements": "backend/requirements.txt",
+    "frontend_manifest": "frontend/package.json",
+    "frontend_lockfile": "frontend/package-lock.json",
+    "offline_python_packages": "vendor/python",
+    "offline_node_modules": "vendor/node/node_modules.tar.gz",
+    "system_installers": [
+      "vendor/installers/python-installer.exe",
+      "vendor/installers/postgresql-installer.exe",
+      "vendor/installers/node-installer.msi"
+    ]
+  },
   "install_guide": "docs/INSTALL_WINDOWS.md",
   "update_guide": "docs/UPDATE_WINDOWS.md",
   "release_notes": "docs/releases/v10.0.2.md",
