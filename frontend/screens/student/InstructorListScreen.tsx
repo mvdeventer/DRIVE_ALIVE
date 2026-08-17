@@ -22,7 +22,6 @@ import { useT } from '../../i18n';
 import { useTheme } from '../../theme/ThemeContext';
 import { useBreakpoint } from '../../hooks/useBreakpoint';
 import ApiService from '../../services/api';
-import { getAllCitiesAndSuburbs } from '../../utils/cities';
 import { studentLessonPrice } from '../../utils/bookingFees';
 
 interface Instructor {
@@ -41,6 +40,9 @@ interface Instructor {
   city: string;
   suburb?: string;
   is_available: boolean;
+  // False when the instructor has not published any active weekly time
+  // slot; students must not be able to book them yet.
+  has_schedule?: boolean;
   hourly_rate: number;
   display_hourly_rate?: number; // Server-computed price the student pays
   rating: number;
@@ -68,6 +70,18 @@ export default function InstructorListScreen({ navigation }: any) {
   const [availableOnly, setAvailableOnly] = useState(true);
   const [showCityPicker, setShowCityPicker] = useState(false);
   const [locationSearchQuery, setLocationSearchQuery] = useState('');
+
+  // Cities/suburbs instructors are actually registered in, not every South
+  // African place name — picking one from a gazetteer that hasn't matched
+  // anyone in the data reads as "the filter is broken".
+  const availableLocations = React.useMemo(() => {
+    const locations = new Set<string>();
+    instructors.forEach(i => {
+      if (i.city) locations.add(i.city);
+      if (i.suburb) locations.add(i.suburb);
+    });
+    return Array.from(locations).sort();
+  }, [instructors]);
 
   useEffect(() => {
     loadInstructors();
@@ -110,9 +124,11 @@ export default function InstructorListScreen({ navigation }: any) {
   const filterInstructors = () => {
     let filtered = instructors;
 
-    // Filter by availability
+    // Filter by availability. `is_available` alone doesn't mean bookable —
+    // an instructor with no active weekly schedule can't take a booking
+    // either, so "Available Only" must exclude those too.
     if (availableOnly) {
-      filtered = filtered.filter(i => i.is_available);
+      filtered = filtered.filter(i => i.is_available && i.has_schedule !== false);
     }
 
     // Filter by city or suburb
@@ -163,6 +179,15 @@ export default function InstructorListScreen({ navigation }: any) {
         alert(t('instructorList.msg.unavailable'));
       } else {
         Alert.alert(t('instructorList.msg.unavailableTitle'), t('instructorList.msg.unavailable'));
+      }
+      return;
+    }
+
+    if (instructor.has_schedule === false) {
+      if (Platform.OS === 'web') {
+        alert(t('instructorList.noScheduleMessage'));
+      } else {
+        Alert.alert(t('instructorList.msg.noScheduleTitle'), t('instructorList.noScheduleMessage'));
       }
       return;
     }
@@ -366,12 +391,14 @@ ${studentName}`;
 
   const renderInstructor = ({ item }: { item: Instructor }) => {
     const location = [item.suburb, item.city, item.province].filter(Boolean).join(', ');
+    const hasSchedule = item.has_schedule !== false;
 
     return (
       <Pressable
         style={({ pressed }) => [
           styles.instructorCard,
           { backgroundColor: colors.card, borderColor: colors.border },
+          !hasSchedule && styles.instructorCardNoSchedule,
           pressed && { opacity: 0.85 },
         ]}
         onPress={() => handleSelectInstructor(item)}
@@ -388,15 +415,24 @@ ${studentName}`;
                 )}
               </View>
               <Badge
-                variant={item.is_available ? 'success' : 'danger'}
+                variant={!hasSchedule ? 'warning' : item.is_available ? 'success' : 'danger'}
                 size="sm"
               >
-                {item.is_available ? 'Available' : 'Unavailable'}
+                {!hasSchedule
+                  ? t('instructorList.noSchedule')
+                  : item.is_available
+                  ? 'Available'
+                  : 'Unavailable'}
               </Badge>
             </View>
             <Text style={[styles.vehicleInfo, { color: colors.textSecondary }]}>
               🚗 {item.vehicle_make} {item.vehicle_model} ({item.vehicle_year})
             </Text>
+            {!hasSchedule && (
+              <Text style={[styles.vehicleInfo, { color: colors.warning }]}>
+                ⚠️ {t('instructorList.noScheduleMessage')}
+              </Text>
+            )}
           </View>
         </View>
 
@@ -432,7 +468,7 @@ ${studentName}`;
             size="sm"
             fullWidth
             onPress={() => handleBookLesson(item)}
-            disabled={!item.is_available || !!item.is_self}
+            disabled={!item.is_available || !!item.is_self || !hasSchedule}
             icon="📅"
           >
             {t('misc.bookLesson')}
@@ -537,7 +573,7 @@ ${studentName}`;
           />
         </View>
         <ScrollView style={styles.cityList}>
-          {getAllCitiesAndSuburbs()
+          {availableLocations
             .filter(location =>
               location.toLowerCase().includes(locationSearchQuery.toLowerCase())
             )
@@ -695,6 +731,9 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     boxShadow: '0px 2px 8px rgba(0, 0, 0, 0.08)',
     elevation: 2,
+  },
+  instructorCardNoSchedule: {
+    opacity: 0.6,
   },
   instructorHeader: {
     marginBottom: 10,

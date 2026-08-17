@@ -418,6 +418,11 @@ class InstructorResponse(UserResponse):
     city: Optional[str] = None
     suburb: Optional[str] = None
     is_available: bool
+    # Whether the instructor has published at least one active weekly time
+    # slot. Defaults True so endpoints that don't compute it (instructor's
+    # own profile, admin lookups) are unaffected; the public list/detail
+    # routes set this explicitly so students can't book an empty schedule.
+    has_schedule: bool = True
     hourly_rate: float
     # The single price a student sees: the instructor's rate plus their
     # school's markup. Computed server-side so no client can reconstruct the

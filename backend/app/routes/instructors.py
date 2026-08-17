@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session, joinedload
 from ..database import get_db
 from ..middleware.admin import require_admin
 from ..middleware.admin import require_admin
+from ..models.availability import InstructorSchedule
 from ..models.booking import Booking, BookingStatus
 from ..models.user import Instructor as InstructorModel
 from ..models.user import User, UserRole
@@ -135,6 +136,25 @@ async def get_instructors(
 
             instructors = filtered_instructors[offset : offset + limit]
 
+        # Batched rather than one query per instructor: which of these have
+        # published at least one active weekly time slot. Students must not
+        # be able to book someone with an empty schedule.
+        instructor_ids = [instructor.id for instructor in instructors]
+        instructors_with_schedule = (
+            {
+                row[0]
+                for row in db.query(InstructorSchedule.instructor_id)
+                .filter(
+                    InstructorSchedule.instructor_id.in_(instructor_ids),
+                    InstructorSchedule.is_active == True,
+                )
+                .distinct()
+                .all()
+            }
+            if instructor_ids
+            else set()
+        )
+
         # Build responses (user is already loaded via joinedload — no extra queries)
         responses = []
         for instructor in instructors:
@@ -161,6 +181,7 @@ async def get_instructors(
                     city=instructor.city,
                     suburb=instructor.suburb,
                     is_available=instructor.is_available,
+                    has_schedule=instructor.id in instructors_with_schedule,
                     hourly_rate=instructor.hourly_rate,
                     # One number, already inclusive of the school's markup.
                     # platform_commission_percent is withheld:
@@ -403,6 +424,16 @@ async def get_instructor(instructor_id: int, db: Session = Depends(get_db)):
 
     user = db.query(User).filter(User.id == instructor.user_id).first()
 
+    has_schedule = (
+        db.query(InstructorSchedule)
+        .filter(
+            InstructorSchedule.instructor_id == instructor.id,
+            InstructorSchedule.is_active == True,
+        )
+        .first()
+        is not None
+    )
+
     return InstructorResponse(
         id=user.id,
         email=user.email,
@@ -424,6 +455,7 @@ async def get_instructor(instructor_id: int, db: Session = Depends(get_db)):
         city=instructor.city,
         suburb=instructor.suburb,
         is_available=instructor.is_available,
+        has_schedule=has_schedule,
         hourly_rate=instructor.hourly_rate,
         display_hourly_rate=resolve_student_price(instructor, 60)[2],
         service_radius_km=instructor.service_radius_km,

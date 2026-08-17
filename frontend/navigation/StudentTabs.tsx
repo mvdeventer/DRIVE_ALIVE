@@ -176,6 +176,10 @@ export default function StudentTabs() {
           tabBarIcon: ({ focused, color, size }) => (
             <Ionicons name={focused ? 'search' : 'search-outline'} size={size} color={color} />
           ),
+          // Otherwise leaving for another tab mid-booking and coming back
+          // resumes the Booking screen for whichever instructor was last
+          // selected, instead of the instructor list.
+          popToTopOnBlur: true,
         }}
       />
       <Tab.Screen

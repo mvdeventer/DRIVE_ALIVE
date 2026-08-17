@@ -6,6 +6,7 @@ import asyncio
 import os
 import sys
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import Depends, FastAPI, Request, status
 
@@ -13,7 +14,9 @@ from .middleware.authentication_gate import authentication_gate
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 from slowapi.errors import RateLimitExceeded
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from .config import settings
 from .database import Base, engine, SessionLocal
@@ -50,6 +53,28 @@ from .routes import (
 from .services.reminder_scheduler import reminder_scheduler
 from .services.backup_scheduler import backup_scheduler
 from .services.verification_cleanup_scheduler import verification_cleanup_scheduler
+
+
+class SPAStaticFiles(StaticFiles):
+    """Serve exported assets and fall back to index.html for client routes."""
+
+    async def get_response(self, path: str, scope):
+        scope.setdefault("state", {})["frontend_static"] = True
+        try:
+            return await super().get_response(path, scope)
+        except StarletteHTTPException as exc:
+            if exc.status_code != 404 or scope["method"] not in {"GET", "HEAD"}:
+                raise
+            return await super().get_response("index.html", scope)
+
+
+def _frontend_dist_dir() -> Path:
+    if getattr(sys, "frozen", False):
+        return Path(sys.executable).resolve().parent.parent / "frontend"
+    return Path(__file__).resolve().parents[2] / "frontend" / "dist"
+
+
+FRONTEND_DIST_DIR = _frontend_dist_dir()
 
 # Create database tables (guarded – DB may not be configured on first run)
 try:
@@ -698,6 +723,7 @@ async def add_security_headers(request: Request, call_next):
         request.url.path.startswith("/setup/wizard") or
         request.url.path.startswith("/setup/admin-reset")
     )
+    is_frontend = request.scope.get("state", {}).get("frontend_static", False)
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["X-Frame-Options"] = "DENY"
     response.headers["Referrer-Policy"] = "no-referrer"
@@ -718,6 +744,14 @@ async def add_security_headers(request: Request, call_next):
             "script-src 'unsafe-inline'; "
             "connect-src 'self'; "
             "frame-ancestors 'none'; base-uri 'none'"
+        )
+    elif is_frontend:
+        response.headers["Content-Security-Policy"] = (
+            "default-src 'self' https: data: blob:; "
+            "script-src 'self' 'unsafe-inline' 'unsafe-eval' https:; "
+            "style-src 'self' 'unsafe-inline' https:; "
+            "connect-src 'self' http: https: ws: wss:; "
+            "worker-src 'self' blob:; frame-ancestors 'none'; base-uri 'self'"
         )
     else:
         response.headers["Content-Security-Policy"] = "default-src 'none'; frame-ancestors 'none'; base-uri 'none'"
@@ -780,14 +814,15 @@ app.include_router(webhooks.router)  # Twilio status callbacks etc.
 app.include_router(unsubscribe.router)  # RFC 8058 one-click unsubscribe
 
 
-@app.get("/")
-async def root():
-    """Root endpoint"""
-    return {
-        "message": "Welcome to Driving School Booking API",
-        "version": "1.0.0",
-        "docs": "/docs",
-    }
+if not (FRONTEND_DIST_DIR / "index.html").exists():
+    @app.get("/")
+    async def root():
+        """Root endpoint used when no packaged frontend is available."""
+        return {
+            "message": "Welcome to Driving School Booking API",
+            "version": "1.0.0",
+            "docs": "/docs",
+        }
 
 
 @app.get("/health")
@@ -809,6 +844,14 @@ async def health_check():
             status_code=503,
             content={"status": "unhealthy", "detail": str(exc)},
         )
+
+
+if (FRONTEND_DIST_DIR / "index.html").exists():
+    app.mount(
+        "/",
+        SPAStaticFiles(directory=FRONTEND_DIST_DIR, html=True),
+        name="frontend",
+    )
 
 
 if __name__ == "__main__":

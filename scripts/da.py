@@ -51,6 +51,7 @@ ROOT = Path(os.path.abspath(__file__)).parent.parent       # repo root
 BACKEND_DIR = ROOT / "backend"
 FRONTEND_DIR = ROOT / "frontend"
 IS_WINDOWS = os.name == "nt"
+IS_WSL = not IS_WINDOWS and bool(os.environ.get("WSL_DISTRO_NAME"))
 
 # The two venvs coexist: a repo checked out on a shared filesystem may be driven
 # from Windows and from WSL, and their binaries are not interchangeable.
@@ -147,15 +148,66 @@ def _slug(title: str) -> str:
     return re.sub(r"[^a-z0-9]+", "-", title.lower()).strip("-")
 
 
-def open_new_window(title: str, cmd_str: str, cwd: Path) -> int | None:
+def open_new_window(
+    title: str,
+    cmd_str: str,
+    cwd: Path,
+    pid_file: Path | None = None,
+) -> int | None:
     """
     Open a new Command Prompt window with *title* running *cmd_str*.
     Returns the PID of the new cmd.exe process.
 
-    On POSIX there is no console to open, so the command runs detached in its
-    own process group with output redirected to logs/<title>.log.
+    WSL opens a Windows Terminal tab that runs entirely inside the current
+    Ubuntu distro. Headless POSIX falls back to a detached logged process.
     """
     if not IS_WINDOWS:
+        windows_terminal = shutil.which("wt.exe") if IS_WSL else None
+        if windows_terminal and pid_file:
+            LOG_DIR.mkdir(parents=True, exist_ok=True)
+            log_path = LOG_DIR / f"{_slug(title)}.log"
+            runner_path = LOG_DIR / f"{_slug(title)}-terminal.sh"
+            pid_file.unlink(missing_ok=True)
+            distro = os.environ.get("WSL_DISTRO_NAME", "Ubuntu")
+            # `exec > >(tee log) 2>&1` replaces stdout/stderr with a pipe, so
+            # Expo/Metro's isatty() check fails and it drops to plain CI-style
+            # logging: no QR code, no w/a/i keyboard hints, no live-redrawing
+            # progress bar. `script` allocates a real pseudo-terminal for the
+            # child so the interactive CLI renders normally, while still
+            # tee-ing the same bytes to the log file for `tail -f`.
+            inner_cmd = f"bash -lc {shlex.quote(cmd_str)}"
+            runner_path.write_text(
+                "#!/usr/bin/env bash\n"
+                f"export PATH={shlex.quote(os.environ.get('PATH', ''))}\n"
+                f"cd {shlex.quote(str(cwd))}\n"
+                f"printf '%s' \"$$\" > {shlex.quote(str(pid_file))}\n"
+                f"exec script -qefc {shlex.quote(inner_cmd)} {shlex.quote(str(log_path))}\n",
+                encoding="utf-8",
+            )
+            try:
+                subprocess.Popen(
+                    [
+                        windows_terminal,
+                        "-w", "0",
+                        "new-tab",
+                        "--title", title,
+                        "wsl.exe",
+                        "-d", distro,
+                        "bash", str(runner_path),
+                    ],
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    start_new_session=True,
+                )
+                for _ in range(50):
+                    if pid_file.exists():
+                        return _read_pid(pid_file)
+                    time.sleep(0.1)
+                warn(f"{title} terminal opened, but its PID was not reported.")
+                return None
+            except OSError as exc:
+                warn(f"Could not open Windows Terminal ({exc}); using log output.")
+
         LOG_DIR.mkdir(parents=True, exist_ok=True)
         log_path = LOG_DIR / f"{_slug(title)}.log"
         log = open(log_path, "w", encoding="utf-8")
@@ -938,7 +990,9 @@ def cmd_start(
                 f" --reload --log-level {uvicorn_log_level}"
                 f" --host 0.0.0.0 --port {BACKEND_PORT}"
             )
-        pid = open_new_window("Drive Alive - Backend", backend_cmd, BACKEND_DIR)
+        pid = open_new_window(
+            "Drive Alive - Backend", backend_cmd, BACKEND_DIR, BACKEND_PID_FILE
+        )
         if pid:
             _write_pid(BACKEND_PID_FILE, pid)
             ok(f"Backend started (PID {pid}) → http://localhost:{BACKEND_PORT}")
@@ -966,7 +1020,9 @@ def cmd_start(
         frontend_cmd = (
             f"{expo_env}npx expo start --web {expo_flag}"
         )
-        pid = open_new_window("Drive Alive - Frontend", frontend_cmd, FRONTEND_DIR)
+        pid = open_new_window(
+            "Drive Alive - Frontend", frontend_cmd, FRONTEND_DIR, FRONTEND_PID_FILE
+        )
         if pid:
             _write_pid(FRONTEND_PID_FILE, pid)
             ok(f"Frontend started (PID {pid}) → http://localhost:{FRONTEND_PORT}")
@@ -982,8 +1038,9 @@ def cmd_start(
             _open_with_devtools(f"http://localhost:{FRONTEND_PORT}")
 
     print()
-    print(_c("green", "  Servers are starting in separate windows."
-                      if IS_WINDOWS else f"  Servers are starting; output goes to {LOG_DIR}/"))
+    visible_terminals = IS_WINDOWS or (IS_WSL and bool(shutil.which("wt.exe")))
+    print(_c("green", "  Servers are starting in separate terminal tabs."
+                      if visible_terminals else f"  Servers are starting; output goes to {LOG_DIR}/"))
     print(_c("cyan",  f"  Frontend : http://localhost:{FRONTEND_PORT}"))
     print(_c("cyan",  f"  Backend  : http://localhost:{BACKEND_PORT}"))
     print(_c("cyan",  f"  API docs : http://localhost:{BACKEND_PORT}/docs"))

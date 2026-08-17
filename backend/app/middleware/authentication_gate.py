@@ -55,6 +55,9 @@ async def authentication_gate(
     if request.method.upper() == "OPTIONS":
         return
 
+    if getattr(request.scope.get("route"), "name", None) == "frontend":
+        return
+
     matched = _matched_route(request)
     if matched is None:
         # No route matched: FastAPI will answer 404 on its own, and there is
